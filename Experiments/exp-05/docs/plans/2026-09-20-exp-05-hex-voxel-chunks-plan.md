@@ -4446,7 +4446,7 @@ prints a distribution on exit):
 | | worst frame | p95 | mean | frames > 33 ms (of 599) |
 |---|---|---|---|---|
 | before (main-thread remesh) | 712 ms | 308 ms | 112 ms | 382 |
-| after (async handover) | 93 ms | 26 ms | 17 ms | 5 |
+| after (async handover, first cut) | 93 ms | 26 ms | 17 ms | 5 |
 
 ```bash
 cd /home/lexa/DevProjects/_GameDev/Murabito/Experiments/exp-05
@@ -4456,6 +4456,80 @@ git -C /home/lexa/DevProjects/_GameDev/Murabito commit -m "exp-05: move the pare
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
+
+- [x] **Task 12b, review round 1: two Critical defects and three Important, from a full
+  review gate before this shipped further.** Both Criticals shared a root cause: neither
+  the load nor the unload apply step re-validated that a target chunk it was about to
+  mutate (`shown.omit`/`restore`, and the mesh swap) still had the same `Entity` the
+  handover snapshotted when it was planned. A target can itself unload — or unload and
+  reload with a fresh entity — while a handover's background re-mesh for it is still in
+  flight, and the original code had no way to notice.
+
+  - **Critical 1 — a stale omission becomes a permanent hole.** `shown.omit` ran
+    unconditionally against a target with no entity, re-creating the exact `omitted` entry
+    `Shown::remove` had just cleared; `spawn_jobs` then feeds that phantom entry straight
+    into the target's *next* regeneration as a stale, wrong omission.
+  - **Critical 2 — a dropped unload orphans its entity, permanently doubling a surface.**
+    `promote_unloads` detected a reload racing in ahead of a queued unload (the entity no
+    longer matched) but never despawned the stale one — it was simply dropped, leaving its
+    `ChunkView`/`Mesh3d` in the world forever alongside the reload's fresh entity.
+  - **Fix:** both `LoadHandover::omit` and `UnloadHandover::restore` now carry each
+    target's `Entity` snapshot alongside its cells; a new `target_is_still_valid` (with
+    three unit tests: unloaded-since-promotion, reloaded-with-a-fresh-entity, and the
+    child's own `None` case, all in `tasks.rs`) gates every mesh swap and every
+    `shown.omit`/`restore` call in `apply_finished_loads`/`apply_finished_unloads`.
+    `promote_unloads` now despawns the stale entity before dropping a raced-past unload.
+  - **Important 3 — a skipped re-mesh still got its bookkeeping.** When a target's chunk
+    data (or entity) was already gone at *promotion* time, the old code skipped spawning
+    its re-mesh but left it in `omit`/`restore` anyway, applying half a handover. Fixed by
+    dropping the target from the resolved plan entirely when this happens, in both
+    `promote_loads` and `promote_unloads`.
+  - **Important 4 — `plan_guest_handover_on_load` didn't diff, so it wasn't actually the
+    pure twin of `sync_guests_on_load`.** It recorded a same-level neighbour as a target
+    whenever it owed *any* guest cell, not whenever it owed a *new* one — in a settled
+    world that is nearly every shown neighbour, on nearly every arrival: real, ~18 ms
+    re-meshes for nothing, each also occupying an `active_targets` slot that blocked
+    unrelated handovers. Fixed by diffing every candidate against `shown.omitted_for`
+    before adding it to the plan (same fix, milder form, for the parent arm in
+    `plan_load_handover`, which inserted `key.cell` even when the parent already omitted
+    it). This is what the re-measurement below is mostly about.
+  - **Important 5 — test strength.** `a_child_is_never_shown_while_its_load_handover_is_pending`'s
+    doc comment overclaimed what it catches — corrected to say what falsification actually
+    showed (see `task-12b-report.md`): it catches a child shown while `Handovers` still
+    also calls it pending, not a handover whose apply step runs prematurely (which drops
+    out of `active_loads` in the same call it shows the child, so "pending" and "shown"
+    never overlap at a frame boundary for it to see — that failure mode is instead what
+    the mesh/bookkeeping tests are for). Added
+    `growing_the_window_back_after_a_shrink_leaves_no_duplicate_or_orphaned_entities`:
+    shrinks the window to nothing, waits for a real backlog of queued unload handovers to
+    build up, then grows it straight back to the original window while that backlog is
+    still draining — the exact reload-races-a-pending-unload sequence Critical 2
+    described. Checks both no duplicate `ChunkView` per key (Critical 2's failure mode,
+    reliably reproduced by this test) and no phantom `Shown` omission for a key with no
+    entity (Critical 1's failure mode, via a new `Shown::keys_with_omissions` — Critical 1
+    itself did not reliably reproduce through this particular integration path in repeated
+    runs, so it is falsified deterministically instead, via the `target_is_still_valid`
+    unit tests in `tasks.rs`; see `task-12b-report.md` for the falsification transcripts
+    of both).
+
+  Falsified each Critical by reverting its fix, confirming the expected failure, then
+  reverting the sabotage — transcripts in `task-12b-report.md`. Full suite, `cargo fmt
+  --all -- --check`, and `cargo clippy --workspace --all-targets -- -D warnings` all clean
+  afterward.
+
+  Re-measured per the reviewer's request, since Important 4 was a strong candidate for the
+  residual over-16.7 ms frames the first cut's measurement left unexplained — same command
+  as above:
+
+  | | worst frame | p95 | mean | frames > 16.7 ms | frames > 33 ms (of 599) |
+  |---|---|---|---|---|---|
+  | after (first cut) | 93 ms | 26 ms | 17 ms | 306 | 5 |
+  | after (review round 1) | 100 ms | 22 ms | 8.5 ms | 63 | 4 |
+
+  Mean frame time roughly halved and the over-16.7 ms count dropped ~5×, confirming
+  Important 4's spurious-re-mesh fix was indeed most of that residual cost. The worst-frame
+  outlier (~100 ms) is unchanged and unexplained by this round — not a regression (present
+  before this round too, within noise), but not investigated further here.
 
 ---
 

@@ -70,19 +70,23 @@ fn main() {
     .add_systems(
         Update,
         (camera::handle_input, camera::follow_ground).chain(),
-    )
-    // Records the wall-clock gap between consecutive frame starts, in `First` so it
-    // brackets the *previous* frame's full cost (every system, main-thread remeshing
-    // included) rather than just this frame's own work.
-    .init_resource::<FrameTimes>()
-    .add_systems(First, record_frame_time);
+    );
 
     if auto_pan {
         app.add_systems(Update, auto_pan_system.before(camera::follow_ground));
     }
 
     if let Some(frames) = frame_limit {
-        app.insert_resource(FrameLimit(frames))
+        // Only wired up for a `--frames N` run: `FrameTimes` collects one sample every
+        // frame for as long as the app runs, so registering it unconditionally would grow
+        // an unbounded `Vec<Duration>` for the length of an ordinary interactive session
+        // that nothing ever reads.
+        app.init_resource::<FrameTimes>()
+            // Records the wall-clock gap between consecutive frame starts, in `First` so
+            // it brackets the *previous* frame's full cost (every system, main-thread
+            // remeshing included) rather than just this frame's own work.
+            .add_systems(First, record_frame_time)
+            .insert_resource(FrameLimit(frames))
             .add_systems(Update, exit_after_frame_limit);
     }
 

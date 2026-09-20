@@ -38,6 +38,20 @@ impl Shown {
             .unwrap_or_else(|| EMPTY.get_or_init(HashSet::new))
     }
 
+    /// Every key that currently omits at least one cell. Read-only introspection for
+    /// tests: a key here with no entity is a phantom omission — bookkeeping applied
+    /// against a chunk nothing is drawing any more (Critical 1, task-12b-report.md fix
+    /// round 1) — which would otherwise sit undetected until that chunk happened to
+    /// reload and `spawn_jobs` fed the stale entry straight into its regeneration as a
+    /// wrong, permanent hole.
+    pub fn keys_with_omissions(&self) -> Vec<ChunkKey> {
+        self.omitted
+            .iter()
+            .filter(|(_, cells)| !cells.is_empty())
+            .map(|(key, _)| *key)
+            .collect()
+    }
+
     pub fn omit(&mut self, parent: ChunkKey, cell: Hex) {
         self.omitted.entry(parent).or_default().insert(cell);
     }
@@ -304,6 +318,13 @@ fn plan_absorb_already_shown_children(shown: &Shown, key: ChunkKey) -> HashSet<H
 /// What `key` itself would newly omit, and what each already-shown same-level neighbour
 /// would newly omit, if `key` became shown right now — the pure-query twin of
 /// `sync_guests_on_load`.
+///
+/// `guest_cells_to_omit`/`_considering` return a chunk's *full* guest set, not an
+/// increment, so every candidate here is diffed against what it already omits
+/// (`shown.omitted_for`) before being added to the plan — a settled same-level neighbour
+/// typically already omits every guest cell it owes, and without the diff it would come
+/// back as a target (and so get a real, ~18 ms re-mesh, and occupy an `active_targets`
+/// slot blocking unrelated handovers) on essentially every arrival near it, for nothing.
 fn plan_guest_handover_on_load(
     cfg: &WorldConfig,
     shown: &Shown,
@@ -311,7 +332,13 @@ fn plan_guest_handover_on_load(
 ) -> HashMap<ChunkKey, HashSet<Hex>> {
     let mut plan: HashMap<ChunkKey, HashSet<Hex>> = HashMap::new();
 
-    let mine = guest_cells_to_omit(cfg, key, shown);
+    // `key` has no entry in `Shown` yet, so its own omitted set is always empty here —
+    // diffing against it is a no-op, but done anyway so this stays correct if that ever
+    // changes (e.g. a future caller re-planning an already-partly-applied handover).
+    let mine: HashSet<Hex> = guest_cells_to_omit(cfg, key, shown)
+        .difference(shown.omitted_for(key))
+        .copied()
+        .collect();
     if !mine.is_empty() {
         plan.entry(key).or_default().extend(mine);
     }
@@ -322,9 +349,13 @@ fn plan_guest_handover_on_load(
             if shown.entity(neighbour).is_none() {
                 continue;
             }
-            let extra = guest_cells_to_omit_considering(cfg, neighbour, shown, Some(key));
-            if !extra.is_empty() {
-                plan.entry(neighbour).or_default().extend(extra);
+            let full = guest_cells_to_omit_considering(cfg, neighbour, shown, Some(key));
+            let new_cells: HashSet<Hex> = full
+                .difference(shown.omitted_for(neighbour))
+                .copied()
+                .collect();
+            if !new_cells.is_empty() {
+                plan.entry(neighbour).or_default().extend(new_cells);
             }
         }
     }
@@ -349,7 +380,7 @@ pub fn plan_load_handover(
     }
 
     if let Some(parent) = key.parent_key() {
-        if shown.entity(parent).is_some() {
+        if shown.entity(parent).is_some() && !shown.omitted_for(parent).contains(&key.cell) {
             plan.entry(parent).or_default().insert(key.cell);
         }
     }

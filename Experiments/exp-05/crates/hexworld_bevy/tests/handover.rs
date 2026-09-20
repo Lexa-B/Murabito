@@ -409,12 +409,20 @@ fn the_guest_sides_mesh_drops_the_shared_vertex_the_frame_both_neighbours_are_sh
 /// Task 12b: the async-specific half of the one-frame property. The tests above check
 /// that the swap lands in one frame — a fact a synchronous implementation would also
 /// satisfy. This one checks the hold-back mechanism the async route added: `Handovers`
-/// tracks a child chunk as "pending" for as long as its parent/neighbours' re-meshes are
-/// still running on the pool, and a bug that showed the child *before* that finished
-/// (e.g. applying it from `promote_loads` instead of waiting for `apply_finished_loads`,
-/// or dropping the `handover.remeshes.is_empty()` check) would make it observable in
-/// `Shown` while `Handovers` still called it pending — exactly what this asserts never
-/// happens, every single frame.
+/// tracks a child chunk as "pending" for as long as its handover has not yet fully
+/// applied, and asserts a key is never *both* pending and shown in the same frame.
+///
+/// What this actually has teeth against (confirmed by falsification; see
+/// `task-12b-report.md`): a bug that shows the child while `Handovers` still separately
+/// considers it pending too — e.g. calling `show_child` from `promote_loads` while the
+/// handover is still also pushed onto `active_loads`. It does **not** catch a bug where a
+/// handover's apply step runs early (skipping the `handover.remeshes.is_empty()` guard):
+/// that would show the child *and* drop it from `active_loads` in the same system call, so
+/// "pending" and "shown" never overlap at a frame boundary for this test to observe either
+/// state change without the other. That failure mode is instead what
+/// `the_parents_mesh_drops_the_vertex_the_same_frame_the_childs_entity_appears` and
+/// `the_parents_omission_never_lags_a_shown_childs_entity_by_even_one_frame` are for: they
+/// check the parent's actual mesh/bookkeeping, which an early apply would still get wrong.
 #[test]
 fn a_child_is_never_shown_while_its_load_handover_is_pending() {
     let mut app = headless_app(StoreSettings::default());
@@ -465,6 +473,99 @@ fn a_child_is_never_shown_while_its_load_handover_is_pending() {
         "never saw a chunk held pending on one frame and only shown on a later one; the \
          test proves nothing about the async hold-back actually spanning frames"
     );
+}
+
+/// Fix round 1 (task-12b-report.md): a reload racing back in while a chunk's unload
+/// handover is still queued must not orphan that handover's stale entity. Shrinks the
+/// window to nothing (queuing a large backlog of unload handovers — comfortably more than
+/// `MAX_ACTIVE_HANDOVERS` can drain in one frame, so most of it is still genuinely queued,
+/// not just promoted-and-waiting), then grows it straight back to the original window
+/// *while that backlog is still draining* — racing a reload against each pending unload's
+/// handover, the exact sequence Critical 2 described: chunk `K` unloads as entity `E1`,
+/// queues; before its handover is promoted, `K` is requested again, regenerates, and is
+/// shown as a fresh `E2`; when `(K, E1)` finally reaches the front of the queue, `E1` must
+/// be despawned rather than dropped on the floor with its `ChunkView`/`Mesh3d` still live
+/// (which `every_shown_chunk_has_exactly_one_entity`'s query below would catch as two
+/// entities for the same key). The same race exercises Critical 1's fix too: any of these
+/// reloads that also needs a load handover (a guest cell ceded back by a neighbour, say)
+/// must not have `shown.omit`/`restore` applied against a chunk that turned out to have
+/// unloaded in the meantime.
+#[test]
+fn growing_the_window_back_after_a_shrink_leaves_no_duplicate_or_orphaned_entities() {
+    let mut app = headless_app(StoreSettings {
+        unload_delay_s: 0.05,
+        ..StoreSettings::default()
+    });
+    let entity = app
+        .world_mut()
+        .spawn((
+            Transform::default(),
+            Loader {
+                rings: Rings::default(),
+            },
+        ))
+        .id();
+    run_until_fully_settled(&mut app, DEFAULT_WINDOW_TOTAL);
+
+    // Shrink to nothing: everything starts lingering at once, so once the (short) unload
+    // delay elapses, a large batch becomes `to_unload` in a single `drive_store` call —
+    // comfortably more than `MAX_ACTIVE_HANDOVERS` (3) can promote per frame.
+    app.world_mut().entity_mut(entity).insert(Loader {
+        rings: Rings {
+            shaku: 0,
+            ken: 0,
+            cho: 0,
+        },
+    });
+    let started = std::time::Instant::now();
+    loop {
+        app.update();
+        let backlog = app
+            .world()
+            .resource::<Handovers>()
+            .pending_unload_keys()
+            .len();
+        if backlog >= 8 {
+            break;
+        }
+        assert!(
+            started.elapsed() < common::SETTLE_TIMEOUT,
+            "timed out after {:?} waiting for an unload backlog to build up (got {backlog})",
+            started.elapsed(),
+        );
+    }
+
+    // Grow the window straight back to the original default while that backlog is still
+    // draining.
+    app.world_mut().entity_mut(entity).insert(Loader {
+        rings: Rings::default(),
+    });
+    run_until_fully_settled(&mut app, DEFAULT_WINDOW_TOTAL);
+
+    // No duplicate entity for any chunk (Critical 2's failure mode: an orphaned stale
+    // entity left behind by a dropped unload, alongside the reload's fresh one)...
+    let mut query = app.world_mut().query::<&ChunkView>();
+    let mut seen: HashSet<ChunkKey> = HashSet::new();
+    for view in query.iter(app.world()) {
+        assert!(seen.insert(view.0), "{:?} has two entities", view.0);
+    }
+    // ...and `Shown` and the ECS still agree on exactly what is shown.
+    let shown = app.world().resource::<Shown>();
+    assert_eq!(seen.len(), shown.keys().len());
+    assert_eq!(seen.len(), DEFAULT_WINDOW_TOTAL);
+
+    // No phantom omission either (Critical 1's failure mode: `shown.omit`/`restore`
+    // applied against a chunk that turned out to have no entity, which `spawn_jobs` would
+    // feed straight into that chunk's next regeneration as a stale, wrong omission — a
+    // permanent hole with nothing left drawing the cell). Every key that omits anything
+    // must currently have an entity.
+    for key in shown.keys_with_omissions() {
+        assert!(
+            shown.entity(key).is_some(),
+            "{key:?} omits cells but has no entity — a phantom omission left over from a \
+             handover applied against a chunk that had already unloaded"
+        );
+    }
 }
 
 fn world_is_fully_settled(world: &World, expected: usize) -> bool {
