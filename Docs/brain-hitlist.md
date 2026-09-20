@@ -78,6 +78,18 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
 12c. **Keys are kanji**, with display names coming from `assets/locales/` like all other
     text. Keeps "UI text is never a literal" intact, and sidesteps 物 and 者 both
     romanising to `mono`.
+12d. **The root is 諸法** (shohō, all dharmas — every phenomenon, thing and event alike),
+    with **諸法実相** named in the ontology file's header. 法 means *law* in ordinary
+    modern Japanese, so the header is what disambiguates it as *dharma*; it does that
+    once, and the key stays two characters in every parent pointer. Chosen over 存在
+    (names the property, not the collection, and 存在者 collides with 者), 一切 (primes
+    negative polarity — 一切ない, 一切禁止) and 万物 (contains 物, muddying the 物/事 cut).
+    Abhidharma is the precedent: a worked hierarchical taxonomy of dharmas that already
+    separates 色法 (matter) from 心不相応行法 (process and happening) — the same cut as
+    物/事, with the awkward cases worked through.
+12e. **`諸法 → 知らない物` is the absolute floor** and can never be missing. "Something is
+    there and I have no idea what" is where fight/flight/freeze/fawn live, and it is what
+    guarantees the arena always has a bid.
 
 **Selection**
 
@@ -131,9 +143,9 @@ Perception **pushes**; the arena does not go looking. Per percept, per tick:
 
 Worked examples, from the design conversation:
 
-- `存在 → 者 → 生き物 → 狼 → 知らない物` — *"I don't know which wolf this is, and it
+- `諸法 → 者 → 生き物 → 狼 → 知らない物` — *"I don't know which wolf this is, and it
   doesn't matter: I'm afraid of wolves."*
-- `存在 → 者 → 生き物 → 人間 → 玲子ちゃん` — everything this being feels about her
+- `諸法 → 者 → 生き物 → 人間 → 玲子ちゃん` — everything this being feels about her
   specifically, keyed to one individual.
 - A human who has never met a 妖怪 reaches only 者, pulls its 知らない物, and falls back
   on the generic responses: fight, flight, freeze, fawn.
@@ -206,10 +218,11 @@ are written down rather than forgotten.
 - **Target population size**, which decides what "cheap" actually means.
 - **Whether exp-03/exp-05's hierarchical hex addressing is reused** as the tree's
   address space.
-- **The root's name.** 存在 (plain), 一切 (short, Buddhist) or 森羅万象 (thematic, long).
-  It sits above both 物 and 事, which are a contrast pair and not parent and child.
 - **Where 植物 sits.** If 生き物 is under 者, plants inherit acting-ness they will never
   use. Move them out under 物, or leave them and let a facet decide.
+- **Whether the world's taxonomy and a being's private copy get distinguished in the
+  code.** Tendai supplies the pair ready-made: 実相 for phenomena as they truly are,
+  仮 (仮諦, provisional designation) for how a being has construed them.
 - **妖 / 妖怪 / 精霊** for the supernatural branch. 付喪神 fits under any of them.
 - **Whether the fallback leaf is 知らない物 or 知らない者** on the 者 branch, or a
   reserved key that renders per branch.
