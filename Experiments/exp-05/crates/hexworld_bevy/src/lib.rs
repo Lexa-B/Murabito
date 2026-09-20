@@ -5,13 +5,16 @@
 pub mod axes;
 pub mod entities;
 pub mod loader;
+pub mod material;
 pub mod tasks;
 
+use bevy::pbr::MaterialPlugin;
 use bevy::prelude::*;
 use hexworld::{ChunkStore, StoreSettings, WorldConfig};
 
 pub use entities::{ChunkView, Shown};
 pub use loader::Loader;
+pub use material::{GroundExtension, GroundMaterial, LineMode, TintByLevel};
 
 /// Everything this plugin does, in one set, so a viewer can order against it.
 #[derive(SystemSet, Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -33,7 +36,7 @@ impl HexWorld {
 }
 
 #[derive(Resource, Clone)]
-pub struct GroundMaterialHandle(pub Handle<StandardMaterial>);
+pub struct GroundMaterialHandle(pub Handle<GroundMaterial>);
 
 #[derive(Default)]
 pub struct HexWorldPlugin {
@@ -47,12 +50,16 @@ impl Plugin for HexWorldPlugin {
             store: ChunkStore::new(self.config, self.settings),
         })
         .init_resource::<entities::Shown>()
+        .init_resource::<LineMode>()
+        .init_resource::<TintByLevel>()
+        .add_plugins(MaterialPlugin::<GroundMaterial>::default())
         .add_systems(Startup, entities::setup_material)
         .add_systems(
             Update,
             (loader::drive_store, tasks::collect_finished_jobs)
                 .chain()
                 .in_set(HexWorldSet),
-        );
+        )
+        .add_systems(Update, material::sync_ground_material);
     }
 }

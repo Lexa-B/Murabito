@@ -9,6 +9,7 @@ use bevy::render::mesh::{Indices, PrimitiveTopology};
 use hexworld::{mesh::MeshData, plane::cell_centre_m, ChunkKey, Hex, Level, WorldConfig};
 
 use crate::axes::{mesh_position, to_bevy};
+use crate::material::GroundMaterial;
 use crate::HexWorld;
 
 #[derive(Component, Clone, Copy, Debug)]
@@ -61,10 +62,16 @@ impl Shown {
     }
 }
 
-pub fn setup_material(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>) {
-    let handle = materials.add(StandardMaterial {
-        perceptual_roughness: 0.95,
-        ..default()
+pub fn setup_material(mut commands: Commands, mut materials: ResMut<Assets<GroundMaterial>>) {
+    let handle = materials.add(GroundMaterial {
+        base: StandardMaterial {
+            perceptual_roughness: 0.95,
+            ..default()
+        },
+        extension: crate::material::GroundExtension {
+            mode: crate::material::LineMode::default().as_u32(),
+            tint: 0,
+        },
     });
     commands.insert_resource(crate::GroundMaterialHandle(handle));
 }
@@ -123,7 +130,7 @@ pub fn chunk_origin(key: ChunkKey) -> Vec3 {
 pub fn spawn_chunk_entity(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    material: Handle<StandardMaterial>,
+    material: Handle<GroundMaterial>,
     key: ChunkKey,
     data: &MeshData,
     _cfg: &WorldConfig,
