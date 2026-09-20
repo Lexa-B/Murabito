@@ -742,4 +742,29 @@ mod store_tests {
             0
         );
     }
+
+    #[test]
+    fn in_flight_counts_chunks_being_generated() {
+        let mut s = store();
+        let here = [Loader {
+            focus: Hex::ZERO,
+            rings: Rings::default(),
+        }];
+        let update = s.update(&here, 0.0);
+        let key = update.to_load[0];
+        assert_eq!(s.in_flight_count(), 0);
+        s.begin_load(key);
+        assert_eq!(s.in_flight_count(), 1);
+        let chunk = crate::chunk::generate(s.config(), key);
+        s.insert(chunk);
+        assert_eq!(s.in_flight_count(), 0);
+    }
+
+    #[test]
+    fn settings_are_readable_and_tunable() {
+        let mut s = store();
+        assert_eq!(s.settings().unload_delay_s, 5.0);
+        s.settings_mut().unload_delay_s = 0.5;
+        assert_eq!(s.settings().unload_delay_s, 0.5);
+    }
 }
