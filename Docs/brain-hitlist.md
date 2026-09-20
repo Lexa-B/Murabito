@@ -262,6 +262,33 @@ are written down rather than forgotten.
 One at a time, smallest first, each one visible before the next is agreed. Order is a
 proposal, not a commitment.
 
+- [x] **0. Bodies, no brains.** A fox and a rabbit: `Vision` (one cone angle, three
+      concentric range bands, acuity falling in steps) and `Hearing` (the microphone
+      polar-pattern family — one number carries a rabbit's near-circle and a fox's
+      forward lobe), both as data with pure scoring functions, plus a gizmo overlay.
+      Nothing senses anything yet; these are the shapes. Tests assert the species claim
+      — hunter and prey shaped oppositely by the same two senses — not the numbers,
+      which are placeholder tuning.
+- [x] **0a. Seeing the shapes.** `--zoom <metres>` on the one-shot capture. At the
+      starting zoom the fields run off every edge, so the overlay had been rendered but
+      never actually looked at.
+- [ ] **0b. Assert the tableau.** The starting arrangement is a predator watching prey
+      that hasn't noticed: the fox should see the rabbit, the rabbit's blind wedge should
+      be pointed back at the fox. Currently that is eyeballed off a screenshot, through
+      a perspective projection that makes ground angles hard to judge. It is a claim, so
+      it should be a test.
+- [ ] **0c. A legible overlay.** Each being's vision and hearing are drawn in one hue and
+      overlap heavily, so which curve is which sense is guesswork; and the rabbit's
+      vision — 2.5/5/8 m at low alpha, inside a 10 m hearing circle — is the faintest
+      thing on screen while being its most interesting sense. This overlay is how
+      everything downstream gets debugged, so it has to be readable before it is relied
+      on.
+- [ ] **0d. 嗅覚.** Smell, which is structurally unlike the other two: not a cone cast
+      from the head, but something left *in the world* that persists, spreads, decays and
+      drifts on the wind. The first sense with state of its own, the first that makes the
+      past readable in the present, and the one a fox and a rabbit actually live by.
+- [ ] **0e. Facing, visibly.** A slow idle turn, so the fields are seen to track the body
+      rather than assumed to.
 - [ ] **1. The layer skeleton.** Three systems at 60 / ~10 / ~1 Hz that do nothing
       interesting, plus a test proving each actually ticks at its rate under a varying
       frame time. Establishes `FixedUpdate` vs `Update` and the run conditions.
