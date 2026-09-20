@@ -566,9 +566,94 @@ fn growing_the_window_back_after_a_shrink_leaves_no_duplicate_or_orphaned_entiti
              handover applied against a chunk that had already unloaded"
         );
     }
+
+    // The full content invariant, not just presence: also catches a phantom (or missing)
+    // omission on a key that *has* reloaded with a fresh entity — the failure mode fix
+    // round 2 (task-12b-report.md) found this test's shrink/grow churn newly makes
+    // reachable, and which the presence-only check above cannot see.
+    assert_omission_invariant(app.world());
 }
 
+/// Same three-part condition as `common::run_until_fully_settled` (see its doc comment):
+/// nothing in flight, the expected count loaded, and — added in fix round 2
+/// (task-12b-report.md) — no handover left queued or mid-re-mesh either, or a settle can
+/// read true while a stale handover is still waiting its turn.
 fn world_is_fully_settled(world: &World, expected: usize) -> bool {
     let hex_world = world.resource::<HexWorld>();
-    hex_world.store().in_flight_count() == 0 && hex_world.store().loaded_keys().len() >= expected
+    let handovers = world.resource::<Handovers>();
+    hex_world.store().in_flight_count() == 0
+        && hex_world.store().loaded_keys().len() >= expected
+        && handovers.is_idle()
+}
+
+/// The content invariant a settled world must satisfy, over *every* shown chunk at once:
+/// its omission set is exactly the union of (a) the cells of its own currently-shown
+/// children, and (b) the guest cells it draws whose true (same-level) owner is currently
+/// shown instead — no more (a phantom omission, drawing nothing extra but sitting there
+/// ready to corrupt the next regeneration) and no less (a doubled surface, or, read from
+/// the owner's side, a hole). Recomputed independently from the public API
+/// (`hexworld::mesh::drawn_cells`, `hexworld::owner::parent_of`, `ChunkKey::parent_key`)
+/// rather than by reusing `entities.rs`'s own planning functions, so it does not just
+/// check the implementation agrees with itself.
+///
+/// Unlike `every_shown_chunk_has_exactly_one_entity` (presence-only: does every key have
+/// exactly one entity), this is a *content* check over the final state, so it also catches
+/// a surviving phantom omission left on a key that has since reloaded with a fresh entity
+/// — precisely the failure mode fix round 2 (task-12b-report.md) found was reachable and
+/// fix round 1 did not yet close.
+fn assert_omission_invariant(world: &World) {
+    let hex_world = world.resource::<HexWorld>();
+    let shown = world.resource::<Shown>();
+    let cfg = *hex_world.store().config();
+    let shown_keys: HashSet<ChunkKey> = shown.keys().into_iter().collect();
+
+    for &key in &shown_keys {
+        let child_level = key.child_level();
+        let mut expected: HashSet<Hex> = HashSet::new();
+
+        // (a) cells of currently-shown children.
+        for &candidate in &shown_keys {
+            if candidate.level == child_level && candidate.parent_key() == Some(key) {
+                expected.insert(candidate.cell);
+            }
+        }
+
+        // (b) guest cells whose same-level owner is currently shown.
+        for cell in hexworld::mesh::drawn_cells(&cfg, key) {
+            let owner_cell = hexworld::owner::parent_of(cell, child_level);
+            if owner_cell == key.cell {
+                continue; // key owns this cell outright, never a guest of itself
+            }
+            let owner_key = ChunkKey::new(key.level, owner_cell);
+            if shown_keys.contains(&owner_key) {
+                expected.insert(cell);
+            }
+        }
+
+        let actual = shown.omitted_for(key).clone();
+        assert_eq!(
+            actual,
+            expected,
+            "{key:?}'s omission set does not match the content invariant — extra (phantom \
+             or stale) cells: {:?}; missing cells: {:?}",
+            actual.difference(&expected).collect::<Vec<_>>(),
+            expected.difference(&actual).collect::<Vec<_>>(),
+        );
+    }
+}
+
+/// The content invariant, checked on the simplest possible settle: a single loader, no
+/// window changes at all. Establishes the baseline the shrink/grow test below also checks
+/// under churn.
+#[test]
+fn a_settled_worlds_omissions_match_the_content_invariant() {
+    let mut app = headless_app(StoreSettings::default());
+    app.world_mut().spawn((
+        Transform::default(),
+        Loader {
+            rings: Rings::default(),
+        },
+    ));
+    run_until_fully_settled(&mut app, DEFAULT_WINDOW_TOTAL);
+    assert_omission_invariant(app.world());
 }

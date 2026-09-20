@@ -4531,6 +4531,84 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
   outlier (~100 ms) is unchanged and unexplained by this round — not a regression (present
   before this round too, within noise), but not investigated further here.
 
+- [x] **Task 12b, review round 2: distinguishing "gone" from "reloaded" precisely, a
+  content invariant, and two more staleness gaps the invariant found on its own.**
+
+  Re-review confirmed all five round-1 findings addressed and the structure sound, but
+  found **one new Important**: the round-1 gate (`target_is_still_valid`) treated a target
+  that unloaded-and-reloaded the same as one that stayed gone, silently discarding the
+  reloaded target's needed re-mesh — a permanent doubled surface (load side) or hole
+  (unload side), since the old, ungated code had been accidentally correct here (chunk
+  geometry is a pure function of the key). Fixed by replacing the boolean gate with a
+  three-way `TargetStatus` (`Unchanged` / `Gone` / `Reloaded(Entity)`) and a new
+  `replan_reloaded_targets`: a `Reloaded` target gets a fresh re-mesh spawned against its
+  *live* current omissions (not thrown away), and the whole handover keeps waiting for
+  that too, in both `apply_finished_loads` and `apply_finished_unloads` (parameterised by
+  `union`/`difference` for the two sides' opposite cell-set operations). Also fixed: a
+  **Low** flake in the new integration test (`run_until_fully_settled`'s "settled" check
+  only looked at the store's own bookkeeping, not `Handovers`, so it could read settled
+  while a stale unload was still queued — added `Handovers::is_idle()` and gated both
+  `common::run_until_fully_settled` and `tests/handover.rs`'s local `world_is_fully_settled`
+  on it too), and a **Doc-only** false comment in `entities.rs` claiming a diff "stays
+  correct if [`omitted_for(key)`] ever changes" when it would actually break
+  `promote_loads`'s self case — corrected to explain the real invariant.
+
+  Added the reviewer-designed **content invariant** test,
+  `assert_omission_invariant`: for every shown chunk, its omission set must equal exactly
+  the union of its currently-shown children's cells and the guest cells whose same-level
+  owner is currently shown — recomputed independently from the public API, not by reusing
+  `entities.rs`'s own planning functions. Run on both a plain settle
+  (`a_settled_worlds_omissions_match_the_content_invariant`, new) and at the end of the
+  shrink/grow test.
+
+  **This test immediately failed — on the plain, churn-free settle, not just under
+  churn — revealing two further staleness gaps beyond the reload fix above:**
+
+  1. A handover's plan is frozen at promotion, but the *live* world can still grow past
+     it in two ways nothing was checking: `key` itself can need to omit *more* (an
+     already-shown grandchild, or a guest cell, that only appeared after promotion), or
+     an entirely *new* target can become relevant (a parent or same-level neighbour that
+     was not yet shown at promotion time). Reached whenever the handover's own subject
+     needed a handover for an unrelated reason (a coarse chunk waiting on its own coarser
+     parent, in the first reproduction) — ordinary contention, not a race construction.
+     Fixed with a new `reconcile_load_plan`, called every round alongside
+     `replan_reloaded_targets`: it recomputes the full plan fresh, spawns a re-mesh for
+     any self-growth or brand-new target, and keeps the handover waiting until nothing
+     more turns up.
+  2. Once (1) closed the plain-settle failures, the shrink/grow test kept failing anyway,
+     by a much smaller margin. Traced (via temporary, then removed, sequence-numbered
+     tracing across every promote/apply/show_child call) to a second, independent bug:
+     `apply_finished_unloads`'s restore step checked only the *target's* identity
+     (`replan_reloaded_targets`/`TargetStatus`), never the *departing key's own* — so if
+     the departing chunk itself reloaded with a fresh entity while this handover's
+     re-meshes were in flight (passing `promote_unloads`'s one-time, pre-promotion check,
+     then racing a slow remesh), the restore still applied unconditionally, wrongly
+     undoing an omission the reload still needed: a permanent hole. Fixed with a
+     `departed_cleanly` check (`shown.entity(handover.key) == Some(handover.entity)`)
+     gating the entire restore step, not just the final despawn/remove (which already had
+     an equivalent check).
+
+  **Falsified all three defects individually** (sabotage → confirm the specific failure →
+  revert → confirm it passes again), each isolated from the others:
+  - The `TargetStatus`/`replan_reloaded_targets` reload fix: two deterministic unit tests,
+    `a_target_that_unloaded_since_promotion_is_gone` and
+    `a_target_that_reloaded_with_a_fresh_entity_is_reloaded_not_gone`.
+  - `reconcile_load_plan`'s self-growth half: disabling it reliably failed the plain
+    settle test 3/3.
+  - `reconcile_load_plan`'s new-target half: disabling it reliably failed the plain
+    settle test 3/3 (a different missing cell than the self case, at Ri level).
+  - The unload-side `departed_cleanly` check: disabling it reliably failed the shrink/grow
+    test 3/3.
+
+  Verified with 5 consecutive full-suite runs plus 8 more of just the shrink/grow test,
+  all green (a test that failed reliably before this round's fixes). `cargo fmt --all --
+  check` and `cargo clippy --workspace --all-targets -- -D warnings` clean throughout.
+  No performance re-measurement this round (correctness-only; the reconciliation loop adds
+  at most one extra, capped round of pool work per handover, only when the live world
+  actually outran the frozen plan).
+
+  See `task-12b-report.md` for the full falsification transcripts and self-review.
+
 ---
 
 ### Task 13: Hex lines and the detail-level tint

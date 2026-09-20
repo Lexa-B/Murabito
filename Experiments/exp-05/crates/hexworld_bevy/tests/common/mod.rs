@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use bevy::prelude::*;
 use hexworld::{Level, StoreSettings};
-use hexworld_bevy::{HexWorld, HexWorldPlugin};
+use hexworld_bevy::{Handovers, HexWorld, HexWorldPlugin};
 
 pub const SETTLE_TIMEOUT: Duration = Duration::from_secs(30);
 pub const SETTLE_FRAME_CAP: usize = 20_000;
@@ -71,6 +71,38 @@ pub fn run_until(
     );
 }
 
+/// Like `run_until`, but the condition (and `describe`) see the whole `World` rather than
+/// just `HexWorld` — for a settle check that also needs another resource, such as
+/// `Handovers` (see `run_until_fully_settled`).
+pub fn run_until_world(
+    app: &mut App,
+    mut condition: impl FnMut(&World) -> bool,
+    describe: impl Fn(&World) -> String,
+) -> usize {
+    let started = Instant::now();
+    for frame in 0..SETTLE_FRAME_CAP {
+        app.update();
+        let world = app.world();
+        if condition(world) {
+            return frame;
+        }
+        if started.elapsed() >= SETTLE_TIMEOUT {
+            panic!(
+                "timed out after {:?} and {} frames: {}",
+                started.elapsed(),
+                frame + 1,
+                describe(world)
+            );
+        }
+    }
+    let world = app.world();
+    panic!(
+        "hit the {SETTLE_FRAME_CAP}-frame cap after {:?}: {}",
+        started.elapsed(),
+        describe(world)
+    );
+}
+
 /// Run frames until the store reports at least 37 loaded ken chunks (the default
 /// window's full shaku-detail ring), or the settle timeout/frame cap is hit.
 ///
@@ -95,23 +127,41 @@ pub fn run_until_settled(app: &mut App) -> usize {
 }
 
 /// Run frames until the store has *genuinely* settled: nothing outstanding
-/// (`in_flight_count() == 0`) and at least `expected` chunks loaded. Both conditions are
-/// needed together: `in_flight_count()` can read 0 for a single frame in the middle of a
-/// settle too, if every currently in-flight job happens to finish in the same frame
-/// while more requested chunks are still waiting for a free slot (they only get picked
-/// up on the *next* frame's `drive_store`) — pairing it with a known target count closes
-/// that gap, the same way `in_flight` alone would not.
+/// (`in_flight_count() == 0`), at least `expected` chunks loaded, and no handover left
+/// queued or mid-re-mesh (`Handovers::is_idle`). All three are needed together:
+/// `in_flight_count()` can read 0 for a single frame in the middle of a settle too, if
+/// every currently in-flight job happens to finish in the same frame while more requested
+/// chunks are still waiting for a free slot (they only get picked up on the *next*
+/// frame's `drive_store`) — pairing it with a known target count closes that gap, the
+/// same way `in_flight` alone would not. And since the store considers a load "loaded"
+/// (or an unload already gone from `loaded`) well before that chunk's handover — if it
+/// needs one — actually finishes applying, `in_flight`/`loaded_keys` reaching their target
+/// numbers does not by itself mean nothing is still queued in `Handovers`; without this
+/// third check, a test racing a reload against a still-queued unload handover (see
+/// `tests/handover.rs::growing_the_window_back_after_a_shrink_leaves_no_duplicate_or_orphaned_entities`)
+/// could read the world as settled while a stale unload was still waiting its turn,
+/// making the test's own eventual failure look identical to the real defect it exists to
+/// catch (fix round 2, task-12b-report.md).
 pub fn run_until_fully_settled(app: &mut App, expected: usize) -> usize {
-    run_until(
+    run_until_world(
         app,
         move |world| {
-            world.store().in_flight_count() == 0 && world.store().loaded_keys().len() >= expected
+            let store = world.resource::<HexWorld>();
+            let handovers = world.resource::<Handovers>();
+            store.store().in_flight_count() == 0
+                && store.store().loaded_keys().len() >= expected
+                && handovers.is_idle()
         },
         move |world| {
+            let store = world.resource::<HexWorld>();
+            let handovers = world.resource::<Handovers>();
             format!(
-                "in_flight={} loaded={} (want in_flight == 0 and loaded >= {expected})",
-                world.store().in_flight_count(),
-                world.store().loaded_keys().len()
+                "in_flight={} loaded={} pending_loads={} pending_unloads={} (want in_flight \
+                 == 0, loaded >= {expected}, and no pending handovers)",
+                store.store().in_flight_count(),
+                store.store().loaded_keys().len(),
+                handovers.pending_load_keys().len(),
+                handovers.pending_unload_keys().len(),
             )
         },
     )

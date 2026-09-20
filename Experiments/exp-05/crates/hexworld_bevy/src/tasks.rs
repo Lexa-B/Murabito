@@ -76,21 +76,174 @@ fn spawn_remesh(
     RemeshTask { key, task }
 }
 
-/// Whether `target` still has exactly the entity a handover snapshotted at promotion time
-/// (`None` means the handover's own not-yet-shown child, which is always "valid" — it has
-/// no staleness to check). A target chunk can unload — or unload and reload with a fresh
-/// entity — while a handover's background re-mesh for it is in flight; applying that
-/// handover's mesh swap or `shown.omit`/`restore` bookkeeping against a target that no
-/// longer matches this way is exactly what Critical 1 and the reload variant it named were
-/// (task-12b-report.md fix round 1): a phantom omission recreated against a chunk with no
-/// entity (nothing ever mutates it again, since `Shown::remove` is what clears it, and
-/// that already ran), or a fresh entity painted with a mesh computed from the stale
-/// incarnation's omissions. See `apply_finished_loads` / `apply_finished_unloads`.
-fn target_is_still_valid(shown: &Shown, target: ChunkKey, entity_snapshot: Option<Entity>) -> bool {
-    match entity_snapshot {
-        None => true,
-        Some(expected) => shown.entity(target) == Some(expected),
+/// How a handover's snapshot of a target's entity, taken at promotion time, compares to
+/// what `Shown` says right now. A target chunk can unload — or unload and reload with a
+/// fresh entity — while a handover's background re-mesh for it is in flight; treating
+/// those two outcomes the same (task-12b-report.md fix round 1's `target_is_still_valid`)
+/// is itself a bug (fix round 2): a target that is genuinely `Gone` contributes nothing
+/// further and is safely dropped, but a `Reloaded` target still needs its cells re-meshed
+/// against its *current* state — discarding it instead silently drops the handover's work
+/// for that target, leaving the two chunks permanently disagreeing about who draws the
+/// cell (a doubled surface on the load side, a hole on the unload side). See
+/// `replan_reloaded_targets` and `apply_finished_loads` / `apply_finished_unloads`.
+#[derive(PartialEq, Eq, Debug)]
+enum TargetStatus {
+    /// Still exactly the entity this was planned against.
+    Unchanged,
+    /// Unloaded and not shown at all any more.
+    Gone,
+    /// Unloaded and reloaded with a different (but real) entity.
+    Reloaded(Entity),
+}
+
+fn target_status(shown: &Shown, target: ChunkKey, entity_snapshot: Entity) -> TargetStatus {
+    match shown.entity(target) {
+        Some(current) if current == entity_snapshot => TargetStatus::Unchanged,
+        Some(current) => TargetStatus::Reloaded(current),
+        None => TargetStatus::Gone,
     }
+}
+
+/// After every one of a handover's originally-spawned re-meshes has landed, check whether
+/// any target reloaded with a fresh entity in the meantime (as opposed to unloading and
+/// staying gone — see `TargetStatus`). Re-plans and re-spawns a re-mesh for each one found,
+/// against its *live* current omissions, mutating `targets` (the stale entity snapshot is
+/// replaced with the fresh one) and dropping any now-stale finished result for it from
+/// `results`. Returns whether it queued at least one new re-mesh, in which case the caller
+/// must treat the whole handover as still waiting — exactly like an original re-mesh that
+/// has not landed yet — rather than applying anything this frame.
+#[allow(clippy::too_many_arguments)]
+fn replan_reloaded_targets(
+    world: &HexWorld,
+    shown: &Shown,
+    cfg: &WorldConfig,
+    pool: &AsyncComputeTaskPool,
+    targets: &mut HashMap<ChunkKey, (Entity, HashSet<Hex>)>,
+    results: &mut Vec<(ChunkKey, MeshData)>,
+    remeshes: &mut Vec<RemeshTask>,
+    // Union for a load handover's `omit` (cells to *add*), set difference for an unload
+    // handover's `restore` (cells to *remove*) — the two are otherwise identical.
+    combine: impl Fn(&HashSet<Hex>, &HashSet<Hex>) -> HashSet<Hex>,
+) -> bool {
+    let mut replanned = false;
+    for (&target, (entity_snapshot, cells)) in targets.iter_mut() {
+        let TargetStatus::Reloaded(current) = target_status(shown, target, *entity_snapshot) else {
+            continue; // unchanged, or gone — the final apply step handles both correctly
+        };
+        // A chunk that reloaded must be loaded again by definition, but a burst of churn
+        // could in principle have it unload a *second* time before this very check reads
+        // it — in which case there is nothing to re-mesh yet either; leave the stale
+        // snapshot as-is and let the *next* round see it as `Gone` and drop it cleanly.
+        let Some(chunk) = world.store().chunk(target) else {
+            continue;
+        };
+        let final_omitted = combine(shown.omitted_for(target), cells);
+        remeshes.push(spawn_remesh(
+            pool,
+            *cfg,
+            target,
+            chunk.clone(),
+            final_omitted,
+        ));
+        results.retain(|(t, _)| *t != target);
+        *entity_snapshot = current;
+        replanned = true;
+    }
+    replanned
+}
+
+fn union(a: &HashSet<Hex>, b: &HashSet<Hex>) -> HashSet<Hex> {
+    a.union(b).copied().collect()
+}
+
+fn difference(a: &HashSet<Hex>, b: &HashSet<Hex>) -> HashSet<Hex> {
+    a.difference(b).copied().collect()
+}
+
+/// After every one of a load handover's currently in-flight re-meshes has landed (and
+/// `replan_reloaded_targets` has already handled any *existing* target whose entity
+/// changed), check whether `plan_load_handover`, recomputed fresh right now, wants
+/// anything this handover does not yet have queued up: `key` itself omitting more (an
+/// already-shown grandchild, or a guest cell whose owner only became shown since this was
+/// last checked), or a target — a parent or same-level neighbour — that either was not a
+/// target at all yet (it only became shown after this handover was promoted, or during an
+/// earlier round of this very reconciliation) or, defensively, wants more cells than it
+/// already has queued (the increment for an existing target is fixed by geometry and
+/// should never actually grow in practice, but this is checked the same way regardless).
+/// Spawns whatever re-meshes are newly needed, drops any now-stale finished result they
+/// replace, and updates `self_omit`/`omit` to match. Returns whether it queued at least
+/// one, in which case the caller must keep waiting — exactly like an original re-mesh
+/// that has not landed yet — rather than apply anything this frame.
+#[allow(clippy::too_many_arguments)]
+fn reconcile_load_plan(
+    world: &HexWorld,
+    shown: &Shown,
+    cfg: &WorldConfig,
+    pool: &AsyncComputeTaskPool,
+    key: ChunkKey,
+    child_chunk: &Chunk,
+    self_omit: &mut HashSet<Hex>,
+    omit: &mut HashMap<ChunkKey, (Entity, HashSet<Hex>)>,
+    results: &mut Vec<(ChunkKey, MeshData)>,
+    remeshes: &mut Vec<RemeshTask>,
+) -> bool {
+    let fresh_plan = entities::plan_load_handover(cfg, shown, key);
+    let mut needs_another_round = false;
+
+    let fresh_self = fresh_plan.get(&key).cloned().unwrap_or_default();
+    if !fresh_self.is_subset(self_omit) {
+        *self_omit = union(self_omit, &fresh_self);
+        results.retain(|(t, _)| *t != key);
+        remeshes.push(spawn_remesh(
+            pool,
+            *cfg,
+            key,
+            child_chunk.clone(),
+            self_omit.clone(),
+        ));
+        needs_another_round = true;
+    }
+
+    for (&target, fresh_cells) in &fresh_plan {
+        if target == key {
+            continue;
+        }
+        let already_covered = omit
+            .get(&target)
+            .is_some_and(|(_, cells)| fresh_cells.is_subset(cells));
+        if already_covered {
+            continue;
+        }
+        // A brand new target (the common case reaching here), or — defensively — one
+        // whose increment grew. Either way, `plan_load_handover` only proposes an
+        // already-shown target, but that can still have changed identity since; drop it
+        // rather than acting on stale data (the next reconciliation, or the final apply
+        // step, resolves it correctly from fresh state).
+        let Some(chunk) = world.store().chunk(target) else {
+            continue;
+        };
+        let Some(entity) = shown.entity(target) else {
+            continue;
+        };
+        let existing_cells = omit
+            .get(&target)
+            .map(|(_, cells)| cells.clone())
+            .unwrap_or_default();
+        let added = union(&existing_cells, fresh_cells);
+        let final_omitted = union(shown.omitted_for(target), &added);
+        remeshes.push(spawn_remesh(
+            pool,
+            *cfg,
+            target,
+            chunk.clone(),
+            final_omitted,
+        ));
+        results.retain(|(t, _)| *t != target);
+        omit.insert(target, (entity, added));
+        needs_another_round = true;
+    }
+
+    needs_another_round
 }
 
 /// Poll every `RemeshTask` in `tasks`, removing the ones that finished. Returns their
@@ -117,14 +270,17 @@ fn poll_remeshes(tasks: &mut Vec<RemeshTask>) -> Vec<(ChunkKey, MeshData)> {
 /// reaches the screen even for one frame.
 struct LoadHandover {
     child: JobOutput,
-    /// Cells each affected chunk (parent, a same-level neighbour, or the child itself)
-    /// must newly omit — frozen from `Shown` when this handover was planned — together
-    /// with the `Entity` that chunk had at that same moment (`None` for the child's own
-    /// key, which has none yet). Applying this later only ever touches a target that
-    /// *still* has exactly that entity: one that unloaded (or unloaded and reloaded with
-    /// a fresh entity) while this handover's re-mesh was in flight is left alone
-    /// entirely — see `apply_finished_loads`.
-    omit: HashMap<ChunkKey, (Option<Entity>, HashSet<Hex>)>,
+    /// Cells the child itself must newly omit (an already-shown child of its own, or a
+    /// guest cell whose true owner is already on screen) — applied unconditionally once
+    /// `show_child` gives the child a real entity, since there is no earlier incarnation
+    /// of it to have gone stale.
+    self_omit: HashSet<Hex>,
+    /// Every *other* affected chunk (parent, or a same-level neighbour) that must newly
+    /// omit one of the child's cells, and the `Entity` it had at the moment this was
+    /// planned (or last re-planned — see `replan_reloaded_targets`). Applying this later
+    /// only ever touches a target that still has exactly that entity; see
+    /// `apply_finished_loads`.
+    omit: HashMap<ChunkKey, (Entity, HashSet<Hex>)>,
     remeshes: Vec<RemeshTask>,
     /// Re-meshes that already finished, in case they land across more than one frame — a
     /// result is kept here (never applied) until every one of them has.
@@ -216,6 +372,21 @@ impl Handovers {
             .map(|(key, _)| *key)
             .chain(self.active_unloads.iter().map(|handover| handover.key))
             .collect()
+    }
+
+    /// Whether nothing is queued or active on either side. A "settled" test helper that
+    /// only checks the store's own bookkeeping (`in_flight_count`/`loaded_keys`) can read
+    /// settled while a handover is still queued or mid-re-mesh — the store considers a
+    /// load "loaded" and an unload already gone from `loaded` well before either one's
+    /// handover actually finishes; see `tests/common/mod.rs::run_until_fully_settled` and
+    /// `tests/handover.rs`'s local `world_is_fully_settled`, both gated on this too (fix
+    /// round 2, task-12b-report.md — the flake this closes: a stale queued unload racing a
+    /// reload past a settle check that never looked at it).
+    pub fn is_idle(&self) -> bool {
+        self.queued_loads.is_empty()
+            && self.queued_unloads.is_empty()
+            && self.active_loads.is_empty()
+            && self.active_unloads.is_empty()
     }
 
     fn active_targets(&self) -> HashSet<ChunkKey> {
@@ -335,7 +506,13 @@ pub fn process_handovers(
         now,
     );
 
-    apply_finished_unloads(&mut commands, &mut shown, &mut meshes, &mut handovers);
+    apply_finished_unloads(
+        &mut commands,
+        &world,
+        &mut shown,
+        &mut meshes,
+        &mut handovers,
+    );
     apply_finished_loads(
         &mut commands,
         &mut world,
@@ -398,12 +575,13 @@ fn promote_loads(
             break;
         }
         let mut remeshes = Vec::with_capacity(plan.len());
-        let mut omit: HashMap<ChunkKey, (Option<Entity>, HashSet<Hex>)> =
+        let mut self_omit: HashSet<Hex> = HashSet::new();
+        let mut omit: HashMap<ChunkKey, (Entity, HashSet<Hex>)> =
             HashMap::with_capacity(plan.len());
         for (&target, added) in &plan {
             if target == output.key {
                 // The child itself: always available (this handover generated it), and
-                // has no entity yet — that is what `None` here means to the apply step.
+                // has no entity yet, so nothing to snapshot — see `LoadHandover::self_omit`.
                 remeshes.push(spawn_remesh(
                     pool,
                     *cfg,
@@ -411,7 +589,7 @@ fn promote_loads(
                     output.chunk.clone(),
                     added.clone(),
                 ));
-                omit.insert(target, (None, added.clone()));
+                self_omit = added.clone();
                 continue;
             }
             // A partner target's store data (or its `Shown` entity) can already be gone
@@ -436,10 +614,11 @@ fn promote_loads(
                 chunk.clone(),
                 final_omitted,
             ));
-            omit.insert(target, (Some(entity), added.clone()));
+            omit.insert(target, (entity, added.clone()));
         }
         handovers.active_loads.push(LoadHandover {
             child: output,
+            self_omit,
             omit,
             remeshes,
             results: Vec::new(),
@@ -538,6 +717,8 @@ fn apply_finished_loads(
     handovers: &mut Handovers,
     now: f64,
 ) {
+    let cfg = *world.store().config();
+    let pool = AsyncComputeTaskPool::get();
     let mut still_active = Vec::with_capacity(handovers.active_loads.len());
     for mut handover in handovers.active_loads.drain(..) {
         // Results are kept across frames (`results`) rather than only looked at the frame
@@ -553,7 +734,56 @@ fn apply_finished_loads(
             still_active.push(handover);
             continue;
         }
+        // A partner target may have unloaded and *reloaded* with a fresh entity while the
+        // re-meshes above were in flight — fix round 2's find (task-12b-report.md): that
+        // is not the same as the target simply being gone, and must not be treated as
+        // such, or the target's needed re-mesh is silently dropped, leaving it and the
+        // child permanently disagreeing about who draws the shared cell. Re-plan and
+        // re-spawn against live state instead, and keep waiting for that too.
+        if replan_reloaded_targets(
+            world,
+            shown,
+            &cfg,
+            pool,
+            &mut handover.omit,
+            &mut handover.results,
+            &mut handover.remeshes,
+            union,
+        ) {
+            still_active.push(handover);
+            continue;
+        }
         let key = handover.child.key;
+        // The plan can also have grown since it was frozen at promotion — not only by an
+        // existing target's entity changing (`replan_reloaded_targets`, above), but by an
+        // entirely new target becoming relevant, or `key` itself needing to omit more.
+        // Nothing blocks this the way `active_targets` blocks a second handover from
+        // touching the same *target*: a parent or same-level neighbour that was not yet
+        // shown when this handover was promoted is not reserved by anything, so it can
+        // become shown — and start needing this handover's contribution — at any later
+        // point while this handover waits on unrelated work; symmetrically, `key` itself
+        // is not a target of anything while it has no entity, so an already-shown
+        // grandchild or guest-cell owner appearing elsewhere never races a disjointness
+        // check either. Reachable whenever `key` (or one of its targets) needed a
+        // handover for an unrelated reason and something else settled in during that
+        // wait — plain, churn-free settles included; found by the content invariant
+        // (`assert_omission_invariant`, task-12b-report.md fix round 2), not by any race
+        // construction.
+        if reconcile_load_plan(
+            world,
+            shown,
+            &cfg,
+            pool,
+            key,
+            &handover.child.chunk,
+            &mut handover.self_omit,
+            &mut handover.omit,
+            &mut handover.results,
+            &mut handover.remeshes,
+        ) {
+            still_active.push(handover);
+            continue;
+        }
         // This is the same gate `insert` has always been (just reached later, once this
         // handover's re-meshes have actually landed rather than the moment generation
         // finished): a chunk the window stopped wanting while this handover was in flight
@@ -564,19 +794,17 @@ fn apply_finished_loads(
             continue;
         }
         // Partner chunks (parent / same-level neighbours): only touch a target that
-        // *still* has exactly the entity this handover was planned against. One that
-        // unloaded — or unloaded and reloaded with a fresh entity — while this handover's
-        // re-mesh was in flight is left alone entirely: neither the mesh swap nor the
-        // `shown.omit` bookkeeping runs for it. Applying the bookkeeping unconditionally
-        // here was Critical 1 (task-12b-report.md fix round 1): it recreated a phantom
-        // omission entry for a chunk with no entity, which `spawn_jobs` would then feed
-        // straight into that chunk's *next* regeneration as a stale, wrong omission —
-        // a permanent hole with nothing left drawing the cell.
+        // *still* has exactly the entity this handover was (last) planned against — one
+        // that is genuinely gone (its `TargetStatus`, not merely "not `Unchanged`" now
+        // that `replan_reloaded_targets` above has already handled the `Reloaded` case) is
+        // left alone entirely: neither the mesh swap nor the `shown.omit` bookkeeping runs
+        // for it. Applying the bookkeeping unconditionally here was Critical 1
+        // (task-12b-report.md fix round 1): it recreated a phantom omission entry for a
+        // chunk with no entity, which `spawn_jobs` would then feed straight into that
+        // chunk's *next* regeneration as a stale, wrong omission — a permanent hole with
+        // nothing left drawing the cell.
         for (target, (entity_snapshot, cells)) in &handover.omit {
-            if *target == key {
-                continue; // the child itself: handled below, once it has a real entity
-            }
-            if !target_is_still_valid(shown, *target, *entity_snapshot) {
+            if target_status(shown, *target, *entity_snapshot) != TargetStatus::Unchanged {
                 continue;
             }
             if let Some((_, data)) = handover.results.iter().find(|(t, _)| t == target) {
@@ -602,11 +830,10 @@ fn apply_finished_loads(
             &child_mesh,
         );
         // The child's own omissions (self_dirty), if any — always applied: `show_child`
-        // just gave `key` a brand new entity, so there is no staleness to guard against.
-        if let Some((_, cells)) = handover.omit.get(&key) {
-            for cell in cells {
-                shown.omit(key, *cell);
-            }
+        // just gave `key` a brand new entity, so there is no earlier incarnation of it to
+        // have gone stale.
+        for cell in &handover.self_omit {
+            shown.omit(key, *cell);
         }
     }
     handovers.active_loads = still_active;
@@ -614,10 +841,13 @@ fn apply_finished_loads(
 
 fn apply_finished_unloads(
     commands: &mut Commands,
+    world: &HexWorld,
     shown: &mut Shown,
     meshes: &mut Assets<Mesh>,
     handovers: &mut Handovers,
 ) {
+    let cfg = *world.store().config();
+    let pool = AsyncComputeTaskPool::get();
     let mut still_active = Vec::with_capacity(handovers.active_unloads.len());
     for mut handover in handovers.active_unloads.drain(..) {
         handover
@@ -627,23 +857,51 @@ fn apply_finished_unloads(
             still_active.push(handover);
             continue;
         }
-        // Same staleness guard as `apply_finished_loads`: only touch a target that still
-        // has exactly the entity this handover was planned against.
-        for (target, (entity_snapshot, cells)) in &handover.restore {
-            if !target_is_still_valid(shown, *target, Some(*entity_snapshot)) {
-                continue;
-            }
-            if let Some((_, data)) = handover.results.iter().find(|(t, _)| t == target) {
-                entities::apply_remesh(commands, meshes, shown, *target, data);
-            }
-            for cell in cells {
-                shown.restore(*target, *cell);
-            }
+        // Same reload-vs-gone distinction as `apply_finished_loads` — see fix round 2
+        // (task-12b-report.md): a target that unloaded and reloaded with a fresh entity
+        // must be re-planned against its live state, not treated the same as one that is
+        // simply gone, or its restore is silently dropped and the cell is left with
+        // nothing drawing it — a permanent hole, the unload-side mirror of Critical 1's
+        // permanent-doubled-surface.
+        if replan_reloaded_targets(
+            world,
+            shown,
+            &cfg,
+            pool,
+            &mut handover.restore,
+            &mut handover.results,
+            &mut handover.remeshes,
+            difference,
+        ) {
+            still_active.push(handover);
+            continue;
         }
-        // Only remove/despawn this exact snapshot — a reload that raced back in and was
-        // already applied owns a fresher entity, which this must not touch (see
-        // `promote_unloads` and `UnloadHandover::entity`).
-        if shown.entity(handover.key) == Some(handover.entity) {
+        // The departing chunk itself can also have reloaded with a fresh entity while
+        // this handover's re-meshes were in flight — `promote_unloads`'s entity check
+        // only runs once, *before* promotion; nothing re-checks it again before this
+        // point. `replan_reloaded_targets` above only guards a *target*'s identity, not
+        // the departing key's own — and if the departing key raced back in, the reload is
+        // already drawing every cell this handover was going to restore, so applying any
+        // of them now would wrongly undo an omission the reload still needs: a permanent
+        // hole (found by the content invariant, fix round 2, task-12b-report.md — this
+        // was the actual bug behind the residual failures fixing the load-side "new
+        // target" gap didn't touch). Skip the whole restore step in that case; only the
+        // stale entity's despawn below still applies.
+        let departed_cleanly = shown.entity(handover.key) == Some(handover.entity);
+        if departed_cleanly {
+            // Only touch a target that is genuinely still `Unchanged` (the `Reloaded`
+            // case is already fully handled above by `replan_reloaded_targets`).
+            for (target, (entity_snapshot, cells)) in &handover.restore {
+                if target_status(shown, *target, *entity_snapshot) != TargetStatus::Unchanged {
+                    continue;
+                }
+                if let Some((_, data)) = handover.results.iter().find(|(t, _)| t == target) {
+                    entities::apply_remesh(commands, meshes, shown, *target, data);
+                }
+                for cell in cells {
+                    shown.restore(*target, *cell);
+                }
+            }
             shown.remove(handover.key);
         }
         commands.entity(handover.entity).despawn();
@@ -663,11 +921,11 @@ mod tests {
     /// target's entity at promotion time, then that target unloaded (its own,
     /// independent unload handover applied — which despawns it and calls
     /// `Shown::remove`, clearing its entry entirely) before this handover's own re-mesh
-    /// landed. Applying its bookkeeping against that must be refused, or `shown.omit`
-    /// re-creates a phantom entry for a chunk nothing is drawing any more (see
-    /// `apply_finished_loads`).
+    /// landed. That must read as `Gone`, not `Unchanged` — the final apply step drops a
+    /// `Gone` target rather than recreating a phantom `Shown` entry for a chunk nothing
+    /// is drawing any more (see `apply_finished_loads`).
     #[test]
-    fn a_target_that_unloaded_since_promotion_is_no_longer_valid() {
+    fn a_target_that_unloaded_since_promotion_is_gone() {
         let n = ChunkKey::new(hexworld::Level::Ken, hexworld::Hex::new(1, 0));
         let mut shown = Shown::default();
         let e1 = fake_entity(1);
@@ -675,51 +933,34 @@ mod tests {
 
         // Snapshotted while N was still shown — this is what a handover targeting N
         // would have captured at its own promotion time.
-        let snapshot = Some(e1);
-        assert!(target_is_still_valid(&shown, n, snapshot));
+        assert_eq!(target_status(&shown, n, e1), TargetStatus::Unchanged);
 
         // N's own unload handover applies: despawns e1, and `Shown::remove` clears N's
         // entry entirely — exactly `apply_finished_unloads`'s last step.
         shown.remove(n);
-        assert!(
-            !target_is_still_valid(&shown, n, snapshot),
-            "a target with no entity must never be treated as valid, or its handover's \
-             `shown.omit`/`restore` recreates a phantom entry for a chunk nothing draws"
-        );
+        assert_eq!(target_status(&shown, n, e1), TargetStatus::Gone);
     }
 
-    /// The reload variant Critical 1's fix also covers: N unloads *and* reloads with a
-    /// fresh entity before the other handover's re-mesh for it lands. The stale snapshot
-    /// must not be treated as valid just because N has *an* entity again — it must be
-    /// the *same* entity, or the re-mesh in flight was computed against the wrong
-    /// incarnation's omissions.
+    /// Fix round 2's find (task-12b-report.md): a target that unloads *and reloads* with
+    /// a fresh entity before the other handover's re-mesh for it lands is not the same
+    /// case as one that stays gone — it must read as `Reloaded(e2)`, carrying the fresh
+    /// entity forward, so the caller can re-plan and re-spawn a re-mesh against it rather
+    /// than silently dropping the target's needed work (fix round 1's bug: treating
+    /// `Reloaded` the same as `Gone` left a permanent doubled surface or hole, depending
+    /// on which side).
     #[test]
-    fn a_target_that_reloaded_with_a_fresh_entity_is_no_longer_valid() {
+    fn a_target_that_reloaded_with_a_fresh_entity_is_reloaded_not_gone() {
         let n = ChunkKey::new(hexworld::Level::Ken, hexworld::Hex::new(1, 0));
         let mut shown = Shown::default();
         let e1 = fake_entity(1);
         shown.insert_entity(n, e1);
-        let snapshot = Some(e1);
 
         shown.remove(n);
         let e2 = fake_entity(2);
         shown.insert_entity(n, e2);
 
-        assert!(
-            !target_is_still_valid(&shown, n, snapshot),
-            "a fresh entity must not be painted with a mesh/bookkeeping computed against \
-             the stale incarnation the snapshot was taken from"
-        );
-        // Sanity: the fresh entity is of course valid against its own, current snapshot.
-        assert!(target_is_still_valid(&shown, n, Some(e2)));
-    }
-
-    /// `None` means the handover's own child, which has no entity yet at promotion time
-    /// by construction — always valid, since there is nothing to have gone stale.
-    #[test]
-    fn no_snapshot_means_the_not_yet_shown_child_and_is_always_valid() {
-        let key = ChunkKey::new(hexworld::Level::Ken, hexworld::Hex::ZERO);
-        let shown = Shown::default();
-        assert!(target_is_still_valid(&shown, key, None));
+        assert_eq!(target_status(&shown, n, e1), TargetStatus::Reloaded(e2));
+        // Sanity: the fresh entity is of course unchanged against its own, current status.
+        assert_eq!(target_status(&shown, n, e2), TargetStatus::Unchanged);
     }
 }

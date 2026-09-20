@@ -332,9 +332,17 @@ fn plan_guest_handover_on_load(
 ) -> HashMap<ChunkKey, HashSet<Hex>> {
     let mut plan: HashMap<ChunkKey, HashSet<Hex>> = HashMap::new();
 
-    // `key` has no entry in `Shown` yet, so its own omitted set is always empty here —
-    // diffing against it is a no-op, but done anyway so this stays correct if that ever
-    // changes (e.g. a future caller re-planning an already-partly-applied handover).
+    // `key` has no entry in `Shown` yet, so its own omitted set is always empty here and
+    // this diff is a no-op — but it is *only* safe because of that, not despite it: the
+    // invariant is that `Shown::omit` is never called for a key without an entity (see
+    // `Shown::insert_entity`/`omit`), which is exactly what guarantees `omitted_for(key)`
+    // is empty at this point. If that guarantee were ever broken, this diff would become
+    // actively wrong, not merely redundant: `tasks::promote_loads` re-meshes a not-yet-
+    // shown child with `added` alone (this plan's `key` entry), never
+    // `shown.omitted_for(key)` unioned in, so any cell this diff excluded because it was
+    // already in a non-empty `omitted_for(key)` would be missing from the child's first
+    // mesh entirely — an under-omitting, doubled-surface bug. Keep this diff and
+    // `promote_loads`'s self case in sync if that invariant ever changes.
     let mine: HashSet<Hex> = guest_cells_to_omit(cfg, key, shown)
         .difference(shown.omitted_for(key))
         .copied()
