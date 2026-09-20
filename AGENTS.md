@@ -58,13 +58,15 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
 
 - **No spec or plan files for the main project.** Agree the design with the user in chat, wait for a yes, then implement it and open a PR. Specs and plans are only for experiments.
 - **Work in small, visible steps.** Build the smallest thing that puts something on screen, let the user see it, then agree the next step. Don't disappear into a long build-out.
-- **Build and run:** `cargo build`, `cargo run`, `cargo clippy`, `cargo fmt`. There are no tests yet.
+- **Build, run and test:** `cargo build`, `cargo run`, `cargo test`, `cargo clippy --all-targets`, `cargo fmt`.
 - **Bevy compiles into the binary.** There is no engine install: `bevy = "0.19"` in `Cargo.toml` is the whole thing. The first build takes about 4.5 minutes (551 crates, dependencies at `opt-level = 3`); after that, a change to `src/` rebuilds in about 3 seconds. `target/` runs to roughly 10 GB.
 - **Linux system libraries.** Bevy's default features build winit with the Wayland backend, which needs `libwayland-dev`, `libxkbcommon-dev` and `libudev-dev`. Without them the build fails in `wayland-sys`'s build script with a pkg-config error.
 
 ### Layout
 
+- `src/lib.rs` — the module list; everything lives in the library so the tests can reach it
 - `src/main.rs` — the window and the plugin list, and nothing else
+- `tests/` — integration tests, each file its own binary against the library
 - `src/camera.rs` — `CameraRig` (a ground focus, a zoom distance, a pan velocity) and the pan/zoom/apply systems
 - `src/scene.rs` — the placeholder world: ground, a cube, a sun
 - `src/settings.rs` — `CameraSettings` and the settings file
@@ -86,6 +88,14 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
 - **Running the binary directly needs `BEVY_ASSET_ROOT`.** Bevy resolves `assets/` relative to the executable unless `cargo run` sets it, so a direct `./target/debug/murabito` can't find the font or the locales.
 - **UI text is never a literal.** Every string comes from `assets/locales/{en,ja}.yaml` through a `Localized` key, and both catalogues must carry the same keys — a gap warns at startup. Text that is the same in every language (a language's own name, a number) uses `ui::spawn_literal_button` instead.
 - **A fixed-width text node wraps.** Bevy UI text in a node with an explicit width will line-break, possibly onto an invisible whitespace line, which doubles the node's height and pushes the glyphs off centre. Use `LineBreak::NoWrap` on labels with a fixed width.
+- **Tests run headless, and must stay that way.** `MinimalPlugins` brings the schedules
+  and `Time`; add `bevy::state::app::StatesPlugin` for anything touching `AppState`, as it
+  arrives with `DefaultPlugins` in the real app but not in `MinimalPlugins`. Drive frames
+  with `app.update()`, never `app.run()`. No test may open a window or need a GPU.
+- **Tests must not touch the player's real files.** `settings.rs` still resolves its path
+  from `dirs::config_dir()` internally, so it cannot be tested without clobbering the
+  player's own `~/.config/murabito/settings.yaml`. Give it an injectable path before
+  writing those tests.
 - **Never kill, signal or otherwise touch a process you didn't start.**
 
 

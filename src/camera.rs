@@ -212,3 +212,61 @@ fn apply_rig(mut rig: Single<(&CameraRig, &mut Transform)>) {
     let (camera_rig, transform) = &mut *rig;
     **transform = camera_rig.transform();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// These pin down the pan-speed curve, which was arrived at by feel over several
+    /// rounds rather than derived. Nothing will catch a change to it at runtime except
+    /// a person noticing the camera feels wrong, so it is worth a test.
+    fn rig_at(zoom: f32) -> CameraRig {
+        CameraRig {
+            zoom,
+            zoom_target: zoom,
+            ..default()
+        }
+    }
+
+    fn scaled(scale: f32) -> CameraSettings {
+        CameraSettings {
+            pan_speed_scale: scale,
+        }
+    }
+
+    #[test]
+    fn pans_at_the_base_speed_at_the_reference_zoom() {
+        let speed = rig_at(PAN_REF_ZOOM).pan_speed(&scaled(1.0));
+        assert!(
+            (speed - PAN_SPEED).abs() < 1e-4,
+            "{speed} should be PAN_SPEED"
+        );
+    }
+
+    #[test]
+    fn pan_speed_follows_zoom_by_the_tuned_exponent() {
+        let near = rig_at(PAN_REF_ZOOM).pan_speed(&scaled(1.0));
+        let far = rig_at(PAN_REF_ZOOM * 4.0).pan_speed(&scaled(1.0));
+        // Four times further out pans about 2.83x faster, not 4x (proportional) and
+        // not 1x (fixed). This is the whole point of the 0.75 exponent.
+        let ratio = far / near;
+        assert!(
+            (ratio - 4.0_f32.powf(PAN_ZOOM_EXPONENT)).abs() < 1e-4,
+            "zooming out 4x changed the pan speed {ratio}x"
+        );
+        assert!(ratio > 1.0 && ratio < 4.0, "{ratio} left the tuned range");
+    }
+
+    #[test]
+    fn the_player_multiplier_scales_the_whole_curve() {
+        for zoom in [ZOOM_MIN, PAN_REF_ZOOM, ZOOM_MAX] {
+            let plain = rig_at(zoom).pan_speed(&scaled(1.0));
+            let doubled = rig_at(zoom).pan_speed(&scaled(2.0));
+            assert!(
+                (doubled - plain * 2.0).abs() < 1e-3,
+                "at zoom {zoom}, doubling the setting gave {doubled} not {}",
+                plain * 2.0
+            );
+        }
+    }
+}

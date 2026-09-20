@@ -2,22 +2,12 @@
 //!
 //! Controls: WASD or the arrow keys pan, the mouse wheel zooms, Escape opens the menu,
 //! F12 saves a screenshot.
-
-// ECS query types are tuples of tuples by nature, and naming each one costs more than it
-// explains. Bevy's own examples allow this lint for the same reason.
-#![allow(clippy::type_complexity)]
-
-mod camera;
-mod i18n;
-mod menu;
-mod scene;
-mod screenshot;
-mod settings;
-mod settings_page;
-mod state;
-mod ui;
+//!
+//! Everything this assembles lives in the library crate (`src/lib.rs`), so that the
+//! tests can get at it. This file is the window and the plugin list, and nothing else.
 
 use bevy::prelude::*;
+use murabito::{camera, i18n, menu, scene, screenshot, settings, settings_page, state, ui};
 
 fn main() {
     App::new()
