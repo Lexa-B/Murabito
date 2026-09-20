@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use bevy::prelude::*;
-use hexworld::{ChunkKey, Hex, Level, Rings, StoreSettings};
+use hexworld::{ChunkKey, Hex, Level, Rings, StoreSettings, WorldConfig};
 use hexworld_bevy::{ChunkView, HexWorld, Loader, Shown};
 
 #[path = "common/mod.rs"]
@@ -288,6 +288,121 @@ fn the_parents_mesh_drops_the_vertex_the_same_frame_the_childs_entity_appears() 
     assert!(
         checked_at_least_one,
         "the loop never saw a new ken child of {cho_key:?} appear; the test proves nothing"
+    );
+}
+
+/// The mesh-geometry check for Ruling 2's guest-cell dedup, in the same shape as
+/// `the_parents_mesh_drops_the_vertex_the_same_frame_the_childs_entity_appears` above, but
+/// for two same-level neighbours sharing a guest (tie) cell rather than a parent and its
+/// child. `entities::tests::a_guest_chunk_omits_once_its_owner_is_shown` already proves
+/// the `Shown` bookkeeping is right; this proves the actual mesh follows it, in the frame
+/// the second of the pair is shown — not merely eventually — the same gap the parent/child
+/// sabotage exercise above found for bookkeeping-only checks.
+#[test]
+fn the_guest_sides_mesh_drops_the_shared_vertex_the_frame_both_neighbours_are_shown() {
+    let mut app = headless_app(StoreSettings::default());
+    app.world_mut().spawn((
+        Transform::default(),
+        Loader {
+            rings: Rings::default(),
+        },
+    ));
+
+    // Same pair `entities.rs`'s own unit test uses: known, by construction, to share at
+    // least one guest cell (see `hexworld`'s `shared_cells_are_exactly_guests`), and both
+    // are well within the default window (rings.shaku = 3) around the origin.
+    let a = ChunkKey::new(Level::Ken, Hex::ZERO);
+    let b = ChunkKey::new(Level::Ken, Hex::new(1, 0));
+    let cfg = WorldConfig::default();
+
+    // Which of a/b owns the shared tie cell is fixed by geometry alone, independent of
+    // load order — work it out once, up front, the pure-data way.
+    let cells_a: HashSet<Hex> = hexworld::mesh::drawn_cells(&cfg, a).into_iter().collect();
+    let cells_b: HashSet<Hex> = hexworld::mesh::drawn_cells(&cfg, b).into_iter().collect();
+    let mut shared: Vec<Hex> = cells_a.intersection(&cells_b).copied().collect();
+    shared.sort_by_key(|h| (h.q, h.r));
+    let cell = *shared
+        .first()
+        .expect("a and b are known neighbours and must share at least one guest cell");
+    let owner_cell = hexworld::owner::parent_of(cell, Level::Shaku);
+    let (owner_key, guest_key) = if owner_cell == a.cell { (a, b) } else { (b, a) };
+
+    // Each chunk's mesh is relative to its own centre (`chunk_origin`/`cell_centre_m`), so
+    // the shared cell's local target position differs between the two meshes — converted
+    // through the same public `axes::mesh_position` helper the production code uses, not
+    // reimplemented.
+    let local_target = |key: ChunkKey| -> [f32; 2] {
+        let origin = hexworld::plane::cell_centre_m(key.cell, Level::Ken);
+        let (ce, cn) = hexworld::plane::cell_centre_m(cell, Level::Shaku);
+        let p = hexworld_bevy::axes::mesh_position([
+            (ce - origin.0) as f32,
+            (cn - origin.1) as f32,
+            0.0,
+        ]);
+        [p[0], p[2]]
+    };
+    let owner_target = local_target(owner_key);
+    let guest_target = local_target(guest_key);
+
+    let mesh_positions = |world: &World, key: ChunkKey| -> Option<Vec<[f32; 3]>> {
+        let shown = world.resource::<Shown>();
+        let entity = shown.entity(key)?;
+        let handle = &world.get::<Mesh3d>(entity)?.0;
+        let mesh = world.resource::<Assets<Mesh>>().get(handle)?;
+        let values = mesh.attribute(Mesh::ATTRIBUTE_POSITION)?.as_float3()?;
+        Some(values.to_vec())
+    };
+    let has_vertex_at = |positions: &[[f32; 3]], target: [f32; 2]| {
+        positions
+            .iter()
+            .any(|v| (v[0] - target[0]).abs() < 1e-3 && (v[2] - target[1]).abs() < 1e-3)
+    };
+
+    let mut both_were_shown = false;
+    let mut checked = false;
+
+    let started = std::time::Instant::now();
+    for frame in 0..common::SETTLE_FRAME_CAP {
+        app.update();
+
+        let world = app.world();
+        let both_shown_now = {
+            let shown = world.resource::<Shown>();
+            shown.entity(a).is_some() && shown.entity(b).is_some()
+        };
+
+        if both_shown_now && !both_were_shown {
+            checked = true;
+            let owner_positions = mesh_positions(world, owner_key)
+                .expect("the owner must have a mesh once both chunks are shown");
+            let guest_positions = mesh_positions(world, guest_key)
+                .expect("the guest must have a mesh once both chunks are shown");
+            assert!(
+                has_vertex_at(&owner_positions, owner_target),
+                "frame {frame}: {owner_key:?} owns {cell:?} and must still draw it"
+            );
+            assert!(
+                !has_vertex_at(&guest_positions, guest_target),
+                "frame {frame}: {guest_key:?} and {owner_key:?} are both shown this frame, \
+                 but {guest_key:?}'s mesh — read this same frame — still has a vertex at the \
+                 shared cell {cell:?}: the guest-side handover did not land in one frame"
+            );
+        }
+        both_were_shown = both_shown_now;
+
+        if world_is_fully_settled(world, DEFAULT_WINDOW_TOTAL) {
+            break;
+        }
+        assert!(
+            started.elapsed() < common::SETTLE_TIMEOUT,
+            "timed out after {:?} and {} frames waiting to settle",
+            started.elapsed(),
+            frame + 1
+        );
+    }
+    assert!(
+        checked,
+        "never observed both {a:?} and {b:?} shown together; the test proves nothing"
     );
 }
 

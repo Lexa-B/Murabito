@@ -4101,38 +4101,67 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: Task 11's plugin.
-- Produces: `Shown` resource: `HashMap<ChunkKey, Entity>` plus `omitted: HashMap<ChunkKey, HashSet<Hex>>`, with `omitted_for(ChunkKey) -> &HashSet<Hex>`. A job may now carry a re-meshed parent as well as a child: `JobOutput { key, chunk, mesh, parent_remesh: Option<(ChunkKey, MeshData)> }`.
+- Produces: `Shown` resource: `HashMap<ChunkKey, Entity>` plus `omitted: HashMap<ChunkKey, HashSet<Hex>>`, with `omitted_for(ChunkKey) -> &HashSet<Hex>`.
+
+  **As implemented (Ruling, dispatch): the `parent_remesh` field named above is void.**
+  `JobOutput` keeps its original three fields (`key`, `chunk`, `mesh`); the parent is
+  re-meshed on the main thread via `remesh_shown` (Step 2), not carried back from the
+  background job. The async route stays available as a fallback if a viewer later shows a
+  frame hitch from a cho chunk's re-mesh cost (Task 10 measured ~18.4 ms release /
+  22–27 ms dev — over the task's own ~4 ms threshold — but that is a decision for the
+  viewer to make from a real frame-time readout, not from this task).
 
 The rule: a chunk's mesh leaves out the cells whose own chunk is on screen. So a child appearing means its parent must be re-meshed without that cell, and both must reach the screen **in the same frame**, or there is a hole (child late) or a doubled surface (parent late).
 
+**As implemented, this also covers same-level siblings, not only parent/child** (carried
+in from Task 9's dispatch note: "`omitted` must also cover guest cells whose owning chunk
+is shown"). Two neighbouring chunks at the same level can share a guest (tie) cell by
+design (Task 9); once both are shown, the non-owner omits it and the owner never does —
+enforced structurally, since `guest_cells_to_omit` never proposes a cell a chunk owns as
+one to omit from itself, so there is no code path where both sides could omit the same
+cell. See `entities.rs`'s `sync_guests_on_load` / `release_guests_on_unload` /
+`guest_cells_to_omit`, and `tests/handover.rs`'s
+`the_guest_sides_mesh_drops_the_shared_vertex_the_frame_both_neighbours_are_shown` (added
+in fix round 1, see below).
+
+Also implemented, defensively, beyond the brief: `absorb_already_shown_children`. The
+store's `to_load` excludes a chunk once it is merely *in-flight*, not once it is *loaded*,
+and `load_order` only decides which chunk starts next, coarsest first — so once every
+coarser chunk has started, freed capacity pulls in finer chunks even while some coarser
+jobs are still generating. A finer chunk's async job can therefore finish, and be shown,
+before its own coarser parent's job does. When a chunk becomes newly shown, it now also
+checks whether any already-shown chunk at its own child level turns out to be its child,
+and omits that cell too, in the same frame. See `entities::tests::a_late_parent_absorbs_an_already_shown_child`.
+
 - [ ] **Step 1: Write the failing tests**
 
-`crates/hexworld_bevy/tests/handover.rs`:
+`crates/hexworld_bevy/tests/handover.rs`. `headless_app`, `run_until`,
+`run_until_fully_settled` and their wall-clock-bounded settle discipline are shared with
+`tests/plugin.rs` via `tests/common/mod.rs` (Task 11's helpers, generalised to take a
+`StoreSettings` argument), rather than duplicated per test file.
 
 ```rust
 use std::collections::HashSet;
 
 use bevy::prelude::*;
-use hexworld::{ChunkKey, Hex, Level, Rings, WorldConfig};
-use hexworld_bevy::{ChunkView, HexWorld, HexWorldPlugin, Loader, Shown};
+use hexworld::{ChunkKey, Hex, Level, Rings, StoreSettings, WorldConfig};
+use hexworld_bevy::{ChunkView, HexWorld, Loader, Shown};
 
-fn headless_app() -> App {
-    let mut app = App::new();
-    app.add_plugins(MinimalPlugins)
-        .add_plugins(bevy::asset::AssetPlugin::default())
-        .init_asset::<Mesh>()
-        .init_asset::<StandardMaterial>()
-        .add_plugins(HexWorldPlugin::default());
-    app
-}
+#[path = "common/mod.rs"]
+mod common;
+use common::{headless_app, run_until_fully_settled};
+
+// The default rings settle to 76 chunks (Task 7's known total for default rings at the
+// origin: 37 ken + 37 cho + 1 ri + 1 world). Waiting for a genuine settle, rather than a
+// fixed frame budget, is what makes the state these tests inspect a fact instead of an
+// observation caught mid-flight.
+const DEFAULT_WINDOW_TOTAL: usize = 76;
 
 #[test]
 fn a_shown_child_is_left_out_of_its_parents_mesh() {
-    let mut app = headless_app();
+    let mut app = headless_app(StoreSettings::default());
     app.world_mut().spawn((Transform::default(), Loader { rings: Rings::default() }));
-    for _ in 0..300 {
-        app.update();
-    }
+    run_until_fully_settled(&mut app, DEFAULT_WINDOW_TOTAL);
     let shown = app.world().resource::<Shown>();
     let cho_key = ChunkKey::new(Level::Cho, Hex::ZERO);
     let omitted = shown.omitted_for(cho_key);
@@ -4147,11 +4176,9 @@ fn a_shown_child_is_left_out_of_its_parents_mesh() {
 
 #[test]
 fn every_shown_chunk_has_exactly_one_entity() {
-    let mut app = headless_app();
+    let mut app = headless_app(StoreSettings::default());
     app.world_mut().spawn((Transform::default(), Loader { rings: Rings::default() }));
-    for _ in 0..300 {
-        app.update();
-    }
+    run_until_fully_settled(&mut app, DEFAULT_WINDOW_TOTAL);
     let mut query = app.world_mut().query::<&ChunkView>();
     let mut seen: HashSet<ChunkKey> = HashSet::new();
     for view in query.iter(app.world()) {
@@ -4163,38 +4190,78 @@ fn every_shown_chunk_has_exactly_one_entity() {
 
 #[test]
 fn unloading_puts_the_cell_back_into_its_parent() {
-    let mut app = headless_app();
+    // Ruling 3: a short unload delay, or the test would wait out the real 5 s default.
+    let mut app = headless_app(StoreSettings { unload_delay_s: 0.05, ..StoreSettings::default() });
     let entity = app
         .world_mut()
         .spawn((Transform::default(), Loader { rings: Rings::default() }))
         .id();
-    for _ in 0..300 {
-        app.update();
-    }
+    run_until_fully_settled(&mut app, DEFAULT_WINDOW_TOTAL);
     let cho_key = ChunkKey::new(Level::Cho, Hex::ZERO);
     assert!(!app.world().resource::<Shown>().omitted_for(cho_key).is_empty());
 
     // Shrink the loader's shaku window to nothing and wait out the unload delay.
     app.world_mut().entity_mut(entity).insert(Loader { rings: Rings { shaku: 0, ken: 3, cho: 3 } });
-    for _ in 0..600 {
-        app.update();
-    }
+    // The new window (shaku=0) is a strict subset of the old one: it never grows, so a
+    // genuine settle is simply in_flight==0.
+    common::run_until(
+        &mut app,
+        |world| world.store().in_flight_count() == 0,
+        |world| format!("in_flight={}", world.store().in_flight_count()),
+    );
     let shown = app.world().resource::<Shown>();
     let still_shown: Vec<ChunkKey> = shown
         .keys()
         .into_iter()
         .filter(|k| k.level == Level::Ken && k.parent_key() == Some(cho_key))
         .collect();
+    // As implemented: `cho_key`'s omissions are a mix of two mechanisms (see the guest-cell
+    // note above), so "every omitted cell is a still-shown ken child" does not hold on its
+    // own — it must be partitioned by actual owner. Verified concretely during
+    // implementation: Hex{37,-23} stays omitted from cho(0,0) because the *neighbouring*
+    // cho(1,-1) is shown, with no ken chunk involved at all, since the cho window
+    // (`rings.ken`) was never shrunk by this test.
     for cell in shown.omitted_for(cho_key) {
-        assert!(
-            still_shown.iter().any(|k| k.cell == *cell),
-            "{cell:?} is omitted from its parent but nothing draws it"
-        );
+        let owner_cho = hexworld::owner::parent_of(*cell, Level::Ken);
+        if owner_cho == cho_key.cell {
+            assert!(
+                still_shown.iter().any(|k| k.cell == *cell),
+                "{cell:?} is owned by {cho_key:?} and omitted from it, but no ken chunk draws it"
+            );
+        } else {
+            let owning_cho = ChunkKey::new(Level::Cho, owner_cho);
+            assert!(
+                shown.entity(owning_cho).is_some(),
+                "{cell:?} is a guest cell omitted from {cho_key:?}, but its true owner \
+                 {owning_cho:?} is not shown to draw it instead"
+            );
+        }
     }
 }
 ```
 
-Note: the headless app's `Time` advances in real time, so waiting out a 5 s delay in a test would be slow. Give the test app `StoreSettings { unload_delay_s: 0.05, ..default() }` through `HexWorldPlugin { settings, ..default() }` instead of sleeping.
+**As implemented, three more tests were added** to make the one-frame property itself
+testable — the three tests above only check state after many frames have run, which
+proves nothing about any single frame:
+
+- `the_parents_omission_never_lags_a_shown_childs_entity_by_even_one_frame` — checks the
+  first test's bookkeeping invariant on *every* frame of the settle loop, not just at the
+  end.
+- `the_parents_mesh_drops_the_vertex_the_same_frame_the_childs_entity_appears` — the same
+  idea against the actual `Mesh3d` vertex data (with a positive control: the vertex must
+  have been present the frame before), for the parent/child path.
+- `the_guest_sides_mesh_drops_the_shared_vertex_the_frame_both_neighbours_are_shown`
+  (**fix round 1**) — the same vertex-level check for the same-level guest-dedup path. The
+  first two tests, plus a bookkeeping-only unit test in `entities.rs`
+  (`a_guest_chunk_omits_once_its_owner_is_shown`), all still pass when the production code
+  is deliberately sabotaged to update `Shown` without calling `remesh_shown` — bookkeeping
+  alone has no teeth. This test, checking real vertex positions, fails against that same
+  sabotage (falsification evidence in `task-12-report.md`).
+
+`entities.rs` also gained three direct unit tests of the guest/absorb helpers against a
+bare `Shown` with fake `Entity` values (`a_guest_chunk_omits_once_its_owner_is_shown`,
+`unloading_the_owner_restores_the_guest`, `a_late_parent_absorbs_an_already_shown_child`) —
+fast, no `App`/ECS needed, and they pin the ordering rule directly.
 
 - [ ] **Step 2: Implement `Shown` and the handover in `entities.rs`**
 
@@ -4276,6 +4343,14 @@ let task = pool.spawn(async move {
 ```
 
 `spawn_jobs` therefore takes `&Shown` as well, and `drive_store` passes it through.
+
+**As implemented**, `Shown` also gained `insert_entity`/`remove` (so despawning a chunk
+forgets its entity and its omission set together, and there is one owner of "does this key
+have an entity" — the brief's own Step 3 note), and `entities.rs` gained the guest-cell
+functions (`guest_cells_to_omit`, `sync_guests_on_load`, `release_guests_on_unload`) and
+`absorb_already_shown_children` described under Interfaces above. `collect_finished_jobs`
+and `drive_store` call all of it inline, in the same system call as the entity
+spawn/despawn.
 
 - [ ] **Step 3: Run the tests**
 
