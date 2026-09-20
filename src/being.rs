@@ -15,6 +15,7 @@ use bevy::prelude::*;
 #[cfg(test)]
 use crate::senses::rotate;
 use crate::senses::{Hearing, SenseOverlay, Vision, VisionBand};
+use crate::諸法::種;
 
 /// Marks a body that senses and (later) acts. What perception will query for.
 ///
@@ -22,12 +23,6 @@ use crate::senses::{Hearing, SenseOverlay, Vision, VisionBand};
 /// were never alive; and not "entity", which is Bevy's own ID type.
 #[derive(Component, Clone, Copy, Debug)]
 pub struct Being;
-
-#[derive(Component, Clone, Copy, Debug)]
-pub struct Fox;
-
-#[derive(Component, Clone, Copy, Debug)]
-pub struct Rabbit;
 
 const FOX_COLOR: Color = Color::srgb(0.78, 0.36, 0.12);
 const RABBIT_COLOR: Color = Color::srgb(0.74, 0.70, 0.64);
@@ -115,7 +110,10 @@ fn spawn_beings(
     let rabbit_at = Vec3::new(4.0, 0.18, -3.0);
 
     commands.spawn((
-        Fox,
+        // Which kind it is, as a taxonomy key rather than a Rust type: the same reason
+        // the tree is data. A `Fox` component would put the ontology back in the type
+        // system, where it cannot be walked.
+        種::new("狐"),
         Being,
         Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 1.1))),
         MeshMaterial3d(materials.add(FOX_COLOR)),
@@ -127,7 +125,7 @@ fn spawn_beings(
     ));
 
     commands.spawn((
-        Rabbit,
+        種::new("兎"),
         Being,
         Mesh3d(meshes.add(Cuboid::new(0.36, 0.36, 0.55))),
         MeshMaterial3d(materials.add(RABBIT_COLOR)),

@@ -272,7 +272,11 @@ proposal, not a commitment.
 - [x] **3a-i. The ontology YAML.** `assets/ontology/諸法.yaml` — 19 nodes, parses.
 - [x] **3a-ii. The loader and traversal.** `src/諸法.rs`: `実相` as a resource, `path`,
       `is_a`, and `descend_while` as the seam the recognition loop plugs into.
-- [ ] **3b. Facets.** Non-hierarchical tags alongside the tree, and a lookup by facet.
+- [x] **3b. Facets.** `属性` reserved on a node, inherited downward, validated against a
+      declared registry. `食物連鎖: [捕食者, 被食者]` is the first real one. Beings now
+      carry `種`, not `Fox`/`Rabbit` markers.
+- [ ] **3b-ii. Instance facets.** A being carrying 子供 in its own right, rather than
+      inheriting everything from its 種. 年齢 is declared and has nowhere to live yet.
 - [ ] **3c. The recognition loop, shallow.** Percept in, walk the shared tree, pull the
       leaf, feed a bid. Every being still omniscient about the taxonomy.
 - [ ] **3d. Private ontologies.** Each being gets its own partial copy, so traversal

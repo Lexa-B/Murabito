@@ -14,7 +14,7 @@
 //! so materialising a 未知 child under all nineteen nodes would add nineteen keys that
 //! nothing could ever store anything in.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use bevy::prelude::*;
 use serde::Deserialize;
@@ -25,6 +25,9 @@ const 諸法_YAML: &str = include_str!("../assets/ontology/諸法.yaml");
 
 /// Reserved. Never a node in the tree; see the module note.
 pub const 未知: &str = "未知";
+
+/// Reserved. Under a node this lists that node's facets rather than naming a child.
+pub const 属性: &str = "属性";
 
 /// Loads the taxonomy and inserts it as a resource.
 pub struct TaxonomyPlugin;
@@ -51,7 +54,28 @@ pub struct Node {
 pub struct 実相 {
     root: String,
     nodes: BTreeMap<String, Node>,
+    /// Facet group to its values, as declared. The closed set a node may draw from.
     属性: BTreeMap<String, Vec<String>>,
+    /// Node to the facets it declares itself, before inheritance.
+    own_facets: BTreeMap<String, BTreeSet<String>>,
+}
+
+/// Which node of 諸法実相 an entity is an instance of.
+///
+/// A `String` and not a Rust type, for the same reason the tree is data: `狐` has to be
+/// something `descend_while` can be handed at runtime. It is also why there is no `Fox`
+/// component — that would be the taxonomy leaking back into the type system.
+#[derive(Component, Clone, Debug, PartialEq, Eq)]
+pub struct 種(pub String);
+
+impl 種 {
+    pub fn new(key: impl Into<String>) -> Self {
+        Self(key.into())
+    }
+
+    pub fn key(&self) -> &str {
+        &self.0
+    }
 }
 
 impl 実相 {
@@ -90,6 +114,7 @@ impl 実相 {
             root,
             nodes,
             属性: BTreeMap::new(),
+            own_facets: BTreeMap::new(),
         }
     }
 
@@ -108,15 +133,53 @@ impl 実相 {
             )]);
         }
 
+        let RawEntry::Node(raw) = raw else {
+            return Err(vec![format!("{root} is a list; the root must be a node")]);
+        };
+
         let mut nodes = BTreeMap::new();
+        let mut own_facets = BTreeMap::new();
         let mut problems = Vec::new();
-        flatten(&root, raw, None, 0, &mut nodes, &mut problems);
+        flatten(
+            &root,
+            raw,
+            None,
+            0,
+            &mut nodes,
+            &mut own_facets,
+            &mut problems,
+        );
+
+        // A value in two groups would make `group_of` a coin toss, and the groups are
+        // meant to be alternatives within one axis.
+        let mut seen: BTreeMap<&str, &str> = BTreeMap::new();
+        for (group, values) in &file.属性 {
+            for value in values {
+                if let Some(other) = seen.insert(value, group) {
+                    problems.push(format!(
+                        "facet {value} is declared in two groups: {other} and {group}"
+                    ));
+                }
+            }
+        }
+        // A facet nobody declared is almost always a typo, and a silently-ignored one
+        // would mean a fox quietly stops being a 捕食者.
+        for (node, facets) in &own_facets {
+            for facet in facets {
+                if !seen.contains_key(facet.as_str()) {
+                    problems.push(format!(
+                        "{node} carries {facet}, which no 属性 group declares"
+                    ));
+                }
+            }
+        }
 
         if problems.is_empty() {
             Ok(Self {
                 root,
                 nodes,
                 属性: file.属性,
+                own_facets,
             })
         } else {
             Err(problems)
@@ -206,8 +269,47 @@ impl 実相 {
         Some(deepest)
     }
 
+    /// The declared facet groups and their values: the closed set a node may draw from.
     pub fn 属性(&self) -> &BTreeMap<String, Vec<String>> {
         &self.属性
+    }
+
+    /// Which group a facet belongs to, if any.
+    pub fn group_of(&self, facet: &str) -> Option<&str> {
+        self.属性
+            .iter()
+            .find(|(_, values)| values.iter().any(|value| value == facet))
+            .map(|(group, _)| group.as_str())
+    }
+
+    /// Every facet this node carries, its own and every ancestor's.
+    ///
+    /// Facets inherit downward because the tree is a taxonomy: whatever is true of
+    /// 動物 is true of 狐. They are still a separate axis — two nodes sharing a facet
+    /// need share no branch, which is the whole point of 子供.
+    pub fn facets_of(&self, key: &str) -> BTreeSet<&str> {
+        let mut facets = BTreeSet::new();
+        let mut here = Some(key);
+        while let Some(node) = here {
+            if let Some(own) = self.own_facets.get(node) {
+                facets.extend(own.iter().map(String::as_str));
+            }
+            here = self.parent(node);
+        }
+        facets
+    }
+
+    pub fn has_facet(&self, key: &str, facet: &str) -> bool {
+        self.contains(key) && self.facets_of(key).contains(facet)
+    }
+
+    /// Every node carrying `facet`, inherited ones included. Sorted, so it is stable.
+    pub fn nodes_with(&self, facet: &str) -> Vec<&str> {
+        self.nodes
+            .keys()
+            .map(String::as_str)
+            .filter(|key| self.facets_of(key).contains(facet))
+            .collect()
     }
 }
 
@@ -218,6 +320,7 @@ fn flatten(
     parent: Option<&str>,
     depth: usize,
     nodes: &mut BTreeMap<String, Node>,
+    own_facets: &mut BTreeMap<String, BTreeSet<String>>,
     problems: &mut Vec<String>,
 ) {
     // 未知 is reserved: it is what a stopped traversal means, not somewhere to stop.
@@ -239,7 +342,24 @@ fn flatten(
         return;
     }
 
-    let children = raw.0.unwrap_or_default();
+    // Split the node's own facets out from its children before recording either.
+    let mut children = BTreeMap::new();
+    let mut facets = BTreeSet::new();
+    for (name, entry) in raw.0.unwrap_or_default() {
+        match (name.as_str() == 属性, entry) {
+            (true, RawEntry::Facets(values)) => facets.extend(values),
+            (true, RawEntry::Node(_)) => {
+                problems.push(format!("{key}: 属性 must be a list of facets, not a node"));
+            }
+            (false, RawEntry::Node(child)) => {
+                children.insert(name, child);
+            }
+            (false, RawEntry::Facets(_)) => {
+                problems.push(format!("{key}: {name} is a list; only 属性 may be one"));
+            }
+        }
+    }
+
     nodes.insert(
         key.to_string(),
         Node {
@@ -248,8 +368,19 @@ fn flatten(
             depth,
         },
     );
+    if !facets.is_empty() {
+        own_facets.insert(key.to_string(), facets);
+    }
     for (child, grandchildren) in children {
-        flatten(&child, grandchildren, Some(key), depth + 1, nodes, problems);
+        flatten(
+            &child,
+            grandchildren,
+            Some(key),
+            depth + 1,
+            nodes,
+            own_facets,
+            problems,
+        );
     }
 }
 
@@ -264,7 +395,16 @@ struct File {
 /// `狐:` mean a leaf, because one of them is what somebody will type.
 #[derive(Deserialize)]
 #[serde(transparent)]
-struct RawNode(Option<BTreeMap<String, RawNode>>);
+struct RawNode(Option<BTreeMap<String, RawEntry>>);
+
+/// Under a node, `属性` holds a list of facets and every other key is a child. They are
+/// told apart by shape, and anything of the wrong shape is reported rather than guessed.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RawEntry {
+    Facets(Vec<String>),
+    Node(RawNode),
+}
 
 #[cfg(test)]
 mod tests {
@@ -458,5 +598,115 @@ mod tests {
     #[test]
     fn descending_toward_something_outside_the_tree_yields_nothing() {
         assert_eq!(tree().descend_while("麒麟", |_| true), None);
+    }
+
+    // --- 属性: the second axis ----------------------------------------------
+
+    #[test]
+    fn a_node_carries_the_facets_it_declares() {
+        let tree = tree();
+        assert!(tree.has_facet("狐", "捕食者"));
+        assert!(tree.has_facet("狼", "捕食者"));
+        assert!(tree.has_facet("兎", "被食者"));
+        assert!(!tree.has_facet("兎", "捕食者"));
+    }
+
+    /// The axes are independent: 狐 and 狼 share 捕食者 without 兎 sharing it, though all
+    /// three are siblings under 動物. A facet cuts across the tree rather than along it.
+    #[test]
+    fn facets_cut_across_the_tree_rather_than_along_it() {
+        let tree = tree();
+        assert_eq!(tree.parent("狐"), tree.parent("兎"));
+        assert_eq!(tree.nodes_with("捕食者"), ["狐", "狼"]);
+        assert_eq!(tree.nodes_with("被食者"), ["兎"]);
+    }
+
+    #[test]
+    fn facets_inherit_downward() {
+        let mut yaml = String::from(
+            "
+分類:
+  諸法:
+    動物:
+      属性: [被食者]
+      兎: {}
+属性:
+  食物連鎖: [捕食者, 被食者]
+",
+        );
+        yaml.push('\n');
+        let tree = 実相::parse(&yaml).unwrap();
+        // Declared on the parent, true of the child, and the child declared nothing.
+        assert!(tree.has_facet("動物", "被食者"));
+        assert!(tree.has_facet("兎", "被食者"));
+        assert!(!tree.has_facet("諸法", "被食者"));
+    }
+
+    #[test]
+    fn a_facet_knows_its_group() {
+        let tree = tree();
+        assert_eq!(tree.group_of("捕食者"), Some("食物連鎖"));
+        assert_eq!(tree.group_of("子供"), Some("年齢"));
+        assert_eq!(tree.group_of("麒麟"), None);
+    }
+
+    /// An undeclared facet is nearly always a typo, and ignoring it silently would mean
+    /// a fox quietly ceasing to be a 捕食者.
+    #[test]
+    fn a_facet_no_group_declares_is_rejected() {
+        let yaml = "
+分類:
+  諸法:
+    狐:
+      属性: [補食者]
+属性:
+  食物連鎖: [捕食者, 被食者]
+";
+        let problems = 実相::parse(yaml).unwrap_err();
+        assert!(
+            problems.iter().any(|p| p.contains("補食者")),
+            "{problems:?}"
+        );
+    }
+
+    /// Two groups claiming one value would make `group_of` a coin toss.
+    #[test]
+    fn a_facet_declared_in_two_groups_is_rejected() {
+        let yaml = "
+分類:
+  諸法: {}
+属性:
+  年齢: [子供, 大人]
+  世代: [子供, 老人]
+";
+        let problems = 実相::parse(yaml).unwrap_err();
+        assert!(
+            problems.iter().any(|p| p.contains("two groups")),
+            "{problems:?}"
+        );
+    }
+
+    /// 属性 under a node is metadata, never a child, so it must not appear in the tree.
+    #[test]
+    fn the_reserved_facet_key_is_not_a_node() {
+        let tree = tree();
+        assert!(!tree.contains("属性"));
+        assert!(!tree.children("狐").contains(&"属性".to_string()));
+        assert!(tree.children("狐").is_empty());
+    }
+
+    #[test]
+    fn a_list_where_a_node_belongs_is_reported() {
+        let yaml = "
+分類:
+  諸法:
+    狐: [捕食者]
+属性: {}
+";
+        let problems = 実相::parse(yaml).unwrap_err();
+        assert!(
+            problems.iter().any(|p| p.contains("only 属性")),
+            "{problems:?}"
+        );
     }
 }

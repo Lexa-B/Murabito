@@ -43,9 +43,14 @@
         # if the everyday reading proves too confusing.
         生き物:
           動物:
-            狐: {}
-            兎: {}
-            狼: {}
+            # 属性 is reserved: on a node it lists that node's facets, and everything
+            # else under a node is a child. Facets are inherited downward.
+            狐:
+              属性: [捕食者]
+            狼:
+              属性: [捕食者]
+            兎:
+              属性: [被食者]
           人間: {}
 
         # 幽 — the hidden realm, 幽世, as against the manifest 顕世. Classifies by realm
@@ -76,3 +81,9 @@
   年齢:
     - 子供
     - 大人
+  # Coarse trophic role. A relation strictly speaking — a fox is 被食者 to a bear — but
+  # one position per kind is enough until something eats a fox. 栄養段階 is the more
+  # technical name for the axis if this ever needs to be more than two values.
+  食物連鎖:
+    - 捕食者
+    - 被食者
