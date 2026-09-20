@@ -21,3 +21,7 @@ pub mod settings_page;
 pub mod state;
 pub mod ui;
 pub mod user_data;
+// rustc will not infer a filename from a non-ASCII module name (E0754), so it is
+// spelled out. The file really is `src/諸法.rs`.
+#[path = "諸法.rs"]
+pub mod 諸法;

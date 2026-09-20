@@ -103,11 +103,17 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
 12h. **幽 for the unseen**, not 妖怪 (too narrow, excludes 神) or 霊 (leans ghost). It
     classifies by realm — 幽世 against the manifest 顕世 — so 神 and 妖怪 sit together
     with neither filed under the other, and it leaves 顕/幽 available as a facet.
-12i. **未知 is the fallback leaf at every node**, implicit and added by the loader rather
-    than written out per node. Category-neutral, so it reads correctly on both branches
-    where 知らない物 would not. It pairs with 既知, and learning is a node moving between
-    them.
-12j. **Rust domain types carry kanji** (実相, 仮諦), plumbing verbs stay English.
+12i. **未知 is the name of a stopped traversal, not a node.** Category-neutral, so it
+    reads correctly on both branches where 知らない物 would not, and it pairs with 既知.
+    Building 3a-ii showed it should not be materialised: "stopping at 狼 and pulling
+    狼's 未知" *is* the traversal stopping at 狼, and the generic impression hangs off
+    that node in the being's 仮諦, where impressions live. The world tree has none to
+    hang, so materialising it would add one dead key per node. The YAML header's claim
+    that the loader adds them is superseded.
+12j. **Rust domain types carry kanji** (実相, 仮諦), plumbing verbs stay English. A
+    non-ASCII *module* name needs an explicit `#[path]`, since rustc will not infer a
+    filename from one (E0754); a romaji filename does not help, because the error is
+    about the identifier. Ontology nodes are never types anyway.
     Non-ASCII identifiers have been stable since Rust 1.53; verified compiling on 1.95
     with struct names, field names and arguments, no lints fired. Ontology nodes are
     never types at all — they are YAML keys and runtime strings — so 物 and 者 sharing
@@ -264,8 +270,8 @@ proposal, not a commitment.
 - [ ] **3. The bidding arena.** Two or three hardcoded bidders, a floor bid, max wins,
       hysteresis. Still no memory — bids score off live world state.
 - [x] **3a-i. The ontology YAML.** `assets/ontology/諸法.yaml` — 19 nodes, parses.
-- [ ] **3a-ii. The loader and traversal.** World-side only: one shared tree, no
-      per-being copies yet. Tested by walking it. Materialises the implicit 未知 children.
+- [x] **3a-ii. The loader and traversal.** `src/諸法.rs`: `実相` as a resource, `path`,
+      `is_a`, and `descend_while` as the seam the recognition loop plugs into.
 - [ ] **3b. Facets.** Non-hierarchical tags alongside the tree, and a lookup by facet.
 - [ ] **3c. The recognition loop, shallow.** Percept in, walk the shared tree, pull the
       leaf, feed a bid. Every being still omniscient about the taxonomy.

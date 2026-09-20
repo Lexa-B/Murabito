@@ -19,10 +19,11 @@
 # Note the last one. Dying moves a being from いる to ある — 者 becomes 物 — so death is
 # a reclassification, not a special case.
 #
-# Every node has an implicit 未知 child. The loader adds it rather than this file
-# repeating it twenty times. It is what a being pulls when its traversal stops there:
-# "something of this kind, and I know no more". 諸法 → 未知 is the floor beneath
-# everything, and can never be missing, because it is where fight, flight, freeze and
+# 未知 is reserved and is never a node here. It names what a stopped traversal means:
+# a being that gets as far as 狼 and no further knows "something of this kind, and no
+# more", and the impression it acts on hangs off 狼 in that being's 仮諦, where
+# impressions live. The world tree has none to hang. 諸法 → 未知 is the floor beneath
+# everything and can never be missing, because it is where fight, flight, freeze and
 # fawn live.
 #
 # Display names are not here. Keys are the identity; what a player reads comes from
