@@ -15,10 +15,18 @@ use super::{FaintStroke, HideSenses, MidStroke, SenseOverlay, facing, ground_poi
 use crate::hex::{Hex, steps_covering};
 use crate::senses::vision::Vision;
 
-/// Half an arm of the X, in shaku. Short and centred, so the cells stay visibly tiled —
-/// which is what tells an X apart from vision's hatching, since that runs edge to edge
-/// and knits across cells into a continuous field.
-const ARM_HALF_LENGTH: f32 = 0.26;
+/// Half an arm of the X, in shaku, at the faintest and the loudest a cell can be.
+///
+/// Short and centred at either end, so the cells stay visibly tiled — which is what
+/// tells an X apart from vision's hatching, since that runs edge to edge and knits
+/// across cells into a continuous field.
+///
+/// Size carries the falloff, rather than weight or opacity. The polar pattern is
+/// continuous, and so is this; weight could only step, and dimming the marks cost them
+/// the crispness that makes them read as tiling in the first place. The floor keeps the
+/// quietest cells legible instead of letting them thin away into aliasing.
+const ARM_MIN: f32 = 0.09;
+const ARM_MAX: f32 = 0.30;
 
 const OUTLINE_ALPHA: f32 = 0.85;
 
@@ -104,8 +112,10 @@ pub(super) fn draw_hearing(
                 // Hairline and fully opaque, rather than heavy and translucent. Two
                 // strokes crossing in a small mark put a lot of ink in one place, so
                 // weight is what made these shout; at one pixel they can be solid and
-                // still sit behind the hatching.
-                for (a, b) in cross(hex.center()) {
+                // still sit behind the hatching. How well the cell is heard is then
+                // free to be carried by the size of the mark.
+                let arm = ARM_MIN + (ARM_MAX - ARM_MIN) * gain;
+                for (a, b) in cross(hex.center(), arm) {
                     faint.line(a, b, overlay.color);
                 }
             }
@@ -123,9 +133,8 @@ pub(super) fn draw_hearing(
     }
 }
 
-/// The two arms of an X, centred on a cell.
-fn cross(centre: Vec2) -> [(Vec3, Vec3); 2] {
-    let arm = ARM_HALF_LENGTH;
+/// The two arms of an X, centred on a cell, each `arm` long from the centre.
+fn cross(centre: Vec2, arm: f32) -> [(Vec3, Vec3); 2] {
     [
         (
             ground_point(centre + Vec2::new(-arm, -arm)),
