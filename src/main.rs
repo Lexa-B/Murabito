@@ -1,4 +1,4 @@
-//! exp-06: a minimal Bevy app — a starter scene with an overhead camera.
+//! Murabito: a starter scene with an overhead camera.
 //!
 //! Controls: WASD or the arrow keys pan, the mouse wheel zooms, Escape opens the menu,
 //! F12 saves a screenshot.
@@ -22,7 +22,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "Murabito exp-06".into(),
+                title: "Murabito".into(),
                 ..default()
             }),
             ..default()

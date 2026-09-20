@@ -1,7 +1,7 @@
 //! Player-facing preferences, and the file they persist to.
 //!
-//! The file is YAML at `$XDG_CONFIG_HOME/murabito/exp-06/settings.yaml` (in practice
-//! `~/.config/murabito/exp-06/settings.yaml`), one top-level key per group of settings,
+//! The file is YAML at `$XDG_CONFIG_HOME/murabito/settings.yaml` (in practice
+//! `~/.config/murabito/settings.yaml`), one top-level key per group of settings,
 //! so later groups can be added without disturbing what is already there.
 //!
 //! It is meant to be hand-editable: a missing file means "use the defaults", and a file
@@ -15,7 +15,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 /// Where the file lives under the platform's config directory.
-const CONFIG_SUBDIR: &str = "murabito/exp-06";
+const CONFIG_SUBDIR: &str = "murabito";
 const CONFIG_FILE: &str = "settings.yaml";
 
 /// Loads settings at startup and writes them back whenever they change.

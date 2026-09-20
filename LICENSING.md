@@ -9,7 +9,7 @@ Murabito uses two licences: one for code and one for assets.
 
 ## What counts as an asset
 
-- Everything under `Content/`, including Blueprints and maps. They are `.uasset`/`.umap` files even when they hold logic.
+- Everything under `_Archives/UE-Try/Content/`, including Blueprints and maps. They are `.uasset`/`.umap` files even when they hold logic.
 - Art, audio, video and raw-data source files anywhere in the repo: for example `.blend`, `.fbx`, `.psd`, `.kra`, `.png`, `.wav`, `.flac`, `.mp4`, heightmaps and masks.
 
 Everything else is code and falls under the MIT licence.

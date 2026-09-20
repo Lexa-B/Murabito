@@ -2483,16 +2483,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "exp06"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "dirs",
- "serde",
- "serde_yaml_ng",
-]
-
-[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3460,6 +3450,16 @@ checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
 dependencies = [
  "num-traits",
  "pxfm",
+]
+
+[[package]]
+name = "murabito"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "dirs",
+ "serde",
+ "serde_yaml_ng",
 ]
 
 [[package]]
