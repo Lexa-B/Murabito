@@ -101,6 +101,11 @@ impl CameraRig {
         PAN_SPEED * settings.pan_speed_scale * (self.zoom / PAN_REF_ZOOM).powf(PAN_ZOOM_EXPONENT)
     }
 
+    /// The point on the ground the camera is aimed at.
+    pub fn focus(&self) -> Vec3 {
+        self.focus
+    }
+
     /// Jumps straight to a zoom distance, skipping the ease.
     ///
     /// For the one-shot capture, which has no time to glide: it needs the framing it

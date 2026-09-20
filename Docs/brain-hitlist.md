@@ -304,8 +304,12 @@ proposal, not a commitment.
 - [x] **0b. One file per sense.** `senses/` as a parent with `vision.rs` and `hearing.rs`
       under it, each headed by what drives it. Pure refactor; the overlay renders
       pixel-identically.
-- [ ] **0c. The sense grid.** 1 shaku flat-to-flat, pointy-up: world position to cell,
-      neighbours, distance, rings. Pure maths, fully testable, no senses touching it yet.
+- [x] **0c. The sense grid.** `src/hex.rs`: 1 shaku flat-to-flat, pointy-up, axial
+      coordinates. World position to cell and back (cube rounding, so points near a
+      corner land right), neighbours, distance, ranges. Drawn as a 6 ken patch around the
+      camera's focus — ~4,000 cells, ~24,000 segments a frame — rather than the whole
+      world, which at a cho of ground would be ~150,000 cells almost none of which are
+      ever on screen. Terrain went to one cho at the same time.
       **Provisional** — see settled item 27; exp-05's unit system replaces it.
 - [ ] **0d. Line of sight.** Vision gated by what stands in the way. Obstacles register
       as occluders; shadowcasting over the grid gives a visible set per perceiver that is

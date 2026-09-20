@@ -35,9 +35,9 @@ fn spawn_scene(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Ground: 66 x 66 shaku (11 ken square), centred on the origin, Y up.
+    // Ground: one cho square - 360 shaku, about 109 m - centred on the origin, Y up.
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(66.0, 66.0))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(360.0, 360.0))),
         MeshMaterial3d(materials.add(Color::srgb(0.35, 0.42, 0.30))),
     ));
 

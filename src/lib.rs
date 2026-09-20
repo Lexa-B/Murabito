@@ -22,6 +22,7 @@
 
 pub mod being;
 pub mod camera;
+pub mod hex;
 pub mod i18n;
 pub mod menu;
 pub mod scene;
