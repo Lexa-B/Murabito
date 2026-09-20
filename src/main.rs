@@ -8,7 +8,8 @@
 
 use bevy::prelude::*;
 use murabito::{
-    camera, i18n, menu, scene, screenshot, settings, settings_page, state, ui, user_data,
+    being, camera, i18n, menu, scene, screenshot, senses, settings, settings_page, state, ui,
+    user_data,
 };
 
 fn main() {
@@ -31,6 +32,8 @@ fn main() {
             i18n::I18nPlugin,
             settings::SettingsPlugin,
             scene::ScenePlugin,
+            senses::SensesPlugin,
+            being::BeingPlugin,
             camera::CameraPlugin,
             ui::UiPlugin,
             menu::MenuPlugin,

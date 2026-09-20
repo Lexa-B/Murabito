@@ -9,11 +9,13 @@
 // explains. Bevy's own examples allow this lint for the same reason.
 #![allow(clippy::type_complexity)]
 
+pub mod being;
 pub mod camera;
 pub mod i18n;
 pub mod menu;
 pub mod scene;
 pub mod screenshot;
+pub mod senses;
 pub mod settings;
 pub mod settings_page;
 pub mod state;
