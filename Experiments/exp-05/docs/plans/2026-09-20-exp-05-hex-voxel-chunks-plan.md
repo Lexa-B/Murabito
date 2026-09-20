@@ -4554,6 +4554,47 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 The rig: the focus sits on the ground, the camera sits behind and above it looking at it. Zoom is the distance from the focus, from 3 m to 4,000 m. Tilt goes from 45° close in to 75° far out. Pan speed is proportional to zoom, so panning always feels the same.
 
+**As implemented:** no `crates/viewer/assets/` symlink was created. The file list above
+predates the Task 13 correction: there is one `assets/` directory, at the workspace root,
+reached via `AssetPlugin { file_path: "../../assets", .. }` — the same override the Step 3
+snippet below (and `hexworld_bevy`'s `shader_check` example) already uses. `bevy_egui` and
+`panel::draw` in the Step 3 snippet are not wired into `main.rs` here — they are Task 15's
+own deliverable ("The panel"), confirmed against that task's own Files/Interfaces list.
+Also, `WindowResolution::new` takes `(u32, u32)` in this Bevy build, not `(f32, f32)` as
+the snippet shows — there is no `From<(f32, f32)>` impl, only `(u32,u32)`/`[u32;2]`/`UVec2`.
+
+**Fix round 1 (review finding):** `follow_ground` fell back to height `0.0` whenever
+`surface_height_m` returned `None`. That is not only a first-frames case: at `MAX_ZOOM`
+the pan speed is ~3,600 m/s, fast enough to genuinely outrun the load frontier, so the
+focus could visibly drop to zero and pop back up once real terrain arrived — untested by
+any of the original verification runs, none of which panned fast at high zoom. Fixed by
+adding `CameraRig::last_height: f32` (holding the last resolved height, initialised to
+0.0) and a pure method:
+
+```rust
+/// The ground height to use this frame: the store's real height where the focus has
+/// loaded ground, or the last height we had otherwise — holding, not a smoothing system.
+pub fn resolve_height(&mut self, loaded_height_m: Option<f64>) -> f32 {
+    if let Some(h) = loaded_height_m {
+        self.last_height = h as f32;
+    }
+    self.last_height
+}
+```
+
+`follow_ground` calls this instead of `.unwrap_or(0.0)`. Two pure-maths tests were added
+on the rig (`ground_height_holds_when_nothing_is_loaded`,
+`ground_height_updates_once_the_real_height_arrives`), TDD'd RED-then-GREEN. Verified live
+against the exact scenario named: forced `MAX_ZOOM`, a shrunk loader window (`Rings {
+shaku: 1, ken: 1, cho: 1 }`), and a bigger world (`world_radius_ri: 3`) to try to provoke a
+genuine mid-flight `None` — the default single-ri world gets blanket coarse coverage from
+its initial settle almost immediately, so a fast pan through it never actually sees one.
+Across two runs and ~800 sampled frames, `surface_height_m` only ever returned `None` in
+the two frames before anything had loaded at all. The one height jump over 2 m was that
+single, unavoidable transition from the initial 0.0 default to the first real height;
+every other large frame-to-frame change matched a freshly-loaded `Some(...)` value
+exactly — genuine terrain relief crossed at speed, not a hold-then-pop.
+
 - [ ] **Step 1: Write the failing tests for the camera maths**
 
 ```rust

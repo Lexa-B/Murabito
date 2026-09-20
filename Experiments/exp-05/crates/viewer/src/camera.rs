@@ -35,6 +35,9 @@ pub struct CameraRig {
     pub focus_east: f64,
     pub focus_north: f64,
     pub zoom: f32,
+    /// The last ground height we actually resolved from the store. Held (not reset to
+    /// zero) whenever nothing is loaded at the focus yet — see `resolve_height`.
+    pub last_height: f32,
 }
 
 impl CameraRig {
@@ -51,6 +54,19 @@ impl CameraRig {
             self.focus_east = e;
             self.focus_north = n;
         }
+    }
+
+    /// The ground height to use this frame: the store's real height where the focus has
+    /// loaded ground, or the last height we had otherwise. At `MAX_ZOOM`, pan speed is
+    /// about 3,600 m/s — fast enough to genuinely outrun the load frontier — so falling
+    /// back to 0.0 would make the focus visibly drop and then pop back up once the real
+    /// height arrives. Holding the last value avoids that pop; it is not a smoothing
+    /// system, just "don't snap to a height that was never true."
+    pub fn resolve_height(&mut self, loaded_height_m: Option<f64>) -> f32 {
+        if let Some(h) = loaded_height_m {
+            self.last_height = h as f32;
+        }
+        self.last_height
     }
 }
 
@@ -128,16 +144,16 @@ pub fn handle_input(
 /// the camera child's transform (up and behind, looking at the focus).
 pub fn follow_ground(
     world: Res<HexWorld>,
-    mut focus_query: Query<(&CameraRig, &mut Transform)>,
+    mut focus_query: Query<(&mut CameraRig, &mut Transform)>,
     mut camera_query: Query<&mut Transform, (With<Camera3d>, Without<CameraRig>)>,
 ) {
-    for (rig, mut focus_transform) in &mut focus_query {
-        let (focus_flat, camera_flat) = rig_transforms(rig);
-        let height = world
+    for (mut rig, mut focus_transform) in &mut focus_query {
+        let (focus_flat, camera_flat) = rig_transforms(&rig);
+        let loaded = world
             .store()
-            .surface_height_m(rig.focus_east, rig.focus_north)
-            .unwrap_or(0.0);
-        focus_transform.translation = Vec3::new(focus_flat.x, height as f32, focus_flat.z);
+            .surface_height_m(rig.focus_east, rig.focus_north);
+        let height = rig.resolve_height(loaded);
+        focus_transform.translation = Vec3::new(focus_flat.x, height, focus_flat.z);
 
         if let Ok(mut camera_transform) = camera_query.single_mut() {
             // The camera is a child of the focus, and the focus never rotates, so its
@@ -178,6 +194,7 @@ mod tests {
             focus_east: 0.0,
             focus_north: 0.0,
             zoom: 50.0,
+            last_height: 0.0,
         };
         let (focus, camera) = rig_transforms(&rig);
         assert!(
@@ -197,6 +214,7 @@ mod tests {
             focus_east: 0.0,
             focus_north: 0.0,
             zoom: 50.0,
+            last_height: 0.0,
         };
         rig.zoom_by(-100.0);
         assert!(rig.zoom >= MIN_ZOOM);
@@ -211,6 +229,7 @@ mod tests {
             focus_east: 0.0,
             focus_north: 0.0,
             zoom: 50.0,
+            last_height: 0.0,
         };
         rig.pan(1e6, 0.0, &cfg);
         let cell = hexworld::plane::round_at(rig.focus_east, rig.focus_north, Level::Ri);
@@ -218,5 +237,39 @@ mod tests {
             hexworld::world::in_world(cell, &cfg),
             "panned out of the world"
         );
+    }
+
+    #[test]
+    fn ground_height_holds_when_nothing_is_loaded() {
+        // A fast pan at high zoom can outrun the load frontier. When that happens,
+        // `surface_height_m` returns `None`, and the focus must keep its last known
+        // height rather than snapping to 0.0 and popping back up once the real height
+        // arrives.
+        let mut rig = CameraRig {
+            focus_east: 0.0,
+            focus_north: 0.0,
+            zoom: 50.0,
+            last_height: 12.0,
+        };
+        let height = rig.resolve_height(None);
+        assert_eq!(height, 12.0, "height should hold, not snap to zero");
+        assert_eq!(rig.last_height, 12.0);
+    }
+
+    #[test]
+    fn ground_height_updates_once_the_real_height_arrives() {
+        let mut rig = CameraRig {
+            focus_east: 0.0,
+            focus_north: 0.0,
+            zoom: 50.0,
+            last_height: 0.0,
+        };
+        let height = rig.resolve_height(Some(7.5));
+        assert_eq!(height, 7.5);
+        assert_eq!(rig.last_height, 7.5);
+
+        // And it keeps holding that new value once loading falls behind again.
+        let height = rig.resolve_height(None);
+        assert_eq!(height, 7.5);
     }
 }

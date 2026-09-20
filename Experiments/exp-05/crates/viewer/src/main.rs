@@ -88,6 +88,7 @@ fn setup(mut commands: Commands) {
         focus_east: 0.0,
         focus_north: 0.0,
         zoom: 120.0,
+        last_height: 0.0,
     };
     let (focus_pos, camera_pos) = camera::rig_transforms(&rig);
 
