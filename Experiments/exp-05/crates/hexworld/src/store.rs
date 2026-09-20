@@ -274,14 +274,16 @@ impl ChunkStore {
     }
 
     /// Store a finished chunk. Returns false if nothing wants it any more.
-    pub fn insert(&mut self, chunk: Chunk) -> bool {
+    ///
+    /// The caller supplies the time, the same way it does for `update`: the store has no
+    /// clock of its own.
+    pub fn insert(&mut self, chunk: Chunk, now: f64) -> bool {
         let key = chunk.key;
         self.in_flight.remove(&key);
         if !self.requested.contains(&key) {
             return false;
         }
-        self.events
-            .push((self.events.last().map_or(0.0, |e| e.0), key.level, true));
+        self.events.push((now, key.level, true));
         self.loaded.insert(key, chunk);
         self.lingering.remove(&key);
         true
@@ -519,7 +521,7 @@ mod store_tests {
             for key in update.to_load {
                 store.begin_load(key);
                 let chunk = crate::chunk::generate(store.config(), key);
-                store.insert(chunk);
+                store.insert(chunk, now);
             }
         }
     }
@@ -560,7 +562,7 @@ mod store_tests {
                     );
                 }
                 s.begin_load(key);
-                s.insert(crate::chunk::generate(s.config(), key));
+                s.insert(crate::chunk::generate(s.config(), key), 0.0);
                 loaded.push(key);
             }
         }
@@ -674,6 +676,10 @@ mod store_tests {
         }];
         s.update(&narrow, 1.0);
         let update = s.update(&narrow, 20.0);
+        assert!(
+            !update.to_unload.is_empty(),
+            "the narrow window should have let something expire"
+        );
         for key in &update.to_unload {
             for other in s.loaded_keys() {
                 assert!(
@@ -682,8 +688,28 @@ mod store_tests {
                 );
             }
         }
+        // The global invariant: every loaded chunk's whole ancestor chain is loaded too.
+        for key in s.loaded_keys() {
+            for ancestor in key.ancestors() {
+                assert!(
+                    s.is_loaded(ancestor),
+                    "{key:?} is loaded but its ancestor {ancestor:?} is not"
+                );
+            }
+        }
         // The ken chunks themselves are still requested, so their cho parents survive.
         assert!(s.is_loaded(ChunkKey::new(Level::Cho, Hex::ZERO)));
+
+        // Still holds well past the delay, once everything settles.
+        s.update(&narrow, 100.0);
+        for key in s.loaded_keys() {
+            for ancestor in key.ancestors() {
+                assert!(
+                    s.is_loaded(ancestor),
+                    "{key:?} is loaded but its ancestor {ancestor:?} is not"
+                );
+            }
+        }
     }
 
     #[test]
@@ -702,7 +728,7 @@ mod store_tests {
             rings: Rings::default(),
         }];
         s.update(&away, 0.0);
-        let accepted = s.insert(crate::chunk::generate(s.config(), key));
+        let accepted = s.insert(crate::chunk::generate(s.config(), key), 0.0);
         assert!(!accepted, "a chunk nobody wants is dropped");
         assert!(!s.is_loaded(key));
     }
@@ -741,6 +767,25 @@ mod store_tests {
             s.stats().per_level[Level::Ken as usize].loads_last_second,
             0
         );
+
+        // Move away and let the delay expire everything: unloads are counted too.
+        let away = [Loader {
+            focus: Hex::new(600, 0),
+            rings: Rings::default(),
+        }];
+        s.update(&away, 2.5);
+        let update = s.update(&away, 8.0);
+        assert!(!update.to_unload.is_empty(), "should have expired by now");
+        assert!(s.stats().per_level[Level::Ken as usize].unloads_last_second > 0);
+
+        // A cold start at a non-zero time must not lose its load events to a stale stamp:
+        // this is the case that would have caught the old `insert`, which stamped events
+        // with the time of the *previous* event rather than the caller's `now`.
+        let mut late = store();
+        settle(&mut late, &here, 10.0);
+        let update = late.update(&here, 10.5);
+        assert!(update.to_load.is_empty(), "nothing left to load");
+        assert!(late.stats().per_level[Level::Ken as usize].loads_last_second > 0);
     }
 
     #[test]
@@ -756,7 +801,7 @@ mod store_tests {
         s.begin_load(key);
         assert_eq!(s.in_flight_count(), 1);
         let chunk = crate::chunk::generate(s.config(), key);
-        s.insert(chunk);
+        s.insert(chunk, 0.0);
         assert_eq!(s.in_flight_count(), 0);
     }
 
