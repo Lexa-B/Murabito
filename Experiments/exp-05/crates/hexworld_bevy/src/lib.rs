@@ -24,6 +24,9 @@ pub struct HexWorldSet;
 #[derive(Resource)]
 pub struct HexWorld {
     store: ChunkStore,
+    /// Bumped every time the world is replaced wholesale (see `set_config`), so chunk
+    /// entities and bookkeeping from the old world can be told apart from the new one.
+    generation: u64,
 }
 
 impl HexWorld {
@@ -34,10 +37,45 @@ impl HexWorld {
     pub fn store_mut(&mut self) -> &mut ChunkStore {
         &mut self.store
     }
+
+    /// Replace the world's settings and drop everything generated from the old ones. The
+    /// store's tuning (`unload_delay_s`, `max_in_flight`) is carried over — only what a
+    /// chunk *is* changes, not how eagerly it loads.
+    pub fn set_config(&mut self, config: WorldConfig) {
+        let settings = *self.store.settings();
+        self.store = ChunkStore::new(config, settings);
+        self.generation += 1;
+    }
+
+    /// Bumped whenever the world is replaced, so chunk entities from the old one can go.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
 }
 
 #[derive(Resource, Clone)]
 pub struct GroundMaterialHandle(pub Handle<GroundMaterial>);
+
+/// Despawn every chunk entity left over from a previous world. Runs whenever
+/// `HexWorld::generation()` has moved on since the last time this system looked, which
+/// only happens right after `set_config` replaces the store wholesale — an ordinary frame
+/// is a no-op single comparison.
+pub fn despawn_stale_chunks(
+    mut commands: Commands,
+    world: Res<HexWorld>,
+    mut shown: ResMut<entities::Shown>,
+    views: Query<(Entity, &ChunkView)>,
+    mut last_generation: Local<u64>,
+) {
+    if world.generation() == *last_generation {
+        return;
+    }
+    *last_generation = world.generation();
+    for (entity, _) in &views {
+        commands.entity(entity).despawn();
+    }
+    *shown = entities::Shown::default();
+}
 
 #[derive(Default)]
 pub struct HexWorldPlugin {
@@ -49,6 +87,7 @@ impl Plugin for HexWorldPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(HexWorld {
             store: ChunkStore::new(self.config, self.settings),
+            generation: 0,
         })
         .init_resource::<entities::Shown>()
         .init_resource::<tasks::Handovers>()
@@ -59,6 +98,7 @@ impl Plugin for HexWorldPlugin {
         .add_systems(
             Update,
             (
+                despawn_stale_chunks,
                 loader::drive_store,
                 tasks::collect_finished_jobs,
                 tasks::process_handovers,

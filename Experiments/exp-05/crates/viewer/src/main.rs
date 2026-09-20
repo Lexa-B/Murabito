@@ -8,10 +8,12 @@
 //! asset path is overridden the same way `hexworld_bevy`'s `shader_check` example does it.
 
 mod camera;
+mod panel;
 
 use std::time::{Duration, Instant};
 
 use bevy::asset::AssetPlugin;
+use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::prelude::*;
 use bevy::window::{WindowPlugin, WindowResolution};
 use hexworld::WorldConfig;
@@ -65,12 +67,29 @@ fn main() {
             }),
     )
     .add_plugins(HexWorldPlugin::default())
+    .add_plugins(FrameTimeDiagnosticsPlugin::default())
+    .add_plugins(bevy_egui::EguiPlugin::default())
+    .init_resource::<panel::HoveredCell>()
+    .init_resource::<panel::ExtraLoaders>()
+    .init_resource::<panel::TriangleCounts>()
     .insert_resource(ClearColor(Color::srgb(0.53, 0.81, 0.92)))
     .add_systems(Startup, setup)
     .add_systems(
         Update,
-        (camera::handle_input, camera::follow_ground).chain(),
-    );
+        (
+            camera::handle_input,
+            camera::follow_ground,
+            panel::update_hover,
+        )
+            .chain(),
+    )
+    // After `HexWorldSet` (where chunk entities get their `Mesh3d`), before the render
+    // app's extraction step strips the mesh's CPU-side data — see `TriangleCounts`.
+    .add_systems(
+        Update,
+        panel::track_triangle_counts.after(hexworld_bevy::HexWorldSet),
+    )
+    .add_systems(bevy_egui::EguiPrimaryContextPass, panel::draw);
 
     if auto_pan {
         app.add_systems(Update, auto_pan_system.before(camera::follow_ground));
