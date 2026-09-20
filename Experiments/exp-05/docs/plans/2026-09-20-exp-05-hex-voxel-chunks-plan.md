@@ -2930,6 +2930,44 @@ mod tests {
     }
 
     #[test]
+    fn a_chunks_perimeter_walls_down_even_with_nothing_omitted() {
+        let (cfg, chunk) = ken_chunk();
+        // `chunk.cells[0]` (`Hex { q: -4, r: 2 }`) is a real perimeter cell of this chunk:
+        // its neighbours in directions 1 through 4 belong to sibling chunks, not this one.
+        // Its direction-1 neighbour is in-world and not omitted — the *only* reason this
+        // edge is full depth is that the neighbour is outside this chunk's own drawn set.
+        // Without the fix (testing membership rather than `cell_in_world`), this edge would
+        // be culled as an ordinary, same-level neighbour instead.
+        let target = chunk.cells[0];
+        let mesh = mesh_chunk(&cfg, &chunk, &HashSet::new());
+
+        let bottom = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
+        let (tx, ty) = cell_centre_m(target, Level::Shaku);
+        let (tx, ty) = (tx as f32, ty as f32);
+        let corners = corners_m(Level::Shaku);
+        let (ax, ay) = corners[0];
+        let (bx, by) = corners[1];
+        let (mx, my) = ((ax + bx) / 2.0, (ay + by) / 2.0);
+        let len = (mx * mx + my * my).sqrt();
+        let (dir1_nx, dir1_ny) = ((mx / len) as f32, (my / len) as f32);
+        let walls_at_bottom = mesh
+            .positions
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| (p[2] - bottom).abs() < 1e-3)
+            .filter(|(_, p)| {
+                let (dx, dy) = (p[0] - tx, p[1] - ty);
+                (dx * dx + dy * dy).sqrt() < Level::Shaku.width_m() as f32
+            })
+            .filter(|(i, _)| {
+                let n = mesh.normals[*i];
+                (n[0] - dir1_nx).abs() < 1e-4 && (n[1] - dir1_ny).abs() < 1e-4
+            })
+            .count();
+        assert_eq!(walls_at_bottom, 2);
+    }
+
+    #[test]
     fn meshing_is_deterministic() {
         let (cfg, chunk) = ken_chunk();
         let a = mesh_chunk(&cfg, &chunk, &HashSet::new());
@@ -3200,7 +3238,7 @@ fn shaded(material: crate::column::Material, cell: Hex) -> [f32; 4] {
 - [ ] **Step 6: Run the tests**
 
 Run: `cd Experiments/exp-05 && cargo test -p hexworld mesh`
-Expected: PASS, 8 tests. If `top_faces_point_up_and_wind_anticlockwise` fails, the corner pairing is reversed: the fan must go from `corners[(k + 5) % 6]` to `corners[k]`, which is anticlockwise.
+Expected: PASS, 9 tests. If `top_faces_point_up_and_wind_anticlockwise` fails, the corner pairing is reversed: the fan must go from `corners[(k + 5) % 6]` to `corners[k]`, which is anticlockwise.
 
 - [ ] **Step 7: Commit**
 
