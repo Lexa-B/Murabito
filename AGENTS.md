@@ -58,13 +58,15 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
 
 - **No spec or plan files for the main project.** Agree the design with the user in chat, wait for a yes, then implement it and open a PR. Specs and plans are only for experiments.
 - **Work in small, visible steps.** Build the smallest thing that puts something on screen, let the user see it, then agree the next step. Don't disappear into a long build-out.
-- **Build and run:** `cargo build`, `cargo run`, `cargo clippy`, `cargo fmt`. There are no tests yet.
+- **Build, run and test:** `cargo build`, `cargo run`, `cargo test`, `cargo clippy --all-targets`, `cargo fmt`.
 - **Bevy compiles into the binary.** There is no engine install: `bevy = "0.19"` in `Cargo.toml` is the whole thing. The first build takes about 4.5 minutes (551 crates, dependencies at `opt-level = 3`); after that, a change to `src/` rebuilds in about 3 seconds. `target/` runs to roughly 10 GB.
 - **Linux system libraries.** Bevy's default features build winit with the Wayland backend, which needs `libwayland-dev`, `libxkbcommon-dev` and `libudev-dev`. Without them the build fails in `wayland-sys`'s build script with a pkg-config error.
 
 ### Layout
 
+- `src/lib.rs` — the module list; everything lives in the library so the tests can reach it
 - `src/main.rs` — the window and the plugin list, and nothing else
+- `tests/` — integration tests, each file its own binary against the library
 - `src/camera.rs` — `CameraRig` (a ground focus, a zoom distance, a pan velocity) and the pan/zoom/apply systems
 - `src/scene.rs` — the placeholder world: ground, a cube, a sun
 - `src/settings.rs` — `CameraSettings` and the settings file
@@ -73,6 +75,7 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
 - `src/state.rs` — `AppState` (Playing / Menu / Settings), and pausing
 - `src/ui.rs` — what the screens share: scrim, buttons, slider visuals
 - `src/i18n.rs` — the string catalogues, `Language`, and the `Localized` component
+- `src/user_data.rs` — where the player's files live; the only place that decides that
 - `src/screenshot.rs` — F12, and the `--shot` command-line capture
 
 ### Conventions
@@ -80,12 +83,19 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
 - **Each module registers itself through a `Plugin`.** `main.rs` adds plugins and knows nothing about what they need; a module's resources, systems and spawns are its own business.
 - **Pausing is `Time<Virtual>`, not a flag.** Pausing the clock stops everything driven by elapsed time, so no system has to know a menu exists. `Time<Real>` keeps running, which keeps the UI responsive. Input is gated separately, with `run_if(in_state(AppState::Playing))`.
 - **Settings are resources; `settings.rs` persists them.** Anything that edits a settings resource gets saved automatically. Nothing else writes the file.
-- **Settings live at `~/.config/murabito/settings.yaml`** (YAML, one top-level key per group). A missing file means defaults and is created; a file that fails to parse warns and is left alone so the user can fix it.
+- **One directory holds everything belonging to the player**, `~/.config/murabito/`, and `user_data.rs` is the only place that works out where it is. A module joins its own filename onto `UserData::root()` rather than resolving a path itself, so saves and anything else later land beside the settings. `UserDataPlugin` goes first in the plugin list: plugins read the resource while the app is being built, not once it runs.
+- **Settings live at `settings.yaml` in that directory** (YAML, one top-level key per group). A missing file means defaults and is created; a file that fails to parse warns and is left alone so the user can fix it.
 - **Windowed runs need the desktop display.** Shells in the user's terminal may have no `DISPLAY`/`WAYLAND_DISPLAY`; take them from the systemd user session (`systemctl --user show-environment`), as the experiments' scripts do.
 - **Check visual work with a screenshot, not by asking.** F12 saves one to `screenshots/` (gitignored) while playing, and `cargo run -- --shot <path> --screen playing|menu|settings` drives the app to a screen, captures it and exits — no keyboard needed. Add `--settle <frames>` if 150 isn't long enough; capture too early and the PNG is a bare clear colour, because render pipelines compile on first use.
 - **Running the binary directly needs `BEVY_ASSET_ROOT`.** Bevy resolves `assets/` relative to the executable unless `cargo run` sets it, so a direct `./target/debug/murabito` can't find the font or the locales.
 - **UI text is never a literal.** Every string comes from `assets/locales/{en,ja}.yaml` through a `Localized` key, and both catalogues must carry the same keys — a gap warns at startup. Text that is the same in every language (a language's own name, a number) uses `ui::spawn_literal_button` instead.
 - **A fixed-width text node wraps.** Bevy UI text in a node with an explicit width will line-break, possibly onto an invisible whitespace line, which doubles the node's height and pushes the glyphs off centre. Use `LineBreak::NoWrap` on labels with a fixed width.
+- **Tests run headless, and must stay that way.** `MinimalPlugins` brings the schedules
+  and `Time`; add `bevy::state::app::StatesPlugin` for anything touching `AppState`, as it
+  arrives with `DefaultPlugins` in the real app but not in `MinimalPlugins`. Drive frames
+  with `app.update()`, never `app.run()`. No test may open a window or need a GPU.
+- **Tests must not touch the player's real files.** Point `UserDataPlugin::at` at a
+  temporary directory; never let a test fall back on the real one.
 - **Never kill, signal or otherwise touch a process you didn't start.**
 
 
