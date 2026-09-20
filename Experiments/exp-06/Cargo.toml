@@ -1,0 +1,16 @@
+[package]
+name = "exp06"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = "0.19.1"
+
+# Bevy is slow in a plain debug build. Compile our own code lightly optimised
+# and every dependency (i.e. the engine) fully optimised; the engine is rebuilt
+# rarely, our code often.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
