@@ -5,10 +5,18 @@
 //! Positions are `(east, north, height)` in metres; mapping to an engine's axes is
 //! the caller's job.
 
+pub mod address;
+pub mod config;
 pub mod hex;
 pub mod level;
 pub mod owner;
+pub mod plane;
+pub mod world;
 
+pub use address::{address_of, shaku_of, Address};
+pub use config::WorldConfig;
 pub use hex::{d2, distance, neighbours, range, Hex, DIRECTIONS};
 pub use level::{Level, CELL_LEVELS, SHAKU_M, SUN_M};
 pub use owner::{centre_child, centre_shaku, children, local, owned_offsets, owner, parent_of, up};
+pub use plane::{cell_centre_m, corners_m, hex_round, metres_to_axial, round_at};
+pub use world::{cell_in_world, in_world, world_ri};
