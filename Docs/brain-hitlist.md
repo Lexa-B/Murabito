@@ -94,7 +94,25 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
     are never the same object and the naming says so. 中諦 names the remaining slot: a
     debug view holding truth and construal at once without collapsing to either, as
     exp-02's `T` overlay did.
-12e. **`諸法 → 知らない物` is the absolute floor** and can never be missing. "Something is
+12g. **者 versus 物 is settled by Japanese grammar, not judgement.** いる for the
+    animate (猫がいる, 神がいる, 妖怪がいる) and ある for the inanimate (木がある,
+    石がある, 死体がある). 植物 takes ある, so plants sit under 物 and will never have
+    senses or an intent. The corpse case is the useful one: dying moves a being from
+    いる to ある, so death is a reclassification rather than a special case, and 付喪神
+    is the same move in reverse.
+12h. **幽 for the unseen**, not 妖怪 (too narrow, excludes 神) or 霊 (leans ghost). It
+    classifies by realm — 幽世 against the manifest 顕世 — so 神 and 妖怪 sit together
+    with neither filed under the other, and it leaves 顕/幽 available as a facet.
+12i. **未知 is the fallback leaf at every node**, implicit and added by the loader rather
+    than written out per node. Category-neutral, so it reads correctly on both branches
+    where 知らない物 would not. It pairs with 既知, and learning is a node moving between
+    them.
+12j. **Rust domain types carry kanji** (実相, 仮諦), plumbing verbs stay English.
+    Non-ASCII identifiers have been stable since Rust 1.53; verified compiling on 1.95
+    with struct names, field names and arguments, no lints fired. Ontology nodes are
+    never types at all — they are YAML keys and runtime strings — so 物 and 者 sharing
+    a romanisation can never collide.
+12e. **`諸法 → 未知` is the absolute floor** and can never be missing. "Something is
     there and I have no idea what" is where fight/flight/freeze/fawn live, and it is what
     guarantees the arena always has a bid.
 
@@ -144,17 +162,17 @@ Perception **pushes**; the arena does not go looking. Per percept, per tick:
 2. Each percept is walked **down the being's own ontology** — its private, partial copy,
    not the world's — as deep as that being's knowledge allows.
 3. At the deepest node it can reach it pulls either a **specific instance leaf** or that
-   node's **知らない物** fallback.
+   node's **未知** fallback.
 4. What it found updates utility.
 5. The arena runs and the being acts.
 
 Worked examples, from the design conversation:
 
-- `諸法 → 者 → 生き物 → 狼 → 知らない物` — *"I don't know which wolf this is, and it
+- `存在 → 者 → 生き物 → 動物 → 狼 → 未知` — *"I don't know which wolf this is, and it
   doesn't matter: I'm afraid of wolves."*
-- `諸法 → 者 → 生き物 → 人間 → 玲子ちゃん` — everything this being feels about her
+- `諸法 → 物 → 者 → 生き物 → 人間 → 玲子ちゃん` — everything this being feels about her
   specifically, keyed to one individual.
-- A human who has never met a 妖怪 reaches only 者, pulls its 知らない物, and falls back
+- A human who has never met a 妖怪 reaches only 者, pulls its 未知, and falls back
   on the generic responses: fight, flight, freeze, fawn.
 
 Why this shape earns its place:
@@ -227,15 +245,7 @@ are written down rather than forgotten.
 - **Target population size**, which decides what "cheap" actually means.
 - **Whether exp-03/exp-05's hierarchical hex addressing is reused** as the tree's
   address space.
-- **Where 植物 sits.** If 生き物 is under 者, plants inherit acting-ness they will never
-  use. Move them out under 物, or leave them and let a facet decide.
-- **Whether Rust type names carry the kanji or English.** Repo convention is English
-  code with kanji reserved for data keys and display strings, which suggests
-  `Taxonomy` / `Construal` doc-commented with 諸法実相 / 仮諦 rather than romanised
-  `Jissou` / `Ketai`. Undecided.
-- **妖 / 妖怪 / 精霊** for the supernatural branch. 付喪神 fits under any of them.
-- **Whether the fallback leaf is 知らない物 or 知らない者** on the 者 branch, or a
-  reserved key that renders per branch.
+
 - **The observer's relationship to the world** — embedded player, or a simulation watched
   and perturbed. Decides whether legibility must be diegetic.
 
@@ -253,13 +263,14 @@ proposal, not a commitment.
       executes it. No deciding yet. Something moves on screen.
 - [ ] **3. The bidding arena.** Two or three hardcoded bidders, a floor bid, max wins,
       hysteresis. Still no memory — bids score off live world state.
-- [ ] **3a. The ontology as data.** The YAML, a loader, and traversal. World-side only:
-      one shared tree, no per-being copies yet. Tested by walking it.
+- [x] **3a-i. The ontology YAML.** `assets/ontology/諸法.yaml` — 19 nodes, parses.
+- [ ] **3a-ii. The loader and traversal.** World-side only: one shared tree, no
+      per-being copies yet. Tested by walking it. Materialises the implicit 未知 children.
 - [ ] **3b. Facets.** Non-hierarchical tags alongside the tree, and a lookup by facet.
 - [ ] **3c. The recognition loop, shallow.** Percept in, walk the shared tree, pull the
       leaf, feed a bid. Every being still omniscient about the taxonomy.
 - [ ] **3d. Private ontologies.** Each being gets its own partial copy, so traversal
-      depth starts differing between beings and 知らない物 begins to matter.
+      depth starts differing between beings and 未知 begins to matter.
 - [ ] **4. The truth/belief cut.** Perception as ingestion into a flat belief store;
       retrieval systems lose world access. Prove the cut with a query signature.
 - [ ] **5. The hierarchy.** Belief store becomes the tiered index. Coarse tier answers

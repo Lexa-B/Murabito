@@ -1,0 +1,77 @@
+# 諸法実相 — all phenomena as they truly are.
+#
+# The world's own taxonomy: what a thing IS. This file is 実相, the engine's ground
+# truth. A being's private, partial copy of it — most branches missing, impressions
+# attached to the ones it has — is 仮諦, and is built at runtime, not written here.
+#
+# 法 here is dharma, a constituent of reality. Not 法律.
+#
+# Two axes, and only the first is this tree:
+#
+#   分類   what a thing is      — hierarchical, always walked from 諸法 downward
+#   属性   what a thing is like — flat tags; any node or instance may carry any of them
+#
+# The 者 / 物 boundary is Japanese grammar, not a judgement call. Ask which verb it takes:
+#
+#   いる   animate    猫がいる・神がいる・妖怪がいる      → 者
+#   ある   inanimate  木がある・石がある・死体がある      → 物
+#
+# Note the last one. Dying moves a being from いる to ある — 者 becomes 物 — so death is
+# a reclassification, not a special case.
+#
+# Every node has an implicit 未知 child. The loader adds it rather than this file
+# repeating it twenty times. It is what a being pulls when its traversal stops there:
+# "something of this kind, and I know no more". 諸法 → 未知 is the floor beneath
+# everything, and can never be missing, because it is where fight, flight, freeze and
+# fawn live.
+#
+# Display names are not here. Keys are the identity; what a player reads comes from
+# assets/locales/, like all other text.
+
+分類:
+  諸法:
+
+    # 物 — that which takes ある. Occupies space, does not act.
+    物:
+
+      # 者 — that which takes いる. Acts, and so may be given a brain.
+      者:
+
+        # Narrower than everyday 生き物, which would include 植物. Here it means the
+        # living things that act. 有情 is the Buddhist term for exactly this narrowing
+        # if the everyday reading proves too confusing.
+        生き物:
+          動物:
+            狐: {}
+            兎: {}
+            狼: {}
+          人間: {}
+
+        # 幽 — the hidden realm, 幽世, as against the manifest 顕世. Classifies by realm
+        # rather than by kind, so 神 and 妖怪 sit together without either being filed
+        # under the other.
+        幽:
+          神: {}
+          妖怪:
+            # A 物 that became a 者: a tool old enough to acquire a self. The transition
+            # 死体 makes in one direction, 付喪神 makes in the other.
+            付喪神: {}
+
+      # Alive, but takes ある, so not a 者. It will never have senses or an intent.
+      植物:
+        木: {}
+        草: {}
+
+      物体:
+        道具: {}
+
+    # 事 — that which happens, as against that which is. The contrast pair with 物, not
+    # a child of it. Nothing under it yet: events are undesigned.
+    事: {}
+
+# 属性 — facets. Non-hierarchical, and deliberately so: a child fox and a child human
+# share 子供 while sharing no branch. Closer to tags on a paper than to a class.
+属性:
+  年齢:
+    - 子供
+    - 大人
