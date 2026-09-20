@@ -11,7 +11,7 @@
 
 use bevy::prelude::*;
 
-use super::{BoldStroke, FaintStroke, HideSenses, MidStroke, SenseOverlay, facing, ground_point};
+use super::{FaintStroke, HideSenses, MidStroke, SenseOverlay, facing, ground_point};
 use crate::hex::{Hex, steps_covering};
 use crate::senses::vision::Vision;
 
@@ -20,13 +20,6 @@ use crate::senses::vision::Vision;
 /// and knits across cells into a continuous field.
 const ARM_HALF_LENGTH: f32 = 0.26;
 
-/// Gain above which an X is drawn heavy, and above which it is drawn mid-weight. The
-/// polar pattern falls off continuously; these are only where the stroke weight steps.
-const BOLD_ABOVE: f32 = 0.66;
-const MID_ABOVE: f32 = 0.33;
-
-/// Fill opacity by the same three steps, and the outline's.
-const FILL_ALPHA: [f32; 3] = [0.55, 0.42, 0.30];
 const OUTLINE_ALPHA: f32 = 0.85;
 
 /// Hearing, shaped like a microphone's polar pattern.
@@ -84,7 +77,6 @@ impl Hearing {
 /// a fact about the ear; not drawing an X there is a choice about clutter, and the
 /// boundary should report the first rather than the second.
 pub(super) fn draw_hearing(
-    mut bold: Gizmos<BoldStroke>,
     mut mid: Gizmos<MidStroke>,
     mut faint: Gizmos<FaintStroke>,
     beings: Query<
@@ -109,14 +101,12 @@ pub(super) fn draw_hearing(
 
             let seen = vision.is_some_and(|v| v.band_at(forward, offset).is_some());
             if !seen {
-                let step = weight_of(gain);
-                let colour = overlay.color.with_alpha(FILL_ALPHA[step]);
+                // Hairline and fully opaque, rather than heavy and translucent. Two
+                // strokes crossing in a small mark put a lot of ink in one place, so
+                // weight is what made these shout; at one pixel they can be solid and
+                // still sit behind the hatching.
                 for (a, b) in cross(hex.center()) {
-                    match step {
-                        0 => bold.line(a, b, colour),
-                        1 => mid.line(a, b, colour),
-                        _ => faint.line(a, b, colour),
-                    }
+                    faint.line(a, b, overlay.color);
                 }
             }
 
@@ -130,17 +120,6 @@ pub(super) fn draw_hearing(
                 mid.line(ground_point(a), ground_point(b), outline);
             }
         }
-    }
-}
-
-/// Which of the three stroke weights a gain falls into, heaviest first.
-fn weight_of(gain: f32) -> usize {
-    if gain > BOLD_ABOVE {
-        0
-    } else if gain > MID_ABOVE {
-        1
-    } else {
-        2
     }
 }
 
