@@ -7,6 +7,8 @@
 
 pub mod hex;
 pub mod level;
+pub mod owner;
 
 pub use hex::{d2, distance, neighbours, range, Hex, DIRECTIONS};
 pub use level::{Level, CELL_LEVELS, SHAKU_M, SUN_M};
+pub use owner::{centre_child, centre_shaku, children, local, owned_offsets, owner, parent_of, up};
