@@ -35,6 +35,7 @@ fn a_shown_child_is_left_out_of_its_parents_mesh() {
         }
     }
     assert!(!omitted.is_empty(), "nothing was handed over");
+    assert_invariants(app.world());
 }
 
 #[test]
@@ -54,6 +55,7 @@ fn every_shown_chunk_has_exactly_one_entity() {
     }
     let shown = app.world().resource::<Shown>();
     assert_eq!(seen.len(), shown.keys().len());
+    assert_invariants(app.world());
 }
 
 #[test]
@@ -127,6 +129,26 @@ fn unloading_puts_the_cell_back_into_its_parent() {
             );
         }
     }
+
+    // Both invariants describe a *settled* world, and the wait above only asked the store;
+    // the store calls an unload gone from `loaded` well before that unload's handover has
+    // actually applied. Wait for the handovers too before checking them.
+    common::run_until_world(
+        &mut app,
+        |world| {
+            world.resource::<HexWorld>().store().in_flight_count() == 0
+                && world.resource::<Handovers>().is_idle()
+        },
+        |world| {
+            format!(
+                "in_flight={} pending_loads={} pending_unloads={}",
+                world.resource::<HexWorld>().store().in_flight_count(),
+                world.resource::<Handovers>().pending_load_keys().len(),
+                world.resource::<Handovers>().pending_unload_keys().len(),
+            )
+        },
+    );
+    assert_invariants(app.world());
 }
 
 /// The one-frame property, made testable: check the bookkeeping invariant after *every*
@@ -187,6 +209,7 @@ fn the_parents_omission_never_lags_a_shown_childs_entity_by_even_one_frame() {
         saw_a_child_shown,
         "the loop never saw a ken child of {cho_key:?} shown; the test proves nothing"
     );
+    assert_invariants(app.world());
 }
 
 /// The mesh-geometry half of the one-frame property. Every frame a new ken child of
@@ -289,6 +312,7 @@ fn the_parents_mesh_drops_the_vertex_the_same_frame_the_childs_entity_appears() 
         checked_at_least_one,
         "the loop never saw a new ken child of {cho_key:?} appear; the test proves nothing"
     );
+    assert_invariants(app.world());
 }
 
 /// The mesh-geometry check for Ruling 2's guest-cell dedup, in the same shape as
@@ -404,6 +428,7 @@ fn the_guest_sides_mesh_drops_the_shared_vertex_the_frame_both_neighbours_are_sh
         checked,
         "never observed both {a:?} and {b:?} shown together; the test proves nothing"
     );
+    assert_invariants(app.world());
 }
 
 /// Task 12b: the async-specific half of the one-frame property. The tests above check
@@ -473,6 +498,7 @@ fn a_child_is_never_shown_while_its_load_handover_is_pending() {
         "never saw a chunk held pending on one frame and only shown on a later one; the \
          test proves nothing about the async hold-back actually spanning frames"
     );
+    assert_invariants(app.world());
 }
 
 /// Fix round 1 (task-12b-report.md): a reload racing back in while a chunk's unload
@@ -554,24 +580,11 @@ fn growing_the_window_back_after_a_shrink_leaves_no_duplicate_or_orphaned_entiti
     assert_eq!(seen.len(), shown.keys().len());
     assert_eq!(seen.len(), DEFAULT_WINDOW_TOTAL);
 
-    // No phantom omission either (Critical 1's failure mode: `shown.omit`/`restore`
-    // applied against a chunk that turned out to have no entity, which `spawn_jobs` would
-    // feed straight into that chunk's next regeneration as a stale, wrong omission — a
-    // permanent hole with nothing left drawing the cell). Every key that omits anything
-    // must currently have an entity.
-    for key in shown.keys_with_omissions() {
-        assert!(
-            shown.entity(key).is_some(),
-            "{key:?} omits cells but has no entity — a phantom omission left over from a \
-             handover applied against a chunk that had already unloaded"
-        );
-    }
-
-    // The full content invariant, not just presence: also catches a phantom (or missing)
-    // omission on a key that *has* reloaded with a fresh entity — the failure mode fix
-    // round 2 (task-12b-report.md) found this test's shrink/grow churn newly makes
-    // reachable, and which the presence-only check above cannot see.
-    assert_omission_invariant(app.world());
+    // ...and neither the bookkeeping nor the meshes came out of the churn disagreeing with
+    // what the shown set says they must be. This is the test that exercises the reload-races-
+    // an-unload sequences, so it is where a stale re-mesh applied against the wrong omission
+    // set (Task 12c's defect 1) would show up as a mesh that no `Shown` check could fault.
+    assert_invariants(app.world());
 }
 
 /// Same three-part condition as `common::run_until_fully_settled` (see its doc comment):
@@ -586,50 +599,83 @@ fn world_is_fully_settled(world: &World, expected: usize) -> bool {
         && handovers.is_idle()
 }
 
-/// The content invariant a settled world must satisfy, over *every* shown chunk at once:
-/// its omission set is exactly the union of (a) the cells of its own currently-shown
-/// children, and (b) the guest cells it draws whose true (same-level) owner is currently
-/// shown instead — no more (a phantom omission, drawing nothing extra but sitting there
-/// ready to corrupt the next regeneration) and no less (a doubled surface, or, read from
-/// the owner's side, a hole). Recomputed independently from the public API
-/// (`hexworld::mesh::drawn_cells`, `hexworld::owner::parent_of`, `ChunkKey::parent_key`)
-/// rather than by reusing `entities.rs`'s own planning functions, so it does not just
-/// check the implementation agrees with itself.
+/// The omission set every shown chunk must have: the union of (a) the cells of its own
+/// currently-shown children, and (b) the guest cells it draws whose true same-level owner is
+/// currently shown instead.
 ///
-/// Unlike `every_shown_chunk_has_exactly_one_entity` (presence-only: does every key have
-/// exactly one entity), this is a *content* check over the final state, so it also catches
-/// a surviving phantom omission left on a key that has since reloaded with a fresh entity
-/// — precisely the failure mode fix round 2 (task-12b-report.md) found was reachable and
-/// fix round 1 did not yet close.
+/// **Deliberately a second implementation of `entities::desired_omissions`.** The production
+/// function is the one the plugin actually runs on; this one is written straight off
+/// `hexworld`'s public geometry (`mesh::drawn_cells`, `owner::parent_of`,
+/// `ChunkKey::parent_key`) with none of the production function's level-uniform offset table,
+/// so the assertions below are an independent oracle rather than a check that the
+/// implementation agrees with itself. Keep the duplication: calling
+/// `entities::desired_omissions` from here would turn every test in this file into a
+/// tautology.
+fn expected_omissions(
+    cfg: &WorldConfig,
+    shown_keys: &HashSet<ChunkKey>,
+    key: ChunkKey,
+) -> HashSet<Hex> {
+    let child_level = key.child_level();
+    let mut expected: HashSet<Hex> = HashSet::new();
+
+    // (a) cells of currently-shown children.
+    for &candidate in shown_keys {
+        if candidate.level == child_level && candidate.parent_key() == Some(key) {
+            expected.insert(candidate.cell);
+        }
+    }
+
+    // (b) guest cells whose same-level owner is currently shown.
+    for cell in hexworld::mesh::drawn_cells(cfg, key) {
+        let owner_cell = hexworld::owner::parent_of(cell, child_level);
+        if owner_cell == key.cell {
+            continue; // key owns this cell outright, never a guest of itself
+        }
+        if shown_keys.contains(&ChunkKey::new(key.level, owner_cell)) {
+            expected.insert(cell);
+        }
+    }
+
+    expected
+}
+
+/// Both invariants a settled world must satisfy, run at the end of every test in this file.
+///
+/// Neither subsumes the other. The bookkeeping check cannot see a mesh that disagrees with
+/// correct bookkeeping — the shape of Task 12c's defect 1, where two concurrent re-meshes of
+/// one chunk raced and the later apply overwrote the earlier one's omission, leaving a
+/// doubled surface behind a perfectly consistent `Shown`. The mesh check cannot see a
+/// phantom omission recorded against a chunk that has no entity at all, because there is no
+/// mesh to look at.
+fn assert_invariants(world: &World) {
+    assert_omission_invariant(world);
+    assert_mesh_content_invariant(world);
+}
+
+/// The bookkeeping invariant, over *every* shown chunk at once: its recorded omission set is
+/// exactly `expected_omissions` — no more (a phantom omission, drawing nothing extra but
+/// sitting there ready to corrupt the next regeneration) and no less (a doubled surface, or,
+/// read from the owner's side, a hole).
+///
+/// Includes a presence check, because iterating shown keys alone never looks at a key that
+/// has omissions but no entity — exactly where a phantom omission hides.
 fn assert_omission_invariant(world: &World) {
     let hex_world = world.resource::<HexWorld>();
     let shown = world.resource::<Shown>();
     let cfg = *hex_world.store().config();
     let shown_keys: HashSet<ChunkKey> = shown.keys().into_iter().collect();
 
+    for key in shown.keys_with_omissions() {
+        assert!(
+            shown_keys.contains(&key),
+            "{key:?} omits cells but has no entity — a phantom omission left over from a \
+             handover applied against a chunk that had already unloaded"
+        );
+    }
+
     for &key in &shown_keys {
-        let child_level = key.child_level();
-        let mut expected: HashSet<Hex> = HashSet::new();
-
-        // (a) cells of currently-shown children.
-        for &candidate in &shown_keys {
-            if candidate.level == child_level && candidate.parent_key() == Some(key) {
-                expected.insert(candidate.cell);
-            }
-        }
-
-        // (b) guest cells whose same-level owner is currently shown.
-        for cell in hexworld::mesh::drawn_cells(&cfg, key) {
-            let owner_cell = hexworld::owner::parent_of(cell, child_level);
-            if owner_cell == key.cell {
-                continue; // key owns this cell outright, never a guest of itself
-            }
-            let owner_key = ChunkKey::new(key.level, owner_cell);
-            if shown_keys.contains(&owner_key) {
-                expected.insert(cell);
-            }
-        }
-
+        let expected = expected_omissions(&cfg, &shown_keys, key);
         let actual = shown.omitted_for(key).clone();
         assert_eq!(
             actual,
@@ -639,6 +685,70 @@ fn assert_omission_invariant(world: &World) {
             actual.difference(&expected).collect::<Vec<_>>(),
             expected.difference(&actual).collect::<Vec<_>>(),
         );
+    }
+}
+
+/// The mesh-content invariant: for every shown chunk, the vertex data actually on its entity
+/// must be what `mesh_chunk` produces from that chunk and the omission set the invariant
+/// says it should have.
+///
+/// This is the check no `Shown`-based assertion can make. A chunk's geometry is a pure
+/// function of `(key, omissions)`, so comparing the real mesh against
+/// `mesh_chunk(cfg, chunk, expected_omissions(...))` catches a mesh that was computed
+/// against some *other* omission set and applied anyway — a doubled surface or a hole on
+/// screen, with the bookkeeping reading perfectly healthy.
+fn assert_mesh_content_invariant(world: &World) {
+    let hex_world = world.resource::<HexWorld>();
+    let shown = world.resource::<Shown>();
+    let meshes = world.resource::<Assets<Mesh>>();
+    let cfg = *hex_world.store().config();
+    let shown_keys: HashSet<ChunkKey> = shown.keys().into_iter().collect();
+
+    for &key in &shown_keys {
+        let omissions = expected_omissions(&cfg, &shown_keys, key);
+        // A shown chunk whose store data has already been dropped (its unload is under way)
+        // is regenerated: generation is pure, so this is the same chunk either way.
+        let chunk = hex_world
+            .store()
+            .chunk(key)
+            .cloned()
+            .unwrap_or_else(|| hexworld::chunk::generate(&cfg, key));
+        let want = hexworld::mesh::mesh_chunk(&cfg, &chunk, &omissions);
+        let want_positions: Vec<[f32; 3]> = want
+            .positions
+            .iter()
+            .map(|p| hexworld_bevy::axes::mesh_position(*p))
+            .collect();
+
+        let entity = shown.entity(key).expect("iterating the shown keys");
+        let handle = &world
+            .get::<Mesh3d>(entity)
+            .expect("a shown chunk always has a mesh")
+            .0;
+        let mesh = meshes.get(handle).expect("the mesh asset is still alive");
+        let got = mesh
+            .attribute(Mesh::ATTRIBUTE_POSITION)
+            .expect("positions")
+            .as_float3()
+            .expect("positions are f32x3");
+
+        assert_eq!(
+            got.len(),
+            want_positions.len(),
+            "{key:?}'s mesh has {} vertices, but meshing it with the {} cells the invariant \
+             says it must omit gives {} — its mesh was built against a different omission set",
+            got.len(),
+            omissions.len(),
+            want_positions.len(),
+        );
+        if let Some((i, (a, b))) = got
+            .iter()
+            .zip(want_positions.iter())
+            .enumerate()
+            .find(|(_, (a, b))| a != b)
+        {
+            panic!("{key:?}'s mesh differs from its expected mesh at vertex {i}: {a:?} vs {b:?}");
+        }
     }
 }
 
@@ -655,5 +765,5 @@ fn a_settled_worlds_omissions_match_the_content_invariant() {
         },
     ));
     run_until_fully_settled(&mut app, DEFAULT_WINDOW_TOTAL);
-    assert_omission_invariant(app.world());
+    assert_invariants(app.world());
 }

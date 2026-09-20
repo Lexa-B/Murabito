@@ -1,7 +1,16 @@
-//! One entity per chunk on screen, and the bookkeeping that keeps a chunk's mesh from
-//! drawing cells a finer or sibling chunk is already drawing.
+//! One entity per chunk on screen, and the geometry that says which cells each chunk must
+//! leave out because a finer chunk, or an already-shown same-level owner, draws them
+//! instead.
+//!
+//! The centre of this module is [`desired_omissions`]: a pure, total function from *the set
+//! of chunks currently on screen* to the exact omission set one chunk must be meshed with.
+//! Nothing here computes an increment, and nothing freezes a plan. A mesh is applicable
+//! exactly when the desired set it was computed against still equals the desired set the
+//! live world asks for — one equality, checked at the moment of applying it (see
+//! `tasks::step`).
 
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
@@ -14,8 +23,17 @@ use crate::material::GroundMaterial;
 #[derive(Component, Clone, Copy, Debug)]
 pub struct ChunkView(pub ChunkKey);
 
-/// What is on screen, and which cells each chunk leaves out because a finer chunk, or an
-/// already-shown sibling that owns the cell, draws them instead.
+/// What is on screen, and the omission set each chunk's *currently applied* mesh was built
+/// with.
+///
+/// The invariant this whole module exists to keep, restored inside every single
+/// `tasks::process_handovers` call and never observable as broken from outside one:
+///
+/// > for every shown `key`, `omitted_for(key) == desired_omissions(cfg, &key_set(), key)`,
+/// > and the mesh on `key`'s entity is `mesh_chunk(cfg, chunk_of(key), omitted_for(key))`.
+///
+/// `omitted` is therefore written whole (`set_omissions`), never nudged cell by cell: an
+/// incremental `omit`/`restore` pair is exactly what made a stale, frozen diff expressible.
 #[derive(Resource, Default)]
 pub struct Shown {
     entities: HashMap<ChunkKey, Entity>,
@@ -27,23 +45,25 @@ impl Shown {
         self.entities.keys().copied().collect()
     }
 
+    /// Everything on screen, as the set `desired_omissions` takes.
+    pub fn key_set(&self) -> HashSet<ChunkKey> {
+        self.entities.keys().copied().collect()
+    }
+
     pub fn entity(&self, key: ChunkKey) -> Option<Entity> {
         self.entities.get(&key).copied()
     }
 
     pub fn omitted_for(&self, key: ChunkKey) -> &HashSet<Hex> {
-        static EMPTY: std::sync::OnceLock<HashSet<Hex>> = std::sync::OnceLock::new();
+        static EMPTY: OnceLock<HashSet<Hex>> = OnceLock::new();
         self.omitted
             .get(&key)
             .unwrap_or_else(|| EMPTY.get_or_init(HashSet::new))
     }
 
-    /// Every key that currently omits at least one cell. Read-only introspection for
-    /// tests: a key here with no entity is a phantom omission — bookkeeping applied
-    /// against a chunk nothing is drawing any more (Critical 1, task-12b-report.md fix
-    /// round 1) — which would otherwise sit undetected until that chunk happened to
-    /// reload and `spawn_jobs` fed the stale entry straight into its regeneration as a
-    /// wrong, permanent hole.
+    /// Every key that currently omits at least one cell. Read-only introspection for tests:
+    /// a key here with no entity is a phantom omission — bookkeeping left on a chunk nothing
+    /// is drawing any more.
     pub fn keys_with_omissions(&self) -> Vec<ChunkKey> {
         self.omitted
             .iter()
@@ -52,13 +72,14 @@ impl Shown {
             .collect()
     }
 
-    pub fn omit(&mut self, parent: ChunkKey, cell: Hex) {
-        self.omitted.entry(parent).or_default().insert(cell);
-    }
-
-    pub fn restore(&mut self, parent: ChunkKey, cell: Hex) {
-        if let Some(set) = self.omitted.get_mut(&parent) {
-            set.remove(&cell);
+    /// Record the omission set `key`'s newly applied mesh was built with. Always the whole
+    /// set, computed fresh by `desired_omissions` — there is no way to express "add this
+    /// cell" or "drop that cell" on its own, so a half-applied handover has no shape to take.
+    pub fn set_omissions(&mut self, key: ChunkKey, cells: HashSet<Hex>) {
+        if cells.is_empty() {
+            self.omitted.remove(&key);
+        } else {
+            self.omitted.insert(key, cells);
         }
     }
 
@@ -160,289 +181,144 @@ pub fn spawn_chunk_entity(
 }
 
 /// Swap a chunk's `Mesh3d` to freshly computed data — the last step of a handover, once
-/// its background re-mesh (see `tasks::process_handovers`) has landed. A no-op if the
-/// chunk stopped being shown while that re-mesh was in flight (it unloaded, or a reload
-/// raced in and swapped its entity) — there is nothing left on screen to update.
+/// its background re-mesh (see `tasks::process_handovers`) has landed.
 pub fn apply_remesh(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    shown: &Shown,
-    key: ChunkKey,
+    entity: Entity,
     data: &MeshData,
 ) {
-    let Some(entity) = shown.entity(key) else {
-        return;
-    };
     let handle = meshes.add(to_bevy_mesh(data));
     commands.entity(entity).insert(Mesh3d(handle));
 }
 
-/// The cells `key` draws that belong to a different, already-shown chunk at the same
-/// level: the guest cells (`drawn_cells` minus the owned ones) whose true owner is on
-/// screen. `key` is the chunk that must omit them, never the owner — the owner keeps
-/// drawing every cell it owns regardless of what its neighbours are doing.
-fn guest_cells_to_omit(cfg: &WorldConfig, key: ChunkKey, shown: &Shown) -> HashSet<Hex> {
-    guest_cells_to_omit_considering(cfg, key, shown, None)
-}
+/// One entry of the guest-offset table: the direction of the same-level neighbour that owns
+/// a group of guest cells, and those cells' offsets from the chunk's own centre child.
+type GuestGroup = (Hex, Vec<Hex>);
 
-/// Same as `guest_cells_to_omit`, but also treats `pretend_shown` as shown even though it
-/// has no entity yet. Used while *planning* a chunk's handover (see `plan_load_handover`):
-/// the chunk that is about to be shown must already count as an owner for this check, or a
-/// neighbour that owes it a guest cell would never be told to hand the cell over, but
-/// nothing may actually mutate `Shown` — real entities and mesh swaps are deferred until
-/// the handover's background re-meshes land — until the arriving chunk has one.
-fn guest_cells_to_omit_considering(
-    cfg: &WorldConfig,
-    key: ChunkKey,
-    shown: &Shown,
-    pretend_shown: Option<ChunkKey>,
-) -> HashSet<Hex> {
-    let child = key.child_level();
-    hexworld::mesh::drawn_cells(cfg, key)
-        .into_iter()
-        .filter(|cell| {
-            let owner_cell = hexworld::owner::parent_of(*cell, child);
-            if owner_cell == key.cell {
-                return false; // key owns this cell outright; never a guest of itself
-            }
-            let owner_key = ChunkKey::new(key.level, owner_cell);
-            Some(owner_key) == pretend_shown || shown.entity(owner_key).is_some()
-        })
-        .collect()
-}
-
-/// Called after `key` becomes newly shown. Brings `key`'s own guest omissions up to date
-/// (some may already be owed because their true owner was shown first), and tells any
-/// already-shown same-level neighbour that was drawing one of `key`'s own cells as a
-/// guest to omit it now that the true owner (`key`) is on screen. Returns every key whose
-/// omission set grew, `key` included, so the caller can re-mesh each of them.
-pub fn sync_guests_on_load(cfg: &WorldConfig, shown: &mut Shown, key: ChunkKey) -> Vec<ChunkKey> {
-    let mut changed = Vec::new();
-
-    let mine = guest_cells_to_omit(cfg, key, shown);
-    if !mine.is_empty() {
-        for cell in mine {
-            shown.omit(key, cell);
-        }
-        changed.push(key);
-    }
-
-    if key.level != Level::World {
-        for neighbour_cell in hexworld::hex::neighbours(key.cell) {
-            let neighbour = ChunkKey::new(key.level, neighbour_cell);
-            if shown.entity(neighbour).is_none() {
-                continue;
-            }
-            let before = shown.omitted_for(neighbour).len();
-            for cell in guest_cells_to_omit(cfg, neighbour, shown) {
-                shown.omit(neighbour, cell);
-            }
-            if shown.omitted_for(neighbour).len() != before {
-                changed.push(neighbour);
-            }
-        }
-    }
-
-    changed
-}
-
-/// Called just before `key` unloads. Any same-level neighbour that had been omitting one
-/// of `key`'s own cells (because `key`, the true owner, was shown) must draw it again, or
-/// a hole opens where `key` used to be. Returns every neighbour key that changed, so the
-/// caller can re-mesh each of them before `key`'s own entity despawns.
-pub fn release_guests_on_unload(shown: &mut Shown, key: ChunkKey) -> Vec<ChunkKey> {
-    let mut changed = Vec::new();
-    if key.level == Level::World {
-        return changed;
-    }
-    let child = key.child_level();
-    for neighbour_cell in hexworld::hex::neighbours(key.cell) {
-        let neighbour = ChunkKey::new(key.level, neighbour_cell);
-        if shown.entity(neighbour).is_none() {
-            continue;
-        }
-        let to_restore: Vec<Hex> = shown
-            .omitted_for(neighbour)
-            .iter()
-            .copied()
-            .filter(|cell| hexworld::owner::parent_of(*cell, child) == key.cell)
-            .collect();
-        if !to_restore.is_empty() {
-            for cell in to_restore {
-                shown.restore(neighbour, cell);
-            }
-            changed.push(neighbour);
-        }
-    }
-    changed
-}
-
-/// Called after `key` becomes newly shown. If any already-shown chunk at `key`'s own
-/// child level turns out to be `key`'s child (its job finished and was shown before
-/// `key`'s own job did — the store's coarsest-first load order makes this rare but not
-/// impossible, since only *starting* a coarser job, not finishing it, is what frees a
-/// slot for a finer one), `key` must omit that child's cell too. Returns whether `key`'s
-/// own omission set grew.
-pub fn absorb_already_shown_children(shown: &mut Shown, key: ChunkKey) -> bool {
-    let child_level = key.child_level();
-    let before = shown.omitted_for(key).len();
-    for candidate in shown.keys() {
-        if candidate.level == child_level && candidate.parent_key() == Some(key) {
-            shown.omit(key, candidate.cell);
-        }
-    }
-    shown.omitted_for(key).len() != before
-}
-
-// --- Handover planning: pure queries the async handover (see `tasks.rs`) uses to freeze
-// what a chunk's arrival or departure will require of its neighbours, *before* doing the
-// (possibly expensive) work of re-meshing each of them off the main thread. Each mirrors a
-// mutating function above but returns the cells-to-add per affected chunk instead of
-// committing them, so the real `shown.omit`/`shown.restore` calls can be made later, in
-// the same frame the background re-mesh actually lands and the chunk's entity is
-// spawned/despawned — never before, or the mesh on screen would lag the bookkeeping.
-
-/// The cells `key` itself would newly omit for an already-shown chunk at its own child
-/// level that turns out to be its child — the pure-query twin of
-/// `absorb_already_shown_children`.
-fn plan_absorb_already_shown_children(shown: &Shown, key: ChunkKey) -> HashSet<Hex> {
-    let child_level = key.child_level();
-    shown
-        .keys()
-        .into_iter()
-        .filter(|candidate| candidate.level == child_level && candidate.parent_key() == Some(key))
-        .map(|candidate| candidate.cell)
-        .collect()
-}
-
-/// What `key` itself would newly omit, and what each already-shown same-level neighbour
-/// would newly omit, if `key` became shown right now — the pure-query twin of
-/// `sync_guests_on_load`.
+/// The cells a chunk at `level` draws but does not own, grouped by the same-level
+/// neighbour that *does* own them, as offsets from the chunk's own centre child.
 ///
-/// `guest_cells_to_omit`/`_considering` return a chunk's *full* guest set, not an
-/// increment, so every candidate here is diffed against what it already omits
-/// (`shown.omitted_for`) before being added to the plan — a settled same-level neighbour
-/// typically already omits every guest cell it owes, and without the diff it would come
-/// back as a target (and so get a real, ~18 ms re-mesh, and occupy an `active_targets`
-/// slot blocking unrelated handovers) on essentially every arrival near it, for nothing.
-fn plan_guest_handover_on_load(
-    cfg: &WorldConfig,
-    shown: &Shown,
-    key: ChunkKey,
-) -> HashMap<ChunkKey, HashSet<Hex>> {
-    let mut plan: HashMap<ChunkKey, HashSet<Hex>> = HashMap::new();
+/// Level-uniform, so it is built once per level and shared by every chunk at it. Two facts
+/// from `hexworld` make that sound, and both are checked by
+/// `the_offset_table_agrees_with_drawn_cells_and_parent_of` below rather than taken on
+/// trust:
+///
+///   * `drawn_cells(cfg, key)` is `centre_child(key.cell, key.level) + drawn_offsets(level)`
+///     filtered to the world; and
+///   * ownership is translation-equivariant on the parent lattice —
+///     `owner(cell + n*t, n) == owner(cell, n) + t` — because the nine candidate parents
+///     `owner` searches shift with `t` while their distances do not, and the tie-break
+///     `-(a, b)` shifts monotonically with them.
+///
+/// So the guest cells of *any* chunk at the level sit at the same offsets and are owned by
+/// the same *relative* neighbours. That turns the guest half of `desired_omissions` from a
+/// full scan of a chunk's drawn set (3 600+ cells and a `parent_of` each, for a cho chunk)
+/// into a walk over the handful of border cells owned by the neighbours that are actually
+/// on screen.
+fn guest_offsets_by_owner(level: Level) -> &'static [GuestGroup] {
+    static CACHE: [OnceLock<Vec<GuestGroup>>; 5] = [
+        OnceLock::new(),
+        OnceLock::new(),
+        OnceLock::new(),
+        OnceLock::new(),
+        OnceLock::new(),
+    ];
+    CACHE[level as usize].get_or_init(|| {
+        let n = level.packing();
+        let mut by_owner: HashMap<Hex, Vec<Hex>> = HashMap::new();
+        for offset in hexworld::owner::drawn_offsets(level) {
+            let owner = hexworld::owner::owner(*offset, n);
+            if owner != Hex::ZERO {
+                by_owner.entry(owner).or_default().push(*offset);
+            }
+        }
+        let mut out: Vec<GuestGroup> = by_owner.into_iter().collect();
+        out.sort_by_key(|(dir, _)| (dir.q, dir.r));
+        out
+    })
+}
 
-    // `key` has no entry in `Shown` yet, so its own omitted set is always empty here and
-    // this diff is a no-op — but it is *only* safe because of that, not despite it: the
-    // invariant is that `Shown::omit` is never called for a key without an entity (see
-    // `Shown::insert_entity`/`omit`), which is exactly what guarantees `omitted_for(key)`
-    // is empty at this point. If that guarantee were ever broken, this diff would become
-    // actively wrong, not merely redundant: `tasks::promote_loads` re-meshes a not-yet-
-    // shown child with `added` alone (this plan's `key` entry), never
-    // `shown.omitted_for(key)` unioned in, so any cell this diff excluded because it was
-    // already in a non-empty `omitted_for(key)` would be missing from the child's first
-    // mesh entirely — an under-omitting, doubled-surface bug. Keep this diff and
-    // `promote_loads`'s self case in sync if that invariant ever changes.
-    let mine: HashSet<Hex> = guest_cells_to_omit(cfg, key, shown)
-        .difference(shown.omitted_for(key))
-        .copied()
-        .collect();
-    if !mine.is_empty() {
-        plan.entry(key).or_default().extend(mine);
+/// **The** function this module is built around: the cells `key` must leave out of its mesh,
+/// given exactly which chunks are on screen. Pure, total, and a function of `shown` alone —
+/// no entities, no history, no increment, nothing frozen.
+///
+/// It is the union of two things, and only these two:
+///
+///   * (a) the cells of `key`'s own currently-shown children — they draw that ground at
+///     finer detail; and
+///   * (b) the guest cells `key` draws but does not own, whose true same-level owner is
+///     currently shown — the owner draws them, the guest defers.
+///
+/// Everything else in the handover machinery is downstream of this: a finished re-mesh for
+/// `T` is applicable exactly when `desired_omissions(now, T)` still equals the set it was
+/// computed against, and a chunk is shown only once every chunk whose desired set its
+/// arrival changes has a mesh matching that chunk's *post*-arrival desired set.
+pub fn desired_omissions(
+    cfg: &WorldConfig,
+    shown: &HashSet<ChunkKey>,
+    key: ChunkKey,
+) -> HashSet<Hex> {
+    let child_level = key.child_level();
+    let mut out: HashSet<Hex> = HashSet::new();
+
+    // (a) cells of currently-shown children.
+    for candidate in shown {
+        if candidate.level == child_level && candidate.parent_key() == Some(key) {
+            out.insert(candidate.cell);
+        }
     }
 
+    // (b) guest cells whose same-level owner is currently shown. The world chunk is the
+    // only chunk at its level, so it has no same-level neighbour to defer to and no guests
+    // (every ri's parent is the single world cell); it also has no `packing`, so the offset
+    // table must not be asked for it.
     if key.level != Level::World {
-        for neighbour_cell in hexworld::hex::neighbours(key.cell) {
-            let neighbour = ChunkKey::new(key.level, neighbour_cell);
-            if shown.entity(neighbour).is_none() {
+        let centre = hexworld::owner::centre_child(key.cell, key.level);
+        for (dir, offsets) in guest_offsets_by_owner(key.level) {
+            let owner_key = ChunkKey::new(key.level, key.cell + *dir);
+            if !shown.contains(&owner_key) {
                 continue;
             }
-            let full = guest_cells_to_omit_considering(cfg, neighbour, shown, Some(key));
-            let new_cells: HashSet<Hex> = full
-                .difference(shown.omitted_for(neighbour))
-                .copied()
-                .collect();
-            if !new_cells.is_empty() {
-                plan.entry(neighbour).or_default().extend(new_cells);
+            for offset in offsets {
+                let cell = centre + *offset;
+                if hexworld::cell_in_world(cell, child_level, cfg) {
+                    out.insert(cell);
+                }
             }
         }
     }
-    plan
+
+    out
 }
 
-/// The full plan for showing `key`: every already-shown chunk (its parent, any same-level
-/// neighbour ceding it a guest cell) that must newly omit one of `key`'s cells, plus `key`
-/// itself if it must omit cells of its own (an already-shown child, or a guest cell whose
-/// true owner is already on screen). Empty when nothing but `key`'s own already-meshed job
-/// output is needed — the common case, handled without any of this machinery.
-pub fn plan_load_handover(
-    cfg: &WorldConfig,
-    shown: &Shown,
-    key: ChunkKey,
-) -> HashMap<ChunkKey, HashSet<Hex>> {
-    let mut plan: HashMap<ChunkKey, HashSet<Hex>> = HashMap::new();
-
-    let absorbed = plan_absorb_already_shown_children(shown, key);
-    if !absorbed.is_empty() {
-        plan.entry(key).or_default().extend(absorbed);
-    }
-
-    if let Some(parent) = key.parent_key() {
-        if shown.entity(parent).is_some() && !shown.omitted_for(parent).contains(&key.cell) {
-            plan.entry(parent).or_default().insert(key.cell);
+/// Every chunk whose `desired_omissions` can possibly change when `key` starts or stops
+/// being shown — `key` itself, its parent, and the same-level neighbours it shares guest
+/// cells with.
+///
+/// That exactness is what makes the one-frame guarantee a short argument: term (a) of
+/// `desired_omissions` mentions `key` only for the chunk whose child `key` is
+/// (`key.parent_key()`), and term (b) mentions it only for a same-level chunk that draws a
+/// cell `key` owns.
+///
+/// The guest relation is *not* symmetric, and assuming it was is a mistake the unit test
+/// `affected_by_names_every_chunk_whose_desired_set_a_flip_can_change` caught: a guest cell
+/// only exists where two neighbouring parents are exactly equidistant, and `owner` breaks
+/// that tie for the lexicographically greatest parent. So a chunk only ever cedes guests
+/// *up* the lexicographic order, and the table's directions run one way. Both directions are
+/// taken here: `key + dir` are the neighbours `key` cedes guests to, `key - dir` the ones
+/// that cede guests to `key`. Including both is a superset for the first group, which costs
+/// one desired-set comparison that comes out equal and is dropped.
+pub fn affected_by(key: ChunkKey) -> Vec<ChunkKey> {
+    let mut out = vec![key];
+    out.extend(key.parent_key());
+    if key.level != Level::World {
+        for (dir, _) in guest_offsets_by_owner(key.level) {
+            out.push(ChunkKey::new(key.level, key.cell + *dir));
+            out.push(ChunkKey::new(key.level, key.cell - *dir));
         }
     }
-
-    for (affected, cells) in plan_guest_handover_on_load(cfg, shown, key) {
-        plan.entry(affected).or_default().extend(cells);
-    }
-
-    plan
-}
-
-/// Every same-level neighbour that would take a cell back if `key` unloaded right now —
-/// the pure-query twin of `release_guests_on_unload`.
-fn plan_release_guests_on_unload(shown: &Shown, key: ChunkKey) -> HashMap<ChunkKey, HashSet<Hex>> {
-    let mut plan: HashMap<ChunkKey, HashSet<Hex>> = HashMap::new();
-    if key.level == Level::World {
-        return plan;
-    }
-    let child = key.child_level();
-    for neighbour_cell in hexworld::hex::neighbours(key.cell) {
-        let neighbour = ChunkKey::new(key.level, neighbour_cell);
-        if shown.entity(neighbour).is_none() {
-            continue;
-        }
-        let to_restore: HashSet<Hex> = shown
-            .omitted_for(neighbour)
-            .iter()
-            .copied()
-            .filter(|cell| hexworld::owner::parent_of(*cell, child) == key.cell)
-            .collect();
-        if !to_restore.is_empty() {
-            plan.insert(neighbour, to_restore);
-        }
-    }
-    plan
-}
-
-/// The full plan for unloading `key`: the parent (if shown) that gets `key`'s cell back,
-/// plus every same-level neighbour that gets a guest cell back. Empty when `key` can just
-/// be despawned with nothing else to update.
-pub fn plan_unload_handover(shown: &Shown, key: ChunkKey) -> HashMap<ChunkKey, HashSet<Hex>> {
-    let mut plan: HashMap<ChunkKey, HashSet<Hex>> = HashMap::new();
-
-    if let Some(parent) = key.parent_key() {
-        if shown.entity(parent).is_some() {
-            plan.entry(parent).or_default().insert(key.cell);
-        }
-    }
-
-    for (neighbour, cells) in plan_release_guests_on_unload(shown, key) {
-        plan.entry(neighbour).or_default().extend(cells);
-    }
-
-    plan
+    out
 }
 
 #[cfg(test)]
@@ -450,49 +326,163 @@ mod tests {
     use super::*;
     use hexworld::owner;
 
-    fn fake_entity(index: u32) -> Entity {
-        Entity::from_raw_u32(index).expect("a small index is always valid")
+    /// The same calculation `desired_omissions` makes, written the slow, obvious way:
+    /// straight off `drawn_cells` and `parent_of`, with no offset table and no level-uniform
+    /// reasoning. Deliberately a second implementation — it is the thing the fast one is
+    /// checked against.
+    fn by_direct_scan(cfg: &WorldConfig, shown: &HashSet<ChunkKey>, key: ChunkKey) -> HashSet<Hex> {
+        let child_level = key.child_level();
+        let mut expected: HashSet<Hex> = HashSet::new();
+        for candidate in shown {
+            if candidate.level == child_level && candidate.parent_key() == Some(key) {
+                expected.insert(candidate.cell);
+            }
+        }
+        for cell in hexworld::mesh::drawn_cells(cfg, key) {
+            let owner_cell = owner::parent_of(cell, child_level);
+            if owner_cell == key.cell {
+                continue;
+            }
+            if shown.contains(&ChunkKey::new(key.level, owner_cell)) {
+                expected.insert(cell);
+            }
+        }
+        expected
     }
 
+    /// Every chunk key these tests treat as the whole world: enough of each level around the
+    /// origin that a chunk's parent, children and same-level neighbours are all in it.
+    fn universe() -> Vec<ChunkKey> {
+        let mut out = vec![ChunkKey::WORLD];
+        for level in [Level::Ken, Level::Cho, Level::Ri] {
+            for cell in hexworld::hex::range(Hex::ZERO, 2) {
+                out.push(ChunkKey::new(level, cell));
+            }
+        }
+        out
+    }
+
+    /// A deterministic pseudo-random subset, so the checks below see many different shown
+    /// sets without a dependency or a flaky seed.
+    fn subset(universe: &[ChunkKey], seed: u64) -> HashSet<ChunkKey> {
+        let mut state = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+        universe
+            .iter()
+            .copied()
+            .filter(|_| {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                !(state >> 33).is_multiple_of(3)
+            })
+            .collect()
+    }
+
+    /// The fast, table-driven `desired_omissions` and the slow direct scan must agree on
+    /// every chunk, for many different shown sets. This is what licenses the level-uniform
+    /// offset table (and its translation-equivariance argument) in the first place.
+    #[test]
+    fn the_offset_table_agrees_with_drawn_cells_and_parent_of() {
+        let cfg = WorldConfig::default();
+        let universe = universe();
+        for seed in 0..24 {
+            let shown = subset(&universe, seed);
+            for &key in &universe {
+                assert_eq!(
+                    desired_omissions(&cfg, &shown, key),
+                    by_direct_scan(&cfg, &shown, key),
+                    "seed {seed}: desired_omissions disagrees with a direct scan for {key:?}"
+                );
+            }
+        }
+    }
+
+    /// A wider world than the default single ri, so the `cell_in_world` filter is not the
+    /// only thing doing the work and cho/ri chunks have real neighbours to cede guests to.
+    #[test]
+    fn the_offset_table_agrees_in_a_larger_world() {
+        let cfg = WorldConfig {
+            world_radius_ri: 3,
+            ..WorldConfig::default()
+        };
+        let universe = universe();
+        for seed in 100..112 {
+            let shown = subset(&universe, seed);
+            for &key in &universe {
+                assert_eq!(
+                    desired_omissions(&cfg, &shown, key),
+                    by_direct_scan(&cfg, &shown, key),
+                    "seed {seed}: desired_omissions disagrees with a direct scan for {key:?}"
+                );
+            }
+        }
+    }
+
+    /// `affected_by` is the whole one-frame argument in one line: showing or hiding `key`
+    /// can only change the desired omission set of a chunk it names. Checked by exhaustion
+    /// — flip each key in the universe in and out of a shown set and look at *every* other
+    /// chunk's desired set, not just the ones `affected_by` predicted.
+    #[test]
+    fn affected_by_names_every_chunk_whose_desired_set_a_flip_can_change() {
+        let cfg = WorldConfig {
+            world_radius_ri: 3,
+            ..WorldConfig::default()
+        };
+        let universe = universe();
+        for seed in 200..208 {
+            let base = subset(&universe, seed);
+            for &key in &universe {
+                let mut without = base.clone();
+                without.remove(&key);
+                let mut with = base.clone();
+                with.insert(key);
+
+                let affected: HashSet<ChunkKey> = affected_by(key).into_iter().collect();
+                for &other in &universe {
+                    let before = desired_omissions(&cfg, &without, other);
+                    let after = desired_omissions(&cfg, &with, other);
+                    if before != after {
+                        assert!(
+                            affected.contains(&other),
+                            "seed {seed}: flipping {key:?} changed {other:?}'s desired set, \
+                             but affected_by({key:?}) does not name it"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Ruling 2's guest dedup, stated over `desired_omissions` alone: two same-level
+    /// neighbours share tie cells, and each shared cell is omitted from exactly one of them
+    /// — always the side that does not own it.
     #[test]
     fn a_guest_chunk_omits_once_its_owner_is_shown() {
         let cfg = WorldConfig::default();
         let a = ChunkKey::new(Level::Ken, Hex::ZERO);
         let b = ChunkKey::new(Level::Ken, Hex::new(1, 0));
-        let mut shown = Shown::default();
-        shown.insert_entity(a, fake_entity(1));
-        shown.insert_entity(b, fake_entity(2));
 
-        // Sanity: a and b really do share at least one guest cell (see hexworld's own
-        // `shared_cells_are_exactly_guests`).
-        let guests_of_a = guest_cells_to_omit(&cfg, a, &shown);
-        assert!(!guests_of_a.is_empty(), "a and b should share a guest cell");
+        // Alone, neither omits anything: omission only ever follows from being shown.
+        let only_a: HashSet<ChunkKey> = [a].into_iter().collect();
+        assert!(desired_omissions(&cfg, &only_a, a).is_empty());
 
-        // Neither omits anything on its own — omission only follows from being shown.
-        assert!(shown.omitted_for(a).is_empty());
-        assert!(shown.omitted_for(b).is_empty());
+        let both: HashSet<ChunkKey> = [a, b].into_iter().collect();
+        let omit_a = desired_omissions(&cfg, &both, a);
+        let omit_b = desired_omissions(&cfg, &both, b);
+        assert!(
+            !omit_a.is_empty() || !omit_b.is_empty(),
+            "a and b should share a guest cell"
+        );
 
-        let changed = sync_guests_on_load(&cfg, &mut shown, b);
-        // b's arrival can only ever grow a's or b's own omissions, never both drop the
-        // same cell: the owner (whichever of a/b actually owns a given shared cell) is
-        // never added to `changed` for that cell, because `guest_cells_to_omit` only
-        // ever returns cells the chunk being checked does *not* own.
-        assert!(!changed.is_empty());
-        for key in &changed {
-            assert!(*key == a || *key == b);
-        }
-
-        // Every shared cell ends up omitted from exactly one side.
         let cells_a: HashSet<Hex> = hexworld::mesh::drawn_cells(&cfg, a).into_iter().collect();
         let cells_b: HashSet<Hex> = hexworld::mesh::drawn_cells(&cfg, b).into_iter().collect();
         for cell in cells_a.intersection(&cells_b) {
-            let a_has_it = shown.omitted_for(a).contains(cell);
-            let b_has_it = shown.omitted_for(b).contains(cell);
+            let a_has_it = omit_a.contains(cell);
+            let b_has_it = omit_b.contains(cell);
             assert!(
                 a_has_it ^ b_has_it,
                 "{cell:?} must be omitted from exactly one of a, b — got a={a_has_it} b={b_has_it}"
             );
-            // Whichever side omits it must be the non-owner.
             let owner_cell = owner::parent_of(*cell, Level::Shaku);
             if a_has_it {
                 assert_ne!(owner_cell, a.cell, "the owner must never omit its own cell");
@@ -502,107 +492,87 @@ mod tests {
         }
     }
 
+    /// The unload side of the same rule, and the shape defect 3 used to get wrong: the
+    /// guest's desired set is a function of who is shown *now*, so the owner leaving takes
+    /// the cell straight back out of it — there is no separate "restore" step to miss.
     #[test]
-    fn unloading_the_owner_restores_the_guest() {
+    fn the_owner_leaving_takes_the_cell_back_out_of_the_guests_desired_set() {
         let cfg = WorldConfig::default();
         let a = ChunkKey::new(Level::Ken, Hex::ZERO);
         let b = ChunkKey::new(Level::Ken, Hex::new(1, 0));
-        let mut shown = Shown::default();
-        shown.insert_entity(a, fake_entity(1));
-        shown.insert_entity(b, fake_entity(2));
-        sync_guests_on_load(&cfg, &mut shown, a);
-        sync_guests_on_load(&cfg, &mut shown, b);
+        let both: HashSet<ChunkKey> = [a, b].into_iter().collect();
 
         let cells_a: HashSet<Hex> = hexworld::mesh::drawn_cells(&cfg, a).into_iter().collect();
         let cells_b: HashSet<Hex> = hexworld::mesh::drawn_cells(&cfg, b).into_iter().collect();
         let shared: Vec<Hex> = cells_a.intersection(&cells_b).copied().collect();
         assert!(!shared.is_empty());
 
-        // Whichever of a/b owns each shared cell: unload it, and its guest must pick the
-        // cell back up rather than leaving a hole.
         for cell in &shared {
             let owner_cell = owner::parent_of(*cell, Level::Shaku);
             let (owner_key, guest_key) = if owner_cell == a.cell { (a, b) } else { (b, a) };
             assert!(
-                shown.omitted_for(guest_key).contains(cell),
-                "{cell:?} should have been omitted from the guest side before unload"
+                desired_omissions(&cfg, &both, guest_key).contains(cell),
+                "{cell:?} should be omitted from the guest side while the owner is shown"
             );
-            let restored = release_guests_on_unload(&mut shown, owner_key);
-            shown.remove(owner_key);
-            assert!(restored.contains(&guest_key));
-            assert!(!shown.omitted_for(guest_key).contains(cell));
-            // Put it back for the next cell in the loop.
-            shown.insert_entity(owner_key, fake_entity(3));
-            sync_guests_on_load(&cfg, &mut shown, owner_key);
+            let without_owner: HashSet<ChunkKey> = [guest_key].into_iter().collect();
+            assert!(
+                !desired_omissions(&cfg, &without_owner, guest_key).contains(cell),
+                "{cell:?} must come straight back once {owner_key:?} is gone"
+            );
         }
     }
 
+    /// Ruling 1, and the load-order race `absorb_already_shown_children` used to exist for:
+    /// a parent that arrives *after* its child must omit the child's cell. With the desired
+    /// set computed from the shown set, arrival order simply does not enter into it.
     #[test]
-    fn a_late_parent_absorbs_an_already_shown_child() {
+    fn a_late_parent_omits_an_already_shown_child() {
+        let cfg = WorldConfig::default();
         let ken = ChunkKey::new(Level::Ken, Hex::ZERO);
         let cho = ChunkKey::new(Level::Cho, owner::parent_of(Hex::ZERO, Level::Ken));
-        let mut shown = Shown::default();
-        // The child arrives (and is shown) before its parent — the rare race this
-        // function exists for.
-        shown.insert_entity(ken, fake_entity(1));
-        assert!(shown.omitted_for(cho).is_empty());
 
-        shown.insert_entity(cho, fake_entity(2));
-        let changed = absorb_already_shown_children(&mut shown, cho);
-        assert!(changed);
-        assert!(shown.omitted_for(cho).contains(&ken.cell));
+        let child_only: HashSet<ChunkKey> = [ken].into_iter().collect();
+        assert!(desired_omissions(&cfg, &child_only, cho).contains(&ken.cell));
+
+        let both: HashSet<ChunkKey> = [ken, cho].into_iter().collect();
+        assert!(desired_omissions(&cfg, &both, cho).contains(&ken.cell));
+        // ...and the child never omits its parent's cell, in either order.
+        assert!(!desired_omissions(&cfg, &both, ken).contains(&cho.cell));
     }
 
+    /// `affected_by` must name the parent and the arriving chunk itself, or a handover would
+    /// never re-mesh either of them.
     #[test]
-    fn plan_load_handover_matches_the_late_parent_absorb_case_without_mutating_shown() {
-        let ken = ChunkKey::new(Level::Ken, Hex::ZERO);
-        let cho = ChunkKey::new(Level::Cho, owner::parent_of(Hex::ZERO, Level::Ken));
-        let mut shown = Shown::default();
-        shown.insert_entity(ken, fake_entity(1));
-        shown.insert_entity(cho, fake_entity(2));
+    fn affected_by_names_the_chunk_and_its_parent() {
+        let ken = ChunkKey::new(Level::Ken, Hex::new(1, -1));
+        let affected: HashSet<ChunkKey> = affected_by(ken).into_iter().collect();
+        assert!(affected.contains(&ken));
+        assert!(affected.contains(&ken.parent_key().expect("a ken chunk has a parent")));
+        for neighbour in hexworld::hex::neighbours(ken.cell) {
+            assert!(
+                affected.contains(&ChunkKey::new(Level::Ken, neighbour)),
+                "{neighbour:?} draws cells {ken:?} owns and must be named"
+            );
+        }
+        // The world chunk has neither a parent nor a same-level neighbour.
+        assert_eq!(affected_by(ChunkKey::WORLD), vec![ChunkKey::WORLD]);
+    }
 
-        // The plan must call out cho needing to omit ken's cell...
-        let cfg = WorldConfig::default();
-        let plan = plan_load_handover(&cfg, &shown, cho);
+    /// `set_omissions` writes the whole set, and an empty set leaves no entry behind for a
+    /// later reload to pick up — the phantom-omission failure mode, made unrepresentable.
+    #[test]
+    fn set_omissions_replaces_rather_than_accumulates() {
+        let key = ChunkKey::new(Level::Cho, Hex::ZERO);
+        let mut shown = Shown::default();
+        shown.set_omissions(key, [Hex::new(1, 0), Hex::new(2, 0)].into_iter().collect());
+        assert_eq!(shown.omitted_for(key).len(), 2);
+        shown.set_omissions(key, [Hex::new(3, 0)].into_iter().collect());
         assert_eq!(
-            plan.get(&cho).cloned().unwrap_or_default(),
-            [ken.cell].into_iter().collect::<HashSet<_>>()
+            *shown.omitted_for(key),
+            [Hex::new(3, 0)].into_iter().collect::<HashSet<_>>()
         );
-        // ...and must not itself have touched `Shown` — the whole point of a plan is that
-        // the caller applies it later, once the background re-mesh it drives has landed.
-        assert!(shown.omitted_for(cho).is_empty());
-    }
-
-    #[test]
-    fn plan_load_handover_matches_the_guest_dedup_case_without_mutating_shown() {
-        let cfg = WorldConfig::default();
-        let a = ChunkKey::new(Level::Ken, Hex::ZERO);
-        let b = ChunkKey::new(Level::Ken, Hex::new(1, 0));
-
-        // Ground truth: what `sync_guests_on_load` actually commits when b arrives after a.
-        let mut mutated = Shown::default();
-        mutated.insert_entity(a, fake_entity(1));
-        sync_guests_on_load(&cfg, &mut mutated, a);
-        mutated.insert_entity(b, fake_entity(2));
-        let changed = sync_guests_on_load(&cfg, &mut mutated, b);
-        assert!(!changed.is_empty(), "a and b should share a guest cell");
-
-        // The plan, computed *before* b has an entity (the real caller's situation), must
-        // predict the same omissions without mutating anything.
-        let mut planned = Shown::default();
-        planned.insert_entity(a, fake_entity(1));
-        sync_guests_on_load(&cfg, &mut planned, a);
-        let plan = plan_load_handover(&cfg, &planned, b);
-
-        for key in [a, b] {
-            let predicted = plan.get(&key).cloned().unwrap_or_default();
-            assert_eq!(
-                predicted,
-                mutated.omitted_for(key).clone(),
-                "plan for {key:?} should match what sync_guests_on_load actually commits"
-            );
-        }
-        // The plan must not itself have touched `planned`.
-        assert!(planned.omitted_for(b).is_empty());
+        shown.set_omissions(key, HashSet::new());
+        assert!(shown.omitted_for(key).is_empty());
+        assert!(shown.keys_with_omissions().is_empty());
     }
 }

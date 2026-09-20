@@ -49,5 +49,5 @@ pub fn drive_store(
         }
     }
 
-    spawn_jobs(&mut commands, &mut world, &shown, update.to_load);
+    spawn_jobs(&mut commands, &mut world, update.to_load);
 }

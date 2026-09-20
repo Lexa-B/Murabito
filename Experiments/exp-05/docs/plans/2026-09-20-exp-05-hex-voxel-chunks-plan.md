@@ -4104,6 +4104,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: Task 11's plugin.
 - Produces: `Shown` resource: `HashMap<ChunkKey, Entity>` plus `omitted: HashMap<ChunkKey, HashSet<Hex>>`, with `omitted_for(ChunkKey) -> &HashSet<Hex>`.
 
+  **Superseded by Task 12c** (the async split stayed; the incremental frozen diffs it
+  described did not — see "As shipped (Task 12c)" immediately below). Kept for the record.
+
   **As shipped (fix round 2 / Task 12b): the parent re-mesh runs on the async task pool,
   not the main thread.** The interim choice below (main-thread `remesh_shown`, kept for
   Task 12's own commit) held only until a viewer existed to measure it. Once `viewer`
@@ -4125,6 +4128,52 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
   system call. See `tasks.rs`'s module doc and `task-12b-report.md` for the full design,
   the before/after frame-time numbers, and the falsification evidence for the new test
   (`a_child_is_never_shown_while_its_load_handover_is_pending`).
+
+  **As shipped (Task 12c): the handover's core is one pure, total function, not a plan.**
+  Three review rounds found eight defects in the Task 12b machinery, every one of them the
+  same shape — *a chunk's shown-ness changed while some other handover's plan was frozen,
+  and nothing looked at that edge*. Five were patched; the sixth, seventh and eighth made
+  the diagnosis plain. The async split was never the problem; **incremental frozen diffs
+  were**. Task 12c replaces them, and closes the whole class by construction rather than
+  patching a ninth instance.
+
+  `entities.rs` now exports **`desired_omissions(cfg, &shown_keys, key) -> HashSet<Hex>`**:
+  a pure, total function of *the set of chunks currently on screen alone*, giving the exact
+  cells `key` must leave out — {cells of `key`'s currently-shown children} ∪ {guest cells of
+  `key` whose same-level owner is currently shown}. This is the total function the reviewer
+  pointed out already existed in the repo as `tests/handover.rs`'s content invariant; it is
+  promoted to production here (the test keeps its own independent implementation on purpose,
+  so it stays an oracle rather than a tautology). Alongside it, **`affected_by(key)`** names
+  every chunk whose desired set can change when `key` starts or stops being shown — itself,
+  its parent, its guest-sharing same-level neighbours — and is exact.
+
+  Everything downstream follows from those two:
+
+  - **Applicability is one equality.** A finished re-mesh for `T` was computed against some
+    desired set; it is applicable iff `desired_omissions(now, T)` still equals it. Chunk
+    geometry is a pure function of `(key, omissions)`, so a mesh that matches the desired set
+    is right for whatever incarnation of `T` is on screen — **entity snapshots are no longer
+    part of the staleness reasoning at all.** The only entity still carried is the departing
+    one in an unload, which is what identifies *which* incarnation departs.
+  - **What a handover needs is recomputed from the live shown set every frame**, never
+    carried forward. Growth and shrinkage are the same code path because neither is a diff.
+  - **In-flight re-meshes are bookkeeping, not an invariant.** `Handovers::remeshes` holds at
+    most one per chunk with the desired set it was spawned against; the first handover to ask
+    for a chunk in a frame drives it and the rest ask again next frame. Two handovers wanting
+    the same chunk re-meshed is ordinary, not a race.
+  - **`Shown::omitted` is written whole** (`set_omissions`), never nudged cell by cell:
+    `omit`/`restore` are gone, so a half-applied handover has no shape to take.
+
+  Deleted as subsumed: the `plan_*` twins (`plan_load_handover`, `plan_unload_handover`,
+  `plan_guest_handover_on_load`, `plan_release_guests_on_unload`,
+  `plan_absorb_already_shown_children`) and their mutating originals (`sync_guests_on_load`,
+  `release_guests_on_unload`, `absorb_already_shown_children`, `guest_cells_to_omit`
+  /`_considering`); `TargetStatus`/`target_status`, `replan_reloaded_targets`,
+  `reconcile_load_plan`, `departed_cleanly`, the `union`/`difference` `combine` closure that
+  papered over the load/unload asymmetry, `LoadHandover`/`UnloadHandover` and their frozen
+  `omit`/`restore`/`self_omit` fields, and the disjointness precondition on promotion.
+  `Handovers::is_idle()` stays (every "settled" check needs it). Net effect on the plugin's
+  own source: **−413 lines**.
 
 The rule: a chunk's mesh leaves out the cells whose own chunk is on screen. So a child appearing means its parent must be re-meshed without that cell, and both must reach the screen **in the same frame**, or there is a hole (child late) or a doubled surface (parent late).
 
@@ -4354,10 +4403,12 @@ pub fn remesh_shown(
 }
 ```
 
-**Superseded by fix round 2 / Task 12b.** `remesh_shown` (main-thread mesh + swap in one
-call) is gone; `entities.rs` now has `apply_remesh` (just the swap — mesh data arrives
-already computed, from the pool) plus the pure `plan_*` functions described above. The
-flow is now spread across two systems, chained after each other every frame:
+**Superseded by fix round 2 / Task 12b, and the `plan_*` half of it superseded again by
+Task 12c.** `remesh_shown` (main-thread mesh + swap in one call) is gone; `entities.rs` has
+`apply_remesh` (just the swap — mesh data arrives already computed, from the pool) plus, as
+of Task 12c, `desired_omissions`/`affected_by` in place of the `plan_*` functions. The flow
+below is Task 12b's; **see "the shipped flow (Task 12c)" after it** for what actually runs.
+It is still spread across two systems, chained after each other every frame:
 
 1. `collect_finished_jobs` polls `ChunkJob`s. For each finished job, it computes
    `plan_load_handover`. An **empty plan** (the common case — nothing else is shown near
@@ -4382,6 +4433,40 @@ flow is now spread across two systems, chained after each other every frame:
    flow did) is also what makes `in_flight_count()`/`loaded_keys()` — and so every test's
    "settled" check — mean "genuinely shown", not just "generated".
 
+**The shipped flow (Task 12c).** Same two systems, much less in them:
+
+1. `collect_finished_jobs` polls `ChunkJob`s and queues each finished one. It commits
+   nothing — not to the store, not to `Shown`. `process_handovers`, chained straight after
+   it, is the single place a chunk reaches or leaves the screen, so there is one commit path
+   rather than a fast one and a slow one that can disagree. A chunk that needs no re-mesh
+   still lands in the same frame its job finished, so the old fast path's throughput is kept
+   without the old fast path.
+2. `process_handovers` moves landed re-meshes into `ready` (each with the desired set it was
+   computed against), then gives every waiting handover, and then as many queued ones as
+   there is room for, a single `step`. Each `step` recomputes — from the shown set *as it is
+   right now* — `next = shown ± key`, walks `affected_by(key)`, and collects every chunk
+   whose `desired_omissions(next, ·)` differs from the omission set its current mesh was
+   built with. If every one of those is in `ready` with a matching desired set, the handover
+   commits: the mesh swaps, the whole-set `set_omissions` writes, and the entity spawn or
+   despawn, all in that one call. Otherwise it spawns whatever is missing (replacing any
+   in-flight re-mesh computed against a set the world has moved past) and asks again next
+   frame.
+3. Unloading is the same `step`, with `next = shown - key` instead of `shown + key`. There is
+   no separate restore path and no separate "release the guests" code: a departing owner
+   simply stops being in the set the desired omissions are computed from.
+4. A re-mesh for a chunk whose store data has already been dropped (`ChunkStore::update`
+   drops it the moment it decides to unload, while the entity lingers until that chunk's own
+   handover applies) regenerates the chunk inside the pool task. Generation is pure, so the
+   mesh is identical — and the old "this target had to be dropped from the plan" case, which
+   left a chunk drawing over its neighbour until something else happened to fix it, no longer
+   exists.
+5. A chunk abandoned mid-handover is still dropped at `ChunkStore::insert`, the single gate,
+   called exactly once per job at the point the chunk is either committed and shown or
+   rejected — which is what makes `in_flight_count()`/`loaded_keys()`, and so every test's
+   "settled" check, mean "genuinely shown".
+6. `MAX_ACTIVE_HANDOVERS` (3) still caps how much lands on the pool at once, but a handover
+   that needs no re-mesh does not occupy a slot: it commits the moment it is looked at.
+
 - [ ] **Step 2b: Change what Task 11 left simplified**
 
 Two edits, both needed for the tests above to pass:
@@ -4401,6 +4486,14 @@ let task = pool.spawn(async move {
 ```
 
 `spawn_jobs` therefore takes `&Shown` as well, and `drive_store` passes it through.
+
+**Superseded by Task 12c.** `spawn_jobs` meshes with an empty omission set again, and no
+longer takes `&Shown`. That is not a regression to Task 11's simplification but the
+definition the handover works against: a job's mesh is exactly `mesh_chunk(cfg, chunk, {})`,
+so an arriving chunk needs a re-mesh precisely when its desired omission set is non-empty,
+and needs none when it is empty. (A key with no entity had an empty omission set anyway, so
+the two agree in every reachable state; the point is that the new form is a *definition*
+rather than a fact that has to keep being true.)
 
 **As implemented**, `Shown` also gained `insert_entity`/`remove` (so despawning a chunk
 forgets its entity and its omission set together, and there is one owner of "does this key
@@ -4608,6 +4701,52 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
   actually outran the frozen plan).
 
   See `task-12b-report.md` for the full falsification transcripts and self-review.
+
+- [x] **Task 12c: replace the incremental frozen diffs with one total function**
+
+  Three review rounds, eight defects, one shape. Rather than patch a ninth, the handover's
+  core was replaced with `entities::desired_omissions` — see "As shipped (Task 12c)" under
+  Interfaces above for the design, and `task-12c-report.md` for the full report.
+
+  The three residual defects this closed, each now impossible by construction rather than
+  guarded against:
+
+  1. **Concurrent re-meshes of the same chunk clobbering each other.** There is no longer any
+     code path that "spawns a re-mesh" of its own: `remeshes` is one map, keyed by chunk, and
+     a mesh is applied only if the desired set it was computed against still equals the one
+     asked for now. A second handover wanting the same chunk cannot overwrite the first's
+     omission, because the first's mesh would fail that equality and be recomputed.
+  2. **Shrinkage never reconciled on the load side.** `self_omit` and its growth-only union
+     are gone. A chunk's required omission set is `desired_omissions(next, ·)`, compared for
+     *equality* with what its current mesh was built with — a cell whose child or guest-owner
+     departed simply is not in the new set.
+  3. **No unload-side reconciliation at all.** Load and unload are the same `step` over the
+     same `affected_by`/`desired_omissions` pair, differing only in whether `key` is added to
+     or removed from `next`. A neighbour that becomes shown after an unload is queued is part
+     of the candidate set the next time the handover is looked at, which is every frame.
+
+  Also fixed: a duplicate unload handover despawning an already-despawned entity (log noise
+  on a reachable path). `Shown`'s entity for a key now changes at exactly one place — a load
+  commit, which always despawns the entity it replaces — so an unload naming a stale entity
+  names one that is already gone, and is simply dropped.
+
+  All nine pre-existing integration tests pass **unmodified**, including the two vertex-level
+  ones and the shrink/grow churn test. Three test improvements the reviewer asked for were
+  made: the oracle in `tests/handover.rs` is kept as a deliberate second implementation (with
+  a comment saying so); `assert_omission_invariant` gained a presence check, so a phantom
+  omission on an entity-less key is visible; and a new `assert_mesh_content_invariant`
+  compares every shown chunk's *actual vertex data* against
+  `mesh_chunk(cfg, chunk, expected_omissions)`. Both now run at the end of all nine tests
+  rather than two. Falsified: forcing an arriving chunk to keep its no-omissions job mesh
+  fails all nine on the mesh invariant while the bookkeeping invariant stays green (the exact
+  blind spot defect 1 lived in); reverting the equality comparison to the old growth-only
+  subset test fails the shrink/grow test.
+
+  Five consecutive full-suite runs green (130 tests). `cargo fmt --all --check` and
+  `cargo clippy --workspace --all-targets -- -D warnings` clean. Frame times re-measured
+  like-for-like against the pre-refactor commit on the same machine in the same session:
+  neutral to marginally better (see `task-12c-report.md` for the numbers, and for why the
+  absolute mean does not match the figure quoted from the previous round).
 
 ---
 
