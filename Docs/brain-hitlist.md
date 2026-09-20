@@ -180,8 +180,9 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
     cost are tuned separately. The grid is 1 shaku flat-to-flat, pointy-up.
     **Provisional.** exp-05 is laying the groundwork for a proper ri/cho/ken/shaku unit
     system, and this is a stand-in until that lands — written to be replaced, not
-    extended. Scale to keep in view: ~0.0795 m² a cell, ~5,000 cells over the 20x20 m
-    starter ground, ~8,900 within the fox's 15 m vision.
+    extended. Every length in the crate is shaku; nothing converts to metres. Scale to
+    keep in view: (√3/2) ≈ 0.866 shaku² a cell, ~5,000 cells over the 66 shaku (11 ken)
+    starter ground, ~8,400 within the fox's 48 shaku vision.
 28. **AI code lives under `gestalt_ai/`.** Everything brain-side — the layers, 仮諦, the
     arena, episodes, replay — goes there once it is built. Senses are body, not brain,
     and stay in `senses/`.

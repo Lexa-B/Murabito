@@ -11,8 +11,9 @@ use super::{CURVE_STEPS, SenseOverlay, facing, lift, rotate};
 /// One band of a vision cone: everything out to `range` that isn't in a nearer band.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VisionBand {
-    /// Outer edge, in metres.
-    pub range: f32,
+    /// Outer edge, in whole shaku. Integer because a range is a count of cells on the
+    /// sense grid, not a continuous distance — see the crate docs on the base unit.
+    pub range: u32,
     /// How well something in this band registers, 0..1.
     pub sensitivity: f32,
 }
@@ -37,8 +38,8 @@ impl Vision {
         self.arc * 0.5
     }
 
-    /// The outer edge of the furthest band.
-    pub fn far_range(&self) -> f32 {
+    /// The outer edge of the furthest band, in shaku.
+    pub fn far_range(&self) -> u32 {
         self.bands[2].range
     }
 
@@ -52,7 +53,7 @@ impl Vision {
     /// world XZ.
     pub fn sensitivity_at(&self, forward: Vec2, offset: Vec2) -> f32 {
         let distance = offset.length();
-        if distance > self.far_range() {
+        if distance > self.far_range() as f32 {
             return 0.0;
         }
         // Something at the being's own position has no bearing; treat it as seen.
@@ -63,7 +64,7 @@ impl Vision {
             }
         }
         for band in &self.bands {
-            if distance <= band.range {
+            if distance <= band.range as f32 {
                 return band.sensitivity;
             }
         }
@@ -85,7 +86,7 @@ pub(super) fn draw_vision(
             let color = overlay.color.with_alpha(band.sensitivity);
             let arc = (0..=CURVE_STEPS).map(|step| {
                 let t = -half + vision.arc * step as f32 / CURVE_STEPS as f32;
-                lift(origin, rotate(forward, t) * band.range)
+                lift(origin, rotate(forward, t) * band.range as f32)
             });
             gizmos.linestrip(arc, color);
         }
@@ -93,7 +94,7 @@ pub(super) fn draw_vision(
         // The cone's two straight edges, out to the furthest band.
         let edge = overlay.color.with_alpha(vision.bands[0].sensitivity);
         for side in [-half, half] {
-            let end = rotate(forward, side) * vision.far_range();
+            let end = rotate(forward, side) * vision.far_range() as f32;
             gizmos.line(lift(origin, Vec2::ZERO), lift(origin, end), edge);
         }
     }
@@ -109,15 +110,15 @@ mod tests {
             arc: arc_degrees.to_radians(),
             bands: [
                 VisionBand {
-                    range: 4.0,
+                    range: 12,
                     sensitivity: 1.0,
                 },
                 VisionBand {
-                    range: 9.0,
+                    range: 30,
                     sensitivity: 0.6,
                 },
                 VisionBand {
-                    range: 15.0,
+                    range: 48,
                     sensitivity: 0.3,
                 },
             ],
@@ -127,14 +128,14 @@ mod tests {
     #[test]
     fn each_band_reports_its_own_sensitivity() {
         let vision = cone(120.0);
-        assert_eq!(vision.sensitivity_at(FORWARD, at(0.0, 2.0)), 1.0);
-        assert_eq!(vision.sensitivity_at(FORWARD, at(0.0, 7.0)), 0.6);
-        assert_eq!(vision.sensitivity_at(FORWARD, at(0.0, 12.0)), 0.3);
+        assert_eq!(vision.sensitivity_at(FORWARD, at(0.0, 6.0)), 1.0);
+        assert_eq!(vision.sensitivity_at(FORWARD, at(0.0, 20.0)), 0.6);
+        assert_eq!(vision.sensitivity_at(FORWARD, at(0.0, 40.0)), 0.3);
     }
 
     #[test]
     fn nothing_is_seen_past_the_last_band() {
-        assert_eq!(cone(120.0).sensitivity_at(FORWARD, at(0.0, 20.0)), 0.0);
+        assert_eq!(cone(120.0).sensitivity_at(FORWARD, at(0.0, 60.0)), 0.0);
     }
 
     /// The arc is the *full* width, so a 120 degree cone reaches 60 degrees either side.
@@ -142,21 +143,21 @@ mod tests {
     #[test]
     fn the_arc_is_full_width_not_half_width() {
         let vision = cone(120.0);
-        assert_eq!(vision.sensitivity_at(FORWARD, at(50.0, 2.0)), 1.0);
-        assert_eq!(vision.sensitivity_at(FORWARD, at(-50.0, 2.0)), 1.0);
-        assert_eq!(vision.sensitivity_at(FORWARD, at(70.0, 2.0)), 0.0);
-        assert_eq!(vision.sensitivity_at(FORWARD, at(-70.0, 2.0)), 0.0);
+        assert_eq!(vision.sensitivity_at(FORWARD, at(50.0, 6.0)), 1.0);
+        assert_eq!(vision.sensitivity_at(FORWARD, at(-50.0, 6.0)), 1.0);
+        assert_eq!(vision.sensitivity_at(FORWARD, at(70.0, 6.0)), 0.0);
+        assert_eq!(vision.sensitivity_at(FORWARD, at(-70.0, 6.0)), 0.0);
     }
 
     #[test]
     fn a_wide_cone_sees_where_a_narrow_one_cannot() {
         let narrow = cone(120.0);
         let wide = cone(240.0);
-        let behind_the_shoulder = at(100.0, 2.0);
+        let behind_the_shoulder = at(100.0, 6.0);
         assert_eq!(narrow.sensitivity_at(FORWARD, behind_the_shoulder), 0.0);
         assert_eq!(wide.sensitivity_at(FORWARD, behind_the_shoulder), 1.0);
         // Still not all the way round: 240 degrees leaves a 120 degree blind arc behind.
-        assert_eq!(wide.sensitivity_at(FORWARD, at(130.0, 2.0)), 0.0);
+        assert_eq!(wide.sensitivity_at(FORWARD, at(130.0, 6.0)), 0.0);
     }
 
     /// Something standing on top of you has no bearing to test, and dividing by its

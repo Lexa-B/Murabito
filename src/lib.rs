@@ -1,5 +1,16 @@
 //! Murabito, as a library.
 //!
+//! # The base unit is the shaku
+//!
+//! One world unit is one 尺 — 10/33 m, about 30.3 cm — and every length in this crate is
+//! in shaku unless it says otherwise. Nothing converts to metres; metres appear only in
+//! comments, to say how big something is in terms a reader may find familiar.
+//!
+//! The units above it are the traditional ones, and round numbers tend to land on them:
+//! 1 間 = 6 shaku (~1.8 m), 1 町 = 60 ken = 360 shaku (~109 m), 1 里 = 36 cho (~3.9 km).
+//! The sense grid is one shaku flat-to-flat, so a sense range in shaku is also a count of
+//! cells — which is why those ranges are integers.
+//!
 //! Every module lives here rather than in `main.rs` so that tests can reach them:
 //! Rust's integration tests (the `tests/` directory) can depend on a library target,
 //! but never on a binary. `main.rs` is the binary that builds the app out of these

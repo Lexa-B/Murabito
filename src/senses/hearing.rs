@@ -7,7 +7,7 @@
 //! and belongs elsewhere.
 //!
 //! Until that exists, `range` stands in for propagation: it is how far a sound of
-//! unremarkable loudness carries.
+//! unremarkable loudness carries, in whole shaku.
 
 use bevy::prelude::*;
 
@@ -21,8 +21,10 @@ use super::{CURVE_STEPS, SenseOverlay, facing, lift, rotate};
 /// forward-pointed listening, which is why it is a parameter rather than two shapes.
 #[derive(Component, Clone, Debug)]
 pub struct Hearing {
-    /// How far it reaches at the most sensitive bearing, in metres.
-    pub range: f32,
+    /// How far it reaches at the most sensitive bearing, in whole shaku. Integer for
+    /// the same reason a vision band's range is: it is a count of cells on the sense
+    /// grid, not a continuous distance.
+    pub range: u32,
     /// 0 is a circle, 0.5 a cardioid, approaching 1 an ever tighter forward lobe.
     pub directionality: f32,
 }
@@ -34,9 +36,10 @@ impl Hearing {
         ((1.0 - self.directionality) + self.directionality * bearing_cos).max(0.0)
     }
 
-    /// How far hearing reaches at that bearing.
+    /// How far hearing reaches at that bearing, in shaku. Fractional even though the
+    /// range is not: the pattern scales it continuously with bearing.
     pub fn reach(&self, bearing_cos: f32) -> f32 {
-        self.range * self.gain(bearing_cos)
+        self.range as f32 * self.gain(bearing_cos)
     }
 
     /// How strongly something at `offset` registers for a being facing `forward`.
@@ -81,7 +84,7 @@ mod tests {
 
     fn ears(directionality: f32) -> Hearing {
         Hearing {
-            range: 10.0,
+            range: 30,
             directionality,
         }
     }
@@ -126,8 +129,8 @@ mod tests {
     fn hearing_runs_out_at_its_reach_for_that_bearing() {
         let ears = ears(0.5);
         // Sideways the pattern is at half gain, so it reaches half as far.
-        assert_eq!(ears.reach(0.0), 5.0);
-        assert_close(ears.gain_at(FORWARD, at(90.0, 4.0)), 0.5);
-        assert_close(ears.gain_at(FORWARD, at(90.0, 6.0)), 0.0);
+        assert_eq!(ears.reach(0.0), 15.0);
+        assert_close(ears.gain_at(FORWARD, at(90.0, 12.0)), 0.5);
+        assert_close(ears.gain_at(FORWARD, at(90.0, 18.0)), 0.0);
     }
 }

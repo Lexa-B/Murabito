@@ -22,7 +22,8 @@
 //! the perceiver at all. So what they share is the ground-plane geometry in this file
 //! and (later) a way to ask what lies between two points — not an interface.
 //!
-//! Everything works in the ground plane: `Vec2` here is world XZ, never XY.
+//! Everything works in the ground plane: `Vec2` here is world XZ, never XY. Lengths are
+//! shaku, the crate's base unit.
 
 pub mod hearing;
 pub mod vision;
@@ -33,7 +34,8 @@ pub use hearing::Hearing;
 pub use vision::{Vision, VisionBand};
 
 /// How high above the ground the debug overlay is drawn, to keep it off the surface.
-const OVERLAY_HEIGHT: f32 = 0.05;
+/// Shaku, like every other length.
+const OVERLAY_HEIGHT: f32 = 0.15;
 /// Points per arc or polar curve. Enough to look smooth at the zooms we use.
 const CURVE_STEPS: usize = 48;
 

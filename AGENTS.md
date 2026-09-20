@@ -80,6 +80,7 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
 
 ### Conventions
 
+- **The base unit is the shaku**, not the metre. One world unit is one 尺 (10/33 m, ~30.3 cm); every length in the crate is shaku unless it says otherwise, and metres appear only in comments to give a familiar sense of scale. Round numbers tend to land on 間 (6 shaku) and 町 (360 shaku). The sense grid is one shaku flat-to-flat, so a sense range in shaku is also a count of cells — which is why those ranges are integers rather than floats. Provisional: exp-05 is building the real ri/cho/ken/shaku system.
 - **Each module registers itself through a `Plugin`.** `main.rs` adds plugins and knows nothing about what they need; a module's resources, systems and spawns are its own business.
 - **Pausing is `Time<Virtual>`, not a flag.** Pausing the clock stops everything driven by elapsed time, so no system has to know a menu exists. `Time<Real>` keeps running, which keeps the UI responsive. Input is gated separately, with `run_if(in_state(AppState::Playing))`.
 - **Settings are resources; `settings.rs` persists them.** Anything that edits a settings resource gets saved automatically. Nothing else writes the file.

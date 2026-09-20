@@ -69,14 +69,14 @@ struct ShotRequest {
     path: PathBuf,
     screen: AppState,
     settle: u32,
-    /// Metres back from the focus. `None` leaves the camera wherever it starts.
+    /// Shaku back from the focus. `None` leaves the camera wherever it starts.
     zoom: Option<f32>,
 }
 
 impl ShotRequest {
     /// `--shot <path>` turns this on. `--screen menu|settings|playing` picks what to
     /// capture (default `playing`), `--settle <frames>` how long to wait first, and
-    /// `--zoom <metres>` how far back the camera sits — which is how anything drawn in
+    /// `--zoom <shaku>` how far back the camera sits — which is how anything drawn in
     /// the world gets framed, rather than running off the edge at the starting zoom.
     ///
     /// Parsed by hand rather than with `clap`: four flags, used by whoever is verifying
@@ -104,7 +104,7 @@ impl ShotRequest {
             .and_then(|frames| frames.parse().ok())
             .unwrap_or(DEFAULT_SETTLE);
 
-        let zoom = value("--zoom").and_then(|metres| metres.parse().ok());
+        let zoom = value("--zoom").and_then(|shaku| shaku.parse().ok());
 
         Some(Self {
             path,

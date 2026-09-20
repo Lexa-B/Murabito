@@ -8,7 +8,8 @@
 //! cone and listens forward, the rabbit sees most of the way around itself but not far,
 //! and hears in every direction at once.
 //!
-//! Every number here is placeholder tuning, scaled to the 20x20 m starter ground.
+//! Every number here is placeholder tuning, in shaku, scaled to the 66 shaku (11 ken)
+//! starter ground. Sense ranges are whole shaku because they are cell counts.
 
 use bevy::prelude::*;
 
@@ -46,15 +47,15 @@ fn fox_vision() -> Vision {
         arc: 120.0_f32.to_radians(),
         bands: [
             VisionBand {
-                range: 4.0,
+                range: 12,
                 sensitivity: 1.0,
             },
             VisionBand {
-                range: 9.0,
+                range: 30,
                 sensitivity: 0.6,
             },
             VisionBand {
-                range: 15.0,
+                range: 48,
                 sensitivity: 0.3,
             },
         ],
@@ -63,7 +64,7 @@ fn fox_vision() -> Vision {
 
 fn fox_hearing() -> Hearing {
     Hearing {
-        range: 14.0,
+        range: 48,
         directionality: 0.55,
     }
 }
@@ -76,15 +77,15 @@ fn rabbit_vision() -> Vision {
         arc: 240.0_f32.to_radians(),
         bands: [
             VisionBand {
-                range: 2.5,
+                range: 8,
                 sensitivity: 1.0,
             },
             VisionBand {
-                range: 5.0,
+                range: 18,
                 sensitivity: 0.55,
             },
             VisionBand {
-                range: 8.0,
+                range: 26,
                 sensitivity: 0.25,
             },
         ],
@@ -93,7 +94,7 @@ fn rabbit_vision() -> Vision {
 
 fn rabbit_hearing() -> Hearing {
     Hearing {
-        range: 10.0,
+        range: 33,
         directionality: 0.12,
     }
 }
@@ -106,8 +107,8 @@ fn spawn_beings(
     // Both stand at the height of half their body, so they sit on the ground rather
     // than in it, and both look at a point at their own height, so `looking_at` turns
     // them about Y only and leaves them level.
-    let fox_at = Vec3::new(-5.0, 0.25, 3.0);
-    let rabbit_at = Vec3::new(4.0, 0.18, -3.0);
+    let fox_at = Vec3::new(-16.0, 0.8, 10.0);
+    let rabbit_at = Vec3::new(13.0, 0.6, -10.0);
 
     commands.spawn((
         // Which kind it is, as a taxonomy key rather than a Rust type: the same reason
@@ -115,7 +116,7 @@ fn spawn_beings(
         // system, where it cannot be walked.
         種::new("狐"),
         Being,
-        Mesh3d(meshes.add(Cuboid::new(0.5, 0.5, 1.1))),
+        Mesh3d(meshes.add(Cuboid::new(1.6, 1.6, 3.6))),
         MeshMaterial3d(materials.add(FOX_COLOR)),
         // Watching the rabbit.
         Transform::from_translation(fox_at).looking_at(rabbit_at.with_y(fox_at.y), Vec3::Y),
@@ -127,12 +128,12 @@ fn spawn_beings(
     commands.spawn((
         種::new("兎"),
         Being,
-        Mesh3d(meshes.add(Cuboid::new(0.36, 0.36, 0.55))),
+        Mesh3d(meshes.add(Cuboid::new(1.2, 1.2, 1.8))),
         MeshMaterial3d(materials.add(RABBIT_COLOR)),
         // Facing away, off toward the far corner: the fox is behind it, in the part of
         // its vision the 240 degree cone does not cover.
         Transform::from_translation(rabbit_at)
-            .looking_at(Vec3::new(9.0, rabbit_at.y, -8.0), Vec3::Y),
+            .looking_at(Vec3::new(30.0, rabbit_at.y, -26.0), Vec3::Y),
         rabbit_vision(),
         rabbit_hearing(),
         SenseOverlay {
@@ -161,7 +162,7 @@ mod tests {
 
     #[test]
     fn the_rabbit_sees_behind_its_own_shoulder_and_the_fox_cannot() {
-        let over_the_shoulder = rotate(FORWARD, 100.0_f32.to_radians()) * 2.0;
+        let over_the_shoulder = rotate(FORWARD, 100.0_f32.to_radians()) * 6.0;
         assert_eq!(fox_vision().sensitivity_at(FORWARD, over_the_shoulder), 0.0);
         assert!(rabbit_vision().sensitivity_at(FORWARD, over_the_shoulder) > 0.0);
     }

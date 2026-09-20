@@ -35,17 +35,17 @@ fn spawn_scene(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Ground: 20 x 20 m, centred on the origin, facing up (Y is up in Bevy).
+    // Ground: 66 x 66 shaku (11 ken square), centred on the origin, Y up.
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(20.0, 20.0))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(66.0, 66.0))),
         MeshMaterial3d(materials.add(Color::srgb(0.35, 0.42, 0.30))),
     ));
 
-    // A 1 m cube, lifted half its height so it sits on the ground rather than in it.
+    // A 3.3 shaku cube (1 m), lifted half its height so it sits on the ground.
     commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+        Mesh3d(meshes.add(Cuboid::new(3.3, 3.3, 3.3))),
         MeshMaterial3d(materials.add(Color::srgb(0.85, 0.45, 0.20))),
-        Transform::from_xyz(0.0, 0.5, 0.0),
+        Transform::from_xyz(0.0, 1.65, 0.0),
         Spinner,
     ));
 
@@ -56,7 +56,7 @@ fn spawn_scene(
             shadow_maps_enabled: true,
             ..default()
         },
-        Transform::from_xyz(-10.0, 14.0, -4.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(-33.0, 46.0, -13.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 }
 
