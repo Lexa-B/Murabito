@@ -286,7 +286,14 @@ fn draw_tuning(
             .range(0..=u64::MAX)
             .prefix("seed "),
     );
-    if thickness_response.changed() || seed_response.changed() {
+    // A world rebuild is not cheap — it drops and regenerates everything — so these two
+    // commit once per gesture (the drag being released, or a typed value losing focus)
+    // rather than on every frame the widget merely reports `changed()`, which fires on
+    // every tick of a drag. The rings and unload-delay controls above stay live on every
+    // change: they only mutate a `Loader`/`StoreSettings` field in place, cheap either way.
+    let thickness_committed = thickness_response.drag_stopped() || thickness_response.lost_focus();
+    let seed_committed = seed_response.drag_stopped() || seed_response.lost_focus();
+    if thickness_committed || seed_committed {
         world.set_config(WorldConfig {
             layer_thickness_sun: thickness,
             seed,

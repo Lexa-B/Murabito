@@ -5376,6 +5376,42 @@ git -C /home/lexa/DevProjects/_GameDev/Murabito commit -m "exp-05: viewer panel 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
+**As implemented:** the Step 3 test snippets predate `tests/common/mod.rs`'s real
+`headless_app(StoreSettings)`/`run_until_fully_settled` helpers and were adapted to them.
+Chunk meshes are `RenderAssetUsages::RENDER_WORLD` only, so reading `Assets<Mesh>` for
+triangle counts from `panel::draw` (which runs after render extraction) panics — found by
+running the viewer live. Worked around with a viewer-only `TriangleCounts` cache
+(`panel::track_triangle_counts`, ordered after `HexWorldSet`, reading each chunk's mesh the
+same frame it changes, before extraction), rather than widening `hexworld_bevy`'s asset
+usage. Full detail in `task-15-report.md`.
+
+**Fix round 1 (review findings):**
+
+1. **`set_config` didn't clear in-flight work.** A generation job started under the old
+   config, still running when `set_config` replaced the store, could finish afterwards and
+   be accepted into the new world — `ChunkStore::is_requested` is purely spatial and knows
+   nothing about which config produced the data in hand, and since the loader typically
+   hasn't moved, the key is still requested. Fixed by tagging `JobOutput` with the
+   `HexWorld::generation` it was spawned under and rejecting a mismatch at the top of
+   `tasks::step`'s `Handover::Load` arm, before `is_requested` or any store mutation. This
+   is the one authorised exception (Ruling 4) extended slightly further than Step 2b's own
+   snippet, into `tasks.rs`. New test:
+   `a_job_in_flight_during_set_config_does_not_leak_into_the_new_world` (`tests/config.rs`)
+   — starves new loads (`max_in_flight = 0`) immediately after `set_config` so a same-key
+   duplicate job can't win the race and mask the bug, waits for the old jobs to resolve,
+   checks their content, then un-starves and confirms a full correct settle. Verified RED
+   (fails with the generation check disabled) then GREEN.
+2. **`changing_the_seed_clears_the_world` couldn't fail for the reason it claimed.**
+   Checking only that on-screen keys are currently loaded is vacuous when the reloaded key
+   set equals the old one (the loader never moved) — a `despawn_stale_chunks` that quietly
+   became a no-op would still pass. Fixed to snapshot pre-change `Entity` ids and assert
+   none survive settling.
+3. **Thickness/seed rebuilt the world on every frame of a drag.** Gated on
+   `response.drag_stopped() || response.lost_focus()` so one gesture causes one rebuild;
+   rings and unload-delay stay live (cheap in-place mutation either way).
+
+**Commit:** see `task-15-report.md` for the SHA and full verification detail.
+
 ---
 
 ### Task 16: Headless screenshots, docs, and the whole-branch check

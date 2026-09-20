@@ -62,6 +62,12 @@ pub struct JobOutput {
     pub key: ChunkKey,
     pub chunk: Chunk,
     pub mesh: MeshData,
+    /// `HexWorld::generation()` at the moment this job was spawned. `set_config` replaces
+    /// the store wholesale but has no way to reach into an already-running task, so a job
+    /// started under an old config keeps generating under it regardless — this is how
+    /// `step` tells that apart from a job that belongs to the world as it is now. See the
+    /// staleness check in `step`.
+    pub generation: u64,
 }
 
 #[derive(Component)]
@@ -76,6 +82,7 @@ pub struct ChunkJob(pub Task<JobOutput>);
 pub fn spawn_jobs(commands: &mut Commands, world: &mut HexWorld, to_load: Vec<ChunkKey>) {
     let cap = world.store().settings().max_in_flight;
     let running = world.store().in_flight_count();
+    let generation = world.generation();
     let pool = AsyncComputeTaskPool::get();
     for key in to_load.into_iter().take(cap.saturating_sub(running)) {
         let cfg: WorldConfig = *world.store().config();
@@ -83,7 +90,12 @@ pub fn spawn_jobs(commands: &mut Commands, world: &mut HexWorld, to_load: Vec<Ch
         let task = pool.spawn(async move {
             let chunk = hexworld::chunk::generate(&cfg, key);
             let mesh = hexworld::mesh::mesh_chunk(&cfg, &chunk, &HashSet::new());
-            JobOutput { key, chunk, mesh }
+            JobOutput {
+                key,
+                chunk,
+                mesh,
+                generation,
+            }
         });
         commands.spawn(ChunkJob(task));
     }
@@ -461,6 +473,18 @@ fn step(
 
     match &handover {
         Handover::Load(output) => {
+            if output.generation != world.generation() {
+                // This job started generating under a config `set_config` has since
+                // replaced wholesale (see `JobOutput::generation`). Its data belongs to a
+                // world that no longer exists. `is_requested` below is a purely spatial
+                // check — the loader may not have moved at all — so it would wave this
+                // straight through into the new world if generation weren't checked
+                // first. Nothing was ever marked in-flight for this key on the *new*
+                // store (that store did not exist when this job started), so unlike the
+                // "window moved on" case just below, there is nothing to release either:
+                // just drop it.
+                return Outcome::Abandoned;
+            }
             if !world.store().is_requested(output.key) {
                 // The window stopped wanting it while it waited. Commit-and-reject, purely
                 // to release the store's in-flight slot for this key.
