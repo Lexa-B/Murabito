@@ -87,6 +87,13 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
     Abhidharma is the precedent: a worked hierarchical taxonomy of dharmas that already
     separates 色法 (matter) from 心不相応行法 (process and happening) — the same cut as
     物/事, with the awkward cases worked through.
+12f. **The truth/belief cut is named 実相 / 仮.** What is in the engine — the entities,
+    and the canonical taxonomy they are spawned from — is **諸法実相**, phenomena as they
+    truly are. What is in a being's graph — its partial traversable copy, with its
+    impressions and its instance leaves — is **仮諦**, provisional designation. The two
+    are never the same object and the naming says so. 中諦 names the remaining slot: a
+    debug view holding truth and construal at once without collapsing to either, as
+    exp-02's `T` overlay did.
 12e. **`諸法 → 知らない物` is the absolute floor** and can never be missing. "Something is
     there and I have no idea what" is where fight/flight/freeze/fawn live, and it is what
     guarantees the arena always has a bid.
@@ -173,7 +180,9 @@ later; it is not this loop.
 Taken knowingly, for speed. Each one is cheap now and expensive to unpick later, so they
 are written down rather than forgotten.
 
-1. **Identity is given, not earned.** Beliefs key on `Entity`, so agents get perfect
+1. **Identity is given, not earned — a 仮諦 that cannot be wrong.** Beliefs key on
+   `Entity`, so every 仮 node holds an infallible pointer back to its 実相, which defeats
+   the point of the layer being provisional. Concretely, agents get perfect
    re-identification: they cannot mistake one villager for another, fail to recognise
    someone at range, or be fooled by a disguise. The mirror image of "must have been the
    wind" — unrealistically sharp instead of unrealistically dumb, and just as inert.
@@ -220,9 +229,10 @@ are written down rather than forgotten.
   address space.
 - **Where 植物 sits.** If 生き物 is under 者, plants inherit acting-ness they will never
   use. Move them out under 物, or leave them and let a facet decide.
-- **Whether the world's taxonomy and a being's private copy get distinguished in the
-  code.** Tendai supplies the pair ready-made: 実相 for phenomena as they truly are,
-  仮 (仮諦, provisional designation) for how a being has construed them.
+- **Whether Rust type names carry the kanji or English.** Repo convention is English
+  code with kanji reserved for data keys and display strings, which suggests
+  `Taxonomy` / `Construal` doc-commented with 諸法実相 / 仮諦 rather than romanised
+  `Jissou` / `Ketai`. Undecided.
 - **妖 / 妖怪 / 精霊** for the supernatural branch. 付喪神 fits under any of them.
 - **Whether the fallback leaf is 知らない物 or 知らない者** on the 者 branch, or a
   reserved key that renders per branch.
