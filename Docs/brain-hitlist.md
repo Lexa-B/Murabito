@@ -327,6 +327,14 @@ proposal, not a commitment.
       so `senses` needs to know neither what a 種 is nor that a debug screen exists.
       `--debug` on the one-shot capture presses the real key, so the screen can be
       screenshotted rather than taken on trust.
+- [x] **0f-ii. Pattern fills.** Each sense fills the cells it covers, coloured by being
+      and patterned by sense: crosshatch for vision, heavier and denser the sharper the
+      band; tiled X's for hearing, and only where that being's own vision is not already
+      drawn, so what is left is what hearing *adds* to sight. Outlines are
+      boundary-extracted from the cells themselves, so the picture cannot flatter the
+      coverage. Stroke weight comes from three gizmo config groups, since gizmo width is
+      a property of the group and not of the call.
+      Sound and smell fills wait on 0g and 0h.
 - [ ] **0f. A legible overlay.** Each being's vision and hearing are drawn in one hue and
       overlap heavily, so which curve is which sense is guesswork; and the rabbit's
       vision — 2.5/5/8 m at low alpha, inside a 10 m hearing circle — is the faintest

@@ -11,7 +11,23 @@
 
 use bevy::prelude::*;
 
-use super::{CURVE_STEPS, HideSenses, SenseOverlay, facing, lift, rotate};
+use super::{BoldStroke, FaintStroke, HideSenses, MidStroke, SenseOverlay, facing, ground_point};
+use crate::hex::{Hex, steps_covering};
+use crate::senses::vision::Vision;
+
+/// Half an arm of the X, in shaku. Short and centred, so the cells stay visibly tiled —
+/// which is what tells an X apart from vision's hatching, since that runs edge to edge
+/// and knits across cells into a continuous field.
+const ARM_HALF_LENGTH: f32 = 0.26;
+
+/// Gain above which an X is drawn heavy, and above which it is drawn mid-weight. The
+/// polar pattern falls off continuously; these are only where the stroke weight steps.
+const BOLD_ABOVE: f32 = 0.66;
+const MID_ABOVE: f32 = 0.33;
+
+/// Fill opacity by the same three steps, and the outline's.
+const FILL_ALPHA: [f32; 3] = [0.55, 0.42, 0.30];
+const OUTLINE_ALPHA: f32 = 0.85;
 
 /// Hearing, shaped like a microphone's polar pattern.
 ///
@@ -57,24 +73,90 @@ impl Hearing {
     }
 }
 
-/// The hearing pattern as a closed polar curve around the being.
+/// An X in every cell within earshot, weighted by how well it is heard — except where
+/// this being's own vision is already drawn, so what is left is what hearing *adds* to
+/// sight rather than a second pattern over the top of the first.
+///
+/// The exclusion is per being and not global: a rabbit's hearing has no reason to go
+/// quiet because a fox happens to be looking that way.
+///
+/// The outline traces the whole field, vision overlap included. Where hearing reaches is
+/// a fact about the ear; not drawing an X there is a choice about clutter, and the
+/// boundary should report the first rather than the second.
 pub(super) fn draw_hearing(
-    mut gizmos: Gizmos,
-    beings: Query<(&GlobalTransform, &Hearing, &SenseOverlay), Without<HideSenses>>,
+    mut bold: Gizmos<BoldStroke>,
+    mut mid: Gizmos<MidStroke>,
+    mut faint: Gizmos<FaintStroke>,
+    beings: Query<
+        (&GlobalTransform, &Hearing, Option<&Vision>, &SenseOverlay),
+        Without<HideSenses>,
+    >,
 ) {
-    for (transform, hearing, overlay) in &beings {
+    for (transform, hearing, vision, overlay) in &beings {
         let origin = transform.translation();
+        let ground = Vec2::new(origin.x, origin.z);
         let forward = facing(transform);
-        let color = overlay.color.with_alpha(0.35);
+        let here = Hex::from_world(ground);
 
-        let curve = (0..=CURVE_STEPS).map(|step| {
-            let bearing =
-                -std::f32::consts::PI + std::f32::consts::TAU * step as f32 / CURVE_STEPS as f32;
-            let reach = hearing.reach(bearing.cos());
-            lift(origin, rotate(forward, bearing) * reach)
-        });
-        gizmos.linestrip(curve, color);
+        // Steps, not shaku — see `hex::steps_covering`. Scanning the range directly
+        // leaves notches in the diagonal directions.
+        for hex in here.within(steps_covering(hearing.range as f32)) {
+            let offset = hex.center() - ground;
+            let gain = hearing.gain_at(forward, offset);
+            if gain <= 0.0 {
+                continue;
+            }
+
+            let seen = vision.is_some_and(|v| v.band_at(forward, offset).is_some());
+            if !seen {
+                let step = weight_of(gain);
+                let colour = overlay.color.with_alpha(FILL_ALPHA[step]);
+                for (a, b) in cross(hex.center()) {
+                    match step {
+                        0 => bold.line(a, b, colour),
+                        1 => mid.line(a, b, colour),
+                        _ => faint.line(a, b, colour),
+                    }
+                }
+            }
+
+            let outline = overlay.color.with_alpha(OUTLINE_ALPHA);
+            for direction in 0..6 {
+                let across = hex.neighbour(direction).center() - ground;
+                if hearing.gain_at(forward, across) > 0.0 {
+                    continue;
+                }
+                let (a, b) = hex.edge(direction);
+                mid.line(ground_point(a), ground_point(b), outline);
+            }
+        }
     }
+}
+
+/// Which of the three stroke weights a gain falls into, heaviest first.
+fn weight_of(gain: f32) -> usize {
+    if gain > BOLD_ABOVE {
+        0
+    } else if gain > MID_ABOVE {
+        1
+    } else {
+        2
+    }
+}
+
+/// The two arms of an X, centred on a cell.
+fn cross(centre: Vec2) -> [(Vec3, Vec3); 2] {
+    let arm = ARM_HALF_LENGTH;
+    [
+        (
+            ground_point(centre + Vec2::new(-arm, -arm)),
+            ground_point(centre + Vec2::new(arm, arm)),
+        ),
+        (
+            ground_point(centre + Vec2::new(-arm, arm)),
+            ground_point(centre + Vec2::new(arm, -arm)),
+        ),
+    ]
 }
 
 #[cfg(test)]

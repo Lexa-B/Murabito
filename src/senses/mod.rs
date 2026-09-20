@@ -38,8 +38,6 @@ pub use vision::{Vision, VisionBand};
 /// How high above the ground the debug overlay is drawn, to keep it off the surface.
 /// Shaku, like every other length.
 const OVERLAY_HEIGHT: f32 = 0.15;
-/// Points per arc or polar curve. Enough to look smooth at the zooms we use.
-const CURVE_STEPS: usize = 48;
 
 /// Draws the sense fields. Nothing else here needs a plugin: the components are data.
 pub struct SensesPlugin;
@@ -94,11 +92,6 @@ pub struct SenseOverlay {
 fn facing(transform: &GlobalTransform) -> Vec2 {
     let forward = transform.forward();
     Vec2::new(forward.x, forward.z).normalize_or(Vec2::new(0.0, -1.0))
-}
-
-/// Ground-plane point to a world point on the overlay plane.
-fn lift(origin: Vec3, offset: Vec2) -> Vec3 {
-    Vec3::new(origin.x + offset.x, OVERLAY_HEIGHT, origin.z + offset.y)
 }
 
 /// A ground-plane point, in world coordinates, lifted onto the overlay plane.
