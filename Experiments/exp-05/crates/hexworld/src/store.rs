@@ -3,9 +3,9 @@
 //! The store has no threads, no clock and no engine in it: the caller passes the time,
 //! generates the chunks it is told to, and hands them back.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use crate::chunk::ChunkKey;
+use crate::chunk::{Chunk, ChunkKey};
 use crate::config::WorldConfig;
 use crate::hex::{range, Hex};
 use crate::level::Level;
@@ -108,6 +108,252 @@ pub fn load_order(cfg: &WorldConfig, loaders: &[Loader], keys: &mut [ChunkKey]) 
             )
             .then(a.cmp(b))
     });
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct StoreSettings {
+    /// How long a chunk stays loaded after nothing wants it. 0 unloads at once.
+    pub unload_delay_s: f64,
+    /// How many chunks the caller should generate at once. The store only reports it.
+    pub max_in_flight: usize,
+}
+
+impl Default for StoreSettings {
+    fn default() -> Self {
+        StoreSettings {
+            unload_delay_s: 5.0,
+            max_in_flight: 8,
+        }
+    }
+}
+
+#[derive(Clone, Default, Debug)]
+pub struct StoreUpdate {
+    /// In load order: generate these and hand them back with `insert`.
+    pub to_load: Vec<ChunkKey>,
+    /// Already removed from the store; drop whatever the caller built from them.
+    pub to_unload: Vec<ChunkKey>,
+}
+
+#[derive(Clone, Copy, Default, Debug)]
+pub struct LevelStats {
+    pub chunks: usize,
+    pub columns: usize,
+    pub lingering: usize,
+    pub loads_last_second: usize,
+    pub unloads_last_second: usize,
+}
+
+#[derive(Clone, Default, Debug)]
+pub struct Stats {
+    /// Indexed by `Level as usize`.
+    pub per_level: [LevelStats; 5],
+}
+
+pub struct ChunkStore {
+    cfg: WorldConfig,
+    settings: StoreSettings,
+    loaded: HashMap<ChunkKey, Chunk>,
+    /// Loaded but no longer requested, with the time it fell out of every window.
+    lingering: HashMap<ChunkKey, f64>,
+    /// Handed out by `update` and not yet returned by `insert`.
+    in_flight: HashSet<ChunkKey>,
+    requested: HashSet<ChunkKey>,
+    /// (time, level, was_load) for the last second, for the stats.
+    events: Vec<(f64, Level, bool)>,
+    stats: Stats,
+}
+
+impl ChunkStore {
+    pub fn new(cfg: WorldConfig, settings: StoreSettings) -> Self {
+        ChunkStore {
+            cfg,
+            settings,
+            loaded: HashMap::new(),
+            lingering: HashMap::new(),
+            in_flight: HashSet::new(),
+            requested: HashSet::new(),
+            events: Vec::new(),
+            stats: Stats::default(),
+        }
+    }
+
+    pub fn config(&self) -> &WorldConfig {
+        &self.cfg
+    }
+
+    pub fn settings(&self) -> &StoreSettings {
+        &self.settings
+    }
+
+    pub fn settings_mut(&mut self) -> &mut StoreSettings {
+        &mut self.settings
+    }
+
+    pub fn is_loaded(&self, key: ChunkKey) -> bool {
+        self.loaded.contains_key(&key)
+    }
+
+    pub fn is_requested(&self, key: ChunkKey) -> bool {
+        self.requested.contains(&key)
+    }
+
+    pub fn is_lingering(&self, key: ChunkKey) -> bool {
+        self.lingering.contains_key(&key)
+    }
+
+    pub fn chunk(&self, key: ChunkKey) -> Option<&Chunk> {
+        self.loaded.get(&key)
+    }
+
+    pub fn loaded_keys(&self) -> Vec<ChunkKey> {
+        self.loaded.keys().copied().collect()
+    }
+
+    pub fn in_flight_count(&self) -> usize {
+        self.in_flight.len()
+    }
+
+    /// Everything the loaders want, then what to load and what has just been dropped.
+    pub fn update(&mut self, loaders: &[Loader], now: f64) -> StoreUpdate {
+        self.requested.clear();
+        for loader in loaders {
+            for key in requests(&self.cfg, loader) {
+                self.requested.insert(key);
+            }
+        }
+
+        // Anything requested and not already here or on its way.
+        let mut to_load: Vec<ChunkKey> = self
+            .requested
+            .iter()
+            .copied()
+            .filter(|k| !self.loaded.contains_key(k) && !self.in_flight.contains(k))
+            .collect();
+        load_order(&self.cfg, loaders, &mut to_load);
+
+        // Lingering: requested again clears the stamp; newly unwanted gets one.
+        for key in self.loaded.keys().copied().collect::<Vec<_>>() {
+            if self.requested.contains(&key) {
+                self.lingering.remove(&key);
+            } else {
+                self.lingering.entry(key).or_insert(now);
+            }
+        }
+
+        // Expired, unless something still loaded needs them as an ancestor.
+        let expired: HashSet<ChunkKey> = self
+            .lingering
+            .iter()
+            .filter(|(_, since)| now - **since >= self.settings.unload_delay_s)
+            .map(|(k, _)| *k)
+            .collect();
+        let mut keep: HashSet<ChunkKey> = HashSet::new();
+        for key in self.loaded.keys() {
+            if !expired.contains(key) {
+                for ancestor in key.ancestors() {
+                    keep.insert(ancestor);
+                }
+            }
+        }
+        let mut to_unload: Vec<ChunkKey> = expired.difference(&keep).copied().collect();
+        to_unload.sort();
+        for key in &to_unload {
+            self.loaded.remove(key);
+            self.lingering.remove(key);
+            self.events.push((now, key.level, false));
+        }
+
+        self.refresh_stats(now);
+        StoreUpdate { to_load, to_unload }
+    }
+
+    /// Tell the store a chunk is being generated, so it is not handed out again.
+    pub fn begin_load(&mut self, key: ChunkKey) {
+        self.in_flight.insert(key);
+    }
+
+    /// Store a finished chunk. Returns false if nothing wants it any more.
+    pub fn insert(&mut self, chunk: Chunk) -> bool {
+        let key = chunk.key;
+        self.in_flight.remove(&key);
+        if !self.requested.contains(&key) {
+            return false;
+        }
+        self.events
+            .push((self.events.last().map_or(0.0, |e| e.0), key.level, true));
+        self.loaded.insert(key, chunk);
+        self.lingering.remove(&key);
+        true
+    }
+
+    pub fn clear(&mut self) {
+        self.loaded.clear();
+        self.lingering.clear();
+        self.in_flight.clear();
+        self.requested.clear();
+        self.events.clear();
+        self.stats = Stats::default();
+    }
+
+    /// The column for a cell at a level, if its chunk is loaded.
+    pub fn column(&self, level: Level, cell: Hex) -> Option<&crate::column::Column> {
+        let parent_level = level.parent()?;
+        let key = if parent_level == Level::World {
+            ChunkKey::WORLD
+        } else {
+            ChunkKey::new(parent_level, crate::owner::parent_of(cell, level))
+        };
+        self.loaded.get(&key)?.column(cell)
+    }
+
+    /// The finest level loaded at a shaku, if any.
+    pub fn finest_at(&self, shaku: Hex) -> Option<Level> {
+        for level in crate::level::CELL_LEVELS {
+            let cell = up(shaku, Level::Shaku, level);
+            if self.column(level, cell).is_some() {
+                return Some(level);
+            }
+        }
+        None
+    }
+
+    /// The height of the ground at a point, at the finest detail loaded there.
+    pub fn surface_height_m(&self, east: f64, north: f64) -> Option<f64> {
+        for level in crate::level::CELL_LEVELS {
+            let cell = crate::plane::round_at(east, north, level);
+            if let Some(column) = self.column(level, cell) {
+                return Some(column.surface_height_m(&self.cfg));
+            }
+        }
+        None
+    }
+
+    pub fn stats(&self) -> &Stats {
+        &self.stats
+    }
+
+    fn refresh_stats(&mut self, now: f64) {
+        self.events.retain(|(t, _, _)| now - *t < 1.0);
+        let mut stats = Stats::default();
+        for (key, chunk) in &self.loaded {
+            let slot = &mut stats.per_level[key.level as usize];
+            slot.chunks += 1;
+            slot.columns += chunk.len();
+            if self.lingering.contains_key(key) {
+                slot.lingering += 1;
+            }
+        }
+        for (_, level, was_load) in &self.events {
+            let slot = &mut stats.per_level[*level as usize];
+            if *was_load {
+                slot.loads_last_second += 1;
+            } else {
+                slot.unloads_last_second += 1;
+            }
+        }
+        self.stats = stats;
+    }
 }
 
 #[cfg(test)]
@@ -252,5 +498,248 @@ mod tests {
         load_order(&cfg, &loaders, &mut a);
         load_order(&cfg, &loaders, &mut b);
         assert_eq!(a, b, "order must not depend on the input order");
+    }
+}
+
+#[cfg(test)]
+mod store_tests {
+    use super::*;
+
+    fn store() -> ChunkStore {
+        ChunkStore::new(WorldConfig::default(), StoreSettings::default())
+    }
+
+    /// Drain the queue: generate and insert everything the store asks for.
+    fn settle(store: &mut ChunkStore, loaders: &[Loader], now: f64) {
+        loop {
+            let update = store.update(loaders, now);
+            if update.to_load.is_empty() {
+                break;
+            }
+            for key in update.to_load {
+                store.begin_load(key);
+                let chunk = crate::chunk::generate(store.config(), key);
+                store.insert(chunk);
+            }
+        }
+    }
+
+    #[test]
+    fn settles_with_every_requested_chunk_loaded() {
+        let mut s = store();
+        let loaders = [Loader {
+            focus: Hex::ZERO,
+            rings: Rings::default(),
+        }];
+        settle(&mut s, &loaders, 0.0);
+        for key in requests(&WorldConfig::default(), &loaders[0]) {
+            assert!(s.is_loaded(key), "{key:?} should be loaded");
+        }
+        assert_eq!(s.stats().per_level[Level::Ken as usize].chunks, 37);
+        assert_eq!(s.stats().per_level[Level::Ken as usize].columns, 1_332);
+    }
+
+    #[test]
+    fn parents_load_before_their_children() {
+        let mut s = store();
+        let loaders = [Loader {
+            focus: Hex::ZERO,
+            rings: Rings::default(),
+        }];
+        let mut loaded: Vec<ChunkKey> = Vec::new();
+        loop {
+            let update = s.update(&loaders, 0.0);
+            if update.to_load.is_empty() {
+                break;
+            }
+            for key in update.to_load {
+                for ancestor in key.ancestors() {
+                    assert!(
+                        loaded.contains(&ancestor),
+                        "{key:?} before its ancestor {ancestor:?}"
+                    );
+                }
+                s.begin_load(key);
+                s.insert(crate::chunk::generate(s.config(), key));
+                loaded.push(key);
+            }
+        }
+    }
+
+    #[test]
+    fn a_chunk_out_of_range_lingers_then_unloads() {
+        let mut s = store();
+        let here = [Loader {
+            focus: Hex::ZERO,
+            rings: Rings::default(),
+        }];
+        settle(&mut s, &here, 0.0);
+        let far_key = ChunkKey::new(Level::Ken, up(Hex::new(18, 0), Level::Shaku, Level::Ken));
+        assert!(s.is_loaded(far_key), "should be in the starting window");
+
+        // Move the loader away. The chunk is no longer requested, but it stays loaded.
+        let away = [Loader {
+            focus: Hex::new(600, 0),
+            rings: Rings::default(),
+        }];
+        let update = s.update(&away, 1.0);
+        assert!(
+            update.to_unload.is_empty(),
+            "nothing unloads before the delay"
+        );
+        assert!(s.is_loaded(far_key) && s.is_lingering(far_key));
+
+        // Still inside the 5 s delay.
+        let update = s.update(&away, 4.0);
+        assert!(update.to_unload.is_empty());
+        assert!(s.is_loaded(far_key));
+
+        // Past the delay.
+        let update = s.update(&away, 6.5);
+        assert!(
+            update.to_unload.contains(&far_key),
+            "should unload after the delay"
+        );
+        assert!(!s.is_loaded(far_key));
+    }
+
+    #[test]
+    fn a_chunk_requested_again_in_time_is_kept_and_not_reloaded() {
+        let mut s = store();
+        let here = [Loader {
+            focus: Hex::ZERO,
+            rings: Rings::default(),
+        }];
+        settle(&mut s, &here, 0.0);
+        let away = [Loader {
+            focus: Hex::new(600, 0),
+            rings: Rings::default(),
+        }];
+        s.update(&away, 1.0);
+        // Back again before the delay runs out.
+        let update = s.update(&here, 3.0);
+        assert!(
+            update.to_load.is_empty(),
+            "nothing needs reloading: {:?}",
+            update.to_load
+        );
+        assert!(update.to_unload.is_empty());
+        // And it no longer lingers, so it will not expire later.
+        let update = s.update(&here, 99.0);
+        assert!(update.to_unload.is_empty());
+    }
+
+    #[test]
+    fn a_zero_delay_unloads_at_once() {
+        let mut s = ChunkStore::new(
+            WorldConfig::default(),
+            StoreSettings {
+                unload_delay_s: 0.0,
+                ..StoreSettings::default()
+            },
+        );
+        let here = [Loader {
+            focus: Hex::ZERO,
+            rings: Rings::default(),
+        }];
+        settle(&mut s, &here, 0.0);
+        let away = [Loader {
+            focus: Hex::new(600, 0),
+            rings: Rings::default(),
+        }];
+        let update = s.update(&away, 0.0);
+        assert!(!update.to_unload.is_empty(), "immediate unloading");
+    }
+
+    #[test]
+    fn a_lingering_ancestor_is_kept_while_a_descendant_stays() {
+        // Rings that keep a ken chunk but drop its cho: the cho must not unload.
+        let mut s = store();
+        let wide = [Loader {
+            focus: Hex::ZERO,
+            rings: Rings {
+                shaku: 3,
+                ken: 3,
+                cho: 3,
+            },
+        }];
+        settle(&mut s, &wide, 0.0);
+        let narrow = [Loader {
+            focus: Hex::ZERO,
+            rings: Rings {
+                shaku: 3,
+                ken: 0,
+                cho: 0,
+            },
+        }];
+        s.update(&narrow, 1.0);
+        let update = s.update(&narrow, 20.0);
+        for key in &update.to_unload {
+            for other in s.loaded_keys() {
+                assert!(
+                    !other.ancestors().contains(key),
+                    "{key:?} is still an ancestor of {other:?}"
+                );
+            }
+        }
+        // The ken chunks themselves are still requested, so their cho parents survive.
+        assert!(s.is_loaded(ChunkKey::new(Level::Cho, Hex::ZERO)));
+    }
+
+    #[test]
+    fn insert_drops_a_chunk_nobody_wants_any_more() {
+        let mut s = store();
+        let here = [Loader {
+            focus: Hex::ZERO,
+            rings: Rings::default(),
+        }];
+        let update = s.update(&here, 0.0);
+        let key = *update.to_load.last().expect("something to load");
+        s.begin_load(key);
+        // The loader leaves before the chunk arrives.
+        let away = [Loader {
+            focus: Hex::new(50_000, 0),
+            rings: Rings::default(),
+        }];
+        s.update(&away, 0.0);
+        let accepted = s.insert(crate::chunk::generate(s.config(), key));
+        assert!(!accepted, "a chunk nobody wants is dropped");
+        assert!(!s.is_loaded(key));
+    }
+
+    #[test]
+    fn lookups_report_the_finest_detail_loaded() {
+        let mut s = store();
+        let here = [Loader {
+            focus: Hex::ZERO,
+            rings: Rings::default(),
+        }];
+        settle(&mut s, &here, 0.0);
+        assert_eq!(s.finest_at(Hex::ZERO), Some(Level::Shaku));
+        // Far away, inside the ri, only coarse detail is loaded.
+        let far = Hex::new(3_000, 0);
+        let level = s
+            .finest_at(far)
+            .expect("something is loaded everywhere in the ri");
+        assert!(level > Level::Shaku, "{level:?}");
+        assert!(s.column(Level::Shaku, Hex::ZERO).is_some());
+        assert!(s.surface_height_m(0.0, 0.0).is_some());
+    }
+
+    #[test]
+    fn stats_count_loads_and_unloads_in_the_last_second() {
+        let mut s = store();
+        let here = [Loader {
+            focus: Hex::ZERO,
+            rings: Rings::default(),
+        }];
+        settle(&mut s, &here, 0.0);
+        assert!(s.stats().per_level[Level::Ken as usize].loads_last_second > 0);
+        // Two seconds later, with nothing happening, the counts fall back to zero.
+        s.update(&here, 2.0);
+        assert_eq!(
+            s.stats().per_level[Level::Ken as usize].loads_last_second,
+            0
+        );
     }
 }

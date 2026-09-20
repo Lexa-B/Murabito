@@ -27,5 +27,8 @@ pub use level::{Level, CELL_LEVELS, SHAKU_M, SUN_M};
 pub use owner::{centre_child, centre_shaku, children, local, owned_offsets, owner, parent_of, up};
 pub use placeholder_terrain::{column_at, height_m};
 pub use plane::{cell_centre_m, corners_m, hex_round, metres_to_axial, round_at};
-pub use store::{coarseness_rank, load_order, requests, Loader, Rings};
+pub use store::{
+    coarseness_rank, load_order, requests, ChunkStore, LevelStats, Loader, Rings, Stats,
+    StoreSettings, StoreUpdate,
+};
 pub use world::{cell_in_world, in_world, world_ri};
