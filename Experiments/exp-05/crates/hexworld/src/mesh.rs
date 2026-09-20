@@ -115,7 +115,16 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
     let cell_level = child as u32 as f32;
     let bottom_m = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
 
-    for cell in drawn_cells(cfg, key) {
+    // This chunk's own drawn set, built once: full depth is for edges facing a cell this
+    // chunk does not draw, not merely a cell some other chunk might. A neighbour outside
+    // this set is only ever culled against a same-level column generated on demand for a
+    // *different* chunk's territory — a coarser or absent neighbour there can sit at a
+    // different height, and only a full-depth wall is guaranteed not to crack against it.
+    let drawn_list = drawn_cells(cfg, key);
+    let drawn: HashSet<Hex> = drawn_list.iter().copied().collect();
+
+    for cell in &drawn_list {
+        let cell = *cell;
         if omitted.contains(&cell) {
             continue;
         }
@@ -134,7 +143,7 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
             .collect();
         let neighbour_drawn: Vec<bool> = neighbour_cells
             .iter()
-            .map(|n| !omitted.contains(n) && cell_in_world(*n, child, cfg))
+            .map(|n| drawn.contains(n) && !omitted.contains(n))
             .collect();
 
         // --- top faces: one fan per run whose layer above is air ---
@@ -430,37 +439,44 @@ mod tests {
 
         let mesh = mesh_chunk(&cfg, &chunk, &omitted);
 
-        // Vertices at the world bottom, within one corner-radius of target's own centre:
-        // tight enough to hold target's own two corners (each at exactly the hex corner
-        // radius, width/sqrt(3)) but not the far corner of a neighbouring quad (at roughly
-        // twice that). `target` is a real chunk cell (`chunk.cells[0]`, `Hex { q: -4, r: 2 }`
-        // for this chunk), so — unlike an isolated single cell — one of the two neighbours
-        // flanking its omitted edge is itself drawn (confirmed by search: no cell in this
-        // 43-cell drawn set has a fully unshared omitted edge). That flanking neighbour has
-        // an ordinary, un-modified 3-run column and its own full-depth wall facing the same
-        // omitted cell, sharing exactly one corner with target's wall — the other three
-        // cells meeting at a hex corner. So the count here is not just target's own quad:
-        //   after the fix:  target's 1 quad (2 corners) + flank's 1 quad (1 shared corner) = 3
-        //   before the fix: target's 2 quads, one per run (2 corners each) = 4,
-        //                    + flank's 3 quads, one per run (1 shared corner each) = 3
-        //                    = 7
-        // Both numbers were confirmed by temporarily restoring the old per-run
-        // implementation: it produced 7 here, not 3.
+        // Vertices at the world bottom, facing exactly direction 0 (the omitted neighbour's
+        // direction) and close to target. Filtering on the outward normal as well as
+        // position is what makes this robust: `target` sits on this chunk's own perimeter
+        // (`chunk.cells[0]`, `Hex { q: -4, r: 2 }` for this chunk), so most of its edges are
+        // full depth already (this chunk's own border walls down to the world bottom all the
+        // way around, per this round's fix), and several *other* cells elsewhere on the same
+        // perimeter also happen to face direction 0. Those are far away (the nearest is
+        // more than a chunk-width away) and have a different outward normal from any cell
+        // whose edge faces a *different* direction, including target's own other four
+        // full-depth edges and the one drawn neighbour that shares a corner with this edge
+        // (its wall faces direction 5, not 0) — so normal plus a modest radius isolates
+        // target's own direction-0 quad exactly, regardless of how the rest of the chunk's
+        // perimeter behaves. One quad is 2 vertices; the old per-run code gave 4 for this
+        // two-run column (one quad per run, each starting at the world bottom).
         let bottom = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
         let (tx, ty) = cell_centre_m(target, Level::Shaku);
         let (tx, ty) = (tx as f32, ty as f32);
-        let corner_radius = (Level::Shaku.width_m() / 3f64.sqrt()) as f32;
-        let near_corner = corner_radius * 1.2; // excludes the ~2x-distant far corner
+        let corners = corners_m(Level::Shaku);
+        let (ax, ay) = corners[5];
+        let (bx, by) = corners[0];
+        let (mx, my) = ((ax + bx) / 2.0, (ay + by) / 2.0);
+        let len = (mx * mx + my * my).sqrt();
+        let (dir0_nx, dir0_ny) = ((mx / len) as f32, (my / len) as f32);
         let walls_at_bottom = mesh
             .positions
             .iter()
-            .filter(|p| (p[2] - bottom).abs() < 1e-3)
-            .filter(|p| {
+            .enumerate()
+            .filter(|(_, p)| (p[2] - bottom).abs() < 1e-3)
+            .filter(|(_, p)| {
                 let (dx, dy) = (p[0] - tx, p[1] - ty);
-                (dx * dx + dy * dy).sqrt() < near_corner
+                (dx * dx + dy * dy).sqrt() < Level::Shaku.width_m() as f32
+            })
+            .filter(|(i, _)| {
+                let n = mesh.normals[*i];
+                (n[0] - dir0_nx).abs() < 1e-4 && (n[1] - dir0_ny).abs() < 1e-4
             })
             .count();
-        assert_eq!(walls_at_bottom, 3);
+        assert_eq!(walls_at_bottom, 2);
 
         // No two triangles may share all three vertex positions: overlapping full-depth
         // walls would produce exactly that.
