@@ -10,20 +10,26 @@
 //!
 //! Ground plane throughout: `Vec2` is world XZ, with `y` the world's Z.
 //!
+//! Pointy up: a cell has a vertex north and south, and flat sides east and west. Flat to
+//! flat is one shaku — the width — and point to point is 2/√3 of it, about 1.155 shaku.
+//!
+//! The six neighbours, which say the same thing more usefully. Nothing lies due north or
+//! south, because that is where the points are:
+//!
 //! ```text
-//!       /\          Pointy up: a vertex north and south, flat sides east and west.
-//!      /  \         Flat to flat is one shaku - that is the width - and point to
-//!     |    |        point is 2/sqrt(3) of it, about 1.155 shaku. So a cell is
-//!      \  /         slightly taller than it is wide.
-//!       \/
+//!        NW     NE
+//!          \   /
+//!     W ----( )---- E        q increases east, r south-east.
+//!          /   \
+//!        SW     SE
 //! ```
 //!
-//! `q` increases east, `r` south-east. A cell's six neighbours are all exactly one
-//! shaku away, so a hex distance in cells is a distance in shaku.
+//! Every neighbour's centre is exactly one shaku away, so a hex distance in cells is a
+//! distance in shaku.
 //!
-//! (Flat-top is what hex diagrams in ASCII usually are, because pointy-up tiles badly
-//! in characters. This grid is pointy-up; one cell is drawn rather than a tiling so the
-//! picture cannot disagree with the code.)
+//! (No picture of the cell itself: a pointy-up hexagon is barely taller than it is wide,
+//! and an ASCII slash moves a whole column per row, so any attempt comes out a diamond.
+//! Better no diagram than one that disagrees with the code.)
 
 use bevy::prelude::*;
 
