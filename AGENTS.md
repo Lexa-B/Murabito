@@ -72,7 +72,8 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
 - `src/menu.rs` — the escape menu
 - `src/state.rs` — `AppState` (Playing / Menu / Settings), and pausing
 - `src/ui.rs` — what the screens share: scrim, buttons, slider visuals
-- `src/screenshot.rs` — F12 saves a PNG
+- `src/i18n.rs` — the string catalogues, `Language`, and the `Localized` component
+- `src/screenshot.rs` — F12, and the `--shot` command-line capture
 
 ### Conventions
 
@@ -81,7 +82,9 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
 - **Settings are resources; `settings.rs` persists them.** Anything that edits a settings resource gets saved automatically. Nothing else writes the file.
 - **Settings live at `~/.config/murabito/settings.yaml`** (YAML, one top-level key per group). A missing file means defaults and is created; a file that fails to parse warns and is left alone so the user can fix it.
 - **Windowed runs need the desktop display.** Shells in the user's terminal may have no `DISPLAY`/`WAYLAND_DISPLAY`; take them from the systemd user session (`systemctl --user show-environment`), as the experiments' scripts do.
-- **F12 saves a screenshot** to `screenshots/` (gitignored). Use it to check anything visual rather than asking the user to describe it.
+- **Check visual work with a screenshot, not by asking.** F12 saves one to `screenshots/` (gitignored) while playing, and `cargo run -- --shot <path> --screen playing|menu|settings` drives the app to a screen, captures it and exits — no keyboard needed. Add `--settle <frames>` if 150 isn't long enough; capture too early and the PNG is a bare clear colour, because render pipelines compile on first use.
+- **Running the binary directly needs `BEVY_ASSET_ROOT`.** Bevy resolves `assets/` relative to the executable unless `cargo run` sets it, so a direct `./target/debug/murabito` can't find the font or the locales.
+- **UI text is never a literal.** Every string comes from `assets/locales/{en,ja}.yaml` through a `Localized` key, and both catalogues must carry the same keys — a gap warns at startup. Text that is the same in every language (a language's own name, a number) uses `ui::spawn_literal_button` instead.
 - **A fixed-width text node wraps.** Bevy UI text in a node with an explicit width will line-break, possibly onto an invisible whitespace line, which doubles the node's height and pushes the glyphs off centre. Use `LineBreak::NoWrap` on labels with a fixed width.
 - **Never kill, signal or otherwise touch a process you didn't start.**
 
