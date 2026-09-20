@@ -3449,7 +3449,8 @@ Everything below was checked by compiling a throwaway spike against Bevy 0.19.1 
 - Entities use required components: `Mesh3d(handle)`, `MeshMaterial3d(handle)`, `Transform`, `Camera3d::default()`, `Projection::Perspective(PerspectiveProjection { fov, ..default() })`.
 - Screenshots: `commands.spawn(Screenshot::primary_window()).observe(save_to_disk(path))`, from `bevy::render::view::screenshot`. Frame numbers come from `bevy::diagnostic::FrameCount`.
 - Background work: `AsyncComputeTaskPool::get().spawn(async move { .. })`, polled with `block_on(future::poll_once(&mut task))` from `bevy::tasks::{block_on, futures_lite::future}`.
-- Extended materials: `ExtendedMaterial<StandardMaterial, Ext>` with fields `base` and `extension`, registered with `MaterialPlugin::<ExtendedMaterial<StandardMaterial, Ext>>::default()`, uniforms at `@group(2) @binding(100)`.
+- Extended materials: `ExtendedMaterial<StandardMaterial, Ext>` with fields `base` and `extension`, registered with `MaterialPlugin::<ExtendedMaterial<StandardMaterial, Ext>>::default()`, uniforms at `@group(3) @binding(100)`. This Bevy 0.19.1 build sets `bevy_pbr::material::MATERIAL_BIND_GROUP_INDEX = 3` (see `bevy_pbr-0.19.1/src/material.rs`), because group 2 is now reserved for GPU mesh-preprocessing data — group 2 is what every other note in this section would suggest, and is wrong. Unlike the rest of this section, this one was **not** verified by compiling the spike: the spike only ever compiled Rust, it never rendered a frame, so the wrong group number survived until Task 13 actually ran a shader on the GPU and read wgpu's validation error.
+- Bevy's asset root, under `cargo run`, resolves against **`CARGO_MANIFEST_DIR`** (the crate being run), not the process's working directory. A workspace-root `assets/` directory (so one shader file can be shared by every crate under `crates/`) needs `AssetPlugin { file_path: "../../assets".into(), ..default() }` set explicitly from a crate two levels down (`crates/<name>/`), overriding `DefaultPlugins`. Verified by running an example and reading the asset server's own "path not found" error, which named the crate's own directory even when `cargo run` was invoked from the workspace root. This holds for a dev-profile `cargo run`; a packaged build (exp-05 has none) would need revisiting, since a packaged binary has no `CARGO_MANIFEST_DIR` and falls back to its own directory instead.
 - **egui 0.36 has no `SidePanel`.** Panels are `egui::Panel::right(id)`, and they take a **root `Ui`**, not a context:
 
   ```rust
@@ -4438,8 +4439,8 @@ Registration in the plugin: `app.add_plugins(MaterialPlugin::<GroundMaterial>::d
 #import bevy_pbr::pbr_fragment::pbr_input_from_standard_material
 #import bevy_pbr::pbr_functions::{alpha_discard, apply_pbr_lighting, main_pass_post_lighting_processing}
 
-@group(2) @binding(100) var<uniform> line_mode: u32;
-@group(2) @binding(101) var<uniform> tint_by_level: u32;
+@group(3) @binding(100) var<uniform> line_mode: u32;
+@group(3) @binding(101) var<uniform> tint_by_level: u32;
 
 fn level_colour(level: f32) -> vec4<f32> {
     if level < 0.5 { return vec4<f32>(0.10, 0.10, 0.12, 1.0); }   // shaku: thin and dark
@@ -4670,14 +4671,25 @@ Systems: read input (WASD/arrows, middle-drag, wheel), update the rig, set the f
 ```rust
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Murabito exp-05 — hex world".into(),
-                resolution: (1600.0, 900.0).into(),
-                ..default()
-            }),
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Murabito exp-05 — hex world".into(),
+                        resolution: (1600.0, 900.0).into(),
+                        ..default()
+                    }),
+                    ..default()
+                })
+                // `crates/viewer` sits two levels under the workspace root, and Bevy's
+                // asset root under `cargo run` is CARGO_MANIFEST_DIR (this crate's own
+                // directory), not the process's cwd — see the "Bevy notes" section above.
+                // Without this, ground.wgsl fails to load with a "path not found" error.
+                .set(AssetPlugin {
+                    file_path: "../../assets".into(),
+                    ..default()
+                }),
+        )
         .add_plugins(HexWorldPlugin::default())
         .add_plugins(bevy_egui::EguiPlugin::default())
         .add_systems(Startup, setup)
