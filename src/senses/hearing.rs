@@ -11,7 +11,7 @@
 
 use bevy::prelude::*;
 
-use super::{CURVE_STEPS, SenseOverlay, facing, lift, rotate};
+use super::{CURVE_STEPS, HideSenses, SenseOverlay, facing, lift, rotate};
 
 /// Hearing, shaped like a microphone's polar pattern.
 ///
@@ -60,7 +60,7 @@ impl Hearing {
 /// The hearing pattern as a closed polar curve around the being.
 pub(super) fn draw_hearing(
     mut gizmos: Gizmos,
-    beings: Query<(&GlobalTransform, &Hearing, &SenseOverlay)>,
+    beings: Query<(&GlobalTransform, &Hearing, &SenseOverlay), Without<HideSenses>>,
 ) {
     for (transform, hearing, overlay) in &beings {
         let origin = transform.translation();

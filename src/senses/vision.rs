@@ -6,7 +6,7 @@
 
 use bevy::prelude::*;
 
-use super::{CURVE_STEPS, SenseOverlay, facing, lift, rotate};
+use super::{CURVE_STEPS, HideSenses, SenseOverlay, facing, lift, rotate};
 
 /// One band of a vision cone: everything out to `range` that isn't in a nearer band.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -75,7 +75,7 @@ impl Vision {
 /// One arc per band, plus the two edges of the cone. Fainter bands are further out.
 pub(super) fn draw_vision(
     mut gizmos: Gizmos,
-    beings: Query<(&GlobalTransform, &Vision, &SenseOverlay)>,
+    beings: Query<(&GlobalTransform, &Vision, &SenseOverlay), Without<HideSenses>>,
 ) {
     for (transform, vision, overlay) in &beings {
         let origin = transform.translation();

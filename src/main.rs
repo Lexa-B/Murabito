@@ -8,8 +8,8 @@
 
 use bevy::prelude::*;
 use murabito::{
-    being, camera, hex, i18n, menu, scene, screenshot, senses, settings, settings_page, state, ui,
-    user_data, 諸法,
+    being, camera, debug_screen, hex, i18n, menu, scene, screenshot, senses, settings,
+    settings_page, state, ui, user_data, 諸法,
 };
 
 fn main() {
@@ -35,6 +35,7 @@ fn main() {
             scene::ScenePlugin,
             hex::HexGridPlugin,
             senses::SensesPlugin,
+            debug_screen::DebugScreenPlugin,
             being::BeingPlugin,
             camera::CameraPlugin,
             ui::UiPlugin,

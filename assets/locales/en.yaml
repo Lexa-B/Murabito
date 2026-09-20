@@ -11,3 +11,11 @@ settings.language: Language
 # The language button offers the *other* language, so it is named in its own script and
 # is never translated: someone who can't read the current language still recognises it.
 settings.language_toggle: 日本語
+
+# The F3 debug screen. Developer-facing, but localised like everything else.
+debug.senses: Senses
+
+# Taxonomy keys, namespaced by the axis they belong to. 諸法.yaml holds no display
+# names on purpose: the key is the identity, and this is what a reader sees.
+分類.狐: Fox
+分類.兎: Rabbit

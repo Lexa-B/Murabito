@@ -48,6 +48,14 @@ impl Plugin for SensesPlugin {
     }
 }
 
+/// Suppresses this being's sense overlay.
+///
+/// The drawing systems skip anything carrying it, so nothing in `senses` needs to know
+/// that a debug screen exists, or what a 種 is. Whoever wants a being quiet adds the
+/// marker; the senses themselves are unaffected, and still sense.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct HideSenses;
+
 /// The colour a being's sense overlay is drawn in. On the being so that each one
 /// is identifiable at a glance, rather than hard-coded per species in the drawing code.
 #[derive(Component, Clone, Copy, Debug)]

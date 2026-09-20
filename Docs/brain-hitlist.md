@@ -320,6 +320,13 @@ proposal, not a commitment.
       interesting starting position anyway. Currently eyeballed off a screenshot through
       a projection that makes ground angles hard to judge. It is a claim, so it should be
       a test.
+- [x] **0f-i. The F3 screen.** A debug screen over the live world — no scrim, no chrome,
+      terse lines, some clickable — with one line per 種 showing or hiding that kind's
+      sense overlay. Deliberately not an `AppState`, since those pause the clock and the
+      point is watching the world carry on. Beings are quieted with a `HideSenses` marker,
+      so `senses` needs to know neither what a 種 is nor that a debug screen exists.
+      `--debug` on the one-shot capture presses the real key, so the screen can be
+      screenshotted rather than taken on trust.
 - [ ] **0f. A legible overlay.** Each being's vision and hearing are drawn in one hue and
       overlap heavily, so which curve is which sense is guesswork; and the rabbit's
       vision — 2.5/5/8 m at low alpha, inside a 10 m hearing circle — is the faintest

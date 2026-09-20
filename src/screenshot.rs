@@ -41,8 +41,10 @@ impl Plugin for ScreenshotPlugin {
         app.add_systems(Update, capture_on_key);
 
         if let Some(request) = ShotRequest::from_args() {
-            app.insert_resource(request)
-                .add_systems(Update, run_one_shot);
+            app.insert_resource(request).add_systems(
+                Update,
+                run_one_shot.before(crate::debug_screen::toggle_screen),
+            );
         }
     }
 }
@@ -71,13 +73,16 @@ struct ShotRequest {
     settle: u32,
     /// Shaku back from the focus. `None` leaves the camera wherever it starts.
     zoom: Option<f32>,
+    /// Whether to open the F3 screen before capturing.
+    debug: bool,
 }
 
 impl ShotRequest {
     /// `--shot <path>` turns this on. `--screen menu|settings|playing` picks what to
     /// capture (default `playing`), `--settle <frames>` how long to wait first, and
     /// `--zoom <shaku>` how far back the camera sits — which is how anything drawn in
-    /// the world gets framed, rather than running off the edge at the starting zoom.
+    /// the world gets framed, rather than running off the edge at the starting zoom — and
+    /// `--debug` opens the F3 screen first.
     ///
     /// Parsed by hand rather than with `clap`: four flags, used by whoever is verifying
     /// a change, and not worth a dependency.
@@ -105,12 +110,14 @@ impl ShotRequest {
             .unwrap_or(DEFAULT_SETTLE);
 
         let zoom = value("--zoom").and_then(|shaku| shaku.parse().ok());
+        let debug = args.iter().any(|arg| arg == "--debug");
 
         Some(Self {
             path,
             screen,
             settle,
             zoom,
+            debug,
         })
     }
 }
@@ -122,6 +129,7 @@ fn run_one_shot(
     mut commands: Commands,
     mut next: ResMut<NextState<AppState>>,
     mut rigs: Query<&mut CameraRig>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
     mut exit: MessageWriter<AppExit>,
 ) {
     *frames += 1;
@@ -140,6 +148,12 @@ fn run_one_shot(
     // `PreStartup` and `Startup` put in place, the UI font among them.
     if *frames == 2 {
         next.set(request.screen);
+    }
+    // Pressed rather than spawned directly, so what is captured is the screen the real
+    // key opens. Ordered ahead of the system that reads it, because `just_pressed` lasts
+    // exactly one frame.
+    if *frames == 3 && request.debug {
+        keys.press(crate::debug_screen::TOGGLE_KEY);
     }
     if *frames == request.settle {
         if let Some(parent) = request.path.parent()

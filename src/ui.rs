@@ -100,7 +100,7 @@ pub fn spawn_row(
         .with_children(|row| {
             row.spawn((
                 Text::default(),
-                Localized(label_key),
+                Localized::new(label_key),
                 label_font(font),
                 TextLayout::new(Justify::Left, LineBreak::NoWrap),
                 TextColor(TEXT),
@@ -169,7 +169,7 @@ pub fn spawn_button<C: Component>(
         .spawn((Button, action, button_node(width), BackgroundColor(BUTTON)))
         .with_child((
             Text::default(),
-            Localized(key),
+            Localized::new(key),
             TextLayout::new(Justify::Center, LineBreak::NoWrap),
             label_font(font),
             TextColor(TEXT),
