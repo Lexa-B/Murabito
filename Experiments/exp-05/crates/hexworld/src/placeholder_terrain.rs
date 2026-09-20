@@ -50,11 +50,9 @@ pub fn height_m(cfg: &WorldConfig, east: f64, north: f64, level: Level) -> f64 {
 /// The column at a cell, sampled at that cell's centre.
 pub fn column_at(cfg: &WorldConfig, cell: Hex, level: Level) -> Column {
     let (east, north) = cell_centre_m(cell, level);
-    let top = cfg.layer_of_height(height_m(cfg, east, north, level));
+    let height = height_m(cfg, east, north, level);
+    let top = cfg.layer_of_height(height).max(cfg.bottom_layer);
     let bottom = cfg.bottom_layer;
-    if top < bottom {
-        return Column::default();
-    }
     let mut runs = Vec::with_capacity(3);
     // One layer of grass on top, two of dirt below it, rock all the way down.
     let dirt_bottom = (top - 2).max(bottom);
@@ -97,16 +95,31 @@ mod tests {
     #[test]
     fn a_coarse_sample_is_the_fine_sample_minus_the_dropped_octaves() {
         let cfg = WorldConfig::default();
+
+        // Test at a lattice-aligned point
         let (e, n) = (321.0, 654.0);
         let fine = height_m(&cfg, e, n, Level::Shaku);
         let coarse = height_m(&cfg, e, n, Level::Cho);
         let dropped: f64 = (0..OCTAVES)
-            .filter(|k| !octave_kept(*k, Level::Cho))
+            .filter(|k| octave_kept(*k, Level::Shaku) && !octave_kept(*k, Level::Cho))
             .map(|k| octave_value(&cfg, e, n, k))
             .sum();
         assert!(
             (fine - coarse - dropped).abs() < 1e-9,
-            "{fine} {coarse} {dropped}"
+            "lattice-aligned: {fine} {coarse} {dropped}"
+        );
+
+        // Test at a non-lattice-aligned point to ensure the identity has teeth
+        let (e, n) = (321.3, 654.7);
+        let fine = height_m(&cfg, e, n, Level::Shaku);
+        let coarse = height_m(&cfg, e, n, Level::Cho);
+        let dropped: f64 = (0..OCTAVES)
+            .filter(|k| octave_kept(*k, Level::Shaku) && !octave_kept(*k, Level::Cho))
+            .map(|k| octave_value(&cfg, e, n, k))
+            .sum();
+        assert!(
+            (fine - coarse - dropped).abs() < 1e-9,
+            "non-aligned: {fine} {coarse} {dropped}"
         );
     }
 
@@ -167,6 +180,82 @@ mod tests {
         assert_ne!(
             column_at(&a, cell, Level::Shaku),
             column_at(&b, cell, Level::Shaku)
+        );
+    }
+
+    #[test]
+    fn a_degenerate_column_below_bottom_layer_has_at_least_one_run() {
+        // Create a config with a deliberately high bottom_layer so the surface lands below it
+        let cfg = WorldConfig {
+            bottom_layer: 100,
+            ..WorldConfig::default()
+        };
+        // This will produce a very negative height, landing well below bottom_layer = 100
+        let col = column_at(&cfg, Hex::new(0, 0), Level::Shaku);
+
+        // The column must have at least one run (the grass at bottom_layer)
+        assert!(!col.runs.is_empty(), "column has no runs");
+
+        // Runs must be sorted and non-overlapping, starting at bottom_layer
+        assert_eq!(
+            col.runs[0].bottom, cfg.bottom_layer,
+            "first run doesn't start at bottom_layer"
+        );
+        for (i, run) in col.runs.iter().enumerate() {
+            assert!(run.bottom <= run.top, "run has inverted bounds: {:?}", run);
+            if i > 0 {
+                let prev = col.runs[i - 1];
+                assert_eq!(
+                    run.bottom,
+                    prev.top + 1,
+                    "runs are not contiguous: run {}: {:?} after {:?}",
+                    i,
+                    run,
+                    prev
+                );
+            }
+        }
+
+        // Top run must be grass
+        assert_eq!(
+            col.runs.last().unwrap().material,
+            Material::Grass,
+            "top run is not grass"
+        );
+    }
+
+    #[test]
+    fn no_column_is_empty_across_a_wide_scan() {
+        // Scan several thousand cells at Shaku level with default config
+        let cfg = WorldConfig::default();
+        let mut empty_count = 0;
+        let mut total_count = 0;
+
+        for q in -50..=50 {
+            for r in -50..=50 {
+                let cell = Hex::new(q, r);
+                let col = column_at(&cfg, cell, Level::Shaku);
+                total_count += 1;
+
+                if col.runs.is_empty() {
+                    empty_count += 1;
+                }
+
+                // Invariant: every column has at least one run
+                assert!(!col.runs.is_empty(), "empty column at ({}, {})", q, r);
+            }
+        }
+
+        // Sanity check: we scanned a reasonable number of cells
+        assert!(
+            total_count > 1000,
+            "scan covered only {total_count} cells; expand the range"
+        );
+
+        // Record for evidence: no empty columns found
+        assert_eq!(
+            empty_count, 0,
+            "found {empty_count} empty columns out of {total_count} cells"
         );
     }
 }

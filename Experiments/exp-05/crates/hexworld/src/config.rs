@@ -19,7 +19,7 @@ impl Default for WorldConfig {
             seed: 1,
             world_radius_ri: 0,
             layer_thickness_sun: 5.0,
-            bottom_layer: -64,
+            bottom_layer: -256,
         }
     }
 }
