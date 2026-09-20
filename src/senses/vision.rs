@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use super::{
     BoldStroke, FaintStroke, HideSenses, MidStroke, SenseOverlay, facing, ground_point, rotate,
 };
-use crate::hex::Hex;
+use crate::hex::{Hex, steps_covering};
 
 /// Strokes per cell, nearest band first. Density and weight together carry acuity.
 const STROKES_PER_CELL: [usize; 3] = [3, 2, 1];
@@ -117,7 +117,10 @@ pub(super) fn draw_vision(
         let forward = facing(transform);
         let here = Hex::from_world(ground);
 
-        for hex in here.within(vision.far_range()) {
+        // Steps, not shaku: see `steps_covering`. Scanning `far_range` directly leaves
+        // notches in the diagonal directions, where cells inside the range sit more than
+        // that many steps out.
+        for hex in here.within(steps_covering(vision.far_range() as f32)) {
             let Some(band) = vision.band_at(forward, hex.center() - ground) else {
                 continue;
             };

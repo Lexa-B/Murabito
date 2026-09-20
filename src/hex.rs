@@ -157,6 +157,23 @@ impl Hex {
     }
 }
 
+/// Steps needed to be sure of reaching every cell within `shaku` of a point.
+///
+/// Hex distance and shaku are *not* interchangeable, despite a single step being exactly
+/// one shaku. Steps along a straight run agree; steps that turn do not. Two steps along
+/// a diagonal — one each of two neighbouring directions — land only √3 ≈ 1.73 shaku
+/// away, so a cell can sit comfortably inside a radius in shaku while lying outside it
+/// in steps.
+///
+/// A scan bounded by steps therefore misses cells it should cover, and misses them in
+/// the diagonal directions only, which shows up as an outline with pieces cut out of it
+/// rather than as an obviously wrong shape. The worst case is that √3/2 ratio, so the
+/// bound is 2/√3 of the radius, plus one step for the searcher standing somewhere in
+/// its own cell rather than exactly on the centre.
+pub fn steps_covering(shaku: f32) -> u32 {
+    (shaku * 2.0 / SQRT_3).ceil() as u32 + 1
+}
+
 /// How far the debug grid is drawn around the camera's focus. Six ken.
 const GRID_RADIUS_KEN: u32 = 6;
 const GRID_RADIUS: u32 = GRID_RADIUS_KEN * 6;
@@ -301,6 +318,40 @@ mod tests {
                 same || flipped,
                 "edge {direction}: {a:?},{b:?} vs {c:?},{d:?}"
             );
+        }
+    }
+
+    /// Why `steps_covering` exists at all: twelve steps out along the diagonal is under
+    /// eleven shaku away. Scan by steps with the radius in shaku and these cells are
+    /// silently skipped.
+    #[test]
+    fn a_radius_in_shaku_is_not_a_radius_in_steps() {
+        let diagonal = Hex::new(6, 6);
+        assert_eq!(Hex::default().distance(diagonal), 12);
+        assert!(
+            diagonal.center().length() < 11.0,
+            "{} shaku",
+            diagonal.center().length()
+        );
+    }
+
+    /// The guarantee the bound has to make: nothing inside the radius falls outside the
+    /// step count. Checked against a margin, so a cell that ought to be included cannot
+    /// hide by being outside the search too.
+    #[test]
+    fn the_step_bound_reaches_everything_inside_the_radius() {
+        for radius in [2.0, 5.5, 12.0, 30.0, 48.0] {
+            let steps = steps_covering(radius);
+            for hex in Hex::default().within(steps + 6) {
+                if hex.center().length() <= radius {
+                    assert!(
+                        Hex::default().distance(hex) <= steps,
+                        "{hex:?} is {:.2} shaku away, inside {radius}, but {} steps > {steps}",
+                        hex.center().length(),
+                        Hex::default().distance(hex)
+                    );
+                }
+            }
         }
     }
 
