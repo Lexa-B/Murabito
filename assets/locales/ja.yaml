@@ -1,0 +1,11 @@
+# 日本語のUI文字列。キーは en.yaml と同じものを揃える。
+menu.settings: 設定
+menu.resume: 再開
+menu.quit: 終了
+
+settings.title: 設定
+settings.back: 戻る
+settings.pan_speed: カメラ移動速度
+settings.language: 言語
+# 切り替え先の言語を、その言語自身の文字で示す。翻訳しない。
+settings.language_toggle: English

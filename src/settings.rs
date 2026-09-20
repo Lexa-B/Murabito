@@ -14,6 +14,8 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::Language;
+
 /// Where the file lives under the platform's config directory.
 const CONFIG_SUBDIR: &str = "murabito";
 const CONFIG_FILE: &str = "settings.yaml";
@@ -33,6 +35,9 @@ impl Plugin for SettingsPlugin {
         }
 
         app.insert_resource(file.camera)
+            // The language is a resource in its own right: `i18n` reads it every frame
+            // and nothing there needs to know it came from a file.
+            .insert_resource(file.ui.language)
             // Runs in `Last` so a change made anywhere this frame is saved once, after
             // everything that might have touched it has run.
             .add_systems(Last, save_on_change);
@@ -55,6 +60,15 @@ enum LoadOutcome {
 #[serde(default)]
 struct SettingsFile {
     camera: CameraSettings,
+    ui: UiSettings,
+}
+
+/// Settings about the interface itself, as opposed to how the camera behaves.
+#[derive(Serialize, Deserialize, Default, Clone, Copy, PartialEq)]
+#[serde(default)]
+pub struct UiSettings {
+    /// Which language the UI is in. `en` or `ja` in the file.
+    pub language: Language,
 }
 
 /// Camera preferences. A `Resource`, not a component: there is one set of them for the
@@ -159,12 +173,21 @@ fn settings_path() -> Option<PathBuf> {
     Some(dirs::config_dir()?.join(CONFIG_SUBDIR).join(CONFIG_FILE))
 }
 
-/// Saves whenever a settings resource changed this frame. The frame it is inserted
-/// counts as a change, so that one is skipped: writing the file at startup is the
-/// plugin's job, and only when there was no file to begin with.
-fn save_on_change(camera: Res<CameraSettings>) {
-    if camera.is_added() || !camera.is_changed() {
+/// Saves whenever any settings resource changed this frame. The frame one is inserted
+/// counts as a change, so those are skipped: writing the file at startup is the plugin's
+/// job, and only when there was no file to begin with.
+fn save_on_change(camera: Res<CameraSettings>, language: Res<Language>) {
+    if camera.is_added() || language.is_added() {
         return;
     }
-    SettingsFile { camera: *camera }.save();
+    if !camera.is_changed() && !language.is_changed() {
+        return;
+    }
+    SettingsFile {
+        camera: *camera,
+        ui: UiSettings {
+            language: *language,
+        },
+    }
+    .save();
 }

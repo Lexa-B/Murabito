@@ -1,8 +1,10 @@
 //! Shared look and behaviour for the overlay screens.
 
 use bevy::prelude::*;
+use bevy::text::LineBreak;
 use bevy::ui_widgets::{Slider, SliderRange, SliderStep, SliderThumb, SliderValue, TrackClick};
 
+use crate::i18n::Localized;
 use crate::state::AppState;
 
 /// Dim behind a screen, rather than an opaque panel, so the world stays visible.
@@ -12,6 +14,10 @@ pub const SCRIM: Color = Color::srgba(0.05, 0.06, 0.09, 0.75);
 const BUTTON: Color = Color::srgb(0.22, 0.25, 0.31);
 const BUTTON_HOVERED: Color = Color::srgb(0.30, 0.34, 0.42);
 const BUTTON_PRESSED: Color = Color::srgb(0.16, 0.18, 0.23);
+
+/// A button standing for the option currently in force, e.g. the active language.
+const BUTTON_SELECTED: Color = Color::srgb(0.30, 0.45, 0.38);
+const BUTTON_SELECTED_HOVERED: Color = Color::srgb(0.36, 0.53, 0.45);
 
 pub const TEXT: Color = Color::srgb(0.92, 0.93, 0.95);
 
@@ -28,6 +34,8 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
+        // Before `Startup`, so no screen can be built before the handle exists.
+        app.add_systems(PreStartup, load_font);
         // Every overlay screen shares the hover/press tinting, so it runs whenever one
         // is up rather than being repeated per screen.
         app.add_systems(
@@ -35,6 +43,18 @@ impl Plugin for UiPlugin {
             (button_visuals, position_thumbs).run_if(not(in_state(AppState::Playing))),
         );
     }
+}
+
+/// The UI's font. Noto Sans JP covers Latin as well as Japanese, so one font serves
+/// both catalogues and the text doesn't change shape when the language does.
+///
+/// Bevy's built-in font has no CJK glyphs at all: without this, every Japanese string
+/// renders as blank boxes.
+#[derive(Resource)]
+pub struct UiFont(pub Handle<Font>);
+
+fn load_font(mut commands: Commands, assets: Res<AssetServer>) {
+    commands.insert_resource(UiFont(assets.load("fonts/NotoSansJP-Regular.otf")));
 }
 
 /// A full-screen dimmed column: the frame every overlay screen is built in.
@@ -54,30 +74,106 @@ pub fn overlay() -> impl Bundle {
     )
 }
 
-/// Spawns a labelled button carrying `action`, whatever that component happens to be.
-/// Each screen defines its own action enum and this stays agnostic about them.
-pub fn spawn_button<C: Component>(
+/// Marks the button whose option is currently in force, so it is tinted as chosen
+/// rather than looking like one of several equal choices.
+#[derive(Component)]
+pub struct ButtonSelected;
+
+/// A settings row: a label in a fixed-width column, then its controls. The widths are
+/// shared by every row, so labels and controls line up down the page whatever language
+/// they are in — Japanese labels are wider than English ones at the same font size.
+pub const ROW_LABEL_WIDTH: f32 = 230.0;
+pub const ROW_CONTROL_WIDTH: f32 = 290.0;
+
+pub fn spawn_row(
     parent: &mut ChildSpawnerCommands,
+    font: &UiFont,
+    label_key: &'static str,
+    controls: impl FnOnce(&mut ChildSpawnerCommands),
+) {
+    parent
+        .spawn(Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            ..default()
+        })
+        .with_children(|row| {
+            row.spawn((
+                Text::default(),
+                Localized(label_key),
+                label_font(font),
+                TextLayout::new(Justify::Left, LineBreak::NoWrap),
+                TextColor(TEXT),
+                Node {
+                    width: Val::Px(ROW_LABEL_WIDTH),
+                    ..default()
+                },
+            ));
+            row.spawn(Node {
+                width: Val::Px(ROW_CONTROL_WIDTH),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: Val::Px(10.0),
+                ..default()
+            })
+            .with_children(controls);
+        });
+}
+
+/// A button whose label is given outright rather than translated. For text that is the
+/// same in every language — a language's own name, a number, a proper noun.
+pub fn spawn_literal_button<C: Component>(
+    parent: &mut ChildSpawnerCommands,
+    font: &UiFont,
     action: C,
     label: &str,
     width: f32,
+) -> Entity {
+    parent
+        .spawn((Button, action, button_node(width), BackgroundColor(BUTTON)))
+        .with_child((
+            Text::new(label),
+            TextLayout::new(Justify::Center, LineBreak::NoWrap),
+            label_font(font),
+            TextColor(TEXT),
+        ))
+        .id()
+}
+
+fn button_node(width: f32) -> Node {
+    Node {
+        width: Val::Px(width),
+        height: Val::Px(48.0),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        // A field of `Node` in Bevy 0.19, not a component of its own.
+        border_radius: BorderRadius::all(Val::Px(6.0)),
+        ..default()
+    }
+}
+
+/// Spawns a button carrying `action`, whatever that component happens to be, labelled
+/// with the catalogue string for `key`. Each screen defines its own action enum and this
+/// stays agnostic about them.
+///
+/// The label starts empty and is filled by `i18n` in the same frame, before anything is
+/// drawn — which is also what lets the language be switched without rebuilding a screen.
+pub fn spawn_button<C: Component>(
+    parent: &mut ChildSpawnerCommands,
+    font: &UiFont,
+    action: C,
+    key: &'static str,
+    width: f32,
 ) {
     parent
-        .spawn((
-            Button,
-            action,
-            Node {
-                width: Val::Px(width),
-                height: Val::Px(48.0),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                // A field of `Node` in Bevy 0.19, not a component of its own.
-                border_radius: BorderRadius::all(Val::Px(6.0)),
-                ..default()
-            },
-            BackgroundColor(BUTTON),
-        ))
-        .with_child((Text::new(label), label_font(), TextColor(TEXT)));
+        .spawn((Button, action, button_node(width), BackgroundColor(BUTTON)))
+        .with_child((
+            Text::default(),
+            Localized(key),
+            TextLayout::new(Justify::Center, LineBreak::NoWrap),
+            label_font(font),
+            TextColor(TEXT),
+        ));
 }
 
 /// Spawns a slider: a track with a thumb on it, carrying `marker` so the page can find
@@ -150,23 +246,36 @@ fn position_thumbs(
     }
 }
 
-pub fn label_font() -> TextFont {
+pub fn label_font(font: &UiFont) -> TextFont {
+    text_font(font, 20.0)
+}
+
+/// A `TextFont` in the UI's font at the given size.
+pub fn text_font(font: &UiFont, size: f32) -> TextFont {
     TextFont {
-        font_size: FontSize::Px(20.0),
+        font: FontSource::Handle(font.0.clone()),
+        font_size: FontSize::Px(size),
         ..default()
     }
 }
 
-/// Tints a button as the pointer enters, leaves, or presses it. `Changed<Interaction>`
-/// means this runs only for buttons whose state actually changed this frame.
+/// Tints every button from its interaction and whether it is the selected option.
+///
+/// Runs over all of them rather than only those whose `Interaction` changed: selection
+/// changes without any pointer event, and there are a handful of buttons on screen.
 fn button_visuals(
-    mut buttons: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Button>)>,
+    mut buttons: Query<(&Interaction, Option<&ButtonSelected>, &mut BackgroundColor), With<Button>>,
 ) {
-    for (interaction, mut colour) in &mut buttons {
-        *colour = BackgroundColor(match interaction {
-            Interaction::Pressed => BUTTON_PRESSED,
-            Interaction::Hovered => BUTTON_HOVERED,
-            Interaction::None => BUTTON,
-        });
+    for (interaction, selected, mut colour) in &mut buttons {
+        let next = match (interaction, selected.is_some()) {
+            (Interaction::Pressed, _) => BUTTON_PRESSED,
+            (Interaction::Hovered, true) => BUTTON_SELECTED_HOVERED,
+            (Interaction::Hovered, false) => BUTTON_HOVERED,
+            (Interaction::None, true) => BUTTON_SELECTED,
+            (Interaction::None, false) => BUTTON,
+        };
+        if colour.0 != next {
+            *colour = BackgroundColor(next);
+        }
     }
 }

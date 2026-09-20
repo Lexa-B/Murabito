@@ -4,7 +4,7 @@ use bevy::app::AppExit;
 use bevy::prelude::*;
 
 use crate::state::AppState;
-use crate::ui;
+use crate::ui::{self, UiFont};
 
 pub struct MenuPlugin;
 
@@ -51,13 +51,13 @@ fn toggle_menu(
     });
 }
 
-fn spawn_menu(mut commands: Commands) {
+fn spawn_menu(mut commands: Commands, font: Res<UiFont>) {
     commands
         .spawn((MenuRoot, ui::overlay()))
         .with_children(|menu| {
-            ui::spawn_button(menu, MenuButton::Settings, "Settings", 220.0);
-            ui::spawn_button(menu, MenuButton::Resume, "Resume", 220.0);
-            ui::spawn_button(menu, MenuButton::Quit, "Quit", 220.0);
+            ui::spawn_button(menu, &font, MenuButton::Settings, "menu.settings", 220.0);
+            ui::spawn_button(menu, &font, MenuButton::Resume, "menu.resume", 220.0);
+            ui::spawn_button(menu, &font, MenuButton::Quit, "menu.quit", 220.0);
         });
 }
 

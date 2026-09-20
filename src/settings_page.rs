@@ -8,9 +8,10 @@ use bevy::prelude::*;
 use bevy::text::LineBreak;
 use bevy::ui_widgets::{SliderValue, ValueChange};
 
+use crate::i18n::{Language, Localized};
 use crate::settings::CameraSettings;
 use crate::state::AppState;
-use crate::ui;
+use crate::ui::{self, UiFont};
 
 /// The pan-speed slider runs in octaves: its value is log2 of the multiplier, so -2 is
 /// a quarter speed, 0 is the tuned default and +2 is four times. A linear slider over
@@ -35,6 +36,8 @@ impl Plugin for SettingsPagePlugin {
                 Update,
                 (
                     button_actions,
+                    choose_language,
+                    mark_selected_language,
                     // Only redraws the number when the setting actually changed.
                     update_value_text.run_if(resource_changed::<CameraSettings>),
                 )
@@ -60,16 +63,19 @@ enum PageButton {
     Back,
 }
 
-fn spawn_page(mut commands: Commands, settings: Res<CameraSettings>) {
+/// A button that selects a language. Carries the language it stands for, so one system
+/// handles any number of them.
+#[derive(Component, Clone, Copy)]
+struct LanguageOption(Language);
+
+fn spawn_page(mut commands: Commands, font: Res<UiFont>, settings: Res<CameraSettings>) {
     commands
         .spawn((PageRoot, ui::overlay()))
         .with_children(|page| {
             page.spawn((
-                Text::new("Settings"),
-                TextFont {
-                    font_size: FontSize::Px(28.0),
-                    ..default()
-                },
+                Text::default(),
+                Localized("settings.title"),
+                ui::text_font(&font, 28.0),
                 TextColor(ui::TEXT),
                 Node {
                     margin: UiRect::bottom(Val::Px(8.0)),
@@ -77,35 +83,17 @@ fn spawn_page(mut commands: Commands, settings: Res<CameraSettings>) {
                 },
             ));
 
-            // One row: a label, then the control. Rows are their own flex containers, so
-            // adding a second setting is another row and nothing else.
-            page.spawn(Node {
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                column_gap: Val::Px(10.0),
-                ..default()
-            })
-            .with_children(|row| {
-                row.spawn((
-                    Text::new("Pan speed"),
-                    ui::label_font(),
-                    TextLayout::new(Justify::Left, LineBreak::NoWrap),
-                    TextColor(ui::TEXT),
-                    Node {
-                        width: Val::Px(120.0),
-                        ..default()
-                    },
-                ));
+            ui::spawn_row(page, &font, "settings.pan_speed", |controls| {
                 ui::spawn_slider(
-                    row,
+                    controls,
                     PanSpeedSlider,
                     settings.pan_speed_scale.log2(),
                     OCTAVES_MIN..=OCTAVES_MAX,
                     OCTAVE_STEP,
                 );
-                row.spawn((
+                controls.spawn((
                     Text::new(format_scale(settings.pan_speed_scale)),
-                    ui::label_font(),
+                    ui::label_font(&font),
                     TextLayout::new(Justify::Left, LineBreak::NoWrap),
                     TextColor(ui::TEXT),
                     PanSpeedValue,
@@ -117,7 +105,25 @@ fn spawn_page(mut commands: Commands, settings: Res<CameraSettings>) {
                 ));
             });
 
-            ui::spawn_button(page, PageButton::Back, "Back", 220.0);
+            // Both languages are shown, each named in its own script and never
+            // translated, with the one in force highlighted. A single button showing
+            // "the other language" reads as a label rather than a choice.
+            ui::spawn_row(page, &font, "settings.language", |controls| {
+                for (language, name) in [
+                    (Language::English, "English"),
+                    (Language::Japanese, "日本語"),
+                ] {
+                    ui::spawn_literal_button(
+                        controls,
+                        &font,
+                        LanguageOption(language),
+                        name,
+                        138.0,
+                    );
+                }
+            });
+
+            ui::spawn_button(page, &font, PageButton::Back, "settings.back", 220.0);
         });
 }
 
@@ -156,6 +162,35 @@ fn on_slider_change(
         .entity(change.source)
         .insert(SliderValue(change.value));
     settings.pan_speed_scale = change.value.exp2();
+}
+
+/// Every label on screen is a `Localized` key, so setting the language retranslates the
+/// page in place — no rebuild. `settings.rs` notices the change and saves it.
+fn choose_language(
+    buttons: Query<(&Interaction, &LanguageOption), Changed<Interaction>>,
+    mut language: ResMut<Language>,
+) {
+    for (interaction, option) in &buttons {
+        if *interaction == Interaction::Pressed && *language != option.0 {
+            *language = option.0;
+        }
+    }
+}
+
+/// Marks whichever language button matches the language in force. Runs when the page
+/// appears and whenever the language changes.
+fn mark_selected_language(
+    mut commands: Commands,
+    language: Res<Language>,
+    buttons: Query<(Entity, &LanguageOption)>,
+) {
+    for (entity, option) in &buttons {
+        if option.0 == *language {
+            commands.entity(entity).insert(ui::ButtonSelected);
+        } else {
+            commands.entity(entity).remove::<ui::ButtonSelected>();
+        }
+    }
 }
 
 fn update_value_text(
