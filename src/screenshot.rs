@@ -18,6 +18,8 @@ use bevy::app::AppExit;
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 
+use crate::camera::CameraRig;
+
 use crate::state::AppState;
 
 /// Where F12 puts its captures.
@@ -67,13 +69,17 @@ struct ShotRequest {
     path: PathBuf,
     screen: AppState,
     settle: u32,
+    /// Metres back from the focus. `None` leaves the camera wherever it starts.
+    zoom: Option<f32>,
 }
 
 impl ShotRequest {
     /// `--shot <path>` turns this on. `--screen menu|settings|playing` picks what to
-    /// capture (default `playing`), `--settle <frames>` how long to wait first.
+    /// capture (default `playing`), `--settle <frames>` how long to wait first, and
+    /// `--zoom <metres>` how far back the camera sits — which is how anything drawn in
+    /// the world gets framed, rather than running off the edge at the starting zoom.
     ///
-    /// Parsed by hand rather than with `clap`: three flags, used by whoever is verifying
+    /// Parsed by hand rather than with `clap`: four flags, used by whoever is verifying
     /// a change, and not worth a dependency.
     fn from_args() -> Option<Self> {
         let args: Vec<String> = std::env::args().collect();
@@ -98,10 +104,13 @@ impl ShotRequest {
             .and_then(|frames| frames.parse().ok())
             .unwrap_or(DEFAULT_SETTLE);
 
+        let zoom = value("--zoom").and_then(|metres| metres.parse().ok());
+
         Some(Self {
             path,
             screen,
             settle,
+            zoom,
         })
     }
 }
@@ -112,9 +121,20 @@ fn run_one_shot(
     mut frames: Local<u32>,
     mut commands: Commands,
     mut next: ResMut<NextState<AppState>>,
+    mut rigs: Query<&mut CameraRig>,
     mut exit: MessageWriter<AppExit>,
 ) {
     *frames += 1;
+
+    // Before the state change below, so the camera systems — which only run while
+    // playing — still get a frame to turn the new zoom into a transform.
+    if *frames == 1
+        && let Some(zoom) = request.zoom
+    {
+        for mut rig in &mut rigs {
+            rig.jump_to_zoom(zoom);
+        }
+    }
 
     // Early, but not on the first frame: a screen's `OnEnter` needs the resources that
     // `PreStartup` and `Startup` put in place, the UI font among them.

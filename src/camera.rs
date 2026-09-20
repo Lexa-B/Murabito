@@ -100,6 +100,15 @@ impl CameraRig {
         PAN_SPEED * settings.pan_speed_scale * (self.zoom / PAN_REF_ZOOM).powf(PAN_ZOOM_EXPONENT)
     }
 
+    /// Jumps straight to a zoom distance, skipping the ease.
+    ///
+    /// For the one-shot capture, which has no time to glide: it needs the framing it
+    /// asked for on the very next frame, not half a second later.
+    pub fn jump_to_zoom(&mut self, zoom: f32) {
+        self.zoom = zoom.clamp(ZOOM_MIN, ZOOM_MAX);
+        self.zoom_target = self.zoom;
+    }
+
     fn transform(&self) -> Transform {
         let eye = self.focus + self.direction * self.zoom;
         Transform::from_translation(eye).looking_at(self.focus, Vec3::Y)
@@ -232,6 +241,20 @@ mod tests {
         CameraSettings {
             pan_speed_scale: scale,
         }
+    }
+
+    #[test]
+    fn jumping_to_a_zoom_skips_the_ease_and_respects_the_limits() {
+        let mut rig = CameraRig::default();
+        rig.jump_to_zoom(30.0);
+        // Both, or the ease would drag it straight back toward the old target.
+        assert_eq!(rig.zoom, 30.0);
+        assert_eq!(rig.zoom_target, 30.0);
+
+        rig.jump_to_zoom(ZOOM_MAX * 10.0);
+        assert_eq!(rig.zoom, ZOOM_MAX);
+        rig.jump_to_zoom(0.0);
+        assert_eq!(rig.zoom, ZOOM_MIN);
     }
 
     #[test]
