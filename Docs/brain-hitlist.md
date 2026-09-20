@@ -67,6 +67,17 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
 12. Coarse-vs-fine is **the same split as the two visual pathways** — retinotectal fast
     and coarse, geniculostriate slow and fine. Not one signal at two speeds; two tiers
     of one index.
+12a. **The ontology is data, not Rust types.** YAML, `include_str!`-ed like the locale
+    catalogues. Not a style choice: Rust types cannot be traversed at runtime, and the
+    whole tiered-index mechanism *is* runtime traversal. Enums would also make every new
+    species a recompile plus every `match` arm.
+12b. **Two axes, not one tree.** The taxonomy says what a thing *is*; **facets** are
+    non-hierarchical tags saying what it's like — closer to tags on a paper than to a
+    class hierarchy. 大人/子供 is a facet, because a child fox and a child human share it
+    while sharing no branch.
+12c. **Keys are kanji**, with display names coming from `assets/locales/` like all other
+    text. Keeps "UI text is never a literal" intact, and sidesteps 物 and 者 both
+    romanising to `mono`.
 
 **Selection**
 
@@ -103,6 +114,45 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
     (catastrophic interference).
 23. **Sleep is the batch window.** Consolidation happens offline, at 3am game time, when
     nothing is rendered and no one is watching. Evolution and RocksDB converged here.
+
+---
+
+## The recognition loop
+
+Perception **pushes**; the arena does not go looking. Per percept, per tick:
+
+1. Senses produce a list of what was seen and heard. No identity attached yet.
+2. Each percept is walked **down the being's own ontology** — its private, partial copy,
+   not the world's — as deep as that being's knowledge allows.
+3. At the deepest node it can reach it pulls either a **specific instance leaf** or that
+   node's **知らない物** fallback.
+4. What it found updates utility.
+5. The arena runs and the being acts.
+
+Worked examples, from the design conversation:
+
+- `存在 → 者 → 生き物 → 狼 → 知らない物` — *"I don't know which wolf this is, and it
+  doesn't matter: I'm afraid of wolves."*
+- `存在 → 者 → 生き物 → 人間 → 玲子ちゃん` — everything this being feels about her
+  specifically, keyed to one individual.
+- A human who has never met a 妖怪 reaches only 者, pulls its 知らない物, and falls back
+  on the generic responses: fight, flight, freeze, fawn.
+
+Why this shape earns its place:
+
+- **Knowledge is traversal depth.** Ignorance is not a missing entry or a special case —
+  it is stopping higher up. Nothing ever has to ask "do I know this?"
+- **Generalisation and specificity come from the same walk**, differing only in where it
+  stops.
+- **It degrades identically to the anytime query.** One tree, two independent reasons to
+  stop early — out of *time*, or out of *knowledge* — and the same blurrier-but-valid
+  answer either way. A structure solving a second problem it wasn't designed for.
+- **The root always answers**, so the four Fs are the floor bid the arena is guaranteed.
+- **Learning is extending a path**, not editing a record.
+
+Corrects an earlier framing in this document's first draft, which had retrieval as a
+pull driven by the active drive. The fast path is push. A deliberative pull may exist
+later; it is not this loop.
 
 ---
 
@@ -156,6 +206,13 @@ are written down rather than forgotten.
 - **Target population size**, which decides what "cheap" actually means.
 - **Whether exp-03/exp-05's hierarchical hex addressing is reused** as the tree's
   address space.
+- **The root's name.** 存在 (plain), 一切 (short, Buddhist) or 森羅万象 (thematic, long).
+  It sits above both 物 and 事, which are a contrast pair and not parent and child.
+- **Where 植物 sits.** If 生き物 is under 者, plants inherit acting-ness they will never
+  use. Move them out under 物, or leave them and let a facet decide.
+- **妖 / 妖怪 / 精霊** for the supernatural branch. 付喪神 fits under any of them.
+- **Whether the fallback leaf is 知らない物 or 知らない者** on the 者 branch, or a
+  reserved key that renders per branch.
 - **The observer's relationship to the world** — embedded player, or a simulation watched
   and perturbed. Decides whether legibility must be diegetic.
 
@@ -173,6 +230,13 @@ proposal, not a commitment.
       executes it. No deciding yet. Something moves on screen.
 - [ ] **3. The bidding arena.** Two or three hardcoded bidders, a floor bid, max wins,
       hysteresis. Still no memory — bids score off live world state.
+- [ ] **3a. The ontology as data.** The YAML, a loader, and traversal. World-side only:
+      one shared tree, no per-being copies yet. Tested by walking it.
+- [ ] **3b. Facets.** Non-hierarchical tags alongside the tree, and a lookup by facet.
+- [ ] **3c. The recognition loop, shallow.** Percept in, walk the shared tree, pull the
+      leaf, feed a bid. Every being still omniscient about the taxonomy.
+- [ ] **3d. Private ontologies.** Each being gets its own partial copy, so traversal
+      depth starts differing between beings and 知らない物 begins to matter.
 - [ ] **4. The truth/belief cut.** Perception as ingestion into a flat belief store;
       retrieval systems lose world access. Prove the cut with a query signature.
 - [ ] **5. The hierarchy.** Belief store becomes the tiered index. Coarse tier answers
