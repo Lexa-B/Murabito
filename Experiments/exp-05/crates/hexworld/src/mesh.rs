@@ -388,10 +388,11 @@ mod tests {
                 })
                 .count()
         };
-        assert!(
-            walls_at_bottom(&fewer) > walls_at_bottom(&all),
-            "the hole should be ringed by full-depth walls"
-        );
+        // Exactly one full-depth quad per walled edge: 6 edges × 2 bottom vertices = 12.
+        // An inequality would not discriminate — emitting one quad per run (the bug this
+        // replaced) gives 36 and would still satisfy `> 0`.
+        assert_eq!(walls_at_bottom(&all), 0);
+        assert_eq!(walls_at_bottom(&fewer), 12);
     }
 
     #[test]
@@ -428,6 +429,39 @@ mod tests {
         omitted.insert(target + DIRECTIONS[0]);
 
         let mesh = mesh_chunk(&cfg, &chunk, &omitted);
+
+        // Vertices at the world bottom, within one corner-radius of target's own centre:
+        // tight enough to hold target's own two corners (each at exactly the hex corner
+        // radius, width/sqrt(3)) but not the far corner of a neighbouring quad (at roughly
+        // twice that). `target` is a real chunk cell (`chunk.cells[0]`, `Hex { q: -4, r: 2 }`
+        // for this chunk), so — unlike an isolated single cell — one of the two neighbours
+        // flanking its omitted edge is itself drawn (confirmed by search: no cell in this
+        // 43-cell drawn set has a fully unshared omitted edge). That flanking neighbour has
+        // an ordinary, un-modified 3-run column and its own full-depth wall facing the same
+        // omitted cell, sharing exactly one corner with target's wall — the other three
+        // cells meeting at a hex corner. So the count here is not just target's own quad:
+        //   after the fix:  target's 1 quad (2 corners) + flank's 1 quad (1 shared corner) = 3
+        //   before the fix: target's 2 quads, one per run (2 corners each) = 4,
+        //                    + flank's 3 quads, one per run (1 shared corner each) = 3
+        //                    = 7
+        // Both numbers were confirmed by temporarily restoring the old per-run
+        // implementation: it produced 7 here, not 3.
+        let bottom = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
+        let (tx, ty) = cell_centre_m(target, Level::Shaku);
+        let (tx, ty) = (tx as f32, ty as f32);
+        let corner_radius = (Level::Shaku.width_m() / 3f64.sqrt()) as f32;
+        let near_corner = corner_radius * 1.2; // excludes the ~2x-distant far corner
+        let walls_at_bottom = mesh
+            .positions
+            .iter()
+            .filter(|p| (p[2] - bottom).abs() < 1e-3)
+            .filter(|p| {
+                let (dx, dy) = (p[0] - tx, p[1] - ty);
+                (dx * dx + dy * dy).sqrt() < near_corner
+            })
+            .count();
+        assert_eq!(walls_at_bottom, 3);
+
         // No two triangles may share all three vertex positions: overlapping full-depth
         // walls would produce exactly that.
         let mut seen: Vec<[[f32; 3]; 3]> = Vec::new();
