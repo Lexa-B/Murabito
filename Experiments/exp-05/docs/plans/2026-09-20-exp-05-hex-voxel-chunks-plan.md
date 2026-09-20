@@ -3441,7 +3441,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 Everything below was checked by compiling a throwaway spike against Bevy 0.19.1 and bevy_egui 0.42 on this machine before this plan was written. Use these exact forms.
 
-- **Features.** This machine has no `libudev` or Wayland development packages, so the crates use `default-features = false` and the list in Task 11. That drops gamepad support (`bevy_gilrs`) and Wayland; X11 is present and works.
+- **Features.** This machine has no `libudev` or Wayland development packages, so the crates use `default-features = false` and the list in Task 11. That drops gamepad support (`bevy_gilrs`) and Wayland; X11 is present and works. The list also needs `zstd_rust`: `tonemapping_luts` enables `bevy_image/zstd` without picking a backend, and `bevy_image` hard-errors (`compile_error!`) unless `zstd_rust` or `zstd_c` is on too. The spike this list came from compiled without it only because `bevy_egui` pulled in a zstd backend of its own, and Cargo's feature unification satisfied `bevy_image/zstd` for the whole graph; a crate that depends on `bevy` alone, like `hexworld_bevy`, hits the missing-backend error directly. `zstd_rust` is the pure-Rust backend, so it adds no system dependency — in keeping with X11-only, no gamepad support.
 - `ShaderRef` is at **`bevy::shader::ShaderRef`**, not in `render_resource`.
 - Buffered events are **messages**: `MessageWriter<AppExit>`, written with `.write(AppExit::Success)`.
 - `AmbientLight` is a **component on the camera**, not a resource.
@@ -3501,7 +3501,7 @@ hexworld = { path = "../hexworld" }
 bevy = { version = "0.19", default-features = false, features = [
   "bevy_winit", "bevy_window", "bevy_render", "bevy_core_pipeline", "bevy_pbr",
   "bevy_asset", "bevy_log", "bevy_ui", "bevy_ui_render", "bevy_text",
-  "x11", "multi_threaded", "tonemapping_luts", "png", "default_font", "std",
+  "x11", "multi_threaded", "tonemapping_luts", "zstd_rust", "png", "default_font", "std",
 ] }
 ```
 
@@ -3577,13 +3577,32 @@ Expected: PASS, 4 tests.
 Append to `crates/hexworld_bevy/tests/plugin.rs`:
 
 ```rust
-use hexworld::{ChunkKey, Hex, Level, Rings, WorldConfig};
+use std::time::{Duration, Instant};
+
+use hexworld::{ChunkKey, Hex, Level, Rings};
 use hexworld_bevy::{HexWorld, HexWorldPlugin, Loader};
 
+/// How long a `run_until` loop is allowed to spend waiting for background work, and how
+/// many frames it is allowed to spend doing it, whichever comes first. Frames are not a
+/// reliable unit here: a headless app with no render loop burns through hundreds of them
+/// in a few milliseconds, while real chunk generation is genuinely CPU-bound (tens of
+/// milliseconds per cho chunk in the dev profile), so waiting is bound by wall-clock time
+/// with the frame count only as a backstop against a truly stuck test.
+const SETTLE_TIMEOUT: Duration = Duration::from_secs(30);
+const SETTLE_FRAME_CAP: usize = 20_000;
+
 /// A headless app: no window, no renderer, just the schedule.
+///
+/// `TransformPlugin` is included even though nothing else here renders, because
+/// `drive_store` reads loaders' `GlobalTransform`, and that is only ever kept in sync
+/// with `Transform` by `TransformPlugin`'s propagation systems (`MinimalPlugins` does
+/// not include them). Propagation runs in `PostUpdate`, so a loader's `GlobalTransform`
+/// is still identity on the very first frame it is spawned; a settle loop runs many
+/// frames, so this does not affect these tests.
 fn headless_app() -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
+        .add_plugins(bevy::transform::TransformPlugin)
         .add_plugins(bevy::asset::AssetPlugin::default())
         .init_asset::<Mesh>()
         .init_asset::<StandardMaterial>()
@@ -3591,23 +3610,59 @@ fn headless_app() -> App {
     app
 }
 
-/// Run frames until the store settles or the limit is hit.
-fn run_until_settled(app: &mut App, limit: usize) -> usize {
-    for frame in 0..limit {
+/// Run frames until `condition` is true, or the settle timeout/frame cap is hit,
+/// whichever comes first. Returns the number of frames it took. `describe` builds the
+/// panic message on timeout, so a genuine failure is diagnosable rather than just
+/// "never settled".
+fn run_until(
+    app: &mut App,
+    mut condition: impl FnMut(&HexWorld) -> bool,
+    describe: impl Fn(&HexWorld) -> String,
+) -> usize {
+    let started = Instant::now();
+    for frame in 0..SETTLE_FRAME_CAP {
         app.update();
         let world = app.world().resource::<HexWorld>();
-        if world.store().stats().per_level[Level::Ken as usize].chunks >= 37 {
+        if condition(world) {
             return frame;
         }
+        if started.elapsed() >= SETTLE_TIMEOUT {
+            panic!(
+                "timed out after {:?} and {} frames: {}",
+                started.elapsed(),
+                frame + 1,
+                describe(world)
+            );
+        }
     }
-    panic!("the store never settled");
+    let world = app.world().resource::<HexWorld>();
+    panic!(
+        "hit the {SETTLE_FRAME_CAP}-frame cap after {:?}: {}",
+        started.elapsed(),
+        describe(world)
+    );
+}
+
+/// Run frames until the store reports at least 37 loaded ken chunks (the default
+/// window's full shaku-detail ring), or the settle timeout/frame cap is hit.
+fn run_until_settled(app: &mut App) -> usize {
+    run_until(
+        app,
+        |world| world.store().stats().per_level[Level::Ken as usize].chunks >= 37,
+        |world| {
+            format!(
+                "{} ken chunks loaded",
+                world.store().stats().per_level[Level::Ken as usize].chunks
+            )
+        },
+    )
 }
 
 #[test]
 fn a_loader_entity_drives_loading() {
     let mut app = headless_app();
     app.world_mut().spawn((Transform::default(), Loader { rings: Rings::default() }));
-    run_until_settled(&mut app, 200);
+    run_until_settled(&mut app);
     let world = app.world().resource::<HexWorld>();
     assert!(world.store().is_loaded(ChunkKey::WORLD));
     assert!(world.store().is_loaded(ChunkKey::new(Level::Ken, Hex::ZERO)));
@@ -3617,7 +3672,7 @@ fn a_loader_entity_drives_loading() {
 fn chunk_entities_appear_for_loaded_chunks() {
     let mut app = headless_app();
     app.world_mut().spawn((Transform::default(), Loader { rings: Rings::default() }));
-    run_until_settled(&mut app, 200);
+    run_until_settled(&mut app);
     let mut query = app.world_mut().query::<&hexworld_bevy::ChunkView>();
     let views: Vec<ChunkKey> = query.iter(app.world()).map(|v| v.0).collect();
     assert!(views.contains(&ChunkKey::new(Level::Ken, Hex::ZERO)), "{views:?}");
@@ -3631,7 +3686,7 @@ fn chunk_entities_appear_for_loaded_chunks() {
 fn a_second_loader_adds_its_windows_with_no_other_changes() {
     let mut app = headless_app();
     app.world_mut().spawn((Transform::default(), Loader { rings: Rings::default() }));
-    run_until_settled(&mut app, 200);
+    run_until_settled(&mut app);
     let before = app.world().resource::<HexWorld>().store().loaded_keys().len();
 
     // One more entity with a Loader: that is the whole API.
@@ -3640,13 +3695,21 @@ fn a_second_loader_adds_its_windows_with_no_other_changes() {
         Transform::from_translation(hexworld_bevy::axes::to_bevy(far.0, far.1, 0.0)),
         Loader { rings: Rings::default() },
     ));
-    for _ in 0..200 {
-        app.update();
-    }
+    run_until(
+        &mut app,
+        |world| world.store().loaded_keys().len() > before,
+        |world| format!("{} loaded chunks, started from {before}", world.store().loaded_keys().len()),
+    );
     let after = app.world().resource::<HexWorld>().store().loaded_keys().len();
     assert!(after > before, "the second loader added nothing: {before} -> {after}");
 }
 ```
+
+Plugin tests wait on real background generation, not just frame counts: a cho chunk takes
+tens of milliseconds to generate and mesh in the dev profile, and a headless app with no
+render loop can burn through hundreds of near-empty frames in a few milliseconds, so
+`run_until` is bound by wall-clock time (with a frame count only as a backstop) rather
+than a fixed number of frames.
 
 - [ ] **Step 6: Implement the plugin**
 
@@ -3958,7 +4021,9 @@ fn in_flight_counts_chunks_being_generated() {
 - [ ] **Step 8: Run everything**
 
 Run: `cd Experiments/exp-05 && cargo test -p hexworld && cargo test -p hexworld_bevy`
-Expected: PASS. The headless tests take a few seconds: with `max_in_flight` at 8, settling 76 chunks takes about 10 frames.
+Expected: PASS. The headless tests settle well under a second of wall-clock time (with
+`max_in_flight` at 8, clearing the 76-chunk default window), bounded by `run_until`'s
+30 s timeout rather than a frame count — see the note after Step 5.
 
 - [ ] **Step 9: Commit**
 
