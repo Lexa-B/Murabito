@@ -34,3 +34,6 @@ screenshots/
 /.kdev4/
 /compile_commands.json
 /.clangd
+
+# SDD scratch (subagent-driven development workspaces)
+.superpowers/
