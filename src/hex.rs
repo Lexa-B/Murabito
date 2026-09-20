@@ -119,6 +119,20 @@ impl Hex {
         })
     }
 
+    /// The two endpoints of the edge shared with the neighbour in `direction`.
+    ///
+    /// Drawing a region's outline from its cells rather than from the maths that defined
+    /// it means the picture cannot flatter the calculation: a cell wrongly included shows
+    /// up as a notch, where a smooth arc would have hidden it.
+    pub fn edge(self, direction: usize) -> (Vec2, Vec2) {
+        let corners = self.corners();
+        // Neighbour `i` lies at -60i degrees while edge `j` faces +60j, so the edge
+        // between corners j and j+1 is the one shared with neighbour (6 - i) % 6.
+        // `an_edge_lies_between_the_two_centres` is what actually holds this honest.
+        let first = (6 - direction % 6) % 6;
+        (corners[first], corners[(first + 1) % 6])
+    }
+
     /// Steps between two cells, which is also shaku between them along the grid.
     pub fn distance(self, other: Self) -> u32 {
         let (dq, dr) = (self.q - other.q, self.r - other.r);
@@ -245,6 +259,49 @@ mod tests {
         // Across the grain, not along it: q and r pulling opposite ways cancel.
         assert_eq!(origin.distance(Hex::new(3, -3)), 3);
         assert_eq!(origin.distance(Hex::new(3, 3)), 6);
+    }
+
+    /// The invariant that pins the corner-to-neighbour mapping down: the edge two cells
+    /// share is halfway between their centres, and perpendicular to the line joining
+    /// them. Asserted rather than reasoned about, because the angle bookkeeping is easy
+    /// to get subtly wrong and impossible to eyeball once it is drawn.
+    #[test]
+    fn an_edge_lies_between_the_two_centres() {
+        let hex = Hex::new(2, -3);
+        for direction in 0..6 {
+            let neighbour = hex.neighbour(direction);
+            let (a, b) = hex.edge(direction);
+            let midpoint = (a + b) * 0.5;
+            let expected = (hex.center() + neighbour.center()) * 0.5;
+            assert!(
+                (midpoint - expected).length() < 1e-5,
+                "edge {direction} sits at {midpoint:?}, not {expected:?}"
+            );
+            let along = (b - a).normalize();
+            let between = (neighbour.center() - hex.center()).normalize();
+            assert!(
+                along.dot(between).abs() < 1e-5,
+                "edge {direction} is not perpendicular to the step"
+            );
+        }
+    }
+
+    /// Both cells agree on where their shared edge is, so an outline drawn from one side
+    /// lands exactly on one drawn from the other.
+    #[test]
+    fn neighbours_agree_on_the_edge_between_them() {
+        let hex = Hex::new(-1, 4);
+        for direction in 0..6 {
+            let neighbour = hex.neighbour(direction);
+            let (a, b) = hex.edge(direction);
+            let (c, d) = neighbour.edge((direction + 3) % 6);
+            let same = (a - c).length() < 1e-5 && (b - d).length() < 1e-5;
+            let flipped = (a - d).length() < 1e-5 && (b - c).length() < 1e-5;
+            assert!(
+                same || flipped,
+                "edge {direction}: {a:?},{b:?} vs {c:?},{d:?}"
+            );
+        }
     }
 
     #[test]

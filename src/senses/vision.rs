@@ -6,7 +6,28 @@
 
 use bevy::prelude::*;
 
-use super::{CURVE_STEPS, HideSenses, SenseOverlay, facing, lift, rotate};
+use super::{
+    BoldStroke, FaintStroke, HideSenses, MidStroke, SenseOverlay, facing, ground_point, rotate,
+};
+use crate::hex::Hex;
+
+/// Strokes per cell, nearest band first. Density and weight together carry acuity.
+const STROKES_PER_CELL: [usize; 3] = [3, 2, 1];
+
+/// Fill opacity per band. Not the band's own sensitivity: count and weight already say
+/// how sharp a band is, and reusing 0.3 as an alpha leaves the far band invisible.
+const FILL_ALPHA: [f32; 3] = [0.55, 0.42, 0.30];
+
+const OUTLINE_ALPHA: f32 = 0.85;
+
+/// Hatch direction, fixed in world space.
+const HATCH_ANGLE: f32 = std::f32::consts::FRAC_PI_4;
+
+/// Half a stroke, in shaku. A whole cell long, so strokes meet across cell edges.
+const STROKE_HALF_LENGTH: f32 = 0.5;
+
+/// How far apart the outermost strokes in a cell sit.
+const HATCH_SPAN: f32 = 0.62;
 
 /// One band of a vision cone: everything out to `range` that isn't in a nearer band.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -52,52 +73,95 @@ impl Vision {
     /// `forward` must be a unit vector; `offset` is relative to the being. Both are
     /// world XZ.
     pub fn sensitivity_at(&self, forward: Vec2, offset: Vec2) -> f32 {
+        self.band_at(forward, offset)
+            .map_or(0.0, |band| self.bands[band].sensitivity)
+    }
+
+    /// Which band something at `offset` falls in, nearest first, or `None` if it is not
+    /// seen at all. The overlay draws from this, so what is on screen is exactly what
+    /// perception will later read — a wrongly included cell shows up as a notch in the
+    /// outline rather than hiding behind a smooth arc.
+    pub fn band_at(&self, forward: Vec2, offset: Vec2) -> Option<usize> {
         let distance = offset.length();
         if distance > self.far_range() as f32 {
-            return 0.0;
+            return None;
         }
         // Something at the being's own position has no bearing; treat it as seen.
         if distance > f32::EPSILON {
             let cos = forward.dot(offset / distance).clamp(-1.0, 1.0);
             if cos.acos() > self.half_arc() {
-                return 0.0;
+                return None;
             }
         }
-        for band in &self.bands {
-            if distance <= band.range as f32 {
-                return band.sensitivity;
-            }
-        }
-        0.0
+        self.bands
+            .iter()
+            .position(|band| distance <= band.range as f32)
     }
 }
 
-/// One arc per band, plus the two edges of the cone. Fainter bands are further out.
+/// Crosshatch over every covered cell, heavier and denser the sharper the band, with
+/// the region outlined along the cells' own edges.
+///
+/// The outline is boundary-extracted rather than drawn as an arc: an edge is stroked
+/// when the cell across it falls in a different band, or in none. So the picture is the
+/// coverage, and cannot flatter it.
 pub(super) fn draw_vision(
-    mut gizmos: Gizmos,
+    mut bold: Gizmos<BoldStroke>,
+    mut mid: Gizmos<MidStroke>,
+    mut faint: Gizmos<FaintStroke>,
     beings: Query<(&GlobalTransform, &Vision, &SenseOverlay), Without<HideSenses>>,
 ) {
     for (transform, vision, overlay) in &beings {
         let origin = transform.translation();
+        let ground = Vec2::new(origin.x, origin.z);
         let forward = facing(transform);
-        let half = vision.half_arc();
+        let here = Hex::from_world(ground);
 
-        for band in &vision.bands {
-            let color = overlay.color.with_alpha(band.sensitivity);
-            let arc = (0..=CURVE_STEPS).map(|step| {
-                let t = -half + vision.arc * step as f32 / CURVE_STEPS as f32;
-                lift(origin, rotate(forward, t) * band.range as f32)
-            });
-            gizmos.linestrip(arc, color);
-        }
+        for hex in here.within(vision.far_range()) {
+            let Some(band) = vision.band_at(forward, hex.center() - ground) else {
+                continue;
+            };
 
-        // The cone's two straight edges, out to the furthest band.
-        let edge = overlay.color.with_alpha(vision.bands[0].sensitivity);
-        for side in [-half, half] {
-            let end = rotate(forward, side) * vision.far_range() as f32;
-            gizmos.line(lift(origin, Vec2::ZERO), lift(origin, end), edge);
+            let colour = overlay.color.with_alpha(FILL_ALPHA[band]);
+            for (a, b) in hatch(hex.center(), STROKES_PER_CELL[band]) {
+                match band {
+                    0 => bold.line(a, b, colour),
+                    1 => mid.line(a, b, colour),
+                    _ => faint.line(a, b, colour),
+                }
+            }
+
+            let outline = overlay.color.with_alpha(OUTLINE_ALPHA);
+            for direction in 0..6 {
+                let across = vision.band_at(forward, hex.neighbour(direction).center() - ground);
+                if across == Some(band) {
+                    continue;
+                }
+                let (a, b) = hex.edge(direction);
+                mid.line(ground_point(a), ground_point(b), outline);
+            }
         }
     }
+}
+
+/// Parallel strokes across one cell, as a hatch.
+///
+/// The angle is fixed in world space rather than per cell, so neighbouring cells knit
+/// into continuous hatching instead of reading as a grid of separate marks.
+fn hatch(centre: Vec2, count: usize) -> impl Iterator<Item = (Vec3, Vec3)> {
+    let along = rotate(Vec2::X, HATCH_ANGLE);
+    let across = Vec2::new(-along.y, along.x);
+    let spacing = if count > 1 {
+        HATCH_SPAN / (count - 1) as f32
+    } else {
+        0.0
+    };
+    (0..count).map(move |i| {
+        let shift = across * ((i as f32) - (count as f32 - 1.0) * 0.5) * spacing;
+        let a = centre + shift - along * STROKE_HALF_LENGTH;
+        let b = centre + shift + along * STROKE_HALF_LENGTH;
+        (ground_point(a), ground_point(b))
+    })
 }
 
 #[cfg(test)]

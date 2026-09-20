@@ -28,6 +28,8 @@
 pub mod hearing;
 pub mod vision;
 
+use bevy::gizmos::AppGizmoBuilder;
+use bevy::gizmos::config::{GizmoConfig, GizmoConfigGroup, GizmoLineConfig};
 use bevy::prelude::*;
 
 pub use hearing::Hearing;
@@ -44,9 +46,34 @@ pub struct SensesPlugin;
 
 impl Plugin for SensesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (vision::draw_vision, hearing::draw_hearing));
+        // Gizmo line width is a property of the config group, not of the call, so a
+        // stroke weight means a group. Three of them is what lets density read as
+        // heaviness as well as count — at a cell ten to thirty pixels across, stroke
+        // count alone does not carry it.
+        app.insert_gizmo_config(BoldStroke, stroke_config(2.6))
+            .insert_gizmo_config(MidStroke, stroke_config(1.7))
+            .insert_gizmo_config(FaintStroke, stroke_config(1.0))
+            .add_systems(Update, (vision::draw_vision, hearing::draw_hearing));
     }
 }
+
+fn stroke_config(width: f32) -> GizmoConfig {
+    GizmoConfig {
+        line: GizmoLineConfig { width, ..default() },
+        ..default()
+    }
+}
+
+/// The heaviest stroke: the nearest, sharpest band.
+#[derive(Default, Reflect, GizmoConfigGroup)]
+pub struct BoldStroke;
+
+#[derive(Default, Reflect, GizmoConfigGroup)]
+pub struct MidStroke;
+
+/// The lightest stroke: the far edge of a sense, where it is barely there.
+#[derive(Default, Reflect, GizmoConfigGroup)]
+pub struct FaintStroke;
 
 /// Suppresses this being's sense overlay.
 ///
@@ -72,6 +99,14 @@ fn facing(transform: &GlobalTransform) -> Vec2 {
 /// Ground-plane point to a world point on the overlay plane.
 fn lift(origin: Vec3, offset: Vec2) -> Vec3 {
     Vec3::new(origin.x + offset.x, OVERLAY_HEIGHT, origin.z + offset.y)
+}
+
+/// A ground-plane point, in world coordinates, lifted onto the overlay plane.
+///
+/// Unlike [`lift`], which offsets from a being, this takes an absolute position — which
+/// is what a cell centre is.
+pub(crate) fn ground_point(point: Vec2) -> Vec3 {
+    Vec3::new(point.x, OVERLAY_HEIGHT, point.y)
 }
 
 /// Rotates a ground-plane vector by `angle` radians.
