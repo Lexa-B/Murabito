@@ -18,3 +18,4 @@ pub mod settings;
 pub mod settings_page;
 pub mod state;
 pub mod ui;
+pub mod user_data;

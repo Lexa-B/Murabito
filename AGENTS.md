@@ -75,6 +75,7 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
 - `src/state.rs` — `AppState` (Playing / Menu / Settings), and pausing
 - `src/ui.rs` — what the screens share: scrim, buttons, slider visuals
 - `src/i18n.rs` — the string catalogues, `Language`, and the `Localized` component
+- `src/user_data.rs` — where the player's files live; the only place that decides that
 - `src/screenshot.rs` — F12, and the `--shot` command-line capture
 
 ### Conventions
@@ -82,7 +83,8 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
 - **Each module registers itself through a `Plugin`.** `main.rs` adds plugins and knows nothing about what they need; a module's resources, systems and spawns are its own business.
 - **Pausing is `Time<Virtual>`, not a flag.** Pausing the clock stops everything driven by elapsed time, so no system has to know a menu exists. `Time<Real>` keeps running, which keeps the UI responsive. Input is gated separately, with `run_if(in_state(AppState::Playing))`.
 - **Settings are resources; `settings.rs` persists them.** Anything that edits a settings resource gets saved automatically. Nothing else writes the file.
-- **Settings live at `~/.config/murabito/settings.yaml`** (YAML, one top-level key per group). A missing file means defaults and is created; a file that fails to parse warns and is left alone so the user can fix it.
+- **One directory holds everything belonging to the player**, `~/.config/murabito/`, and `user_data.rs` is the only place that works out where it is. A module joins its own filename onto `UserData::root()` rather than resolving a path itself, so saves and anything else later land beside the settings. `UserDataPlugin` goes first in the plugin list: plugins read the resource while the app is being built, not once it runs.
+- **Settings live at `settings.yaml` in that directory** (YAML, one top-level key per group). A missing file means defaults and is created; a file that fails to parse warns and is left alone so the user can fix it.
 - **Windowed runs need the desktop display.** Shells in the user's terminal may have no `DISPLAY`/`WAYLAND_DISPLAY`; take them from the systemd user session (`systemctl --user show-environment`), as the experiments' scripts do.
 - **Check visual work with a screenshot, not by asking.** F12 saves one to `screenshots/` (gitignored) while playing, and `cargo run -- --shot <path> --screen playing|menu|settings` drives the app to a screen, captures it and exits — no keyboard needed. Add `--settle <frames>` if 150 isn't long enough; capture too early and the PNG is a bare clear colour, because render pipelines compile on first use.
 - **Running the binary directly needs `BEVY_ASSET_ROOT`.** Bevy resolves `assets/` relative to the executable unless `cargo run` sets it, so a direct `./target/debug/murabito` can't find the font or the locales.
@@ -92,10 +94,8 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
   and `Time`; add `bevy::state::app::StatesPlugin` for anything touching `AppState`, as it
   arrives with `DefaultPlugins` in the real app but not in `MinimalPlugins`. Drive frames
   with `app.update()`, never `app.run()`. No test may open a window or need a GPU.
-- **Tests must not touch the player's real files.** `settings.rs` still resolves its path
-  from `dirs::config_dir()` internally, so it cannot be tested without clobbering the
-  player's own `~/.config/murabito/settings.yaml`. Give it an injectable path before
-  writing those tests.
+- **Tests must not touch the player's real files.** Point `UserDataPlugin::at` at a
+  temporary directory; never let a test fall back on the real one.
 - **Never kill, signal or otherwise touch a process you didn't start.**
 
 
