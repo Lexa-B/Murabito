@@ -5,8 +5,8 @@ use hexworld::{plane::round_at, Level, Rings};
 
 use crate::axes::from_bevy;
 use crate::entities::Shown;
-use crate::tasks::spawn_jobs;
-use crate::{entities, HexWorld};
+use crate::tasks::{spawn_jobs, Handovers};
+use crate::HexWorld;
 
 /// Put this on any entity with a transform to make it a loader.
 #[derive(Component, Clone, Copy, Debug, Default)]
@@ -18,8 +18,8 @@ pub fn drive_store(
     mut commands: Commands,
     time: Res<Time>,
     mut world: ResMut<HexWorld>,
-    mut shown: ResMut<Shown>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    shown: Res<Shown>,
+    mut handovers: ResMut<Handovers>,
     loaders: Query<(&GlobalTransform, &Loader)>,
 ) {
     let core_loaders: Vec<hexworld::Loader> = loaders
@@ -36,22 +36,16 @@ pub fn drive_store(
     let now = time.elapsed_secs_f64();
     let update = world.store_mut().update(&core_loaders, now);
 
-    // Every unload's handover lands in this same system call: the parent (if shown)
-    // restores the cell, any sibling that had handed a guest cell over to this chunk
-    // takes it back, and only then does this chunk's own entity despawn — so there is
-    // never a frame with a hole where this chunk used to be.
+    // Every unload whose chunk is actually shown is queued for `tasks::process_handovers`,
+    // which works out what its departure requires (the parent restoring its cell, a
+    // sibling taking back a guest cell), re-meshes each of them off the main thread, and
+    // only then despawns this chunk's entity — all in the same frame those re-meshes land,
+    // so there is never a frame with a hole where this chunk used to be. A key with no
+    // entity here was never shown at all (its own load handover is still pending, or was
+    // abandoned before it ever got one) — nothing to despawn.
     for key in &update.to_unload {
-        if let Some(parent) = key.parent_key() {
-            if shown.entity(parent).is_some() {
-                shown.restore(parent, key.cell);
-                entities::remesh_shown(&mut commands, &mut meshes, &world, &shown, parent);
-            }
-        }
-        for neighbour in entities::release_guests_on_unload(&mut shown, *key) {
-            entities::remesh_shown(&mut commands, &mut meshes, &world, &shown, neighbour);
-        }
-        if let Some(entity) = shown.remove(*key) {
-            commands.entity(entity).despawn();
+        if let Some(entity) = shown.entity(*key) {
+            handovers.queue_unload(*key, entity);
         }
     }
 

@@ -4104,13 +4104,27 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: Task 11's plugin.
 - Produces: `Shown` resource: `HashMap<ChunkKey, Entity>` plus `omitted: HashMap<ChunkKey, HashSet<Hex>>`, with `omitted_for(ChunkKey) -> &HashSet<Hex>`.
 
-  **As implemented (Ruling, dispatch): the `parent_remesh` field named above is void.**
-  `JobOutput` keeps its original three fields (`key`, `chunk`, `mesh`); the parent is
-  re-meshed on the main thread via `remesh_shown` (Step 2), not carried back from the
-  background job. The async route stays available as a fallback if a viewer later shows a
-  frame hitch from a cho chunk's re-mesh cost (Task 10 measured ~18.4 ms release /
-  22–27 ms dev — over the task's own ~4 ms threshold — but that is a decision for the
-  viewer to make from a real frame-time readout, not from this task).
+  **As shipped (fix round 2 / Task 12b): the parent re-mesh runs on the async task pool,
+  not the main thread.** The interim choice below (main-thread `remesh_shown`, kept for
+  Task 12's own commit) held only until a viewer existed to measure it. Once `viewer`
+  could run sustained panning (Task 12b), the measurement Task 10 only estimated became
+  real: a cho chunk's re-mesh costs ~18 ms in release, and with no cap on how many land on
+  the main thread in the same frame, sustained panning produced **150–660 ms frame
+  spikes** — far past the task's own ~4 ms threshold. `JobOutput` still keeps its original
+  three fields; what changed is that `entities.rs`'s `sync_guests_on_load` /
+  `release_guests_on_unload` / `absorb_already_shown_children` each gained a pure
+  "plan"-computing twin (`plan_guest_handover_on_load`, `plan_release_guests_on_unload`,
+  `plan_absorb_already_shown_children`, unified into `plan_load_handover` /
+  `plan_unload_handover`) that works out *which* cells each affected chunk must newly
+  omit or restore, from `Shown` alone, without mutating anything or touching a mesh. A new
+  `tasks::Handovers` resource uses those plans to spawn each affected chunk's re-mesh on
+  the pool (`AsyncComputeTaskPool`, same as generation), holds the arriving/departing
+  chunk back — no entity spawned, no entity despawned, no `Shown` mutation — until *every*
+  re-mesh a handover needs has finished, and only then applies all of it (the mesh swaps,
+  the entity spawn/despawn, and the `Shown` bookkeeping) together, in one `process_handovers`
+  system call. See `tasks.rs`'s module doc and `task-12b-report.md` for the full design,
+  the before/after frame-time numbers, and the falsification evidence for the new test
+  (`a_child_is_never_shown_while_its_load_handover_is_pending`).
 
 The rule: a chunk's mesh leaves out the cells whose own chunk is on screen. So a child appearing means its parent must be re-meshed without that cell, and both must reach the screen **in the same frame**, or there is a hole (child late) or a doubled surface (parent late).
 
@@ -4264,6 +4278,19 @@ bare `Shown` with fake `Entity` values (`a_guest_chunk_omits_once_its_owner_is_s
 `unloading_the_owner_restores_the_guest`, `a_late_parent_absorbs_an_already_shown_child`) —
 fast, no `App`/ECS needed, and they pin the ordering rule directly.
 
+**Fix round 2 / Task 12b** (moving the re-mesh off the main thread; see the "as shipped"
+note under Interfaces) added a fifth integration test,
+`a_child_is_never_shown_while_its_load_handover_is_pending`: every frame, for every key
+currently in `Shown`, it asserts `Handovers::is_pending_load(key)` is false, and separately
+tracks keys ever seen pending so it can assert at least one was later shown only on a
+*later* frame — proof the hold-back genuinely spans more than one frame, not just this
+task's other same-frame checks (which a correct *synchronous* implementation would also
+satisfy). Falsified by temporarily calling `show_child` from `promote_loads` before its
+handover's re-meshes were even spawned: the new test failed immediately (frame 33, a
+stale `ChunkKey { level: Ri, cell: (0,0) }`), and so did four of the five pre-existing
+handover tests — see `task-12b-report.md` for the full transcript. All five original
+tests plus this new one pass unmodified against the shipped async code.
+
 - [ ] **Step 2: Implement `Shown` and the handover in `entities.rs`**
 
 ```rust
@@ -4300,7 +4327,9 @@ impl Shown {
 }
 ```
 
-The flow in `collect_finished_jobs`:
+The flow in `collect_finished_jobs`, **as this task (12) originally shipped it** — kept
+here for the historical record; see the "as shipped (fix round 2 / Task 12b)" note under
+Interfaces above for what replaced it:
 
 1. A job finishes for key `K`. Insert the chunk; if the store refuses it, drop everything and carry on.
 2. Work out `K`'s parent `P` (`K.parent_key()`). If `P` is on screen, mark `K.cell` omitted from `P` and **re-mesh `P` now, on the main thread**, then swap `P`'s mesh handle and spawn `K`'s entity in the same frame.
@@ -4324,6 +4353,34 @@ pub fn remesh_shown(
     commands.entity(entity).insert(Mesh3d(handle));
 }
 ```
+
+**Superseded by fix round 2 / Task 12b.** `remesh_shown` (main-thread mesh + swap in one
+call) is gone; `entities.rs` now has `apply_remesh` (just the swap — mesh data arrives
+already computed, from the pool) plus the pure `plan_*` functions described above. The
+flow is now spread across two systems, chained after each other every frame:
+
+1. `collect_finished_jobs` polls `ChunkJob`s. For each finished job, it computes
+   `plan_load_handover`. An **empty plan** (the common case — nothing else is shown near
+   this chunk) commits the chunk to the store and shows it immediately, exactly as before.
+   A **non-empty plan** is queued in `Handovers` instead, without touching the store or
+   `Shown` at all yet.
+2. `process_handovers` promotes queued work into active handovers (capped at
+   `MAX_ACTIVE_HANDOVERS = 3` concurrently, and never two handovers that would touch the
+   same chunk — see `tasks.rs`), spawning one background re-mesh per affected chunk (the
+   parent, a same-level neighbour, or the arriving/departing chunk itself). Once *every*
+   re-mesh a handover started has finished — possibly several frames later — it applies
+   all of it together: the mesh swaps, the chunk's own entity spawn/despawn, and the
+   `Shown` bookkeeping, in that one system call. Nothing about the handover is visible
+   (not the entity, not the bookkeeping) before that moment.
+3. Unloading works the same way via `plan_unload_handover`: `drive_store` only queues
+   `(key, entity)` for a shown chunk that the store wants gone; `process_handovers` works
+   out what needs restoring and despawns the entity only once those re-meshes land.
+4. A chunk abandoned mid-handover (the window changed while it waited) is dropped
+   wherever that is discovered — `ChunkStore::insert` is the single gate for this, called
+   exactly once per job, at the point the chunk is either committed and shown or rejected;
+   deferring it (rather than calling it the instant generation finishes, as the original
+   flow did) is also what makes `in_flight_count()`/`loaded_keys()` — and so every test's
+   "settled" check — mean "genuinely shown", not just "generated".
 
 - [ ] **Step 2b: Change what Task 11 left simplified**
 
@@ -4367,6 +4424,37 @@ git -C /home/lexa/DevProjects/_GameDev/Murabito add Experiments/exp-05
 git -C /home/lexa/DevProjects/_GameDev/Murabito commit -m "exp-05: tier handover — parent re-mesh and child swap in one frame
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+- [x] **Task 12b (fix round 2): move the parent re-mesh off the main thread**
+
+The measurement this task's own Step 2 deferred to ("if the measurement... shows over
+about 4 ms, do it as a follow-up task instead") came in once `viewer` existed to produce
+it: a cho chunk's re-mesh costs ~18 ms in release, and sustained panning — many parent
+re-meshes landing on the main thread in the same frame, with no cap — produced measured
+frame spikes of **150–660 ms**. That is the async route's trigger condition, so it shipped:
+see the "as shipped (fix round 2 / Task 12b)" note under Interfaces above for the design,
+the new test entry above under "three more tests"/"fix round 2", and
+`task-12b-report.md` for the full report (design, before/after frame-time numbers with the
+commands that produced them, files changed, self-review, concerns).
+
+Measured with `cargo run -p viewer --release -- --frames 600 --auto-pan` (a temporary,
+flag-gated system in `viewer/src/main.rs` that pans the camera on a fixed sweep so a
+non-interactive run still exercises sustained panning, plus a frame-time recorder that
+prints a distribution on exit):
+
+| | worst frame | p95 | mean | frames > 33 ms (of 599) |
+|---|---|---|---|---|
+| before (main-thread remesh) | 712 ms | 308 ms | 112 ms | 382 |
+| after (async handover) | 93 ms | 26 ms | 17 ms | 5 |
+
+```bash
+cd /home/lexa/DevProjects/_GameDev/Murabito/Experiments/exp-05
+cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
+git -C /home/lexa/DevProjects/_GameDev/Murabito add Experiments/exp-05
+git -C /home/lexa/DevProjects/_GameDev/Murabito commit -m "exp-05: move the parent re-mesh off the main thread
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
 
 ---

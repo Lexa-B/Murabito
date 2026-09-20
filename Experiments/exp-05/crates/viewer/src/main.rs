@@ -9,10 +9,13 @@
 
 mod camera;
 
+use std::time::{Duration, Instant};
+
 use bevy::asset::AssetPlugin;
 use bevy::prelude::*;
 use bevy::window::{WindowPlugin, WindowResolution};
-use hexworld_bevy::{HexWorldPlugin, Loader};
+use hexworld::WorldConfig;
+use hexworld_bevy::{HexWorld, HexWorldPlugin, Loader};
 
 use camera::CameraRig;
 
@@ -33,8 +36,17 @@ fn frames_from_args() -> Option<u32> {
     None
 }
 
+/// `--auto-pan`: drives the camera rig's focus in a steady sweep instead of waiting for
+/// real input, so a non-interactive `--frames N` run still exercises sustained panning —
+/// the scenario that produced the parent-remesh frame spikes this binary is used to
+/// measure. Gated behind the flag and off by default; see `docs/plans/...task-12b`.
+fn auto_pan_from_args() -> bool {
+    std::env::args().any(|arg| arg == "--auto-pan")
+}
+
 fn main() {
     let frame_limit = frames_from_args();
+    let auto_pan = auto_pan_from_args();
 
     let mut app = App::new();
     app.add_plugins(
@@ -58,7 +70,16 @@ fn main() {
     .add_systems(
         Update,
         (camera::handle_input, camera::follow_ground).chain(),
-    );
+    )
+    // Records the wall-clock gap between consecutive frame starts, in `First` so it
+    // brackets the *previous* frame's full cost (every system, main-thread remeshing
+    // included) rather than just this frame's own work.
+    .init_resource::<FrameTimes>()
+    .add_systems(First, record_frame_time);
+
+    if auto_pan {
+        app.add_systems(Update, auto_pan_system.before(camera::follow_ground));
+    }
 
     if let Some(frames) = frame_limit {
         app.insert_resource(FrameLimit(frames))
@@ -72,15 +93,72 @@ fn main() {
 #[derive(Resource)]
 struct FrameLimit(u32);
 
+/// Wall-clock time between consecutive frame starts, collected whenever `--frames` runs
+/// the app non-interactively, so a `--frames N` run always ends with a frame-time report.
+#[derive(Resource, Default)]
+struct FrameTimes(Vec<Duration>);
+
+fn record_frame_time(mut times: ResMut<FrameTimes>, mut last: Local<Option<Instant>>) {
+    let now = Instant::now();
+    if let Some(prev) = *last {
+        times.0.push(now.duration_since(prev));
+    }
+    *last = Some(now);
+}
+
+/// Sweeps the focus east at a steady pace (scaled by zoom, like real panning), crossing
+/// cho/ken chunk boundaries again and again for the length of the run. Real elapsed time
+/// drives the distance (not a frame count), so a run stays "sustained panning" even while
+/// individual frames stall.
+fn auto_pan_system(time: Res<Time>, world: Res<HexWorld>, mut rigs: Query<&mut CameraRig>) {
+    let cfg: WorldConfig = *world.store().config();
+    // Clamped so a slow startup frame (asset/shader load) doesn't register as one huge
+    // simulated jump; it only affects how far the synthetic pan moves, never the recorded
+    // frame time itself.
+    let dt = time.delta_secs().min(0.1);
+    for mut rig in &mut rigs {
+        let speed = camera::pan_speed_for_zoom(rig.zoom);
+        rig.pan((speed * dt) as f64, 0.0, &cfg);
+    }
+}
+
 fn exit_after_frame_limit(
     limit: Res<FrameLimit>,
+    times: Res<FrameTimes>,
     mut frames: Local<u32>,
     mut exit: MessageWriter<AppExit>,
 ) {
     *frames += 1;
     if *frames >= limit.0 {
+        report_frame_times(&times.0);
         exit.write(AppExit::Success);
     }
+}
+
+/// Prints worst frame, a 95th-percentile, and counts over common frame-budget thresholds —
+/// enough to compare a before/after run without pulling in a stats crate.
+fn report_frame_times(samples: &[Duration]) {
+    if samples.is_empty() {
+        println!("frame-times: no samples recorded");
+        return;
+    }
+    let mut sorted: Vec<Duration> = samples.to_vec();
+    sorted.sort();
+    let worst = *sorted.last().unwrap();
+    let p95_index = ((sorted.len() as f64) * 0.95) as usize;
+    let p95 = sorted[p95_index.min(sorted.len() - 1)];
+    let mean: Duration = sorted.iter().sum::<Duration>() / sorted.len() as u32;
+    let over_33ms = sorted.iter().filter(|d| d.as_secs_f64() > 0.033).count();
+    let over_16ms = sorted.iter().filter(|d| d.as_secs_f64() > 0.0167).count();
+    println!(
+        "frame-times: n={} mean={:.2}ms p95={:.2}ms worst={:.2}ms over_16.7ms={} over_33ms={}",
+        sorted.len(),
+        mean.as_secs_f64() * 1000.0,
+        p95.as_secs_f64() * 1000.0,
+        worst.as_secs_f64() * 1000.0,
+        over_16ms,
+        over_33ms,
+    );
 }
 
 fn setup(mut commands: Commands) {

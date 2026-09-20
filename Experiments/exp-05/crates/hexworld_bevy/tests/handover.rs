@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 use hexworld::{ChunkKey, Hex, Level, Rings, StoreSettings, WorldConfig};
-use hexworld_bevy::{ChunkView, HexWorld, Loader, Shown};
+use hexworld_bevy::{ChunkView, Handovers, HexWorld, Loader, Shown};
 
 #[path = "common/mod.rs"]
 mod common;
@@ -403,6 +403,67 @@ fn the_guest_sides_mesh_drops_the_shared_vertex_the_frame_both_neighbours_are_sh
     assert!(
         checked,
         "never observed both {a:?} and {b:?} shown together; the test proves nothing"
+    );
+}
+
+/// Task 12b: the async-specific half of the one-frame property. The tests above check
+/// that the swap lands in one frame — a fact a synchronous implementation would also
+/// satisfy. This one checks the hold-back mechanism the async route added: `Handovers`
+/// tracks a child chunk as "pending" for as long as its parent/neighbours' re-meshes are
+/// still running on the pool, and a bug that showed the child *before* that finished
+/// (e.g. applying it from `promote_loads` instead of waiting for `apply_finished_loads`,
+/// or dropping the `handover.remeshes.is_empty()` check) would make it observable in
+/// `Shown` while `Handovers` still called it pending — exactly what this asserts never
+/// happens, every single frame.
+#[test]
+fn a_child_is_never_shown_while_its_load_handover_is_pending() {
+    let mut app = headless_app(StoreSettings::default());
+    app.world_mut().spawn((
+        Transform::default(),
+        Loader {
+            rings: Rings::default(),
+        },
+    ));
+
+    let mut ever_pending: HashSet<ChunkKey> = HashSet::new();
+    let mut witnessed_a_deferred_reveal = false;
+
+    let started = std::time::Instant::now();
+    for frame in 0..common::SETTLE_FRAME_CAP {
+        app.update();
+        let world = app.world();
+        let shown = world.resource::<Shown>();
+        let handovers = world.resource::<Handovers>();
+
+        for key in shown.keys() {
+            assert!(
+                !handovers.is_pending_load(key),
+                "frame {frame}: {key:?} has an entity in Shown but Handovers still \
+                 considers its load pending — it was shown before its handover landed"
+            );
+            if ever_pending.contains(&key) {
+                // Seen pending on some earlier frame, and only now shown: proof the hold-
+                // back genuinely spanned more than an instant, not just this frame's check
+                // happening to run either side of an atomic same-frame swap.
+                witnessed_a_deferred_reveal = true;
+            }
+        }
+        ever_pending.extend(handovers.pending_load_keys());
+
+        if world_is_fully_settled(world, DEFAULT_WINDOW_TOTAL) {
+            break;
+        }
+        assert!(
+            started.elapsed() < common::SETTLE_TIMEOUT,
+            "timed out after {:?} and {} frames waiting to settle",
+            started.elapsed(),
+            frame + 1
+        );
+    }
+    assert!(
+        witnessed_a_deferred_reveal,
+        "never saw a chunk held pending on one frame and only shown on a later one; the \
+         test proves nothing about the async hold-back actually spanning frames"
     );
 }
 

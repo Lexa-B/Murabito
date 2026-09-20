@@ -10,7 +10,6 @@ use hexworld::{mesh::MeshData, plane::cell_centre_m, ChunkKey, Hex, Level, World
 
 use crate::axes::{mesh_position, to_bevy};
 use crate::material::GroundMaterial;
-use crate::HexWorld;
 
 #[derive(Component, Clone, Copy, Debug)]
 pub struct ChunkView(pub ChunkKey);
@@ -146,19 +145,21 @@ pub fn spawn_chunk_entity(
         .id()
 }
 
-/// Re-mesh a chunk that is already on screen, with its current omissions.
-pub fn remesh_shown(
+/// Swap a chunk's `Mesh3d` to freshly computed data — the last step of a handover, once
+/// its background re-mesh (see `tasks::process_handovers`) has landed. A no-op if the
+/// chunk stopped being shown while that re-mesh was in flight (it unloaded, or a reload
+/// raced in and swapped its entity) — there is nothing left on screen to update.
+pub fn apply_remesh(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    world: &HexWorld,
     shown: &Shown,
     key: ChunkKey,
+    data: &MeshData,
 ) {
-    let (Some(entity), Some(chunk)) = (shown.entity(key), world.store().chunk(key)) else {
+    let Some(entity) = shown.entity(key) else {
         return;
     };
-    let data = hexworld::mesh::mesh_chunk(world.store().config(), chunk, shown.omitted_for(key));
-    let handle = meshes.add(to_bevy_mesh(&data));
+    let handle = meshes.add(to_bevy_mesh(data));
     commands.entity(entity).insert(Mesh3d(handle));
 }
 
@@ -167,6 +168,21 @@ pub fn remesh_shown(
 /// screen. `key` is the chunk that must omit them, never the owner — the owner keeps
 /// drawing every cell it owns regardless of what its neighbours are doing.
 fn guest_cells_to_omit(cfg: &WorldConfig, key: ChunkKey, shown: &Shown) -> HashSet<Hex> {
+    guest_cells_to_omit_considering(cfg, key, shown, None)
+}
+
+/// Same as `guest_cells_to_omit`, but also treats `pretend_shown` as shown even though it
+/// has no entity yet. Used while *planning* a chunk's handover (see `plan_load_handover`):
+/// the chunk that is about to be shown must already count as an owner for this check, or a
+/// neighbour that owes it a guest cell would never be told to hand the cell over, but
+/// nothing may actually mutate `Shown` — real entities and mesh swaps are deferred until
+/// the handover's background re-meshes land — until the arriving chunk has one.
+fn guest_cells_to_omit_considering(
+    cfg: &WorldConfig,
+    key: ChunkKey,
+    shown: &Shown,
+    pretend_shown: Option<ChunkKey>,
+) -> HashSet<Hex> {
     let child = key.child_level();
     hexworld::mesh::drawn_cells(cfg, key)
         .into_iter()
@@ -176,7 +192,7 @@ fn guest_cells_to_omit(cfg: &WorldConfig, key: ChunkKey, shown: &Shown) -> HashS
                 return false; // key owns this cell outright; never a guest of itself
             }
             let owner_key = ChunkKey::new(key.level, owner_cell);
-            shown.entity(owner_key).is_some()
+            Some(owner_key) == pretend_shown || shown.entity(owner_key).is_some()
         })
         .collect()
 }
@@ -262,6 +278,132 @@ pub fn absorb_already_shown_children(shown: &mut Shown, key: ChunkKey) -> bool {
         }
     }
     shown.omitted_for(key).len() != before
+}
+
+// --- Handover planning: pure queries the async handover (see `tasks.rs`) uses to freeze
+// what a chunk's arrival or departure will require of its neighbours, *before* doing the
+// (possibly expensive) work of re-meshing each of them off the main thread. Each mirrors a
+// mutating function above but returns the cells-to-add per affected chunk instead of
+// committing them, so the real `shown.omit`/`shown.restore` calls can be made later, in
+// the same frame the background re-mesh actually lands and the chunk's entity is
+// spawned/despawned — never before, or the mesh on screen would lag the bookkeeping.
+
+/// The cells `key` itself would newly omit for an already-shown chunk at its own child
+/// level that turns out to be its child — the pure-query twin of
+/// `absorb_already_shown_children`.
+fn plan_absorb_already_shown_children(shown: &Shown, key: ChunkKey) -> HashSet<Hex> {
+    let child_level = key.child_level();
+    shown
+        .keys()
+        .into_iter()
+        .filter(|candidate| candidate.level == child_level && candidate.parent_key() == Some(key))
+        .map(|candidate| candidate.cell)
+        .collect()
+}
+
+/// What `key` itself would newly omit, and what each already-shown same-level neighbour
+/// would newly omit, if `key` became shown right now — the pure-query twin of
+/// `sync_guests_on_load`.
+fn plan_guest_handover_on_load(
+    cfg: &WorldConfig,
+    shown: &Shown,
+    key: ChunkKey,
+) -> HashMap<ChunkKey, HashSet<Hex>> {
+    let mut plan: HashMap<ChunkKey, HashSet<Hex>> = HashMap::new();
+
+    let mine = guest_cells_to_omit(cfg, key, shown);
+    if !mine.is_empty() {
+        plan.entry(key).or_default().extend(mine);
+    }
+
+    if key.level != Level::World {
+        for neighbour_cell in hexworld::hex::neighbours(key.cell) {
+            let neighbour = ChunkKey::new(key.level, neighbour_cell);
+            if shown.entity(neighbour).is_none() {
+                continue;
+            }
+            let extra = guest_cells_to_omit_considering(cfg, neighbour, shown, Some(key));
+            if !extra.is_empty() {
+                plan.entry(neighbour).or_default().extend(extra);
+            }
+        }
+    }
+    plan
+}
+
+/// The full plan for showing `key`: every already-shown chunk (its parent, any same-level
+/// neighbour ceding it a guest cell) that must newly omit one of `key`'s cells, plus `key`
+/// itself if it must omit cells of its own (an already-shown child, or a guest cell whose
+/// true owner is already on screen). Empty when nothing but `key`'s own already-meshed job
+/// output is needed — the common case, handled without any of this machinery.
+pub fn plan_load_handover(
+    cfg: &WorldConfig,
+    shown: &Shown,
+    key: ChunkKey,
+) -> HashMap<ChunkKey, HashSet<Hex>> {
+    let mut plan: HashMap<ChunkKey, HashSet<Hex>> = HashMap::new();
+
+    let absorbed = plan_absorb_already_shown_children(shown, key);
+    if !absorbed.is_empty() {
+        plan.entry(key).or_default().extend(absorbed);
+    }
+
+    if let Some(parent) = key.parent_key() {
+        if shown.entity(parent).is_some() {
+            plan.entry(parent).or_default().insert(key.cell);
+        }
+    }
+
+    for (affected, cells) in plan_guest_handover_on_load(cfg, shown, key) {
+        plan.entry(affected).or_default().extend(cells);
+    }
+
+    plan
+}
+
+/// Every same-level neighbour that would take a cell back if `key` unloaded right now —
+/// the pure-query twin of `release_guests_on_unload`.
+fn plan_release_guests_on_unload(shown: &Shown, key: ChunkKey) -> HashMap<ChunkKey, HashSet<Hex>> {
+    let mut plan: HashMap<ChunkKey, HashSet<Hex>> = HashMap::new();
+    if key.level == Level::World {
+        return plan;
+    }
+    let child = key.child_level();
+    for neighbour_cell in hexworld::hex::neighbours(key.cell) {
+        let neighbour = ChunkKey::new(key.level, neighbour_cell);
+        if shown.entity(neighbour).is_none() {
+            continue;
+        }
+        let to_restore: HashSet<Hex> = shown
+            .omitted_for(neighbour)
+            .iter()
+            .copied()
+            .filter(|cell| hexworld::owner::parent_of(*cell, child) == key.cell)
+            .collect();
+        if !to_restore.is_empty() {
+            plan.insert(neighbour, to_restore);
+        }
+    }
+    plan
+}
+
+/// The full plan for unloading `key`: the parent (if shown) that gets `key`'s cell back,
+/// plus every same-level neighbour that gets a guest cell back. Empty when `key` can just
+/// be despawned with nothing else to update.
+pub fn plan_unload_handover(shown: &Shown, key: ChunkKey) -> HashMap<ChunkKey, HashSet<Hex>> {
+    let mut plan: HashMap<ChunkKey, HashSet<Hex>> = HashMap::new();
+
+    if let Some(parent) = key.parent_key() {
+        if shown.entity(parent).is_some() {
+            plan.entry(parent).or_default().insert(key.cell);
+        }
+    }
+
+    for (neighbour, cells) in plan_release_guests_on_unload(shown, key) {
+        plan.entry(neighbour).or_default().extend(cells);
+    }
+
+    plan
 }
 
 #[cfg(test)]
@@ -370,5 +512,58 @@ mod tests {
         let changed = absorb_already_shown_children(&mut shown, cho);
         assert!(changed);
         assert!(shown.omitted_for(cho).contains(&ken.cell));
+    }
+
+    #[test]
+    fn plan_load_handover_matches_the_late_parent_absorb_case_without_mutating_shown() {
+        let ken = ChunkKey::new(Level::Ken, Hex::ZERO);
+        let cho = ChunkKey::new(Level::Cho, owner::parent_of(Hex::ZERO, Level::Ken));
+        let mut shown = Shown::default();
+        shown.insert_entity(ken, fake_entity(1));
+        shown.insert_entity(cho, fake_entity(2));
+
+        // The plan must call out cho needing to omit ken's cell...
+        let cfg = WorldConfig::default();
+        let plan = plan_load_handover(&cfg, &shown, cho);
+        assert_eq!(
+            plan.get(&cho).cloned().unwrap_or_default(),
+            [ken.cell].into_iter().collect::<HashSet<_>>()
+        );
+        // ...and must not itself have touched `Shown` — the whole point of a plan is that
+        // the caller applies it later, once the background re-mesh it drives has landed.
+        assert!(shown.omitted_for(cho).is_empty());
+    }
+
+    #[test]
+    fn plan_load_handover_matches_the_guest_dedup_case_without_mutating_shown() {
+        let cfg = WorldConfig::default();
+        let a = ChunkKey::new(Level::Ken, Hex::ZERO);
+        let b = ChunkKey::new(Level::Ken, Hex::new(1, 0));
+
+        // Ground truth: what `sync_guests_on_load` actually commits when b arrives after a.
+        let mut mutated = Shown::default();
+        mutated.insert_entity(a, fake_entity(1));
+        sync_guests_on_load(&cfg, &mut mutated, a);
+        mutated.insert_entity(b, fake_entity(2));
+        let changed = sync_guests_on_load(&cfg, &mut mutated, b);
+        assert!(!changed.is_empty(), "a and b should share a guest cell");
+
+        // The plan, computed *before* b has an entity (the real caller's situation), must
+        // predict the same omissions without mutating anything.
+        let mut planned = Shown::default();
+        planned.insert_entity(a, fake_entity(1));
+        sync_guests_on_load(&cfg, &mut planned, a);
+        let plan = plan_load_handover(&cfg, &planned, b);
+
+        for key in [a, b] {
+            let predicted = plan.get(&key).cloned().unwrap_or_default();
+            assert_eq!(
+                predicted,
+                mutated.omitted_for(key).clone(),
+                "plan for {key:?} should match what sync_guests_on_load actually commits"
+            );
+        }
+        // The plan must not itself have touched `planned`.
+        assert!(planned.omitted_for(b).is_empty());
     }
 }

@@ -15,6 +15,7 @@ use hexworld::{ChunkStore, StoreSettings, WorldConfig};
 pub use entities::{ChunkView, Shown};
 pub use loader::Loader;
 pub use material::{GroundExtension, GroundMaterial, LineMode, TintByLevel};
+pub use tasks::Handovers;
 
 /// Everything this plugin does, in one set, so a viewer can order against it.
 #[derive(SystemSet, Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -50,13 +51,18 @@ impl Plugin for HexWorldPlugin {
             store: ChunkStore::new(self.config, self.settings),
         })
         .init_resource::<entities::Shown>()
+        .init_resource::<tasks::Handovers>()
         .init_resource::<LineMode>()
         .init_resource::<TintByLevel>()
         .add_plugins(MaterialPlugin::<GroundMaterial>::default())
         .add_systems(Startup, entities::setup_material)
         .add_systems(
             Update,
-            (loader::drive_store, tasks::collect_finished_jobs)
+            (
+                loader::drive_store,
+                tasks::collect_finished_jobs,
+                tasks::process_handovers,
+            )
                 .chain()
                 .in_set(HexWorldSet),
         )
