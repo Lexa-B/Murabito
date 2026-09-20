@@ -10,7 +10,7 @@ pub mod tasks;
 use bevy::prelude::*;
 use hexworld::{ChunkStore, StoreSettings, WorldConfig};
 
-pub use entities::ChunkView;
+pub use entities::{ChunkView, Shown};
 pub use loader::Loader;
 
 /// Everything this plugin does, in one set, so a viewer can order against it.
@@ -46,6 +46,7 @@ impl Plugin for HexWorldPlugin {
         app.insert_resource(HexWorld {
             store: ChunkStore::new(self.config, self.settings),
         })
+        .init_resource::<entities::Shown>()
         .add_systems(Startup, entities::setup_material)
         .add_systems(
             Update,

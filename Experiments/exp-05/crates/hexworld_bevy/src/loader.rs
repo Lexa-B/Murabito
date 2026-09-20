@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use hexworld::{plane::round_at, Level, Rings};
 
 use crate::axes::from_bevy;
+use crate::entities::Shown;
 use crate::tasks::spawn_jobs;
 use crate::{entities, HexWorld};
 
@@ -17,8 +18,9 @@ pub fn drive_store(
     mut commands: Commands,
     time: Res<Time>,
     mut world: ResMut<HexWorld>,
+    mut shown: ResMut<Shown>,
+    mut meshes: ResMut<Assets<Mesh>>,
     loaders: Query<(&GlobalTransform, &Loader)>,
-    views: Query<(Entity, &crate::ChunkView)>,
 ) {
     let core_loaders: Vec<hexworld::Loader> = loaders
         .iter()
@@ -33,6 +35,25 @@ pub fn drive_store(
 
     let now = time.elapsed_secs_f64();
     let update = world.store_mut().update(&core_loaders, now);
-    entities::despawn_unloaded(&mut commands, &views, &update.to_unload);
-    spawn_jobs(&mut commands, &mut world, update.to_load);
+
+    // Every unload's handover lands in this same system call: the parent (if shown)
+    // restores the cell, any sibling that had handed a guest cell over to this chunk
+    // takes it back, and only then does this chunk's own entity despawn — so there is
+    // never a frame with a hole where this chunk used to be.
+    for key in &update.to_unload {
+        if let Some(parent) = key.parent_key() {
+            if shown.entity(parent).is_some() {
+                shown.restore(parent, key.cell);
+                entities::remesh_shown(&mut commands, &mut meshes, &world, &shown, parent);
+            }
+        }
+        for neighbour in entities::release_guests_on_unload(&mut shown, *key) {
+            entities::remesh_shown(&mut commands, &mut meshes, &world, &shown, neighbour);
+        }
+        if let Some(entity) = shown.remove(*key) {
+            commands.entity(entity).despawn();
+        }
+    }
+
+    spawn_jobs(&mut commands, &mut world, &shown, update.to_load);
 }
