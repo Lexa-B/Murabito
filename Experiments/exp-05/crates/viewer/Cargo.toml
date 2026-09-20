@@ -5,3 +5,11 @@ version.workspace = true
 license.workspace = true
 
 [dependencies]
+hexworld = { path = "../hexworld" }
+hexworld_bevy = { path = "../hexworld_bevy" }
+bevy = { version = "0.19", default-features = false, features = [
+  "bevy_winit", "bevy_window", "bevy_render", "bevy_core_pipeline", "bevy_pbr",
+  "bevy_asset", "bevy_log", "bevy_ui", "bevy_ui_render", "bevy_text",
+  "x11", "multi_threaded", "tonemapping_luts", "zstd_rust", "png", "default_font", "std",
+  "keyboard", "mouse",
+] }
