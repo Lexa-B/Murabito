@@ -6,6 +6,7 @@
 //! the caller's job.
 
 pub mod address;
+pub mod chunk;
 pub mod column;
 pub mod config;
 pub mod hex;
@@ -17,6 +18,7 @@ pub mod plane;
 pub mod world;
 
 pub use address::{address_of, shaku_of, Address};
+pub use chunk::{generate, Chunk, ChunkKey};
 pub use column::{Column, Material, Run};
 pub use config::WorldConfig;
 pub use hex::{d2, distance, neighbours, range, Hex, DIRECTIONS};
