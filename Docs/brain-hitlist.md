@@ -158,6 +158,34 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
 23. **Sleep is the batch window.** Consolidation happens offline, at 3am game time, when
     nothing is rendered and no one is watching. Evolution and RocksDB converged here.
 
+**Senses and space**
+
+24. **The senses are not one shape, and get no common trait.** Vision is a *pull* from
+    the perceiver, recomputed and stateless. Hearing is a *push* from a source: an event
+    is cast, and what arrives is then normalised by the listener's own polar pattern, so
+    the cardioid is a receiver gain and not a propagation shape. Smell is a *field* — it
+    emanates from a 物, spreads, drifts on the wind and persists after the source has
+    gone, so its state does not live in the perceiver at all. They share geometry, and
+    later a way to ask what lies between two points. Not an interface.
+25. **Obstacles do not treat the senses alike.** Vision they block outright. Sound they
+    attenuate, because it bends around: loudness falls with the shortest *unobstructed*
+    path, which is what diffraction is. Smell they attenuate too, and it pools against
+    them.
+26. **Sound arrives with a bearing; smell arrives as a scalar.** One rustle tells a fox
+    roughly where. A scent tells it only *here, this strong* — a direction has to be
+    earned by moving and sampling again. Pouncing and quartering a field are the same
+    difference, and neither has to be authored.
+27. **Continuous bodies, hex-gridded senses.** Beings hold arbitrary positions; occlusion
+    and propagation are computed on a grid underneath, so movement fidelity and sense
+    cost are tuned separately. The grid is 1 shaku flat-to-flat, pointy-up.
+    **Provisional.** exp-05 is laying the groundwork for a proper ri/cho/ken/shaku unit
+    system, and this is a stand-in until that lands — written to be replaced, not
+    extended. Scale to keep in view: ~0.0795 m² a cell, ~5,000 cells over the 20x20 m
+    starter ground, ~8,900 within the fox's 15 m vision.
+28. **AI code lives under `gestalt_ai/`.** Everything brain-side — the layers, 仮諦, the
+    arena, episodes, replay — goes there once it is built. Senses are body, not brain,
+    and stay in `senses/`.
+
 ---
 
 ## The recognition loop
@@ -272,22 +300,34 @@ proposal, not a commitment.
 - [x] **0a. Seeing the shapes.** `--zoom <metres>` on the one-shot capture. At the
       starting zoom the fields run off every edge, so the overlay had been rendered but
       never actually looked at.
-- [ ] **0b. Assert the tableau.** The starting arrangement is a predator watching prey
-      that hasn't noticed: the fox should see the rabbit, the rabbit's blind wedge should
-      be pointed back at the fox. Currently that is eyeballed off a screenshot, through
-      a perspective projection that makes ground angles hard to judge. It is a claim, so
-      it should be a test.
-- [ ] **0c. A legible overlay.** Each being's vision and hearing are drawn in one hue and
+- [x] **0b. One file per sense.** `senses/` as a parent with `vision.rs` and `hearing.rs`
+      under it, each headed by what drives it. Pure refactor; the overlay renders
+      pixel-identically.
+- [ ] **0c. The sense grid.** 1 shaku flat-to-flat, pointy-up: world position to cell,
+      neighbours, distance, rings. Pure maths, fully testable, no senses touching it yet.
+      **Provisional** — see settled item 27; exp-05's unit system replaces it.
+- [ ] **0d. Line of sight.** Vision gated by what stands in the way. Obstacles register
+      as occluders; shadowcasting over the grid gives a visible set per perceiver that is
+      computed once and reused for every candidate, rather than a ray per pair.
+- [ ] **0e. Assert the tableau.** The starting arrangement is a predator watching prey
+      that hasn't noticed — and the placeholder cube sits within 0.27 m of the fox-rabbit
+      line, so once 0d lands the fox *cannot* see the rabbit, which is the more
+      interesting starting position anyway. Currently eyeballed off a screenshot through
+      a projection that makes ground angles hard to judge. It is a claim, so it should be
+      a test.
+- [ ] **0f. A legible overlay.** Each being's vision and hearing are drawn in one hue and
       overlap heavily, so which curve is which sense is guesswork; and the rabbit's
       vision — 2.5/5/8 m at low alpha, inside a 10 m hearing circle — is the faintest
-      thing on screen while being its most interesting sense. This overlay is how
-      everything downstream gets debugged, so it has to be readable before it is relied
-      on.
-- [ ] **0d. 嗅覚.** Smell, which is structurally unlike the other two: not a cone cast
-      from the head, but something left *in the world* that persists, spreads, decays and
-      drifts on the wind. The first sense with state of its own, the first that makes the
-      past readable in the present, and the one a fox and a rabbit actually live by.
-- [ ] **0e. Facing, visibly.** A slow idle turn, so the fields are seen to track the body
+      thing on screen while being its most interesting sense. Line-of-sight shadows and a
+      scent field will make this worse, so it wants doing before they land, not after.
+- [ ] **0g. Sound that bends.** A noise is an event cast from its maker; propagation over
+      the grid attenuates it by shortest *unobstructed* path length, so a wall muffles
+      rather than silences. Delivers an intensity and a bearing; the listener's existing
+      polar pattern turns that into what it actually hears.
+- [ ] **0h. 嗅覚.** Smell: emitted continuously by a 物, spreading and decaying over the
+      grid and drifting with wind. The first sense with state of its own, and the first
+      that makes the past readable in the present.
+- [ ] **0i. Facing, visibly.** A slow idle turn, so the fields are seen to track the body
       rather than assumed to.
 - [ ] **1. The layer skeleton.** Three systems at 60 / ~10 / ~1 Hz that do nothing
       interesting, plus a test proving each actually ticks at its rate under a varying
