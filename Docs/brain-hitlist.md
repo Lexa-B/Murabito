@@ -183,7 +183,24 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
     extended. Every length in the crate is shaku; nothing converts to metres. Scale to
     keep in view: (√3/2) ≈ 0.866 shaku² a cell, ~5,000 cells over the 66 shaku (11 ken)
     starter ground, ~8,400 within the fox's 48 shaku vision.
-28. **AI code lives under `gestalt_ai/`.** Everything brain-side — the layers, 仮諦, the
+28. **A sense's falloff is drawn with the visual variable that matches its shape.** Three
+    were tried on hearing's X's and they are not interchangeable. *Opacity* cost the
+    marks the crispness that made them read as tiling rather than as a mass. *Weight*
+    can only step, because gizmo line width is a property of the config group and not of
+    the call — and it fails quietly at the bottom, since a dimmed hairline thins into
+    aliasing and makes a sense look like it stopped short. *Size* is continuous, stays
+    solid however small, and needs only a floor to keep the faintest cells legible. So:
+    vision's bands are genuinely three discrete steps and honestly drawn with weight;
+    hearing's polar pattern is continuous and drawn with arm length; smell's
+    concentration will be continuous too, and should follow hearing rather than vision.
+29. **A radius in shaku is not a radius in steps.** One step is exactly one shaku, which
+    makes the two look interchangeable, and straight runs agree. Turns do not: two steps
+    along a diagonal land √3 ≈ 1.73 shaku out, so cells sit inside a range in shaku while
+    lying outside it in steps. `hex::steps_covering` converts at the worst-case √3/2.
+    Anything that scans by radius needs it — hearing did, and sound and smell will. The
+    failure mode is why this is written down: coverage stops early *only in the diagonal
+    directions*, which reads as a rendering artefact rather than as a logic error.
+30. **AI code lives under `gestalt_ai/`.** Everything brain-side — the layers, 仮諦, the
     arena, episodes, replay — goes there once it is built. Senses are body, not brain,
     and stay in `senses/`.
 
