@@ -22,6 +22,8 @@ Assets are © 2026 Lexa, licensed under CC BY-SA 4.0. When you reuse them, credi
 
 Files made by others keep their own licences, and they are not covered by either licence above. This includes fonts (for example, fonts under the SIL Open Font License), anything from Epic Games (Unreal Engine content, Starter Content, Fab), and assets from other sources. Put each one's licence file next to it and list it here.
 
-None yet.
+| File | What | Licence |
+|---|---|---|
+| `assets/fonts/NotoSansJP-Regular.otf` | Noto Sans JP, Regular — the Japanese subset from [notofonts/noto-cjk](https://github.com/notofonts/noto-cjk), © The Noto Project Authors. The UI's font: it covers Latin as well as Japanese. | SIL Open Font License 1.1, in [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt) |
 
 The Unreal Engine itself is not part of this repository and is not covered by either licence; it is used under Epic's own terms.

@@ -8,6 +8,7 @@
 #![allow(clippy::type_complexity)]
 
 mod camera;
+mod i18n;
 mod menu;
 mod scene;
 mod screenshot;
@@ -32,6 +33,7 @@ fn main() {
         // it draws nothing, so the look of every widget is ours, in `ui.rs`.
         .add_plugins((
             state::StatePlugin,
+            i18n::I18nPlugin,
             settings::SettingsPlugin,
             scene::ScenePlugin,
             camera::CameraPlugin,

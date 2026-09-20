@@ -1,0 +1,13 @@
+# English UI strings. Keys are grouped by screen; see assets/locales/ja.yaml for the
+# Japanese catalogue, which must carry the same keys.
+menu.settings: Settings
+menu.resume: Resume
+menu.quit: Quit
+
+settings.title: Settings
+settings.back: Back
+settings.pan_speed: Pan speed
+settings.language: Language
+# The language button offers the *other* language, so it is named in its own script and
+# is never translated: someone who can't read the current language still recognises it.
+settings.language_toggle: 日本語
