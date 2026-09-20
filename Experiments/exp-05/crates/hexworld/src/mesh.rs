@@ -180,28 +180,60 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
                 let len = (mx * mx + my * my).sqrt().max(1e-9);
                 ((mx / len) as f32, (my / len) as f32)
             };
+            let normal = [nx, ny, 0.0];
+            let line = [0.0, 0.0, cell_level, 0.0];
+            let full_depth = !neighbour_drawn[k];
+            if full_depth {
+                // A full-depth wall is one silhouette quad for the whole column, from the
+                // world bottom to the topmost run's top — not one quad per run, which
+                // would overlap (and z-fight) across any air gap between runs.
+                let topmost = column.runs.last().expect("checked non-empty above");
+                let top_m = cfg.layer_top_m(topmost.top) as f32;
+                let colour = shaded(topmost.material, cell);
+                let v0 = mesh.push_vertex(
+                    [cx + ax as f32, cy + ay as f32, bottom_m],
+                    normal,
+                    colour,
+                    line,
+                );
+                let v1 = mesh.push_vertex(
+                    [cx + bx as f32, cy + by as f32, bottom_m],
+                    normal,
+                    colour,
+                    line,
+                );
+                let v2 = mesh.push_vertex(
+                    [cx + bx as f32, cy + by as f32, top_m],
+                    normal,
+                    colour,
+                    line,
+                );
+                let v3 = mesh.push_vertex(
+                    [cx + ax as f32, cy + ay as f32, top_m],
+                    normal,
+                    colour,
+                    line,
+                );
+                // Seen from outside the cell, anticlockwise.
+                mesh.push_triangle(v0, v1, v2);
+                mesh.push_triangle(v0, v2, v3);
+                continue;
+            }
             for run in &column.runs {
-                let full_depth = !neighbour_drawn[k];
                 let mut layer = run.bottom;
                 while layer <= run.top {
-                    if !full_depth && neighbour.is_solid(layer) {
+                    if neighbour.is_solid(layer) {
                         layer += 1;
                         continue;
                     }
                     // Extend while the wall continues.
                     let start = layer;
-                    while layer <= run.top && (full_depth || !neighbour.is_solid(layer)) {
+                    while layer <= run.top && !neighbour.is_solid(layer) {
                         layer += 1;
                     }
                     let top_m = cfg.layer_top_m(layer - 1) as f32;
-                    let bottom_of_wall = if full_depth {
-                        bottom_m
-                    } else {
-                        cfg.layer_bottom_m(start) as f32
-                    };
+                    let bottom_of_wall = cfg.layer_bottom_m(start) as f32;
                     let colour = shaded(run.material, cell);
-                    let normal = [nx, ny, 0.0];
-                    let line = [0.0, 0.0, cell_level, 0.0];
                     let v0 = mesh.push_vertex(
                         [cx + ax as f32, cy + ay as f32, bottom_of_wall],
                         normal,
@@ -229,9 +261,6 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
                     // Seen from outside the cell, anticlockwise.
                     mesh.push_triangle(v0, v1, v2);
                     mesh.push_triangle(v0, v2, v3);
-                    if full_depth {
-                        break; // one wall covers the whole column
-                    }
                 }
             }
         }
@@ -342,8 +371,13 @@ mod tests {
             .any(|p| p[0].abs() < 1e-4 && p[1].abs() < 1e-4));
 
         // Omitting a cell opens a boundary between detail levels, so its neighbours wall the
-        // hole down to the world bottom: that is what stops a height step becoming a crack,
-        // and it means the mesh gains triangles rather than losing them.
+        // hole down to the world bottom: that is what stops a height step becoming a crack.
+        // We deliberately do NOT assert on the raw triangle count here: whether omitting an
+        // interior cell nets more or fewer triangles overall depends on meshing details
+        // (how many material runs a column has, how many full-depth walls happen to merge)
+        // that have nothing to do with the behaviour under test. Measured for this chunk and
+        // config: 354 triangles all-drawn vs 352 with the centre omitted, and 0 vs 12 vertices
+        // at the world bottom near the hole — fewer total triangles, but still walled.
         let bottom = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
         let walls_at_bottom = |m: &MeshData| {
             m.positions
@@ -358,7 +392,55 @@ mod tests {
             walls_at_bottom(&fewer) > walls_at_bottom(&all),
             "the hole should be ringed by full-depth walls"
         );
-        assert!(fewer.triangle_count() > all.triangle_count());
+    }
+
+    #[test]
+    fn a_full_depth_wall_is_one_quad_even_when_the_column_has_a_gap() {
+        use crate::column::{Material, Run};
+
+        let cfg = WorldConfig::default();
+        let key = ChunkKey::new(Level::Ken, Hex::ZERO);
+        let mut chunk = crate::chunk::generate(&cfg, key);
+        // A column with an air gap: rock low down, grass higher up, nothing between.
+        let gapped = Column {
+            runs: vec![
+                Run {
+                    bottom: cfg.bottom_layer,
+                    top: -8,
+                    material: Material::Rock,
+                },
+                Run {
+                    bottom: -3,
+                    top: -1,
+                    material: Material::Grass,
+                },
+            ],
+        };
+        // Put it on any owned cell, and force one of its outward faces to be full depth by
+        // omitting one neighbour — with the default world (radius 0) a `Ken` chunk near the
+        // origin sits nowhere near the world's actual edge, so "the chunk's own border" does
+        // not by itself make a neighbour full-depth; omitting one does, regardless of chunk
+        // or world geometry.
+        let target = chunk.cells[0];
+        let index = chunk.cells.iter().position(|c| *c == target).unwrap();
+        chunk.columns[index] = gapped;
+        let mut omitted = HashSet::new();
+        omitted.insert(target + DIRECTIONS[0]);
+
+        let mesh = mesh_chunk(&cfg, &chunk, &omitted);
+        // No two triangles may share all three vertex positions: overlapping full-depth
+        // walls would produce exactly that.
+        let mut seen: Vec<[[f32; 3]; 3]> = Vec::new();
+        for tri in mesh.indices.chunks(3) {
+            let mut v = [
+                mesh.positions[tri[0] as usize],
+                mesh.positions[tri[1] as usize],
+                mesh.positions[tri[2] as usize],
+            ];
+            v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            assert!(!seen.contains(&v), "duplicate triangle: {v:?}");
+            seen.push(v);
+        }
     }
 
     #[test]
