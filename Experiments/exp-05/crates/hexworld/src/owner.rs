@@ -103,6 +103,44 @@ pub fn children(cell: Hex, level: Level) -> Vec<Hex> {
     owned_offsets(level).iter().map(|o| centre + *o).collect()
 }
 
+/// Offsets, from the centre child, of the children a cell at this level *draws*: every
+/// child whose centre lies in this cell's ideal hexagon, boundary included. That is the
+/// cells it owns, plus the "guests" — cells sitting exactly on the hexagon's border whose
+/// ownership tie went to a neighbour. A guest's own hexagon straddles the border, so
+/// drawing it is what stops a half-cell gap appearing along a handover.
+///
+/// All integer arithmetic. Deriving this from `round_at` in f64 does not work: ties on the
+/// border resolve inconsistently and the result stops being a partition.
+pub fn drawn_offsets(level: Level) -> &'static [Hex] {
+    static CACHE: [OnceLock<Vec<Hex>>; 5] = [
+        OnceLock::new(),
+        OnceLock::new(),
+        OnceLock::new(),
+        OnceLock::new(),
+        OnceLock::new(),
+    ];
+    let slot = &CACHE[level as usize];
+    slot.get_or_init(|| {
+        let n = level.packing();
+        let mut out = Vec::new();
+        for q in -n..=n {
+            for r in -n..=n {
+                let c = Hex::new(q, r);
+                let mine = d2(c);
+                let nearest = (-1..=1)
+                    .flat_map(|a| (-1..=1).map(move |b| (a, b)))
+                    .map(|(a, b)| d2(Hex::new(q - n * a, r - n * b)))
+                    .min()
+                    .expect("nine candidates");
+                if mine == nearest {
+                    out.push(c);
+                }
+            }
+        }
+        out
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,5 +246,96 @@ mod tests {
         let shaku = Hex::new(77, -31);
         let off = local(shaku, Level::Shaku);
         assert!(off.q.abs() <= 6 && off.r.abs() <= 6, "{off:?}");
+    }
+}
+
+#[cfg(test)]
+mod drawn_tests {
+    use super::*;
+
+    #[test]
+    fn drawn_counts_are_exact() {
+        // 36 owned + 7 guests, 3,600 + 61, 1,296 + 37: guests are ties on the hexagon
+        // border, in addition to (never instead of) the owned cells.
+        assert_eq!(drawn_offsets(Level::Ken).len(), 43);
+        assert_eq!(drawn_offsets(Level::Cho).len(), 3_661);
+        assert_eq!(drawn_offsets(Level::Ri).len(), 1_333);
+    }
+
+    #[test]
+    fn the_drawn_set_contains_every_owned_cell() {
+        for level in [Level::Ken, Level::Cho, Level::Ri] {
+            let drawn: Vec<Hex> = drawn_offsets(level).to_vec();
+            for off in owned_offsets(level) {
+                assert!(drawn.contains(off), "{level:?} {off:?} owned but not drawn");
+            }
+        }
+    }
+
+    #[test]
+    fn every_cell_is_drawn_by_its_owner() {
+        // Over a patch of child cells, each cell's owner lists it among its children,
+        // and the offset from that owner's centre is in the owner's drawn set.
+        // No `round_at`: everything here is integer arithmetic, so it holds everywhere,
+        // not just away from a boundary.
+        let level = Level::Ken;
+        let n = level.packing();
+        for q in -9..=9 {
+            for r in -9..=9 {
+                let cell = Hex::new(q, r);
+                let parent = owner(cell, n);
+                assert!(
+                    children(parent, level).contains(&cell),
+                    "{cell:?} not listed by its owner {parent:?}"
+                );
+                let centre = centre_child(parent, level);
+                let offset = Hex::new(cell.q - centre.q, cell.r - centre.r);
+                assert!(
+                    drawn_offsets(level).contains(&offset),
+                    "{cell:?} offset {offset:?} not drawn by its owner {parent:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn guests_are_tie_cells_owned_by_a_neighbour() {
+        // Every offset drawn but not owned is a genuine tie — its d2 to the centre
+        // matches the minimum over all nine candidate parents — and belongs to one of
+        // those neighbours, not to the centre itself.
+        for level in [Level::Ken, Level::Cho, Level::Ri] {
+            let n = level.packing();
+            let owned = owned_offsets(level);
+            for off in drawn_offsets(level) {
+                if owned.contains(off) {
+                    continue;
+                }
+                assert_ne!(
+                    owner(*off, n),
+                    Hex::ZERO,
+                    "{level:?} {off:?} is a guest but owns itself"
+                );
+                let mine = d2(*off);
+                let nearest = (-1..=1)
+                    .flat_map(|a| (-1..=1).map(move |b| (a, b)))
+                    .map(|(a, b)| d2(Hex::new(off.q - n * a, off.r - n * b)))
+                    .min()
+                    .expect("nine candidates");
+                assert_eq!(mine, nearest, "{level:?} {off:?} is a guest but not a tie");
+            }
+        }
+    }
+
+    #[test]
+    fn the_drawn_set_is_about_the_size_of_the_owned_set() {
+        // Same area, different shape: the ideal hexagon instead of battlements.
+        for level in [Level::Ken, Level::Cho, Level::Ri] {
+            let drawn = drawn_offsets(level).len() as f64;
+            let owned = owned_offsets(level).len() as f64;
+            assert!(
+                (drawn - owned).abs() / owned < 0.2,
+                "{level:?}: {drawn} vs {owned}"
+            );
+        }
     }
 }

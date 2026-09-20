@@ -11,6 +11,7 @@ pub mod column;
 pub mod config;
 pub mod hex;
 pub mod level;
+pub mod mesh;
 pub mod noise;
 pub mod owner;
 pub mod placeholder_terrain;
@@ -24,7 +25,10 @@ pub use column::{Column, Material, Run};
 pub use config::WorldConfig;
 pub use hex::{d2, distance, neighbours, range, Hex, DIRECTIONS};
 pub use level::{Level, CELL_LEVELS, SHAKU_M, SUN_M};
-pub use owner::{centre_child, centre_shaku, children, local, owned_offsets, owner, parent_of, up};
+pub use mesh::{drawn_cells, mesh_chunk, MeshData};
+pub use owner::{
+    centre_child, centre_shaku, children, drawn_offsets, local, owned_offsets, owner, parent_of, up,
+};
 pub use placeholder_terrain::{column_at, height_m};
 pub use plane::{cell_centre_m, corners_m, hex_round, metres_to_axial, round_at};
 pub use store::{

@@ -73,7 +73,7 @@ Experiments/exp-05/
 
 Decided while writing this plan. They implement the spec's intent; the spec's "guests" and "no holes" requirements are unchanged.
 
-1. **The drawn set is "the ideal hexagon", not "owned plus guests".** A chunk draws every child cell whose **centre lies in its parent cell's ideal hexagon** — that is, every child `c` with `round_at(centre_of(c), parent_level) == parent_cell`. This set contains most owned cells plus the guests, and **excludes owned cells whose centres fall outside** the ideal hexagon (they are drawn by the neighbour whose hexagon contains them). Ideal hexagons tile the plane exactly, so any mixture of loaded and unloaded chunks covers the ground once: no holes, no overlaps. Ownership is unchanged and still decides addresses, chunk contents and border lines.
+1. **The drawn set is "owned plus tie-guests", computed in integer arithmetic, not `round_at`.** A chunk draws every child cell at least as close (by `d2`) to its own centre as to any of the eight neighbouring parent centres — that is, every candidate whose distance to this cell's centre matches the minimum over all nine candidate parents. This is exactly the set of cells this parent **owns**, plus the "guests": cells sitting exactly on a tie between this parent and a neighbour, whose ownership (broken by `owner`'s lexicographic rule) went to the neighbour, but whose distance is still tied, so their own ideal hexagon straddles the border. Drawn is therefore **owned ∪ tie-guests** — it never excludes an owned cell. Deriving this from `round_at` in `f64` does not work: floating-point error is direction-dependent, so the same boundary tie resolves differently depending on which side you approach it from, and the result stops being an exact partition (an earlier version of this plan derived `drawn_offsets` from `round_at`, and its own tiling test caught the gap during Task 9). Integer `d2` ties are exact and translation-invariant, so drawn sets tile the plane exactly: any mixture of loaded and unloaded chunks covers the ground once, no holes, no overlaps. Ownership is unchanged and still decides addresses, chunk contents and border lines.
 2. **The mesher generates the columns it needs that the chunk does not hold** (guests, and neighbours just outside the drawn set for face culling) by calling the placeholder generator, which is pure. Recorded as an open question in the spec for when edits arrive.
 3. **Line data rides on the mesh in the UVs**, not in a custom vertex attribute: `UV0 = (edge_w, border_level)` and `UV1 = (cell_level, 0)`. Bevy's standard vertex shader already passes both to the fragment shader, so the ground material needs a fragment shader only — no custom vertex shader and no pipeline specialization. The core still produces one `[f32; 4]` per vertex (`MeshData::line`); the plugin splits it into the two UV sets. Top faces are fanned from the cell centre so each triangle has exactly one outer edge, and `edge_w` is 0 at the centre and 1 at the corners. No hex maths in the shader.
 
@@ -2583,9 +2583,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Modify: `crates/hexworld/src/owner.rs` (add `drawn_offsets`), `src/lib.rs`
 
 **Interfaces:**
-- Consumes: `Chunk`, `ChunkKey`, `Column`, `Run`, `Material`, `corners_m`, `cell_centre_m`, `round_at`, `column_at`, `cell_in_world`, `WorldConfig`.
+- Consumes: `Chunk`, `ChunkKey`, `Column`, `Run`, `Material`, `corners_m`, `cell_centre_m`, `d2`, `owner`, `column_at`, `cell_in_world`, `WorldConfig`.
 - Produces:
-  - `owner::drawn_offsets(Level) -> &'static [Hex]` — the child cells a chunk draws: every child whose centre lies in the parent's ideal hexagon.
+  - `owner::drawn_offsets(Level) -> &'static [Hex]` — the child cells a chunk draws: its owned children, plus the "guests" tied on the boundary of its ideal hexagon. All integer arithmetic (a Voronoi membership test against `d2`), not `round_at`.
   - `mesh::MeshData { positions: Vec<[f32; 3]>, normals: Vec<[f32; 3]>, colours: Vec<[f32; 4]>, line: Vec<[f32; 4]>, indices: Vec<u32> }` with `triangle_count() -> usize`.
   - `mesh::mesh_chunk(&WorldConfig, &Chunk, &HashSet<Hex>) -> MeshData` — the third argument is the child cells drawn by their own chunk, which this chunk leaves out.
   - `mesh::drawn_cells(&WorldConfig, ChunkKey) -> Vec<Hex>`.
@@ -2599,32 +2599,76 @@ Positions are `(east, north, height)` in metres **relative to the chunk's own ce
 #[cfg(test)]
 mod drawn_tests {
     use super::*;
-    use crate::plane::{cell_centre_m, round_at};
 
     #[test]
-    fn the_drawn_set_is_the_ideal_hexagon() {
-        for level in [Level::Ken, Level::Cho] {
-            let child = level.child().unwrap();
-            for off in drawn_offsets(level) {
-                let (e, n) = cell_centre_m(*off, child);
-                assert_eq!(round_at(e, n, level), Hex::ZERO, "{level:?} {off:?}");
+    fn drawn_counts_are_exact() {
+        // 36 owned + 7 guests, 3,600 + 61, 1,296 + 37: guests are ties on the hexagon
+        // border, in addition to (never instead of) the owned cells.
+        assert_eq!(drawn_offsets(Level::Ken).len(), 43);
+        assert_eq!(drawn_offsets(Level::Cho).len(), 3_661);
+        assert_eq!(drawn_offsets(Level::Ri).len(), 1_333);
+    }
+
+    #[test]
+    fn the_drawn_set_contains_every_owned_cell() {
+        for level in [Level::Ken, Level::Cho, Level::Ri] {
+            let drawn: Vec<Hex> = drawn_offsets(level).to_vec();
+            for off in owned_offsets(level) {
+                assert!(drawn.contains(off), "{level:?} {off:?} owned but not drawn");
             }
         }
     }
 
     #[test]
-    fn drawn_sets_tile_the_plane_exactly_once() {
-        // Every child cell in a patch is drawn by exactly one parent.
+    fn every_cell_is_drawn_by_its_owner() {
+        // Over a patch of child cells, each cell's owner lists it among its children,
+        // and the offset from that owner's centre is in the owner's drawn set.
+        // No `round_at`: everything here is integer arithmetic, so it holds everywhere,
+        // not just away from a boundary.
         let level = Level::Ken;
-        let child = Level::Shaku;
+        let n = level.packing();
         for q in -9..=9 {
             for r in -9..=9 {
                 let cell = Hex::new(q, r);
-                let (e, n) = cell_centre_m(cell, child);
-                let drawer = round_at(e, n, level);
-                let centre = centre_child(drawer, level);
+                let parent = owner(cell, n);
+                assert!(
+                    children(parent, level).contains(&cell),
+                    "{cell:?} not listed by its owner {parent:?}"
+                );
+                let centre = centre_child(parent, level);
                 let offset = Hex::new(cell.q - centre.q, cell.r - centre.r);
-                assert!(drawn_offsets(level).contains(&offset), "{cell:?} drawn by nobody");
+                assert!(
+                    drawn_offsets(level).contains(&offset),
+                    "{cell:?} offset {offset:?} not drawn by its owner {parent:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn guests_are_tie_cells_owned_by_a_neighbour() {
+        // Every offset drawn but not owned is a genuine tie — its d2 to the centre
+        // matches the minimum over all nine candidate parents — and belongs to one of
+        // those neighbours, not to the centre itself.
+        for level in [Level::Ken, Level::Cho, Level::Ri] {
+            let n = level.packing();
+            let owned = owned_offsets(level);
+            for off in drawn_offsets(level) {
+                if owned.contains(off) {
+                    continue;
+                }
+                assert_ne!(
+                    owner(*off, n),
+                    Hex::ZERO,
+                    "{level:?} {off:?} is a guest but owns itself"
+                );
+                let mine = d2(*off);
+                let nearest = (-1..=1)
+                    .flat_map(|a| (-1..=1).map(move |b| (a, b)))
+                    .map(|(a, b)| d2(Hex::new(off.q - n * a, off.r - n * b)))
+                    .min()
+                    .expect("nine candidates");
+                assert_eq!(mine, nearest, "{level:?} {off:?} is a guest but not a tie");
             }
         }
     }
@@ -2638,15 +2682,6 @@ mod drawn_tests {
             assert!((drawn - owned).abs() / owned < 0.2, "{level:?}: {drawn} vs {owned}");
         }
     }
-
-    #[test]
-    fn the_drawn_set_includes_guests_and_excludes_some_owned_cells() {
-        let level = Level::Ken;
-        let drawn: Vec<Hex> = drawn_offsets(level).to_vec();
-        let owned: Vec<Hex> = owned_offsets(level).to_vec();
-        assert!(drawn.iter().any(|c| !owned.contains(c)), "there should be guests");
-        assert!(owned.iter().any(|c| !drawn.contains(c)), "some owned cells are drawn by a neighbour");
-    }
 }
 ```
 
@@ -2654,9 +2689,13 @@ mod drawn_tests {
 
 ```rust
 /// Offsets, from the centre child, of the children a cell at this level *draws*: every
-/// child whose centre lies in this cell's ideal hexagon. Ideal hexagons tile the plane,
-/// so any mixture of loaded chunks covers the ground exactly once — unlike owned
-/// territory, which is battlement-shaped. Ownership still decides addresses and contents.
+/// child whose centre lies in this cell's ideal hexagon, boundary included. That is the
+/// cells it owns, plus the "guests" — cells sitting exactly on the hexagon's border whose
+/// ownership tie went to a neighbour. A guest's own hexagon straddles the border, so
+/// drawing it is what stops a half-cell gap appearing along a handover.
+///
+/// All integer arithmetic. Deriving this from `round_at` in f64 does not work: ties on the
+/// border resolve inconsistently and the result stops being a partition.
 pub fn drawn_offsets(level: Level) -> &'static [Hex] {
     static CACHE: [OnceLock<Vec<Hex>>; 5] = [
         OnceLock::new(),
@@ -2667,14 +2706,18 @@ pub fn drawn_offsets(level: Level) -> &'static [Hex] {
     ];
     let slot = &CACHE[level as usize];
     slot.get_or_init(|| {
-        let child = level.child().expect("a drawable level has children");
         let n = level.packing();
         let mut out = Vec::new();
         for q in -n..=n {
             for r in -n..=n {
                 let c = Hex::new(q, r);
-                let (e, north) = crate::plane::cell_centre_m(c, child);
-                if crate::plane::round_at(e, north, level) == Hex::ZERO {
+                let mine = d2(c);
+                let nearest = (-1..=1)
+                    .flat_map(|a| (-1..=1).map(move |b| (a, b)))
+                    .map(|(a, b)| d2(Hex::new(q - n * a, r - n * b)))
+                    .min()
+                    .expect("nine candidates");
+                if mine == nearest {
                     out.push(c);
                 }
             }
@@ -2687,7 +2730,7 @@ pub fn drawn_offsets(level: Level) -> &'static [Hex] {
 - [ ] **Step 3: Run to verify the `drawn_offsets` tests pass**
 
 Run: `cd Experiments/exp-05 && cargo test -p hexworld drawn`
-Expected: PASS, 4 tests.
+Expected: PASS, 5 tests.
 
 - [ ] **Step 4: Write the failing tests for `mesh.rs`**
 
@@ -2762,15 +2805,34 @@ mod tests {
     }
 
     #[test]
-    fn omitted_cells_are_absent() {
+    fn an_omitted_cell_is_gone_and_its_hole_is_walled() {
         let (cfg, chunk) = ken_chunk();
         let all = mesh_chunk(&cfg, &chunk, &HashSet::new());
         let mut omitted = HashSet::new();
         omitted.insert(Hex::ZERO);
         let fewer = mesh_chunk(&cfg, &chunk, &omitted);
-        assert!(fewer.triangle_count() < all.triangle_count());
-        // Nothing is drawn over the omitted cell's centre.
+
+        // The omitted cell's own geometry is gone. Only a cell's own top-face fan puts a
+        // vertex exactly at its centre, so no vertex there means the cell is not drawn.
         assert!(!fewer.positions.iter().any(|p| p[0].abs() < 1e-4 && p[1].abs() < 1e-4));
+        assert!(all.positions.iter().any(|p| p[0].abs() < 1e-4 && p[1].abs() < 1e-4));
+
+        // Omitting a cell opens a boundary between detail levels, so its neighbours wall the
+        // hole down to the world bottom: that is what stops a height step becoming a crack,
+        // and it means the mesh gains triangles rather than losing them.
+        let bottom = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
+        let walls_at_bottom = |m: &MeshData| {
+            m.positions
+                .iter()
+                .filter(|p| (p[2] - bottom).abs() < 1e-3)
+                .filter(|p| (p[0] * p[0] + p[1] * p[1]).sqrt() < Level::Shaku.width_m() as f32 * 1.2)
+                .count()
+        };
+        assert!(
+            walls_at_bottom(&fewer) > walls_at_bottom(&all),
+            "the hole should be ringed by full-depth walls"
+        );
+        assert!(fewer.triangle_count() > all.triangle_count());
     }
 
     #[test]
@@ -2890,7 +2952,7 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
     for (cell, column) in chunk.cells.iter().zip(chunk.columns.iter()) {
         columns.insert(*cell, column.clone());
     }
-    let mut column_for = |cell: Hex, columns: &mut HashMap<Hex, Column>| -> Column {
+    let column_for = |cell: Hex, columns: &mut HashMap<Hex, Column>| -> Column {
         if let Some(c) = columns.get(&cell) {
             return c.clone();
         }
