@@ -4161,6 +4161,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
     most one per chunk with the desired set it was spawned against; the first handover to ask
     for a chunk in a frame drives it and the rest ask again next frame. Two handovers wanting
     the same chunk re-meshed is ordinary, not a race.
+  - **A finished mesh cannot be opened without its key.** `Ready::data` is private and
+    `Ready::take_for(self, want)` is the only way out, so the equality is not a check the
+    apply step remembers to make — it is the only way to get at the mesh at all.
   - **`Shown::omitted` is written whole** (`set_omissions`), never nudged cell by cell:
     `omit`/`restore` are gone, so a half-applied handover has no shape to take.
 
@@ -4747,6 +4750,60 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
   like-for-like against the pre-refactor commit on the same machine in the same session:
   neutral to marginally better (see `task-12c-report.md` for the numbers, and for why the
   absolute mean does not match the figure quoted from the previous round).
+
+- [x] **Task 12c, review round: approved, with four follow-ups**
+
+  Review rebuilt the staleness table independently and found nothing crossing a frame
+  boundary unvalidated, confirmed all three residual defects unrepresentable rather than
+  patched, and derived that the level-uniform offset table is *exactly* equivalent to the
+  naive `drawn_cells`/`parent_of` scan. Four things to fix, two of them mergeability
+  blockers:
+
+  1. **A latent panic.** `affected_by` returns `key ± dir` per guest direction and
+     `apply_partners` takes each named chunk's mesh out of a map exactly once, so a repeat
+     would panic. A repeat is impossible today only because every guest direction is
+     lexicographically positive — three hops of reasoning inside `hexworld::owner` that
+     nothing in `hexworld_bevy` states or checks, and that the exhaustive `affected_by` test
+     could not see because it collected into a `HashSet`. `affected_by` now deduplicates
+     unconditionally, and the unit test checks the returned `Vec`, not a set.
+  2. **The desired-set equality made unbypassable, and given teeth.** `Ready::data` is
+     private with no accessor that skips the check: `take_for(self, want)` is the only way
+     to get a mesh out, so "apply whatever landed" has no syntax — the same move
+     `set_omissions` already made for `Shown`, and unlike a `debug_assert`, which would sit
+     on the same line and inherit the same unreachability. Review also worked out *why* the
+     previous round's sabotage came back negative: for a partner chunk the check is
+     currently unreachable (claims are exclusive and ordered), but for **the arriving chunk's
+     own set it is reachable outright** — nothing claims a chunk that is not shown yet. New
+     test `a_pending_chunks_own_desired_set_can_drift_and_the_mesh_still_matches_it` hits
+     that window deliberately. Doing so needed one new read-only introspection accessor,
+     `Handovers::remeshes_in_flight()`, in the same family as `pending_load_keys()`:
+     "pending" alone cannot tell a handover waiting on the pool from one still in the queue,
+     and the first version of the test — which could not tell them apart — passed six runs
+     out of six against a build with the check removed. With the accessor it fails 5/5 with
+     the check removed and passes with it.
+  3. **A coordinate gap in the agreement tests.** `universe()` only reached two cells from
+     the origin, while translation-equivariance is a claim about *large* shifts (a real ken
+     chunk reaches |cell| ~1080). Added a per-level off-origin cluster, chosen to stay in
+     the world at its own level, plus an assertion that it is in the world so the test
+     cannot go vacuous.
+  4. **Two stale doc references** (to `absorb_already_shown_children` and to
+     `show_child`/`promote_loads`, all deleted) fixed, and a behaviour change put on the
+     record next to `MAX_ACTIVE_HANDOVERS`: a zero-cost load is no longer unconditionally
+     fast-pathed the way `collect_finished_jobs` used to do it. It still commits in the frame
+     it is looked at and still costs no slot, but with all slots busy *and* something ahead of
+     it blocked it waits a frame, holding a store in-flight slot meanwhile. Correctness-
+     neutral, measurement-neutral, deliberate — one commit path instead of two that can
+     disagree.
+
+  Recorded, not fixed (reviewer's call): the `Blocked`-returns-before-claiming inefficiency
+  (up to ~18 ms of pool work discarded per blocked frame), and a pre-existing blind spot that
+  the production function and the test oracle share — a child shown while its own parent is
+  not, with a same-level neighbour of that parent drawing the child's tie cell as a guest, is
+  omitted by neither term. That condition predates this design, is transient and one cell
+  wide, and no assertion in the repo can see it.
+
+  Six consecutive full-suite runs green (131 tests). Frame times re-measured after the
+  follow-ups.
 
 ---
 

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 use hexworld::{ChunkKey, Hex, Level, Rings, StoreSettings, WorldConfig};
@@ -438,13 +438,12 @@ fn the_guest_sides_mesh_drops_the_shared_vertex_the_frame_both_neighbours_are_sh
 /// applied, and asserts a key is never *both* pending and shown in the same frame.
 ///
 /// What this actually has teeth against (confirmed by falsification; see
-/// `task-12b-report.md`): a bug that shows the child while `Handovers` still separately
-/// considers it pending too — e.g. calling `show_child` from `promote_loads` while the
-/// handover is still also pushed onto `active_loads`. It does **not** catch a bug where a
-/// handover's apply step runs early (skipping the `handover.remeshes.is_empty()` guard):
-/// that would show the child *and* drop it from `active_loads` in the same system call, so
-/// "pending" and "shown" never overlap at a frame boundary for this test to observe either
-/// state change without the other. That failure mode is instead what
+/// `task-12b-report.md`): a bug that spawns the chunk's entity while `Handovers` still
+/// separately considers its load pending — in the current design, `commit` running without
+/// the handover leaving the queue. It does **not** catch a bug where the apply step runs
+/// early (committing without every required mesh being ready): that would show the chunk
+/// *and* drop the handover in the same system call, so "pending" and "shown" never overlap
+/// at a frame boundary for this test to observe either state change without the other. That failure mode is instead what
 /// `the_parents_mesh_drops_the_vertex_the_same_frame_the_childs_entity_appears` and
 /// `the_parents_omission_never_lags_a_shown_childs_entity_by_even_one_frame` are for: they
 /// check the parent's actual mesh/bookkeeping, which an early apply would still get wrong.
@@ -599,6 +598,185 @@ fn world_is_fully_settled(world: &World, expected: usize) -> bool {
         && handovers.is_idle()
 }
 
+/// Task 12c: the reachable half of the desired-set staleness check, made deterministic.
+///
+/// A handover's required omission sets are recomputed from the live shown set every frame,
+/// and a finished re-mesh is applied only if the set it was computed against still equals
+/// the set now being recorded. For a *partner* chunk that equality is hard to break from
+/// outside — the frame's exclusive, ordered claims get in the way. For the **arriving chunk
+/// itself** it is wide open: nothing claims a chunk that is not shown yet, so its own desired
+/// set can change between its re-mesh being spawned and that re-mesh being applied.
+///
+/// The window has to be hit on purpose, not hoped for. A chunk that is merely *pending* may
+/// still be sitting in the queue with no re-mesh started, and injecting into one of those
+/// proves nothing: by the time it is promoted, the change is already part of the set its
+/// re-mesh is spawned against. (Written that way first, this test passed against a build
+/// with the equality check removed — six runs out of six.) So it uses
+/// `Handovers::remeshes_in_flight()` intersected with `pending_load_keys()`, which names
+/// exactly the chunks whose *own* re-mesh is on the pool right now, and injects into those.
+///
+/// Injecting = making one more of the chunk's ken children appear on screen behind the
+/// plugin's back. That changes the pending chunk's desired set — and, by how the child is
+/// chosen, nothing else's. Exactly one injection per chunk: one is enough once the window is
+/// hit precisely, and repeating it every frame would livelock the *correct* implementation,
+/// which would re-spawn against a new set forever and never commit.
+///
+/// With the equality check in place the handover notices on its next look, re-spawns against
+/// the new set, and reveals a mesh that omits the injected child. Remove the check — keep
+/// whatever re-mesh happens to be running or to have landed — and the reveal pairs a
+/// pre-drift mesh with a post-drift omission set. That is defect 1's exact signature behind
+/// perfectly healthy bookkeeping, and only a mesh-content check sees it. It has to be taken
+/// in the frame of the reveal, too: a cho chunk is re-meshed again every time one of its ken
+/// children arrives, so a stale mesh is quietly corrected a few frames later and an
+/// end-of-test check cannot tell it from one that was right all along.
+#[test]
+fn a_pending_chunks_own_desired_set_can_drift_and_the_mesh_still_matches_it() {
+    /// Perturb this many different chunks before stopping. One would do; a handful keeps the
+    /// test from resting on a single handover happening to reach its reveal.
+    const WANTED: usize = 6;
+
+    let mut app = headless_app(StoreSettings::default());
+    app.world_mut().spawn((
+        Transform::default(),
+        Loader {
+            rings: Rings::default(),
+        },
+    ));
+    let cfg = WorldConfig::default();
+    let mut drifted: HashMap<ChunkKey, ChunkKey> = HashMap::new();
+    let mut revealed: Vec<ChunkKey> = Vec::new();
+
+    let started = std::time::Instant::now();
+    for _ in 0..common::SETTLE_FRAME_CAP {
+        app.update();
+
+        if drifted.len() < WANTED {
+            // Cho chunks only: their children are ken chunks, which are cheap to generate
+            // and mesh here on the main thread, and — unlike a ken chunk, whose "children"
+            // are shaku cells, never a chunk level at all — they are a level `Shown` can
+            // legitimately hold.
+            let handovers = app.world().resource::<Handovers>();
+            let in_flight: HashSet<ChunkKey> = handovers.remeshes_in_flight().into_iter().collect();
+            let mut targets: Vec<ChunkKey> = handovers
+                .pending_load_keys()
+                .into_iter()
+                .filter(|key| {
+                    key.level == Level::Cho && in_flight.contains(key) && !drifted.contains_key(key)
+                })
+                .collect();
+            targets.sort();
+            for key in targets {
+                if drifted.len() >= WANTED {
+                    break;
+                }
+                let Some(child) = injectable_child(app.world(), &cfg, key) else {
+                    continue;
+                };
+                inject_shown_chunk(&mut app, &cfg, child);
+                drifted.insert(key, child);
+            }
+        }
+
+        // The moment of truth: each perturbed chunk, in the one frame it first appears.
+        let shown_keys: HashSet<ChunkKey> =
+            app.world().resource::<Shown>().keys().into_iter().collect();
+        for key in drifted.keys() {
+            if shown_keys.contains(key) && !revealed.contains(key) {
+                revealed.push(*key);
+                assert_chunk_mesh_matches(
+                    app.world(),
+                    &shown_keys,
+                    *key,
+                    "the frame a chunk whose desired set drifted mid-re-mesh was revealed",
+                );
+            }
+        }
+
+        if world_is_fully_settled(app.world(), DEFAULT_WINDOW_TOTAL) {
+            break;
+        }
+        assert!(
+            started.elapsed() < common::SETTLE_TIMEOUT,
+            "timed out after {:?} waiting to settle",
+            started.elapsed(),
+        );
+    }
+
+    assert!(
+        !drifted.is_empty(),
+        "never caught a chunk with its own re-mesh in flight, so no re-mesh was ever spawned \
+         against a set that then changed under it; the test proves nothing"
+    );
+    assert!(
+        !revealed.is_empty(),
+        "perturbed {} chunk(s) ({drifted:?}) but none was ever revealed, so no possibly-stale \
+         mesh was ever applied and looked at; the test proves nothing",
+        drifted.len(),
+    );
+
+    let shown = app.world().resource::<Shown>();
+    for child in drifted.values() {
+        assert!(shown.entity(*child).is_some(), "{child:?} vanished");
+    }
+    assert_invariants(app.world());
+}
+
+/// A child of `pending` that can be put on screen without changing the desired set of any
+/// *already-shown* chunk — so injecting it perturbs exactly one thing, the pending chunk's
+/// own desired set.
+///
+/// The conditions, all read straight off `Shown`: the child is not shown, its parent
+/// (`pending`) is not shown, and none of its same-level neighbours are shown. Those are the
+/// only chunks whose omissions can mention it. It must also be inside the world, or nothing
+/// draws its cell and omitting it would change no mesh.
+fn injectable_child(world: &World, cfg: &WorldConfig, pending: ChunkKey) -> Option<ChunkKey> {
+    let shown = world.resource::<Shown>();
+    if shown.entity(pending).is_some() {
+        return None;
+    }
+    let child_level = pending.child_level();
+    hexworld::owner::children(pending.cell, pending.level)
+        .into_iter()
+        .map(|cell| ChunkKey::new(child_level, cell))
+        .find(|child| {
+            hexworld::cell_in_world(child.cell, child_level, cfg)
+                && shown.entity(*child).is_none()
+                && hexworld::hex::neighbours(child.cell)
+                    .into_iter()
+                    .all(|n| shown.entity(ChunkKey::new(child_level, n)).is_none())
+        })
+}
+
+/// Put `key` on screen directly, with the mesh a chunk omitting nothing would have — which
+/// is the correct mesh for it, since the caller has checked nothing shown can owe it an
+/// omission. Deliberately bypasses `Handovers`: the point is to move the shown set under a
+/// handover that is already mid-flight, which nothing in the public API does on purpose.
+fn inject_shown_chunk(app: &mut App, cfg: &WorldConfig, key: ChunkKey) {
+    let data =
+        hexworld::mesh::mesh_chunk(cfg, &hexworld::chunk::generate(cfg, key), &HashSet::new());
+    let material = app
+        .world()
+        .resource::<hexworld_bevy::GroundMaterialHandle>()
+        .0
+        .clone();
+    let handle = app
+        .world_mut()
+        .resource_mut::<Assets<Mesh>>()
+        .add(hexworld_bevy::entities::to_bevy_mesh(&data));
+    let entity = app
+        .world_mut()
+        .spawn((
+            Mesh3d(handle),
+            MeshMaterial3d(material),
+            Transform::from_translation(hexworld_bevy::entities::chunk_origin(key)),
+            ChunkView(key),
+        ))
+        .id();
+    app.world_mut()
+        .resource_mut::<Shown>()
+        .insert_entity(key, entity);
+}
+
 /// The omission set every shown chunk must have: the union of (a) the cells of its own
 /// currently-shown children, and (b) the guest cells it draws whose true same-level owner is
 /// currently shown instead.
@@ -698,57 +876,81 @@ fn assert_omission_invariant(world: &World) {
 /// against some *other* omission set and applied anyway — a doubled surface or a hole on
 /// screen, with the bookkeeping reading perfectly healthy.
 fn assert_mesh_content_invariant(world: &World) {
+    let shown_keys: HashSet<ChunkKey> = world.resource::<Shown>().keys().into_iter().collect();
+    for &key in &shown_keys {
+        assert_chunk_mesh_matches(world, &shown_keys, key, "in the settled world");
+    }
+}
+
+/// One chunk's half of the mesh-content invariant, so a test can also ask it about a single
+/// chunk in a single frame.
+///
+/// That single-frame form is not a convenience. A cho chunk is re-meshed again every time
+/// one of its ken children arrives, so a stale mesh applied at its reveal is quietly
+/// corrected a few frames later and an end-of-test check cannot tell a mesh that was right
+/// all along from one that was wrong and got fixed. See
+/// `a_pending_chunks_own_desired_set_can_drift_and_the_mesh_still_matches_it`.
+fn assert_chunk_mesh_matches(
+    world: &World,
+    shown_keys: &HashSet<ChunkKey>,
+    key: ChunkKey,
+    when: &str,
+) {
     let hex_world = world.resource::<HexWorld>();
     let shown = world.resource::<Shown>();
-    let meshes = world.resource::<Assets<Mesh>>();
     let cfg = *hex_world.store().config();
-    let shown_keys: HashSet<ChunkKey> = shown.keys().into_iter().collect();
 
-    for &key in &shown_keys {
-        let omissions = expected_omissions(&cfg, &shown_keys, key);
-        // A shown chunk whose store data has already been dropped (its unload is under way)
-        // is regenerated: generation is pure, so this is the same chunk either way.
-        let chunk = hex_world
-            .store()
-            .chunk(key)
-            .cloned()
-            .unwrap_or_else(|| hexworld::chunk::generate(&cfg, key));
-        let want = hexworld::mesh::mesh_chunk(&cfg, &chunk, &omissions);
-        let want_positions: Vec<[f32; 3]> = want
-            .positions
-            .iter()
-            .map(|p| hexworld_bevy::axes::mesh_position(*p))
-            .collect();
+    let omissions = expected_omissions(&cfg, shown_keys, key);
+    // A shown chunk whose store data has already been dropped (its unload is under way) is
+    // regenerated: generation is pure, so this is the same chunk either way.
+    let chunk = hex_world
+        .store()
+        .chunk(key)
+        .cloned()
+        .unwrap_or_else(|| hexworld::chunk::generate(&cfg, key));
+    let want = hexworld::mesh::mesh_chunk(&cfg, &chunk, &omissions);
+    let want_positions: Vec<[f32; 3]> = want
+        .positions
+        .iter()
+        .map(|p| hexworld_bevy::axes::mesh_position(*p))
+        .collect();
 
-        let entity = shown.entity(key).expect("iterating the shown keys");
-        let handle = &world
-            .get::<Mesh3d>(entity)
-            .expect("a shown chunk always has a mesh")
-            .0;
-        let mesh = meshes.get(handle).expect("the mesh asset is still alive");
-        let got = mesh
-            .attribute(Mesh::ATTRIBUTE_POSITION)
-            .expect("positions")
-            .as_float3()
-            .expect("positions are f32x3");
+    let entity = shown
+        .entity(key)
+        .expect("the caller checked this key is shown");
+    let handle = &world
+        .get::<Mesh3d>(entity)
+        .expect("a shown chunk always has a mesh")
+        .0;
+    let mesh = world
+        .resource::<Assets<Mesh>>()
+        .get(handle)
+        .expect("the mesh asset is still alive");
+    let got = mesh
+        .attribute(Mesh::ATTRIBUTE_POSITION)
+        .expect("positions")
+        .as_float3()
+        .expect("positions are f32x3");
 
-        assert_eq!(
-            got.len(),
-            want_positions.len(),
-            "{key:?}'s mesh has {} vertices, but meshing it with the {} cells the invariant \
-             says it must omit gives {} — its mesh was built against a different omission set",
-            got.len(),
-            omissions.len(),
-            want_positions.len(),
+    assert_eq!(
+        got.len(),
+        want_positions.len(),
+        "{when}: {key:?}'s mesh has {} vertices, but meshing it with the {} cells the \
+         invariant says it must omit gives {} — its mesh was built against a different \
+         omission set",
+        got.len(),
+        omissions.len(),
+        want_positions.len(),
+    );
+    if let Some((i, (a, b))) = got
+        .iter()
+        .zip(want_positions.iter())
+        .enumerate()
+        .find(|(_, (a, b))| a != b)
+    {
+        panic!(
+            "{when}: {key:?}'s mesh differs from its expected mesh at vertex {i}: {a:?} vs {b:?}"
         );
-        if let Some((i, (a, b))) = got
-            .iter()
-            .zip(want_positions.iter())
-            .enumerate()
-            .find(|(_, (a, b))| a != b)
-        {
-            panic!("{key:?}'s mesh differs from its expected mesh at vertex {i}: {a:?} vs {b:?}");
-        }
     }
 }
 

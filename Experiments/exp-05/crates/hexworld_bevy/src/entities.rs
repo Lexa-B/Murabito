@@ -309,6 +309,16 @@ pub fn desired_omissions(
 /// taken here: `key + dir` are the neighbours `key` cedes guests to, `key - dir` the ones
 /// that cede guests to `key`. Including both is a superset for the first group, which costs
 /// one desired-set comparison that comes out equal and is dropped.
+///
+/// **The result is deduplicated, unconditionally.** Today `key + dir` and `key - dir` cannot
+/// collide, because every direction in the table is lexicographically greater than the
+/// origin — but that follows from three hops of reasoning inside `hexworld::owner` (a drawn
+/// offset is a guest exactly where its distance ties with the chunk's own centre; `owner`
+/// breaks ties to the lexicographically greatest parent; the chunk's own cell is always
+/// among the minimisers), none of which this crate states or checks. A caller that indexes
+/// per returned key — `tasks::apply_partners` takes each chunk's mesh out of a map exactly
+/// once — would panic on a repeat, so the safety is made explicit here rather than left
+/// resting on a property of another crate that nothing asserts.
 pub fn affected_by(key: ChunkKey) -> Vec<ChunkKey> {
     let mut out = vec![key];
     out.extend(key.parent_key());
@@ -318,6 +328,8 @@ pub fn affected_by(key: ChunkKey) -> Vec<ChunkKey> {
             out.push(ChunkKey::new(key.level, key.cell - *dir));
         }
     }
+    let mut seen: HashSet<ChunkKey> = HashSet::with_capacity(out.len());
+    out.retain(|candidate| seen.insert(*candidate));
     out
 }
 
@@ -351,11 +363,27 @@ mod tests {
     }
 
     /// Every chunk key these tests treat as the whole world: enough of each level around the
-    /// origin that a chunk's parent, children and same-level neighbours are all in it.
+    /// origin that a chunk's parent, children and same-level neighbours are all in it — and a
+    /// second cluster a long way from the origin.
+    ///
+    /// The off-origin cluster is not decoration. `desired_omissions` reads its guest cells out
+    /// of a level-uniform offset table, which is sound only because ownership is
+    /// translation-equivariant on the parent lattice — a claim *about large shifts*. A
+    /// universe confined to two cells of the origin could not tell a correct table from one
+    /// that happens to be right near zero. The centres are picked to stay inside the world at
+    /// their own level (a ken cell runs to roughly |cell| 2 160 within a single ri, and the
+    /// ri-level centre needs the radius-3 world to be in bounds at all).
     fn universe() -> Vec<ChunkKey> {
         let mut out = vec![ChunkKey::WORLD];
-        for level in [Level::Ken, Level::Cho, Level::Ri] {
+        for (level, far) in [
+            (Level::Ken, Hex::new(500, -300)),
+            (Level::Cho, Hex::new(8, -5)),
+            (Level::Ri, Hex::new(2, -1)),
+        ] {
             for cell in hexworld::hex::range(Hex::ZERO, 2) {
+                out.push(ChunkKey::new(level, cell));
+            }
+            for cell in hexworld::hex::range(far, 1) {
                 out.push(ChunkKey::new(level, cell));
             }
         }
@@ -385,6 +413,14 @@ mod tests {
     fn the_offset_table_agrees_with_drawn_cells_and_parent_of() {
         let cfg = WorldConfig::default();
         let universe = universe();
+        // The off-origin cluster only proves anything while it is inside the world: out
+        // there, `drawn_cells` would be empty and both implementations would agree on
+        // nothing. Fail loudly rather than quietly if that ever stops being true.
+        let far_ken = ChunkKey::new(Level::Ken, Hex::new(500, -300));
+        assert!(
+            !hexworld::mesh::drawn_cells(&cfg, far_ken).is_empty(),
+            "{far_ken:?} must be in the world, or the far cluster tests nothing"
+        );
         for seed in 0..24 {
             let shown = subset(&universe, seed);
             for &key in &universe {
@@ -522,9 +558,10 @@ mod tests {
         }
     }
 
-    /// Ruling 1, and the load-order race `absorb_already_shown_children` used to exist for:
-    /// a parent that arrives *after* its child must omit the child's cell. With the desired
-    /// set computed from the shown set, arrival order simply does not enter into it.
+    /// Ruling 1, and the load-order race the old design needed a dedicated "absorb the
+    /// children that are already shown" step for: a parent that arrives *after* its child
+    /// must omit the child's cell. With the desired set computed from the shown set, arrival
+    /// order simply does not enter into it.
     #[test]
     fn a_late_parent_omits_an_already_shown_child() {
         let cfg = WorldConfig::default();
@@ -545,7 +582,16 @@ mod tests {
     #[test]
     fn affected_by_names_the_chunk_and_its_parent() {
         let ken = ChunkKey::new(Level::Ken, Hex::new(1, -1));
-        let affected: HashSet<ChunkKey> = affected_by(ken).into_iter().collect();
+        // No repeats: `tasks::apply_partners` takes each named chunk's mesh out of a map
+        // exactly once, so a duplicate would panic there. Checked on the `Vec`, because
+        // collecting into a set — which every other assertion here does — cannot see one.
+        let listed = affected_by(ken);
+        let affected: HashSet<ChunkKey> = listed.iter().copied().collect();
+        assert_eq!(
+            listed.len(),
+            affected.len(),
+            "affected_by returned a duplicate: {listed:?}"
+        );
         assert!(affected.contains(&ken));
         assert!(affected.contains(&ken.parent_key().expect("a ken chunk has a parent")));
         for neighbour in hexworld::hex::neighbours(ken.cell) {

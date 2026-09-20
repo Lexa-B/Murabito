@@ -95,11 +95,50 @@ struct InFlight {
     task: Task<MeshData>,
 }
 
-/// A finished re-mesh, and the omission set it was computed against. Useless unless that
-/// set is still the one the world wants — which is the only check the apply step makes.
+/// A finished re-mesh, and the omission set it was computed against.
+///
+/// `data` is deliberately private and there is deliberately **no** accessor that hands it
+/// over without being told which omission set the caller is about to record. "Apply whatever
+/// landed" is the exact shape of the defect this whole design exists to make
+/// unrepresentable, and it is not enough for the apply step to merely *have* checked: the
+/// only reason a mismatch is currently unreachable for a partner chunk is a scheduling
+/// argument (claims are exclusive and ordered) that this module's own documentation
+/// disclaims as correctness-relevant. For an *arriving* chunk it is reachable outright —
+/// nothing claims a chunk that is not shown yet, so another handover can show a child of it,
+/// or a same-level owner of one of its guest cells, while its own re-mesh is in flight.
+/// A `debug_assert` would sit on the same line and inherit the same unreachability; a type
+/// that cannot be opened without the key cannot.
 struct Ready {
     desired: HashSet<Hex>,
     data: MeshData,
+}
+
+impl Ready {
+    /// Whether this mesh is the mesh for exactly `want`. Probing is harmless — it cannot
+    /// produce a wrong mesh, only a redundant re-spawn — so `step` uses it to decide whether
+    /// it still has to wait.
+    fn is_for(&self, want: &HashSet<Hex>) -> bool {
+        self.desired == *want
+    }
+
+    /// The one and only way to get at the mesh: hand over the omission set about to be
+    /// recorded alongside it. A mesh computed against anything else is consumed and dropped
+    /// — it is a mesh for a world that has moved on, and the caller is about to spawn its
+    /// replacement, so there is nothing to hand back.
+    fn take_for(self, want: &HashSet<Hex>) -> Option<MeshData> {
+        self.is_for(want).then_some(self.data)
+    }
+}
+
+/// Take `key`'s finished re-mesh if — and only if — it is the mesh for exactly `want`.
+/// Anything else is dropped rather than returned: it is a mesh for a world that has moved
+/// on, and `step` is about to spawn its replacement.
+fn take_ready_for(
+    ready: &mut HashMap<ChunkKey, Ready>,
+    key: ChunkKey,
+    want: &HashSet<Hex>,
+) -> Option<MeshData> {
+    ready.remove(&key)?.take_for(want)
 }
 
 /// Start a chunk's re-mesh on the pool.
@@ -155,6 +194,17 @@ impl Handover {
 /// A handover that needs no re-mesh at all does not occupy a slot: it commits the moment it
 /// is looked at, so the common case (a chunk arriving where nothing else is drawn) is not
 /// rate-limited by this number.
+///
+/// **A behaviour change from the pre-12c design, recorded deliberately.** There, a chunk
+/// whose arrival changed nothing was shown unconditionally, inside `collect_finished_jobs`,
+/// without consulting this cap at all. Now it goes through the same queue as everything
+/// else: it still commits in the frame it is looked at and still costs no slot, but if all
+/// `MAX_ACTIVE_HANDOVERS` slots are occupied *and* something ahead of it in the queue is
+/// blocked, it is not looked at that frame — and it holds a `ChunkStore` in-flight slot
+/// while it waits, where the old fast path would have released it immediately. The trade is
+/// deliberate: one commit path instead of two that can disagree. Frame-time measurement
+/// after the change was neutral, and the queue drains at the same rate, but this is the one
+/// place the refactor is not purely a simplification.
 const MAX_ACTIVE_HANDOVERS: usize = 3;
 
 /// Chunk arrivals and departures that have not reached the screen yet, plus the re-meshes
@@ -205,6 +255,21 @@ impl Handovers {
         self.pending_keys(|h| matches!(h, Handover::Unload { .. }))
     }
 
+    /// Every chunk with a re-mesh running on the pool right now. Read-only introspection for
+    /// tests, in the same family as `pending_load_keys`.
+    ///
+    /// Intersected with `pending_load_keys()` it names exactly the chunks whose *own* re-mesh
+    /// is in flight — a chunk that is not shown yet can be in here for no other reason, since
+    /// nothing else has a reason to re-mesh it. That is the one window in which a chunk's
+    /// desired set can drift out from under a re-mesh already computed against it, and
+    /// `tests/handover.rs::a_pending_chunks_own_desired_set_can_drift_and_the_mesh_still_matches_it`
+    /// needs to hit it deliberately rather than hope: without this, "pending" alone cannot
+    /// tell a handover that is waiting on the pool from one still sitting in the queue, and
+    /// the test passes for the wrong reason.
+    pub fn remeshes_in_flight(&self) -> Vec<ChunkKey> {
+        self.remeshes.keys().copied().collect()
+    }
+
     /// Whether nothing is queued or waiting. A "settled" helper that only checks the store's
     /// own bookkeeping can read settled while a handover is still queued or mid-re-mesh: the
     /// store calls an unload gone from `loaded` well before its handover applies.
@@ -246,6 +311,13 @@ pub fn collect_finished_jobs(
         handovers.queue_load(output);
     }
 }
+
+/// `step` accepts a finished re-mesh only after checking it against the same omission set
+/// the commit then records, so reaching this means the two disagreed between the check and
+/// the commit — impossible without a mutation of `Shown` in between, which only a commit
+/// does, and a commit does not run in the middle of another.
+const STALE_MESH: &str =
+    "step checked this mesh against the same omission set the commit is recording";
 
 /// What a single look at a handover concluded.
 enum Outcome {
@@ -452,7 +524,7 @@ fn step(
     let mut all_ready = true;
     for (chunk_key, desired) in &required {
         claimed.insert(*chunk_key);
-        if ready.get(chunk_key).is_some_and(|r| r.desired == *desired) {
+        if ready.get(chunk_key).is_some_and(|r| r.is_for(desired)) {
             continue;
         }
         all_ready = false;
@@ -531,12 +603,14 @@ fn commit(
             }
             apply_partners(commands, shown, meshes, ready, partners);
 
-            let own_mesh = own.as_ref().map(|_| {
-                ready
-                    .remove(&key)
-                    .expect("checked ready before committing")
-                    .data
-            });
+            // `own` is `Some` exactly when `step` required a re-mesh of the arriving chunk
+            // itself, and `take_ready_for` hands it over only if it was computed against the
+            // very set recorded below. This is the reachable half of the staleness check: a
+            // chunk that is not shown yet is claimed by nobody, so its desired set can drift
+            // between spawning that re-mesh and getting here.
+            let own_mesh = own
+                .as_ref()
+                .map(|desired| take_ready_for(ready, key, desired).expect(STALE_MESH));
             let mesh = own_mesh.as_ref().unwrap_or(&output.mesh);
 
             // A reload can race back in while this chunk's own unload is still queued, so
@@ -571,13 +645,13 @@ fn apply_partners(
     partners: Vec<(ChunkKey, HashSet<Hex>)>,
 ) {
     for (chunk_key, desired) in partners {
-        let mesh = ready
-            .remove(&chunk_key)
-            .expect("checked ready before committing");
+        // The mesh and the omission set recorded beside it come out of the same call, keyed
+        // by that very set — there is no way to write "apply whatever landed" here.
+        let data = take_ready_for(ready, chunk_key, &desired).expect(STALE_MESH);
         let entity = shown
             .entity(chunk_key)
             .expect("a partner is only required while it is on screen");
-        entities::apply_remesh(commands, meshes, entity, &mesh.data);
+        entities::apply_remesh(commands, meshes, entity, &data);
         shown.set_omissions(chunk_key, desired);
     }
 }
