@@ -11,12 +11,19 @@
 //! Ground plane throughout: `Vec2` is world XZ, with `y` the world's Z.
 //!
 //! ```text
-//!        __            q increases east; r increases south-east.
-//!     __/  \__         A cell's six neighbours are all exactly one shaku away,
-//!    /  \__/  \        so a hex distance in cells is a distance in shaku.
-//!    \__/  \__/
-//!       \__/
+//!       /\          Pointy up: a vertex north and south, flat sides east and west.
+//!      /  \         Flat to flat is one shaku - that is the width - and point to
+//!     |    |        point is 2/sqrt(3) of it, about 1.155 shaku. So a cell is
+//!      \  /         slightly taller than it is wide.
+//!       \/
 //! ```
+//!
+//! `q` increases east, `r` south-east. A cell's six neighbours are all exactly one
+//! shaku away, so a hex distance in cells is a distance in shaku.
+//!
+//! (Flat-top is what hex diagrams in ASCII usually are, because pointy-up tiles badly
+//! in characters. This grid is pointy-up; one cell is drawn rather than a tiling so the
+//! picture cannot disagree with the code.)
 
 use bevy::prelude::*;
 
