@@ -1603,11 +1603,11 @@ use crate::level::Level;
 use crate::noise::gradient_2d;
 use crate::plane::cell_centre_m;
 
-/// Number of octaves. The first is 4 km across (about one ri), the last about 16 m.
-pub const OCTAVES: usize = 8;
-const BASE_WAVELENGTH_M: f64 = 4_096.0;
-const BASE_AMPLITUDE_M: f64 = 18.0;
-const GAIN: f64 = 0.5;
+/// Number of octaves. The first is 8 km across (about twice the ri width), the last about 0.5 m.
+pub const OCTAVES: usize = 15;
+const BASE_WAVELENGTH_M: f64 = 8_192.0;
+const BASE_AMPLITUDE_M: f64 = 10.0;
+const GAIN: f64 = 0.75;
 
 fn wavelength(octave: usize) -> f64 {
     BASE_WAVELENGTH_M / (1 << octave) as f64
