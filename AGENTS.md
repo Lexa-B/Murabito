@@ -6,7 +6,7 @@ This file provides guidance to AI coding agents when working with code in this r
 
 Murabito is a new project, described by its author as halfway between a game and a fun AI experiment / population-dynamics simulator. It's being built in Unreal Engine 5, starting with exp-04.
 
-Ideas are tried out as small, self-contained **experiments**. They come in two kinds:
+Ideas are tried out as small, self-contained **experiments**. They come in three kinds:
 
 - **Unreal Engine 5 (C++)**: where most of the code is headed. exp-04 is the first: a UE 5.8 project with procedural hilly terrain, a hex grid draped over it, an overhead camera, and hover highlighting.
 - **Python + pygame**: mostly for quick testing of ideas.
@@ -14,6 +14,7 @@ Ideas are tried out as small, self-contained **experiments**. They come in two k
   - **exp-01** builds on it with objects that wander.
   - **exp-02** adds fog of war and a believed world.
   - **exp-03** is a tiered hex world: hierarchical hex addresses at historical Japanese scale, loaded in tiers of detail (moderngl).
+- **Rust + Bevy**: a second scaffolding line, tried when the user wanted something FOSS to build the coordinate system in. **exp-05** is the first: ri/cho/ken/shaku hex addresses with a vertical layer, hot-loaded chunks holding voxel columns, and an overhead viewer, in an engine-free core crate plus a Bevy plugin and app.
 
 Don't assume goals beyond what `Experiments/manifest.md` and each experiment's spec state.
 
@@ -38,14 +39,18 @@ Murabito/
    │  │  └─ ai/            AI code (decision logic, pathing, etc.)
    │  ├─ tests/            pytest; run with `uv run pytest` from the experiment dir
    │  └─ docs/             specs/ and plans/, as below
-   └─ exp-NN/              an Unreal Engine 5 (C++) experiment
-      ├─ MuraBito.uproject, Config/       project file and text config
-      ├─ Source/MuraBito/                 the C++ module; Private/Tests/ holds automation tests
-      ├─ scripts/                         build.sh, editor.sh, game.sh, test.sh (wrap the local engine)
-      ├─ .gitignore                       Binaries/ Intermediate/ Saved/ DerivedDataCache/ …
-      └─ docs/
-         ├─ specs/         design specs    (YYYY-MM-DD-<topic>-design.md)
-         └─ plans/         implementation plans (YYYY-MM-DD-<topic>-plan.md)
+   ├─ exp-NN/              an Unreal Engine 5 (C++) experiment
+   │  ├─ MuraBito.uproject, Config/       project file and text config
+   │  ├─ Source/MuraBito/                 the C++ module; Private/Tests/ holds automation tests
+   │  ├─ scripts/                         build.sh, editor.sh, game.sh, test.sh (wrap the local engine)
+   │  ├─ .gitignore                       Binaries/ Intermediate/ Saved/ DerivedDataCache/ …
+   │  └─ docs/
+   │     ├─ specs/         design specs    (YYYY-MM-DD-<topic>-design.md)
+   │     └─ plans/         implementation plans (YYYY-MM-DD-<topic>-plan.md)
+   └─ exp-NN/              a Rust + Bevy experiment
+      ├─ Cargo.toml        workspace
+      ├─ crates/           an engine-free core crate, a Bevy plugin, the viewer app
+      └─ docs/             specs/ and plans/, as below
 ```
 
 - **Experiments are self-contained.** Code, tests, dependencies and docs live inside `Experiments/exp-NN/`. Nothing experiment-specific goes at the repo root.
@@ -87,3 +92,11 @@ The repo root is the Murabito Unreal Engine 5.8 project. The user drives it; AI 
 - **The user may have the editor open on the same checkout while you work.** `build.sh` then does a hot-reload build, and the open editor loads it by itself within about a second. While the user is in Play, the reload waits until they stop. Changes to class layout (new or changed `UPROPERTY`/`UCLASS`, header changes) don't hot-reload reliably: tell the user to restart the editor after those.
 - **`test.sh` is safe with an editor open.** It copies the project into a private mirror under `~/.cache/murabito/` and builds that with `-NoHotReloadFromIDE`, so the tests run the code on disk and never touch the editor's modules.
 - **Windowed runs need the desktop display.** Shells in the user's terminal may have no `DISPLAY`/`WAYLAND_DISPLAY`; `game.sh` and `editor.sh` take them from the systemd user session. The main project's `Tools/` scripts run the editor on X11 (`SDL_VIDEODRIVER=x11`), because on SDL's Wayland backend editor pop-ups such as the Pick Parent Class tree stop taking clicks; set `SDL_VIDEODRIVER=wayland` to override.
+
+
+## Rust + Bevy experiments
+
+- **Build and test from the experiment directory:** `cargo build --release` and `cargo test`, e.g. `cd Experiments/exp-05 && cargo test`. A workspace member's own commands (`cargo run -p viewer --release`, `cargo test -p hexworld`) also work from there.
+- **The core crate is engine-free** (no Bevy, no graphics, no dependencies at all in exp-05's case) and is the part meant to outlive whatever engine or graphics stack sits on top of it. Keep it that way: engine types and rendering code belong in the plugin crate or the app, not the core.
+- **No Rust build directory under `/tmp`.** It is a RAM-backed tmpfs on this machine, and a `target/` there can silently blow the build past available memory. `cargo`'s default `target/` inside the experiment directory is fine; don't set `CARGO_TARGET_DIR` (or a temp working directory) to anywhere under `/tmp`.
+- **Windowed runs need the desktop display**, same as the Unreal Engine experiments: take `DISPLAY`/`XAUTHORITY` from the systemd user session when the shell doesn't have them (`export $(systemctl --user show-environment | rg '^(DISPLAY|XAUTHORITY)=' | xargs)`).

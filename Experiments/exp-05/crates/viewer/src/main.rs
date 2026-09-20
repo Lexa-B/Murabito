@@ -8,47 +8,28 @@
 //! asset path is overridden the same way `hexworld_bevy`'s `shader_check` example does it.
 
 mod camera;
+mod headless;
 mod panel;
 
 use std::time::{Duration, Instant};
 
 use bevy::asset::AssetPlugin;
-use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
+use bevy::diagnostic::{FrameCount, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::window::{WindowPlugin, WindowResolution};
 use hexworld::WorldConfig;
-use hexworld_bevy::{HexWorld, HexWorldPlugin, Loader};
+use hexworld_bevy::{HexWorld, HexWorldPlugin, LineMode, Loader, TintByLevel};
 
 use camera::CameraRig;
-
-/// Runs forever unless `--frames N` is given on the command line, in which case the app
-/// exits on its own after N frames. Parsed by hand (no `clap`): every later verification
-/// of this crate has to be non-interactive, and a windowed app with no exit condition
-/// cannot be run from an agent's shell.
-fn frames_from_args() -> Option<u32> {
-    let args: Vec<String> = std::env::args().collect();
-    for (i, arg) in args.iter().enumerate() {
-        if let Some(value) = arg.strip_prefix("--frames=") {
-            return value.parse().ok();
-        }
-        if arg == "--frames" {
-            return args.get(i + 1).and_then(|v| v.parse().ok());
-        }
-    }
-    None
-}
-
-/// `--auto-pan`: drives the camera rig's focus in a steady sweep instead of waiting for
-/// real input, so a non-interactive `--frames N` run still exercises sustained panning —
-/// the scenario that produced the parent-remesh frame spikes this binary is used to
-/// measure. Gated behind the flag and off by default; see `docs/plans/...task-12b`.
-fn auto_pan_from_args() -> bool {
-    std::env::args().any(|arg| arg == "--auto-pan")
-}
+use headless::Headless;
 
 fn main() {
-    let frame_limit = frames_from_args();
-    let auto_pan = auto_pan_from_args();
+    let headless = Headless::from_args();
+
+    let mut world_config = WorldConfig::default();
+    if let Some(seed) = headless.seed {
+        world_config.seed = seed;
+    }
 
     let mut app = App::new();
     app.add_plugins(
@@ -66,7 +47,10 @@ fn main() {
                 ..default()
             }),
     )
-    .add_plugins(HexWorldPlugin::default())
+    .add_plugins(HexWorldPlugin {
+        config: world_config,
+        ..default()
+    })
     .add_plugins(FrameTimeDiagnosticsPlugin::default())
     .add_plugins(bevy_egui::EguiPlugin::default())
     .init_resource::<panel::HoveredCell>()
@@ -89,13 +73,18 @@ fn main() {
         Update,
         panel::track_triangle_counts.after(hexworld_bevy::HexWorldSet),
     )
-    .add_systems(bevy_egui::EguiPrimaryContextPass, panel::draw);
+    .add_systems(bevy_egui::EguiPrimaryContextPass, panel::draw)
+    // Both are no-ops without their flag (`--screenshot-dir`, `--frames`): `shoot` returns
+    // immediately with no `screenshot_dir`, and `quit_after` never writes `AppExit`
+    // without a `frames` limit, so registering them unconditionally costs nothing in an
+    // ordinary interactive session.
+    .add_systems(Update, (headless::shoot, headless::quit_after));
 
-    if auto_pan {
+    if headless.auto_pan {
         app.add_systems(Update, auto_pan_system.before(camera::follow_ground));
     }
 
-    if let Some(frames) = frame_limit {
+    if headless.frames.is_some() {
         // Only wired up for a `--frames N` run: `FrameTimes` collects one sample every
         // frame for as long as the app runs, so registering it unconditionally would grow
         // an unbounded `Vec<Duration>` for the length of an ordinary interactive session
@@ -105,16 +94,28 @@ fn main() {
             // it brackets the *previous* frame's full cost (every system, main-thread
             // remeshing included) rather than just this frame's own work.
             .add_systems(First, record_frame_time)
-            .insert_resource(FrameLimit(frames))
-            .add_systems(Update, exit_after_frame_limit);
+            .add_systems(Update, report_frame_times_once_done);
     }
+
+    // `--line-mode`/`--tint`: override the resources `HexWorldPlugin` just initialised to
+    // their defaults, above. Neither has a keyboard shortcut (only the egui panel's mouse
+    // controls reach them), so a headless run has no other way to start in these modes.
+    if let Some(mode) = headless.line_mode.as_deref() {
+        let mode = match mode {
+            "off" => LineMode::Off,
+            "nested" => LineMode::Nested,
+            _ => LineMode::ShakuOnly,
+        };
+        app.insert_resource(mode);
+    }
+    if headless.tint {
+        app.insert_resource(TintByLevel(true));
+    }
+
+    app.insert_resource(headless);
 
     app.run();
 }
-
-/// How many frames to run before exiting on its own. Only present with `--frames N`.
-#[derive(Resource)]
-struct FrameLimit(u32);
 
 /// Wall-clock time between consecutive frame starts, collected whenever `--frames` runs
 /// the app non-interactively, so a `--frames N` run always ends with a frame-time report.
@@ -145,17 +146,24 @@ fn auto_pan_system(time: Res<Time>, world: Res<HexWorld>, mut rigs: Query<&mut C
     }
 }
 
-fn exit_after_frame_limit(
-    limit: Res<FrameLimit>,
+/// Prints the frame-time report exactly once, the first frame `FrameCount` reaches the
+/// `--frames` limit. `headless::quit_after` is the system that actually exits — this one
+/// only reports, guarded by `reported` so it cannot print twice if `AppExit` takes an
+/// extra frame to stop the app.
+fn report_frame_times_once_done(
+    frame_count: Res<FrameCount>,
+    headless: Res<Headless>,
     times: Res<FrameTimes>,
-    mut frames: Local<u32>,
-    mut exit: MessageWriter<AppExit>,
+    mut reported: Local<bool>,
 ) {
-    *frames += 1;
-    if *frames >= limit.0 {
-        report_frame_times(&times.0);
-        exit.write(AppExit::Success);
+    let Some(limit) = headless.frames else {
+        return;
+    };
+    if *reported || frame_count.0 < limit {
+        return;
     }
+    *reported = true;
+    report_frame_times(&times.0);
 }
 
 /// Prints worst frame, a 95th-percentile, and counts over common frame-budget thresholds —
@@ -184,21 +192,27 @@ fn report_frame_times(samples: &[Duration]) {
     );
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, headless: Res<Headless>) {
+    let (focus_east, focus_north) = headless.start.unwrap_or((0.0, 0.0));
+    let zoom = headless
+        .zoom
+        .unwrap_or(120.0)
+        .clamp(camera::MIN_ZOOM, camera::MAX_ZOOM);
     let rig = CameraRig {
-        focus_east: 0.0,
-        focus_north: 0.0,
-        zoom: 120.0,
+        focus_east,
+        focus_north,
+        zoom,
         last_height: 0.0,
     };
     let (focus_pos, camera_pos) = camera::rig_transforms(&rig);
 
+    let mut loader = Loader::default();
+    if let Some(rings_shaku) = headless.rings_shaku {
+        loader.rings.shaku = rings_shaku;
+    }
+
     commands
-        .spawn((
-            rig,
-            Loader::default(),
-            Transform::from_translation(focus_pos),
-        ))
+        .spawn((rig, loader, Transform::from_translation(focus_pos)))
         .with_children(|parent| {
             parent.spawn((
                 Camera3d::default(),
