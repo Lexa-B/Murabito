@@ -9,6 +9,7 @@ use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 
 use crate::settings::CameraSettings;
+use crate::state::AppState;
 
 /// Default top pan speed in metres per second at `PAN_REF_ZOOM`, before the zoom
 /// scaling below and before the player's own multiplier in `CameraSettings`.
@@ -51,7 +52,11 @@ impl Plugin for CameraPlugin {
             Update,
             // Chained: both input systems mutate the rig, and `apply_rig` must see the
             // result of both, so the order is part of the design rather than incidental.
-            (pan_camera, zoom_camera, apply_rig).chain(),
+            // Frozen while the escape menu is open: a click on a button should not
+            // also be a click in the world, and WASD should not pan behind the menu.
+            (pan_camera, zoom_camera, apply_rig)
+                .chain()
+                .run_if(in_state(AppState::Playing)),
         );
     }
 }

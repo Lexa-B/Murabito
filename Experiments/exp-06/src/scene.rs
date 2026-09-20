@@ -12,9 +12,20 @@ pub struct ScenePlugin;
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ClearColor(SKY))
-            .add_systems(Startup, spawn_scene);
+            .add_systems(Startup, spawn_scene)
+            // Not gated on `AppState`: it stops because the clock stops, which is the
+            // point of pausing `Time<Virtual>` rather than gating every system by hand.
+            .add_systems(Update, spin);
     }
 }
+
+/// Marks something that turns slowly on the spot. Placeholder motion: without it the
+/// scene is completely static and a pause would be impossible to see.
+#[derive(Component)]
+struct Spinner;
+
+/// A quarter turn a second, in radians.
+const SPIN_RATE: f32 = std::f32::consts::FRAC_PI_2;
 
 /// Runs once, before the first frame. `Commands` queues entity spawns; the two
 /// `ResMut<Assets<_>>` are the engine's mesh and material stores — `add` uploads an
@@ -35,6 +46,7 @@ fn spawn_scene(
         Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
         MeshMaterial3d(materials.add(Color::srgb(0.85, 0.45, 0.20))),
         Transform::from_xyz(0.0, 0.5, 0.0),
+        Spinner,
     ));
 
     // Sun. A directional light has no position — only a direction, which is why this is
@@ -46,4 +58,12 @@ fn spawn_scene(
         },
         Transform::from_xyz(-10.0, 14.0, -4.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
+}
+
+/// Turns every `Spinner` on the spot. `time.delta_secs()` is zero while the game is
+/// paused, so this keeps running and simply moves nothing.
+fn spin(time: Res<Time>, mut spinners: Query<&mut Transform, With<Spinner>>) {
+    for mut transform in &mut spinners {
+        transform.rotate_y(SPIN_RATE * time.delta_secs());
+    }
 }

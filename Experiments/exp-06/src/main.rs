@@ -1,10 +1,12 @@
 //! exp-06: a minimal Bevy app — a starter scene with an overhead camera.
 //!
-//! Controls: WASD or the arrow keys pan, the mouse wheel zooms.
+//! Controls: WASD or the arrow keys pan, the mouse wheel zooms, Escape opens the menu.
 
 mod camera;
+mod menu;
 mod scene;
 mod settings;
+mod state;
 
 use bevy::prelude::*;
 
@@ -19,9 +21,11 @@ fn main() {
         }))
         // Ours, in dependency order: the camera reads what settings registers.
         .add_plugins((
+            state::StatePlugin,
             settings::SettingsPlugin,
             scene::ScenePlugin,
             camera::CameraPlugin,
+            menu::MenuPlugin,
         ))
         .run();
 }
