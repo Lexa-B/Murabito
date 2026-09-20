@@ -84,3 +84,14 @@ cargo run -p viewer --release -- --frames 240 --screenshot-every 60 --screenshot
 ```
 
 `screenshots/` is gitignored.
+
+## Known limitations
+
+- **No automated test renders a frame.** Shader correctness rests on `examples/shader_check.rs` run by hand and on the committed screenshots; a WGSL regression would pass `cargo test` silently. This is the largest hole in the suite.
+- **Bottom faces are not emitted.** Fine while columns run contiguously from the world bottom; a cave or overhang would be see-through from below.
+- **A one-cell blind spot** shared by the production code *and* the test oracle: a child shown while its own parent is not, whose tie cell a same-level neighbour of that parent draws as a guest, is omitted by neither term of `desired_omissions`. Transient and one cell wide — and invisible to every assertion in the repo, which is the part worth knowing.
+- **A full-depth wall spans an air gap**, so a cave mouth meeting a detail boundary would be walled over.
+- **`border_level` never reports the world's edge** as its own category; edges there are styled as `ri`.
+- **`fwidth` derivatives are per 2×2 fragment quad**, so a top face and a side face sharing a quad at a grazing angle can show a faint line sliver. Inherent to the line technique.
+- **The triangle counter under-counts permanently** for a chunk if `try_indices_option()` ever fails for it, since `Changed<Mesh3d>` will not fire again. Degrades to a wrong number, never a crash.
+- **A blocked handover discards its other in-flight re-meshes** for that frame — up to about 18 ms of pool work in a contended burst. Throughput only; starvation is impossible by ordering.

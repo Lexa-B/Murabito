@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
-use hexworld::{address_of, cell_centre_m, round_at, Hex, Level, WorldConfig, CELL_LEVELS};
+use hexworld::{address_of, cell_centre_m, round_at, Hex, Level, WorldConfig};
 
 use hexworld_bevy::axes::{from_bevy, to_bevy};
 use hexworld_bevy::{ChunkView, HexWorld, LineMode, Loader, TintByLevel};
@@ -226,8 +226,13 @@ fn draw_levels(
         }
     }
     let stats = world.store().stats();
+    // `stats.per_level` is keyed by *chunk* level (a `ChunkKey`'s level is its parent's
+    // level; the chunk holds columns for cells one level finer, at `level.child()` — see
+    // `ChunkKey`'s doc comment). No chunk is ever keyed at `Level::Shaku`, so we walk the
+    // chunk levels that actually occur and label each row by the detail it provides.
+    const CHUNK_LEVELS: [Level; 4] = [Level::Ken, Level::Cho, Level::Ri, Level::World];
     egui::Grid::new("level_stats").striped(true).show(ui, |ui| {
-        ui.label("level");
+        ui.label("detail");
         ui.label("chunks");
         ui.label("columns");
         ui.label("lingering");
@@ -235,15 +240,18 @@ fn draw_levels(
         ui.label("unloads/s");
         ui.label("triangles");
         ui.end_row();
-        for level in CELL_LEVELS {
-            let s = stats.per_level[level as usize];
-            ui.label(level.name());
+        for chunk_level in CHUNK_LEVELS {
+            let detail_level = chunk_level
+                .child()
+                .expect("chunk levels always have a child");
+            let s = stats.per_level[chunk_level as usize];
+            ui.label(detail_level.name());
             ui.label(s.chunks.to_string());
             ui.label(s.columns.to_string());
             ui.label(s.lingering.to_string());
             ui.label(s.loads_last_second.to_string());
             ui.label(s.unloads_last_second.to_string());
-            ui.label(triangles[level as usize].to_string());
+            ui.label(triangles[chunk_level as usize].to_string());
             ui.end_row();
         }
     });

@@ -53,6 +53,8 @@ mod tests {
         assert_eq!(c.world_radius_ri, 0);
         assert_eq!(c.layer_thickness_sun, 5.0);
         assert!((c.layer_thickness_m() - 5.0 / 33.0).abs() < 1e-12);
+        assert_eq!(c.seed, 1);
+        assert_eq!(c.bottom_layer, -256);
     }
 
     #[test]

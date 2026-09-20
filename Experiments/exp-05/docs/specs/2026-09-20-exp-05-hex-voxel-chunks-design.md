@@ -254,3 +254,13 @@ Recorded for later experiments; none blocks exp-05.
 - **Window sizes for an overhead camera.** The default 3 rings give full detail only about 6 m around the focus. Rings that follow the zoom were discussed and deferred.
 - **Vertical sections** (decision 12) for caves, deep mines and tall structures.
 - **Triangle budget.** Default rings give roughly 2 to 3 million triangles at ken detail. The plan measures this early.
+
+## Amendments from implementation (2026-09-20)
+
+Found while building and reviewing the plan's code. Recorded here rather than edited into the bullets above, per this repo's convention (see exp-03's spec).
+
+- **Bottom faces are not emitted**, though the Prisms bullet promises them. Unreachable with contiguous placeholder columns run from `bottom_layer` to the surface — nothing is ever under a column's lowest run — so the gap is invisible today. It is where a caves/overhangs implementer must start.
+- **`border_level`** tops out at `Ri` and reports neither "none" nor "the world's edge", both of which the Line data bullet lists as categories. In the shipped code it is always one of `Shaku`/`Ken`/`Cho`/`Ri`: same-owner-everywhere edges read as the finest level (`child`, i.e. `Shaku`) rather than "none", and the world's rim reads as `Ri` rather than its own category.
+- **The second-loader control** is two panel buttons ("Add loader at mouse", "Remove last loader"), not "a debug key" as the viewer bullet says.
+- **"All integer arithmetic"** in the ownership section is not quite literally true: `owner()` uses one `f64` round (`(cell.q as f64 / n as f64).round()`) to choose the 3×3 candidate window it then searches, before the comparison that actually decides the owner (`d2`, exact `i64`). The property the sentence is getting at — that the decision itself is exact, with no accumulated floating-point error — holds; the search-window step is not integer arithmetic.
+- **The drawn set and the guest mechanism were redefined in integer terms during implementation.** The original `round_at`-based formulation this section implies was not a partition (a point could round to more than one cell, or to none, at a boundary); `desired_omissions` and the rest of the meshing/handover machinery were built around a pure, total function from the live shown set instead, and the handover itself (see the Bevy plugin section above) was rewritten around one total function rather than incremental diffs. The Meshing section above does not reflect this — treat this bullet as the correction rather than editing it in.

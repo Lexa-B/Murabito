@@ -77,6 +77,7 @@ pub fn rig_transforms(rig: &CameraRig) -> (Vec3, Vec3) {
     let tilt = tilt_for_zoom(rig.zoom);
     let back = rig.zoom * tilt.cos();
     let up = rig.zoom * tilt.sin();
+    // +Z is behind the focus, i.e. south, since north is -Z (see `hexworld_bevy::axes`).
     (focus, focus + Vec3::new(0.0, up, back))
 }
 

@@ -152,15 +152,17 @@ fn unloading_puts_the_cell_back_into_its_parent() {
 }
 
 /// The one-frame property, made testable: check the bookkeeping invariant after *every*
-/// single frame, not just once at the end after many frames have run. `Shown.omitted` and
-/// a chunk's entity are both updated inside the same system call in `collect_finished_jobs`
-/// (see `entities.rs`), so there must never be a frame where a child's entity exists but
-/// its parent's omission has not yet caught up — that lag is exactly what an async or
-/// next-frame remesh (the route Ruling 1 forbids) would produce: a doubled surface for one
-/// frame while the parent's stale mesh is still on screen next to the new child.
+/// single frame, not just once at the end after many frames have run. Re-meshing itself runs
+/// asynchronously on the background task pool, but a chunk's entity and its affected
+/// neighbours' `Shown.omitted` are only ever written together, inside one `commit` call from
+/// `process_handovers` (see `tasks.rs`), once every mesh the handover needs has landed. So
+/// there must never be a frame where a child's entity exists but its parent's omission has
+/// not yet caught up — that lag is exactly what committing the entity spawn ahead of the
+/// omission update would produce: a doubled surface for one frame while the parent's stale
+/// mesh is still on screen next to the new child.
 ///
 /// This only checks `Shown`'s bookkeeping, not the mesh actually on screen — a bug that
-/// updated `Shown.omitted` correctly but forgot to call `remesh_shown` would pass this
+/// updated `Shown.omitted` correctly but committed the wrong mesh data would pass this
 /// test. `the_parents_mesh_drops_the_vertex_the_same_frame_the_childs_entity_appears`
 /// below checks the mesh geometry itself for exactly that reason.
 #[test]
