@@ -101,6 +101,19 @@ PALETTE = [
     ("azalea_flower_red", "#E0553A"),
     ("azalea_flower_red_light", "#EE6A48"),
     ("azalea_flower_red_deep", "#C9432E"),
+    ("sakura_petal", "#F2B8C8"),
+    ("sakura_petal_white", "#FBE3EA"),
+    ("sakura_petal_pink", "#EA9FB5"),
+    ("sakura_leaf_bronze", "#B87A5E"),
+    ("sakura_petal_shade", "#D899AD"),
+    ("sakura_petal_shade_deep", "#C08398"),
+    ("sakura_green", "#4E7A3C"),
+    ("sakura_green_light", "#5E8C46"),
+    ("sakura_green_deep", "#3E6632"),
+    ("sakura_shade", "#2E4C2A"),
+    ("sakura_shade_light", "#3A5A32"),
+    ("sakura_bark", "#5B403B"),
+    ("sakura_bark_band", "#7D5E54"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 

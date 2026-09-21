@@ -65,6 +65,23 @@ def densify(points, radii, step):
     return out_points, out_radii
 
 
+def gnarl(points, radii, rng, amount, step):
+    """Make a polyline gnarly: points at most step apart, each inner one pushed
+    off line by up to amount (less up and down than sideways), and radii
+    swelling and pinching a little, for knots. The ends stay where they are,
+    so joints still meet."""
+    points, radii = densify(points, radii, step)
+    out_points, out_radii = [points[0]], [radii[0]]
+    for p, r in zip(points[1:-1], radii[1:-1]):
+        out_points.append(p + Vector((
+            rng.uniform(-amount, amount), rng.uniform(-amount, amount), rng.uniform(-amount, amount) * 0.4,
+        )))
+        out_radii.append(r * rng.uniform(0.85, 1.2))
+    out_points.append(points[-1])
+    out_radii.append(radii[-1])
+    return out_points, out_radii
+
+
 def point_at_height(points, z):
     """Where a mostly upright polyline passes height z."""
     points = [Vector(p) for p in points]
