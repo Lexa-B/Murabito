@@ -21,6 +21,7 @@ PALETTE = [
     ("fox_orange", "#D9772B"),
     ("cream", "#F3EBDD"),
     ("soot", "#3B2B26"),
+    ("hare_brown", "#8E7456"),
 ]
 PALETTE_SIZE = 8  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels
 
