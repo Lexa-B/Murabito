@@ -65,6 +65,15 @@ PALETTE = [
     ("pine_bark_grey", "#6B5B4E"),
     ("pine_bark_mid", "#935F45"),
     ("pine_bark_warm", "#7B5D4D"),
+    ("sugi_green", "#3F6A36"),
+    ("sugi_green_light", "#4E7C40"),
+    ("sugi_green_deep", "#335B2F"),
+    ("sugi_green_yellow", "#5A7A3A"),
+    ("sugi_green_shade", "#284A26"),
+    ("sugi_green_shade_deep", "#1F3B1F"),
+    ("sugi_bark", "#7A4E36"),
+    ("sugi_bark_light", "#8C5C40"),
+    ("sugi_bark_dark", "#613D2C"),
 ]
 PALETTE_SIZE = 8  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels
 

@@ -166,5 +166,51 @@ def pad(b, centre, radius, leaves, shades, rng, up=2.2, down=1.0, lumps=4, subdi
     )
 
 
+GOLDEN_ANGLE = 2.39996  # radians: spreads branches evenly round a trunk
+
+
+def _lerp(a, b, t):
+    return a + (b - a) * t
+
+
+def grow_branches(trunk_points, rules, rng):
+    """Grow branches up a trunk from rules, spiralling round it by the golden
+    angle. Returns (points, radii, pad centre, pad radius) per branch, forks
+    included; lengths, thicknesses and pads shrink from the bottom to the top.
+
+    rules: count, from and to (heights of the lowest and highest branch),
+    length and pad ((bottom, top) pairs), fork_chance, and optionally rise (a
+    range, as a fraction of length), droop (the kink sags by this fraction of
+    length instead of rising), wander (sideways kink, in shaku) and thickness
+    ((bottom, top) radius at the trunk).
+    """
+    rise_range = rules.get("rise", (0.2, 0.45))
+    droop = rules.get("droop")
+    wander = rules.get("wander", 1)
+    thickness = rules.get("thickness", (0.55, 0.3))
+    out = []
+    for i in range(rules["count"]):
+        t = i / (rules["count"] - 1)
+        z = _lerp(rules["from"], rules["to"], t) + rng.uniform(-0.8, 0.8)
+        base = point_at_height(trunk_points, z)
+        angle = i * GOLDEN_ANGLE + rng.uniform(-0.3, 0.3)
+        out_dir = Vector((math.cos(angle), math.sin(angle), 0))
+        across = Vector((-out_dir.y, out_dir.x, 0))
+        length = _lerp(*rules["length"], t) * rng.uniform(0.8, 1.2)
+        rise = length * rng.uniform(*rise_range)
+        kink_z = rise * 0.4 if droop is None else -length * droop
+        kink = base + out_dir * length * 0.5 + across * rng.uniform(-wander, wander) + Vector((0, 0, kink_z))
+        end = base + out_dir * length + across * rng.uniform(-wander, wander) + Vector((0, 0, rise))
+        thick = _lerp(*thickness, t)
+        pad_radius = _lerp(*rules["pad"], t) * rng.uniform(0.85, 1.15)
+        out.append(([base, kink, end], [thick, thick * 0.65, 0.15], end + Vector((0, 0, 1)), pad_radius))
+        if rng.random() < rules["fork_chance"]:
+            turn = rng.choice((-1, 1)) * rng.uniform(0.6, 1.0)
+            fork_dir = Vector((math.cos(angle + turn), math.sin(angle + turn), 0))
+            fork_end = kink + fork_dir * length * 0.45 + Vector((0, 0, rise * 0.5))
+            out.append(([kink, fork_end], [thick * 0.45, 0.12], fork_end + Vector((0, 0, 0.8)), pad_radius * 0.7))
+    return out
+
+
 def rng_for(seed):
     return random.Random(seed)

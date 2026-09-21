@@ -60,9 +60,6 @@ VERSIONS = {
     },
 }
 
-GOLDEN_ANGLE = 2.39996  # radians: spreads branches evenly round the trunk
-
-
 def _wild(seed, height=50.0, lean=(1.5, 1.0), branches=16, crown=0.46, fork_chance=0.5):
     """A version whose trunk grows from its seed too: height and crown in shaku
     and as a fraction of the height, lean as the (x, y) drift at the top."""
@@ -104,37 +101,6 @@ VERSIONS.update({
 })
 
 
-def _lerp(a, b, t):
-    return a + (b - a) * t
-
-
-def _branches(spec, rng):
-    """Grow the branches: (points, radii, pad centre, pad radius), forks included."""
-    trunk_points = spec["trunk"][0]
-    rules = spec["branches"]
-    out = []
-    for i in range(rules["count"]):
-        t = i / (rules["count"] - 1)
-        z = _lerp(rules["from"], rules["to"], t) + rng.uniform(-0.8, 0.8)
-        base = flora.point_at_height(trunk_points, z)
-        angle = i * GOLDEN_ANGLE + rng.uniform(-0.3, 0.3)
-        out_dir = Vector((math.cos(angle), math.sin(angle), 0))
-        across = Vector((-out_dir.y, out_dir.x, 0))
-        length = _lerp(*rules["length"], t) * rng.uniform(0.8, 1.2)
-        rise = length * rng.uniform(0.2, 0.45)
-        kink = base + out_dir * length * 0.5 + across * rng.uniform(-1, 1) + Vector((0, 0, rise * 0.4))
-        end = base + out_dir * length + across * rng.uniform(-1, 1) + Vector((0, 0, rise))
-        thick = _lerp(0.55, 0.3, t)
-        pad_radius = _lerp(*rules["pad"], t) * rng.uniform(0.85, 1.15)
-        out.append(([base, kink, end], [thick, thick * 0.65, 0.15], end + Vector((0, 0, 1)), pad_radius))
-        if rng.random() < rules["fork_chance"]:
-            turn = rng.choice((-1, 1)) * rng.uniform(0.6, 1.0)
-            fork_dir = Vector((math.cos(angle + turn), math.sin(angle + turn), 0))
-            fork_end = kink + fork_dir * length * 0.45 + Vector((0, 0, rise * 0.5))
-            out.append(([kink, fork_end], [thick * 0.45, 0.12], fork_end + Vector((0, 0, 0.8)), pad_radius * 0.7))
-    return out
-
-
 def build_redpine(version="00", colour="a", season="summer"):
     spec = VERSIONS[version]
     needles, shades = COLOURS[colour][season]
@@ -155,7 +121,9 @@ def build_redpine(version="00", colour="a", season="summer"):
         out_dir = Vector((math.cos(angle), math.sin(angle), 0.25))
         flora.branch(b, [base, base + out_dir * 2.5, base + out_dir * 3.8], [0.4, 0.25, 0.12], GREY)
 
-    for branch_points, branch_radii, pad_centre, pad_radius in _branches(spec, rng):
+    for branch_points, branch_radii, pad_centre, pad_radius in flora.grow_branches(
+        spec["trunk"][0], spec["branches"], rng
+    ):
         flora.branch(b, branch_points, branch_radii, RED)
         flora.pad(
             b, pad_centre, pad_radius, needles, shades, rng,
