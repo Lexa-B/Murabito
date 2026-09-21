@@ -29,6 +29,7 @@ Murabito/
 ├─ Cargo.toml, Cargo.lock, rust-toolchain.toml   the main project: a Cargo workspace
 ├─ crates/                 its members, one directory each (see "Main project" below)
 │  └─ murabito/            the app: the one binary
+├─ scripts/run.sh          launches the app; what a desktop entry points at. Finds the display itself, logs to ~/.cache/murabito/run.log
 ├─ Docs/                   project docs (no specs or plans; see below)
 ├─ _Archives/
 │  ├─ UE-Try/              the Unreal Engine 5 attempt, kept for reference, not built
