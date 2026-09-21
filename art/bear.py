@@ -32,15 +32,15 @@ SPINE = [
     (-1.22, 1.45, 0.24, 0.26, BLACK, BLACK),
     (-1.10, 1.43, 0.38, 0.40, BLACK, BLACK),
     (-0.92, 1.41, 0.48, 0.52, BLACK, BLACK),  # haunches; the hind legs grow from the segment in front
-    (-0.45, 1.43, 0.52, 0.58, BLACK, BLACK),
-    (-0.05, 1.47, 0.53, 0.60, BLACK, BLACK),  # the front legs grow from the segment in front
-    (0.30, 1.51, 0.52, 0.60, BLACK, BLACK),  # chest
+    (-0.45, 1.38, 0.54, 0.63, BLACK, BLACK),  # a round belly, hanging lowest in the middle
+    (-0.10, 1.415, 0.55, 0.655, BLACK, BLACK),  # the front legs grow from the segment in front
+    (0.32, 1.475, 0.52, 0.635, BLACK, BLACK),  # chest
     (0.55, 1.55, 0.44, 0.50, BLACK, BLACK),  # shoulders
     (0.74, 1.53, 0.36, 0.40, BLACK, BLACK),  # neck, narrower than the head to set it off
     # head: big and round, about 1.3x natural, with a tan muzzle
     (0.90, 1.55, 0.46, 0.46, BLACK, BLACK),  # back of the head
-    (1.10, 1.53, 0.50, 0.44, BLACK, BLACK),  # cheeks, the widest point
-    (1.32, 1.43, 0.30, 0.27, MUZZLE, MUZZLE),
+    (1.10, 1.50, 0.54, 0.47, BLACK, BLACK),  # cheeks, the widest point, with full jowls
+    (1.32, 1.42, 0.33, 0.30, MUZZLE, MUZZLE),
     (1.48, 1.35, 0.18, 0.17, MUZZLE, MUZZLE),  # muzzle
     (1.58, 1.31, 0.12, 0.11, SOOT, SOOT),  # nose
 ]
@@ -55,18 +55,18 @@ EAR_SEGMENT = 9  # back of the head -> cheeks
 # Limbs, for the right side: rings of (x, y, z, half-width, half-depth, colour).
 # See loft.Builder.limb.
 FRONT_LEG = [  # short, thick columns
-    (0.26, 0.125, 0.84, 0.14, 0.17, BLACK),  # shoulder
-    (0.25, 0.145, 0.50, 0.12, 0.14, BLACK),  # elbow
-    (0.24, 0.165, 0.18, 0.11, 0.12, BLACK),  # wrist
-    (0.24, 0.225, 0.08, 0.12, 0.17, BLACK),  # paw
-    (0.24, 0.225, 0.00, 0.12, 0.17, BLACK),  # sole
+    (0.26, 0.11, 0.76, 0.17, 0.20, BLACK),  # shoulder
+    (0.25, 0.13, 0.46, 0.15, 0.17, BLACK),  # elbow
+    (0.24, 0.15, 0.18, 0.135, 0.145, BLACK),  # wrist
+    (0.24, 0.21, 0.08, 0.145, 0.20, BLACK),  # paw
+    (0.24, 0.21, 0.00, 0.145, 0.20, BLACK),  # sole
 ]
 HIND_LEG = [
-    (0.26, -0.685, 0.84, 0.15, 0.22, BLACK),  # thigh
-    (0.25, -0.63, 0.55, 0.13, 0.16, BLACK),  # knee
-    (0.24, -0.65, 0.22, 0.12, 0.13, BLACK),  # ankle
-    (0.24, -0.59, 0.08, 0.13, 0.19, BLACK),  # a long, flat foot
-    (0.24, -0.59, 0.00, 0.13, 0.19, BLACK),  # sole
+    (0.26, -0.685, 0.76, 0.18, 0.23, BLACK),  # thigh
+    (0.25, -0.63, 0.50, 0.16, 0.19, BLACK),  # knee
+    (0.24, -0.65, 0.22, 0.145, 0.155, BLACK),  # ankle
+    (0.24, -0.59, 0.08, 0.155, 0.22, BLACK),  # a long, flat foot
+    (0.24, -0.59, 0.00, 0.155, 0.22, BLACK),  # sole
 ]
 EAR = [  # big and round: wide, with a blunt top
     (0.34, 0.99, 2.02, 0.13, 0.06, BLACK),
