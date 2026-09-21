@@ -48,8 +48,10 @@ class Builder:
         """Loft a body along a spine in the YZ plane.
 
         rings run from start_tip to end_tip, each (y, z, half-width, half-height,
-        colour, underside colour). A ring's colours paint the segment arriving at
-        it from the start_tip side. Each ring stands square to the spine, except
+        colour, underside colour), with an optional seventh item, a taper: the
+        ring is that much wider at the top and narrower at the bottom (0.3: 30%),
+        for a face shaped like a trapezoid rather than an oval. A ring's colours
+        paint the segment arriving at it from the start_tip side. Each ring stands square to the spine, except
         the upright ones, which stand straight up: where the spine curves sharply
         (a fan of a tail, a rump under a high tail), squared rings swing past each
         other and fold. upright is how many rings from the start, or a collection
@@ -60,13 +62,18 @@ class Builder:
         points = [start_tip] + [Vector((0, y, z)) for y, z, *_ in rings] + [end_tip]
         side = Vector((1, 0, 0))
         verts = []
-        for i, (y, z, hw, hh, *_) in enumerate(rings, start=1):
+        for i, (y, z, hw, hh, *rest) in enumerate(rings, start=1):
+            taper = rest[2] if len(rest) > 2 else 0.0
             tangent = (points[i + 1] - points[i - 1]).normalized()
             up = Vector((0, 0, 1)) if is_upright(i - 1) else side.cross(tangent).normalized()
             centre = points[i]
             verts.append(
                 [
-                    self.bm.verts.new(centre + side * hw * math.cos(a) + up * hh * math.sin(a))
+                    self.bm.verts.new(
+                        centre
+                        + side * hw * (1 + taper * math.sin(a)) * math.cos(a)
+                        + up * hh * math.sin(a)
+                    )
                     for a in ANGLES
                 ]
             )
@@ -78,7 +85,7 @@ class Builder:
         segments = []
         for i in range(len(verts) - 1):
             a, b = verts[i], verts[i + 1]
-            _, _, _, _, colour, under = rings[i]
+            colour, under = rings[i][4], rings[i][5]
             segments.append(
                 [
                     self.face(

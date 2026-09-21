@@ -197,6 +197,7 @@ PALETTE = [
     ("macaque_brown_deep", "#8A755D"),
     ("macaque_face", "#C4655A"),
     ("macaque_skin", "#5E514A"),
+    ("eye_black", "#1A1716"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
