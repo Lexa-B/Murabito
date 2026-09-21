@@ -119,7 +119,7 @@ sampler), so faces get exactly the swatch colour.
 
 | | |
 |---|---|
-| `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `finish(name, shaded=False)` → a coloured object; `shaded=True` varies each fur or feather face among its `SHADES`, from a stream seeded by `name` |
+| `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `stud(centre, normal, size, colour)` (a small closed stud standing on a surface: eyes, spots), `finish(name, shaded=False)` → a coloured object; `shaded=True` varies each fur or feather face among its `SHADES`, from a stream seeded by `name` |
 | `Builder.spine(start_tip, rings, end_tip, upright=0)` | loft an animal's body along a spine in the YZ plane, octagonal rings from tail tip to nose (an optional seventh value tapers a ring, wider at the top: a trapezoid face), each square to the spine except the `upright` ones (a count from the start, or ring indices), which stand straight up (a tail fan, a rump under a high tail); returns the faces per segment |
 | `Builder.limb(face, rings, mirror, tip)` | replace one of those faces with a limb (leg, ear) lofted through square rings; returns its faces |
 | `run(build, name, target, extent)` | the shared command line (`--out`, `--renders`); scripts parse their own extra flags first |
@@ -301,7 +301,7 @@ And by eye:
 | dog | – | – | – | native dog of the Shiba type (柴犬), red with cream urajiro; a ring-curled tail resting on the back |
 | tanuki | – | – | – | Japanese raccoon dog (ホンドタヌキ), the real animal; round and low, with the dark mask and shoulder band |
 | macaque | – | – | – | Japanese macaque (ニホンザル) on all fours; a flat, trapezoid red face with stud eyes in a poofy mane, a red rump, a stubby tail |
-| wolf | – | – | – | Japanese wolf (ニホンオオカミ), extinct since about 1905; the dog's layout at 1.5×, a saddle, a hanging bushy tail |
+| wolf | – | – | – | Japanese wolf (ニホンオオカミ), extinct since about 1905; the dog's layout at 1.5×, tawny after a specimen, stud eyes, a hanging bushy tail |
 | maple (イロハモミジ) | `00`, `pruned-00` | a–e | summer | wild mushroom crown; `pruned-00` is cloud-pruned, kept to shrink into a garden prop |
 | redpine (アカマツ) | `00`–`04` | a | summer | crooked, flat pads, bark blending grey to red |
 | sugi (スギ) | `00`–`04` | a | summer | straight spire of knobbly tufts |
@@ -338,6 +338,10 @@ And by eye:
 - **A ring whose underside hangs below both neighbours' shows as a point** (the macaque's
   chin), just as one that bulges out on top shows as a ridge. Measure each ring's bottom
   edge to find it; guessing at the rings around it didn't work.
+- **A stud on a four-sided face can come out bigger on one side than its mirror.** The
+  face isn't flat, and mirrored faces can split into triangles along different diagonals,
+  sinking one stud deeper (the wolf's eyes). Poke the face first and set the stud on
+  its centre.
 - **A ring on a rising spine leans back, and its top sits lower than its numbers say.**
   To line up a topline, check the ring vertices, not the ring centres (the dog's withers).
 - **A ring bigger than both neighbours shows as a ridge**, and a rump that ends in one

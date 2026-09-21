@@ -4,8 +4,9 @@
 
 Still in the mountains round villages in 1550, and revered as a guardian (大口真神);
 extinct since about 1905. The smallest of wolves, with shortish legs and small
-ears: grizzled grey-brown with a darker saddle over the back, a pale underside
-and cheeks, a long wolfish muzzle, and a bushy tail hanging down behind.
+ears: a tawny, sandy buff with a warmer brown saddle over the back, pale
+cream-buff legs, face and underside, black eyes, a long wolfish muzzle, and a
+bushy, dusky tail hanging down behind (after a preserved specimen).
 
 Built with loft.py on the dog's layout at one and a half times the size, so it
 keeps the dog's lessons: a flat, upright rump under the tail, hind legs dropping
@@ -16,13 +17,15 @@ the shoulder, feet on z = 0.
 import sys
 from pathlib import Path
 
+import bmesh
 from mathutils import Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import loft  # noqa: E402
 from loft import LOWER_LEFT, LOWER_RIGHT, UPPER_LEFT, UPPER_RIGHT  # noqa: E402
 
-GREY, SADDLE, PALE, SOOT = "wolf_grey", "wolf_saddle", "wolf_pale", "soot"
+GREY, SADDLE, PALE, TAIL = "wolf_grey", "wolf_saddle", "wolf_pale", "wolf_tail"
+SOOT, EYE = "soot", "eye_black"
 
 # The spine, tail tip to nose: (y, z, half-width, half-height, colour, underside
 # colour). See loft.Builder.spine.
@@ -30,10 +33,10 @@ TAIL_TIP = Vector((0, -1.35, 0.50))
 SPINE = [
     # the tail: bushy, hanging down behind, dark at the tip
     (-1.35, 0.60, 0.12, 0.12, SOOT, SOOT),
-    (-1.35, 0.80, 0.17, 0.17, GREY, GREY),
-    (-1.33, 1.05, 0.19, 0.19, GREY, GREY),
-    (-1.28, 1.30, 0.17, 0.17, GREY, GREY),
-    (-1.185, 1.50, 0.13, 0.13, GREY, GREY),  # tail root
+    (-1.35, 0.80, 0.17, 0.17, TAIL, TAIL),
+    (-1.33, 1.05, 0.19, 0.19, TAIL, TAIL),
+    (-1.28, 1.30, 0.17, 0.17, TAIL, TAIL),
+    (-1.185, 1.50, 0.13, 0.13, TAIL, TAIL),  # tail root
     # body: a flat, upright rump under the tail, a tucked-up flank, a deep belly;
     # the back level from the tail, rising a little to the shoulders
     (-1.14, 1.35, 0.225, 0.24, GREY, GREY),
@@ -67,18 +70,18 @@ EAR_SEGMENT = 13  # back of the skull -> cheeks
 FRONT_LEG = [
     (0.195, 0.15, 0.75, 0.135, 0.225, GREY),  # shoulder, reaching down and back into the armpit
     (0.18, 0.18, 0.495, 0.105, 0.12, GREY),  # elbow
-    (0.165, 0.21, 0.24, 0.0825, 0.09, GREY),  # wrist
-    (0.165, 0.24, 0.075, 0.0825, 0.09, GREY),
-    (0.165, 0.285, 0.03, 0.0975, 0.12, GREY),  # paw
-    (0.165, 0.285, 0.00, 0.0975, 0.12, GREY),  # sole
+    (0.165, 0.21, 0.24, 0.0825, 0.09, PALE),  # wrist: pale lower legs
+    (0.165, 0.24, 0.075, 0.0825, 0.09, PALE),
+    (0.165, 0.285, 0.03, 0.0975, 0.12, PALE),  # paw
+    (0.165, 0.285, 0.00, 0.0975, 0.12, PALE),  # sole
 ]
 HIND_LEG = [
     (0.21, -0.825, 0.72, 0.15, 0.255, GREY),  # the haunch: as long as the body above it
     (0.195, -0.84, 0.45, 0.1125, 0.1275, GREY),  # narrowing to the knee
-    (0.18, -0.915, 0.225, 0.0825, 0.09, GREY),  # hock, back under the rump
-    (0.18, -0.90, 0.075, 0.0825, 0.09, GREY),
-    (0.18, -0.87, 0.03, 0.0975, 0.12, GREY),  # paw
-    (0.18, -0.87, 0.00, 0.0975, 0.12, GREY),  # sole
+    (0.18, -0.915, 0.225, 0.0825, 0.09, PALE),  # hock, back under the rump: pale lower legs
+    (0.18, -0.90, 0.075, 0.0825, 0.09, PALE),
+    (0.18, -0.87, 0.03, 0.0975, 0.12, PALE),  # paw
+    (0.18, -0.87, 0.00, 0.0975, 0.12, PALE),  # sole
 ]
 EAR = [(0.255, 0.86, 2.30, 0.11, 0.06, GREY)]  # small, upright triangles
 EAR_TIP = Vector((0.29, 0.88, 2.48))
@@ -94,6 +97,8 @@ MARKINGS = [
     (14, (3, 7), PALE),  # pale cheeks and sides of the muzzle
     (15, (3, 7), PALE),
 ]
+EYE_SEGMENT = 14  # cheeks -> muzzle: an eye on each upper side
+EYE_SIZE = 0.065
 
 
 def build_wolf():
@@ -101,6 +106,14 @@ def build_wolf():
     segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP, upright=RUMP_RINGS)
     for segment, faces, colour in MARKINGS:
         b.paint([segments[segment][k] for k in faces], colour)
+    for face, outward in ((segments[EYE_SEGMENT][UPPER_RIGHT], 1), (segments[EYE_SEGMENT][UPPER_LEFT], -1)):
+        face.normal_update()
+        normal = face.normal if face.normal.x * outward > 0 else -face.normal
+        # Poke the face into four triangles round its centre first: the quad isn't
+        # flat, and mirrored quads can split along different diagonals, which sinks
+        # one eye deeper into the head than the other.
+        centre = bmesh.ops.poke(b.bm, faces=[face])["verts"][0].co.copy()
+        b.stud(centre, normal, EYE_SIZE, EYE)
 
     # Collect every base face before growing anything: growing removes faces.
     limbs = []

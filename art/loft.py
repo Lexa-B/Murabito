@@ -39,6 +39,25 @@ class Builder:
         f[self._swatch] = style.SWATCH[colour]
         return f
 
+    def stud(self, centre, normal, size, colour, inset=0.006, height=0.014):
+        """A small, closed, faceted stud standing on a surface: an eye, a spot.
+
+        Four corners a little below the surface round centre, and an apex a
+        little above it along normal, closed underneath so it stays manifold.
+        """
+        normal = normal.normalized()
+        across = normal.cross(Vector((0, 0, 1)))
+        across = across.normalized() if across.length > 1e-6 else Vector((1, 0, 0))
+        up = across.cross(normal)
+        corners = [
+            self.bm.verts.new(centre - normal * inset + offset)
+            for offset in (up * size, across * size, -up * size, -across * size)
+        ]
+        apex = self.bm.verts.new(centre + normal * height)
+        for k in range(4):
+            self.face((apex, corners[k], corners[(k + 1) % 4]), colour)
+        self.face(list(reversed(corners)), colour)
+
     def paint(self, faces, colour):
         """Recolour faces already built, for patches that don't follow rings."""
         for f in faces:

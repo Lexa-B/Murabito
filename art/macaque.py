@@ -78,25 +78,11 @@ HIND_LEG = [
 ]
 
 
-def eye(b, centre):
-    """A small, closed, faceted stud facing forward (+Y)."""
-    forward, across, up = Vector((0, 1, 0)), Vector((1, 0, 0)), Vector((0, 0, 1))
-    s = EYE_SIZE
-    corners = [
-        b.bm.verts.new(centre - forward * 0.006 + offset)
-        for offset in (up * s, across * s, -up * s, -across * s)
-    ]
-    apex = b.bm.verts.new(centre + forward * 0.014)
-    for k in range(4):
-        b.face((apex, corners[k], corners[(k + 1) % 4]), EYE)
-    b.face(list(reversed(corners)), EYE)
-
-
 def build_macaque():
     b = loft.Builder()
     segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP, upright=UPRIGHT)
     for mirror in (1, -1):
-        eye(b, Vector((EYE_AT[0] * mirror, EYE_AT[1], EYE_AT[2])))
+        b.stud(Vector((EYE_AT[0] * mirror, EYE_AT[1], EYE_AT[2])), Vector((0, 1, 0)), EYE_SIZE, EYE)
 
     # Collect every base face before growing anything: growing removes faces.
     legs = []
