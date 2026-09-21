@@ -141,9 +141,11 @@ class Builder:
 
 
 def run(build, name, target, extent):
-    """The command line every animal script shares:
+    """The command line every model script shares:
 
-        blender -b --python art/<animal>.py -- --out <file.glb> [--renders <dir>]
+        blender -b --python art/<model>.py -- --out <file.glb> [--renders <dir>]
+
+    Arguments it doesn't know are left for the script's own parser.
     """
     import argparse
     import sys
@@ -153,7 +155,7 @@ def run(build, name, target, extent):
     parser = argparse.ArgumentParser(prog=f"{name}.py")
     parser.add_argument("--out", type=Path, required=True, help="where to write the .glb")
     parser.add_argument("--renders", type=Path, help="directory for a preview sheet")
-    args = parser.parse_args(argv)
+    args, _ = parser.parse_known_args(argv)
 
     style.reset_scene()
     obj = build()

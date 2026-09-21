@@ -24,9 +24,13 @@ PALETTE = [
     ("hare_brown", "#8E7456"),
     ("rat_grey", "#6B635D"),
     ("flesh_pink", "#C99A90"),
-    ("maple_green", "#6A9A3E"),
-    ("maple_green_shade", "#46702E"),
+    ("leaf_green", "#6A9A3E"),
+    ("leaf_green_shade", "#46702E"),
     ("bark", "#6A5747"),
+    ("leaf_green_light", "#7DAA48"),
+    ("leaf_green_deep", "#578536"),
+    ("leaf_green_yellow", "#8BA84A"),
+    ("leaf_green_shade_deep", "#3A5F28"),
 ]
 PALETTE_SIZE = 8  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels
 

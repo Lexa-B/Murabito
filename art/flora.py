@@ -11,7 +11,7 @@ import math
 import random
 
 import bmesh
-from mathutils import Matrix, Vector
+from mathutils import Vector
 
 BRANCH_RING = 6
 
@@ -45,19 +45,27 @@ def branch(b, points, radii, colour):
     b.face(rings[-1], colour)
 
 
-def clump(b, centre, radius, height, colour, shade, rng, lumpiness=0.12):
-    """A faceted foliage blob: a flattened icosphere, its vertices pushed in and
-    out a little so no two clumps look alike. Faces pointing down take shade."""
-    matrix = Matrix.Translation(centre) @ Matrix.Diagonal((radius, radius, height, 1))
-    made = bmesh.ops.create_icosphere(b.bm, subdivisions=2, radius=1.0, matrix=matrix)
+def clump(b, centre, radius, up, down, leaves, shades, rng, lumpiness=0.12):
+    """A faceted foliage blob: an icosphere reaching up above its centre and down
+    below it, so a small down gives a flattish underside like a mushroom cap.
+    Its vertices are pushed in and out a little so no two clumps look alike.
+
+    Each face takes a colour at random from leaves, or from shades if it points
+    down; repeat a colour in the list to make it more likely.
+    """
+    made = bmesh.ops.create_icosphere(b.bm, subdivisions=2, radius=1.0)
     verts = made["verts"]
     centre = Vector(centre)
     for v in verts:
-        v.co = centre + (v.co - centre) * (1 + rng.uniform(-lumpiness, lumpiness))
-    faces = {f for v in verts for f in v.link_faces}
+        x, y, z = v.co
+        local = Vector((x * radius, y * radius, z * (up if z > 0 else down)))
+        v.co = centre + local * (1 + rng.uniform(-lumpiness, lumpiness))
+    faces = []  # in a fixed order, so a seed always paints the same faces
+    for v in verts:
+        faces.extend(f for f in v.link_faces if f not in faces)
     for f in faces:
         f.normal_update()
-        b.paint([f], shade if f.normal.z < -0.35 else colour)
+        b.paint([f], rng.choice(shades if f.normal.z < -0.35 else leaves))
 
 
 def rng_for(seed):
