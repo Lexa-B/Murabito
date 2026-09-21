@@ -71,6 +71,24 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
     catalogues. Not a style choice: Rust types cannot be traversed at runtime, and the
     whole tiered-index mechanism *is* runtime traversal. Enums would also make every new
     species a recompile plus every `match` arm.
+12k. **A facet group is an 軸 — an axis — and is exclusive by default.** A group whose
+    values are not alternatives is a namespace, not a group; and the default that
+    catches mistakes beats the one that swallows them. `排他: false` opts out. Arity is
+    irrelevant: 匂い's four values are exclusive exactly as 年齢's two are.
+12l. **Nearest wins on an exclusive axis.** Resolution walks from the node upward and
+    the first value found holds: 狐 overrides 動物, and an instance will override its
+    種. Two values from one axis on a *single* node is a contradiction at one point
+    rather than an override, so it is refused at load.
+12m. **Attachment level is not declared.** 食物連鎖 is naturally a species property and
+    年齢 naturally an instance one, but nearest-wins makes that a modelling choice
+    rather than an error class: 年齢 on the 人間 node means "humans default to 大人",
+    which an instance overrides. Declaring it would forbid useful species-level
+    defaults to prevent a mistake that no longer yields a wrong answer.
+12n. **Sense-occlusion axes are namespaced by their sense kanji.** 音, 視界 and 匂い each
+    need "blocks" and "transmits", and a facet may be declared only once across all
+    groups — so 遮音 / 不透明 / 防臭 rather than three copies of a bare 遮る. 遮音, 吸音,
+    不透明, 半透明, 透明 and 防臭 are ordinary words; 透音, 混臭, 保臭 and 通臭 are
+    coinages pending review.
 12b. **Two axes, not one tree.** The taxonomy says what a thing *is*; **facets** are
     non-hierarchical tags saying what it's like — closer to tags on a paper than to a
     class hierarchy. 大人/子供 is a facet, because a child fox and a child human share it
@@ -379,8 +397,12 @@ proposal, not a commitment.
 - [x] **3b. Facets.** `属性` reserved on a node, inherited downward, validated against a
       declared registry. `食物連鎖: [捕食者, 被食者]` is the first real one. Beings now
       carry `種`, not `Fox`/`Rabbit` markers.
-- [ ] **3b-ii. Instance facets.** A being carrying 子供 in its own right, rather than
-      inheriting everything from its 種. 年齢 is declared and has nowhere to live yet.
+- [x] **3b-ii. Axes.** `軸` with `排他`, defaulting to exclusive; nearest-wins
+      resolution; a node holding two values from one axis refused at load. 音, 視界 and
+      匂い added for the senses work.
+- [ ] **3b-iii. Instance facets.** A being carrying 子供 in its own right, rather than
+      inheriting everything from its 種. The resolution rule is in place and already
+      puts an instance nearest; nothing can attach one yet.
 - [ ] **3c. The recognition loop, shallow.** Percept in, walk the shared tree, pull the
       leaf, feed a bid. Every being still omniscient about the taxonomy.
 - [ ] **3d. Private ontologies.** Each being gets its own partial copy, so traversal

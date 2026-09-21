@@ -54,10 +54,23 @@ pub struct Node {
 pub struct 実相 {
     root: String,
     nodes: BTreeMap<String, Node>,
-    /// Facet group to its values, as declared. The closed set a node may draw from.
-    属性: BTreeMap<String, Vec<String>>,
+    /// Facet group to its declaration. The closed set a node may draw from.
+    属性: BTreeMap<String, 軸>,
     /// Node to the facets it declares itself, before inheritance.
     own_facets: BTreeMap<String, BTreeSet<String>>,
+}
+
+/// A group of facets.
+///
+/// Exclusive by default, because a group whose values are not alternatives is not a
+/// group but a namespace — and because the default that catches mistakes is better than
+/// the one that swallows them. Arity is irrelevant: three or four values are exclusive
+/// exactly as two are.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct 軸 {
+    /// Whether a thing may hold only one of these at a time.
+    pub 排他: bool,
+    pub 値: Vec<String>,
 }
 
 /// Which node of 諸法実相 an entity is an instance of.
@@ -153,8 +166,16 @@ impl 実相 {
         // A value in two groups would make `group_of` a coin toss, and the groups are
         // meant to be alternatives within one axis.
         let mut seen: BTreeMap<&str, &str> = BTreeMap::new();
-        for (group, values) in &file.属性 {
-            for value in values {
+        // Not named 属性: that is a `const` in this module, and `let 属性 = ..` would be
+        // a const *pattern* rather than a binding. SCREAMING_CASE normally keeps consts
+        // and locals apart by sight; kanji has no case, so the convention cannot.
+        let axes: BTreeMap<String, 軸> = file
+            .属性
+            .into_iter()
+            .map(|(group, raw)| (group, raw.into()))
+            .collect();
+        for (group, axis) in &axes {
+            for value in &axis.値 {
                 if let Some(other) = seen.insert(value, group) {
                     problems.push(format!(
                         "facet {value} is declared in two groups: {other} and {group}"
@@ -174,11 +195,32 @@ impl 実相 {
             }
         }
 
+        // A node holding two values from one exclusive axis has nothing to resolve:
+        // it is a contradiction at a single point, not a nearer value overriding a
+        // further one, so it is refused rather than arbitrated.
+        for (node, facets) in &own_facets {
+            let mut claimed: BTreeMap<&str, &str> = BTreeMap::new();
+            for facet in facets {
+                let Some(group) = axes
+                    .iter()
+                    .find(|(_, axis)| axis.排他 && axis.値.contains(facet))
+                    .map(|(group, _)| group.as_str())
+                else {
+                    continue;
+                };
+                if let Some(other) = claimed.insert(group, facet) {
+                    problems.push(format!(
+                        "{node} carries both {other} and {facet}, which are alternatives on {group}"
+                    ));
+                }
+            }
+        }
+
         if problems.is_empty() {
             Ok(Self {
                 root,
                 nodes,
-                属性: file.属性,
+                属性: axes,
                 own_facets,
             })
         } else {
@@ -269,8 +311,8 @@ impl 実相 {
         Some(deepest)
     }
 
-    /// The declared facet groups and their values: the closed set a node may draw from.
-    pub fn 属性(&self) -> &BTreeMap<String, Vec<String>> {
+    /// The declared facet groups: the closed set a node may draw from.
+    pub fn 属性(&self) -> &BTreeMap<String, 軸> {
         &self.属性
     }
 
@@ -278,8 +320,13 @@ impl 実相 {
     pub fn group_of(&self, facet: &str) -> Option<&str> {
         self.属性
             .iter()
-            .find(|(_, values)| values.iter().any(|value| value == facet))
+            .find(|(_, axis)| axis.値.iter().any(|value| value == facet))
             .map(|(group, _)| group.as_str())
+    }
+
+    /// Whether a group's values are alternatives.
+    pub fn is_exclusive(&self, group: &str) -> bool {
+        self.属性.get(group).is_some_and(|axis| axis.排他)
     }
 
     /// Every facet this node carries, its own and every ancestor's.
@@ -289,14 +336,36 @@ impl 実相 {
     /// need share no branch, which is the whole point of 子供.
     pub fn facets_of(&self, key: &str) -> BTreeSet<&str> {
         let mut facets = BTreeSet::new();
+        // Exclusive axes already settled by a nearer node. The walk runs from the node
+        // upward, so the first value found is the nearest one, and it wins: 狐 overrides
+        // 動物 the way an instance will override its 種.
+        let mut claimed: BTreeSet<&str> = BTreeSet::new();
         let mut here = Some(key);
         while let Some(node) = here {
             if let Some(own) = self.own_facets.get(node) {
-                facets.extend(own.iter().map(String::as_str));
+                for facet in own {
+                    match self.group_of(facet) {
+                        Some(group) if self.is_exclusive(group) => {
+                            if claimed.insert(group) {
+                                facets.insert(facet.as_str());
+                            }
+                        }
+                        _ => {
+                            facets.insert(facet.as_str());
+                        }
+                    }
+                }
             }
             here = self.parent(node);
         }
         facets
+    }
+
+    /// The value this node holds on one axis, after resolution. `None` if it holds none.
+    pub fn facet_in_group(&self, key: &str, group: &str) -> Option<&str> {
+        self.facets_of(key)
+            .into_iter()
+            .find(|facet| self.group_of(facet) == Some(group))
     }
 
     pub fn has_facet(&self, key: &str, facet: &str) -> bool {
@@ -388,7 +457,33 @@ fn flatten(
 struct File {
     分類: RawNode,
     #[serde(default)]
-    属性: BTreeMap<String, Vec<String>>,
+    属性: BTreeMap<String, RawAxis>,
+}
+
+/// A bare list is an exclusive axis, which is the common case and stays terse. The long
+/// form is only needed to opt out.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RawAxis {
+    Values(Vec<String>),
+    Declared {
+        #[serde(default = "exclusive_by_default")]
+        排他: bool,
+        値: Vec<String>,
+    },
+}
+
+fn exclusive_by_default() -> bool {
+    true
+}
+
+impl From<RawAxis> for 軸 {
+    fn from(raw: RawAxis) -> Self {
+        match raw {
+            RawAxis::Values(値) => Self { 排他: true, 値 },
+            RawAxis::Declared { 排他, 値 } => Self { 排他, 値 },
+        }
+    }
 }
 
 /// A node as written: a mapping of children, or nothing at all. Both `狐: {}` and a bare
@@ -476,10 +571,9 @@ mod tests {
     #[test]
     fn facets_are_loaded_alongside_the_tree() {
         let tree = tree();
-        assert_eq!(
-            tree.属性().get("年齢").map(Vec::as_slice),
-            Some(["子供".to_string(), "大人".to_string()].as_slice())
-        );
+        let 年齢 = tree.属性().get("年齢").unwrap();
+        assert_eq!(年齢.値, ["子供", "大人"]);
+        assert!(年齢.排他, "an axis is exclusive unless it says otherwise");
         // A facet is not a node: that is the whole point of having two axes.
         assert!(!tree.contains("子供"));
     }
@@ -693,6 +787,119 @@ mod tests {
         assert!(!tree.contains("属性"));
         assert!(!tree.children("狐").contains(&"属性".to_string()));
         assert!(tree.children("狐").is_empty());
+    }
+
+    // --- 軸: exclusivity and resolution -------------------------------------
+
+    /// The bug this machinery exists for: without axes, a child declaring 子供 under a
+    /// parent declaring 大人 yielded *both*, silently, and nothing complained.
+    #[test]
+    fn on_an_exclusive_axis_the_nearest_value_wins() {
+        let yaml = "
+分類:
+  諸法:
+    人間:
+      属性: [大人]
+      子:
+        属性: [子供]
+属性:
+  年齢: [子供, 大人]
+";
+        let tree = 実相::parse(yaml).unwrap();
+        assert_eq!(
+            tree.facets_of("子").into_iter().collect::<Vec<_>>(),
+            ["子供"]
+        );
+        assert_eq!(
+            tree.facets_of("人間").into_iter().collect::<Vec<_>>(),
+            ["大人"]
+        );
+        assert!(
+            !tree.has_facet("子", "大人"),
+            "the further value should be overridden"
+        );
+    }
+
+    #[test]
+    fn a_non_exclusive_group_keeps_every_value() {
+        let yaml = "
+分類:
+  諸法:
+    人間:
+      属性: [勇敢]
+      子:
+        属性: [慎重]
+属性:
+  性格:
+    排他: false
+    値: [勇敢, 慎重]
+";
+        let tree = 実相::parse(yaml).unwrap();
+        assert!(!tree.is_exclusive("性格"));
+        assert_eq!(
+            tree.facets_of("子").into_iter().collect::<Vec<_>>(),
+            ["勇敢", "慎重"]
+        );
+    }
+
+    /// Two values from one axis on a *single* node is a contradiction at one point, not
+    /// a nearer value overriding a further one. There is nothing to resolve, so it is
+    /// refused rather than arbitrated.
+    #[test]
+    fn one_node_holding_two_values_from_an_axis_is_rejected() {
+        let yaml = "
+分類:
+  諸法:
+    人間:
+      属性: [子供, 大人]
+属性:
+  年齢: [子供, 大人]
+";
+        let problems = 実相::parse(yaml).unwrap_err();
+        assert!(
+            problems.iter().any(|p| p.contains("alternatives")),
+            "{problems:?}"
+        );
+    }
+
+    #[test]
+    fn an_axis_is_exclusive_unless_it_opts_out() {
+        let tree = tree();
+        for axis in ["年齢", "食物連鎖", "音", "視界", "匂い"] {
+            assert!(tree.is_exclusive(axis), "{axis} should be exclusive");
+        }
+    }
+
+    /// Arity is irrelevant to exclusivity: 匂い has four values and is exclusive exactly
+    /// as 年齢 with two is.
+    #[test]
+    fn exclusivity_does_not_care_how_many_values_an_axis_has() {
+        let tree = tree();
+        assert_eq!(tree.属性().get("匂い").unwrap().値.len(), 4);
+        assert!(tree.is_exclusive("匂い"));
+    }
+
+    /// One value per axis, several axes at once. A tree hides you from sight and damps
+    /// your footsteps, and those are separate facts about it.
+    #[test]
+    fn a_node_holds_one_value_on_each_of_several_axes() {
+        let tree = tree();
+        assert_eq!(tree.facet_in_group("木", "視界"), Some("不透明"));
+        assert_eq!(tree.facet_in_group("木", "音"), Some("吸音"));
+        assert_eq!(tree.facet_in_group("木", "匂い"), Some("保臭"));
+        assert_eq!(tree.facet_in_group("草", "視界"), Some("半透明"));
+        // Grass says nothing about scent, and absence is not a value.
+        assert_eq!(tree.facet_in_group("草", "匂い"), None);
+    }
+
+    /// The reason the sense axes use 遮音 / 不透明 / 防臭 rather than three copies of a
+    /// bare "blocks": a facet may be declared only once across all groups.
+    #[test]
+    fn the_sense_axes_share_no_vocabulary() {
+        let tree = tree();
+        assert_eq!(tree.group_of("吸音"), Some("音"));
+        assert_eq!(tree.group_of("半透明"), Some("視界"));
+        assert_eq!(tree.group_of("保臭"), Some("匂い"));
     }
 
     #[test]

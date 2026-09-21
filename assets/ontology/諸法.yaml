@@ -65,8 +65,10 @@
 
       # Alive, but takes ある, so not a 者. It will never have senses or an intent.
       植物:
-        木: {}
-        草: {}
+        木:
+          属性: [不透明, 吸音, 保臭]
+        草:
+          属性: [半透明, 透音]
 
       物体:
         道具: {}
@@ -87,3 +89,26 @@
   食物連鎖:
     - 捕食者
     - 被食者
+
+  # How a thing treats each sense channel. One axis per channel, because a thicket can
+  # hide you from sight while doing nothing to your footsteps.
+  #
+  # The three axes need words for "blocks" and "transmits" apiece, and a facet may only
+  # be declared once across all groups. Japanese namespaces them for free: the sense
+  # kanji is already part of the word, so there is no need for 音.遮る.
+  #
+  # 遮音, 吸音, 不透明, 半透明, 透明 and 防臭 are ordinary words. 透音, 混臭, 保臭 and
+  # 通臭 are coinages: readable compounds rather than dictionary entries.
+  音:
+    - 遮音      # blocks
+    - 吸音      # muffles
+    - 透音      # transmits
+  視界:
+    - 不透明    # blocks
+    - 半透明    # obscures
+    - 透明      # transmits
+  匂い:
+    - 防臭      # blocks
+    - 混臭      # obscures
+    - 保臭      # holds, so a scent lingers there
+    - 通臭      # transmits
