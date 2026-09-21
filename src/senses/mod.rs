@@ -34,7 +34,7 @@ use bevy::gizmos::config::{GizmoConfig, GizmoConfigGroup, GizmoLineConfig};
 use bevy::prelude::*;
 
 pub use hearing::Hearing;
-pub use vision::{Vision, VisionBand};
+pub use vision::{SeenCells, Vision, VisionBand};
 
 /// How high above the ground the debug overlay is drawn, to keep it off the surface.
 /// Shaku, like every other length.
@@ -58,6 +58,7 @@ impl Plugin for SensesPlugin {
                 // Gathered first: both senses read the map in the same frame it is built.
                 (
                     occlusion::gather_occluders,
+                    vision::cast_vision,
                     (
                         occlusion::draw_occluders,
                         vision::draw_vision,

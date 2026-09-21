@@ -54,6 +54,11 @@ impl Opacity {
 pub struct Occluders(HashMap<Hex, Opacity>);
 
 impl Occluders {
+    /// A fixed map, for tests and for anything that needs one that is not the world's.
+    pub fn from_cells(cells: impl IntoIterator<Item = (Hex, Opacity)>) -> Self {
+        Self(cells.into_iter().collect())
+    }
+
     pub fn at(&self, hex: Hex) -> Opacity {
         self.0.get(&hex).copied().unwrap_or_default()
     }

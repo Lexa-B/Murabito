@@ -15,7 +15,7 @@ use bevy::prelude::*;
 
 #[cfg(test)]
 use crate::senses::rotate;
-use crate::senses::{Hearing, SenseOverlay, Vision, VisionBand};
+use crate::senses::{Hearing, SeenCells, SenseOverlay, Vision, VisionBand};
 use crate::諸法::種;
 
 /// Marks a body that senses and (later) acts. What perception will query for.
@@ -121,6 +121,7 @@ fn spawn_beings(
         // Watching the rabbit.
         Transform::from_translation(fox_at).looking_at(rabbit_at.with_y(fox_at.y), Vec3::Y),
         fox_vision(),
+        SeenCells::default(),
         fox_hearing(),
         SenseOverlay { color: FOX_OVERLAY },
     ));
@@ -135,6 +136,7 @@ fn spawn_beings(
         Transform::from_translation(rabbit_at)
             .looking_at(Vec3::new(30.0, rabbit_at.y, -26.0), Vec3::Y),
         rabbit_vision(),
+        SeenCells::default(),
         rabbit_hearing(),
         SenseOverlay {
             color: RABBIT_OVERLAY,

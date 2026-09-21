@@ -144,6 +144,33 @@ impl Hex {
         Self::new(self.q + offset.q, self.r + offset.r)
     }
 
+    /// The cells at exactly `radius` steps, walked round in order.
+    ///
+    /// Shadowcasting needs rings rather than a bag of cells: a shadow cast at ring *n*
+    /// may only darken rings beyond it, and that ordering is the whole reason the
+    /// algorithm is linear in cells rather than cells times blockers.
+    pub fn ring(self, radius: u32) -> Vec<Self> {
+        if radius == 0 {
+            return vec![self];
+        }
+        // Start on one corner of the ring and walk the six sides. Which corner is a
+        // consequence of how `DIRECTIONS` is ordered, so it is pinned by a test rather
+        // than reasoned about.
+        let steps = radius as i32;
+        let mut hex = Self::new(
+            self.q + DIRECTIONS[4].q * steps,
+            self.r + DIRECTIONS[4].r * steps,
+        );
+        let mut cells = Vec::with_capacity(6 * radius as usize);
+        for direction in 0..6 {
+            for _ in 0..radius {
+                cells.push(hex);
+                hex = hex.neighbour(direction);
+            }
+        }
+        cells
+    }
+
     /// Every cell within `radius` steps, this one included.
     ///
     /// The bounds on the inner loop are what make this a hexagon rather than a rhombus:
@@ -353,6 +380,47 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_ring_holds_exactly_the_cells_at_that_distance() {
+        let centre = Hex::new(2, -5);
+        assert_eq!(centre.ring(0), vec![centre]);
+        for radius in 1..6u32 {
+            let ring = centre.ring(radius);
+            assert_eq!(ring.len(), 6 * radius as usize, "radius {radius}");
+            for hex in &ring {
+                assert_eq!(centre.distance(*hex), radius, "{hex:?} at radius {radius}");
+            }
+            let unique: std::collections::HashSet<_> = ring.iter().collect();
+            assert_eq!(unique.len(), ring.len(), "radius {radius} repeats a cell");
+        }
+    }
+
+    /// The rings partition the range, so walking outward visits everything exactly once.
+    #[test]
+    fn the_rings_add_up_to_the_range() {
+        let centre = Hex::new(-3, 1);
+        let radius = 5;
+        let mut walked: Vec<Hex> = (0..=radius).flat_map(|r| centre.ring(r)).collect();
+        let mut all: Vec<Hex> = centre.within(radius).collect();
+        walked.sort_by_key(|h| (h.q, h.r));
+        all.sort_by_key(|h| (h.q, h.r));
+        assert_eq!(walked, all);
+    }
+
+    /// Consecutive cells in a ring are neighbours, which is what makes the walk a walk.
+    #[test]
+    fn a_ring_is_walked_in_order() {
+        let ring = Hex::default().ring(4);
+        for pair in ring.windows(2) {
+            assert_eq!(pair[0].distance(pair[1]), 1, "{pair:?} are not adjacent");
+        }
+        assert_eq!(
+            ring[ring.len() - 1].distance(ring[0]),
+            1,
+            "ring does not close"
+        );
     }
 
     #[test]
