@@ -4,9 +4,9 @@ This file provides guidance to AI coding agents when working with code in this r
 
 ## Project Overview
 
-Murabito is a new project, described by its author as halfway between a game and a fun AI experiment / population-dynamics simulator. The main project at the repo root is **Rust + Bevy**.
+Murabito is a new project, described by its author as halfway between a game and a fun AI experiment / population-dynamics simulator. The main project at the repo root is **Rust + Bevy**, and is being rebuilt from an empty root, one module at a time.
 
-It was first built in Unreal Engine 5. That attempt is kept, unbuilt, in `_Archives/UE-Try/`; see "The archived Unreal attempt" below.
+Two earlier attempts are kept, unbuilt, under `_Archives/`: the Unreal Engine 5 project the repo started as (`UE-Try/`), and the first Bevy crate (`Bevy-Try-1/`). See "The archived attempts" below.
 
 Ideas are tried out as small, self-contained **experiments** under `Experiments/`. They come in three kinds:
 
@@ -26,11 +26,11 @@ Don't assume goals beyond what `Experiments/manifest.md` and each experiment's s
 ```
 Murabito/
 ├─ AGENTS.md, CLAUDE.md, LICENSE, LICENSE-ASSETS, LICENSING.md, .gitignore, .gitattributes
-├─ Cargo.toml, Cargo.lock, rust-toolchain.toml   the main project: one crate, `murabito`
-├─ src/                    its code (see "Main project" below)
+├─ (the main project)      nothing yet: see "Main project" below
 ├─ Docs/                   project docs (no specs or plans; see below)
 ├─ _Archives/
-│  └─ UE-Try/              the Unreal Engine 5 attempt, kept for reference, not built
+│  ├─ UE-Try/              the Unreal Engine 5 attempt, kept for reference, not built
+│  └─ Bevy-Try-1/          the first Bevy attempt, kept for reference, not maintained
 └─ Experiments/
    ├─ manifest.md          one entry per experiment: what, why, how to run
    ├─ exp-NN/              a Python + pygame experiment
@@ -54,59 +54,24 @@ Murabito/
 
 ## Main project
 
-The repo root is the Murabito game: a single Rust crate, `murabito`, built on Bevy 0.19. The user drives it; AI assists.
+The repo root is where the Murabito game lives, in Rust on Bevy. It is empty for now: the first Bevy attempt grew tangled and was archived to `_Archives/Bevy-Try-1/`, and the project is being rebuilt from nothing. The user drives it; AI assists.
 
+- **One module at a time, at a pace the user can learn from.** The user is learning Rust and Bevy through this rebuild. Explain what a piece does and why before writing it, do one small piece, let the user look at it, then agree the next. Show the API and the reasoning, not only the finished diff.
+- **Modules are self-contained, with a clear job and a clear API.** Nothing reaches into another module's internals. Code follows Clean Code: small functions, names that say what things do, one level of abstraction at a time.
+- **The archive is a reference, not a source.** `_Archives/Bevy-Try-1/` records what was tried and what was learned (its `README.md` holds the old layout and conventions, its `Docs/HANDOFF.md` the decisions and the Bevy 0.19 gotchas). Read it to avoid relearning something; don't copy a module back wholesale, and don't treat its conventions as settled: each is re-decided with the user as its module comes back.
 - **No spec or plan files for the main project.** Agree the design with the user in chat, wait for a yes, then implement it and open a PR. Specs and plans are only for experiments.
 - **Work in small, visible steps.** Build the smallest thing that puts something on screen, let the user see it, then agree the next step. Don't disappear into a long build-out.
-- **Build, run and test:** `cargo build`, `cargo run`, `cargo test`, `cargo clippy --all-targets`, `cargo fmt`.
-- **Bevy compiles into the binary.** There is no engine install: `bevy = "0.19"` in `Cargo.toml` is the whole thing. The first build takes about 4.5 minutes (551 crates, dependencies at `opt-level = 3`); after that, a change to `src/` rebuilds in about 3 seconds. `target/` runs to roughly 10 GB.
+- **Bevy compiles into the binary.** There is no engine install: the `bevy` dependency in `Cargo.toml` is the whole thing. A first build takes about 4.5 minutes (some 550 crates); after that, a change to the project's own code rebuilds in seconds. `target/` runs to roughly 10 GB.
 - **Linux system libraries.** Bevy's default features build winit with the Wayland backend, which needs `libwayland-dev`, `libxkbcommon-dev` and `libudev-dev`. Without them the build fails in `wayland-sys`'s build script with a pkg-config error.
-
-### Layout
-
-- `src/lib.rs` — the module list; everything lives in the library so the tests can reach it
-- `src/main.rs` — the window and the plugin list, and nothing else
-- `tests/` — integration tests, each file its own binary against the library
-- `src/camera.rs` — `CameraRig` (a ground focus, a zoom distance, a pan velocity) and the pan/zoom/apply systems
-- `src/scene.rs` — the placeholder world: ground, a cube, a sun
-- `src/settings.rs` — `CameraSettings` and the settings file
-- `src/settings_page.rs` — the settings screen
-- `src/menu.rs` — the escape menu
-- `src/state.rs` — `AppState` (Playing / Menu / Settings), and pausing
-- `src/ui.rs` — what the screens share: scrim, buttons, slider visuals
-- `src/i18n.rs` — the string catalogues, `Language`, and the `Localized` component
-- `src/user_data.rs` — where the player's files live; the only place that decides that
-- `src/debug_screen.rs` — the F3 screen: terse clickable lines over the live world
-- `src/screenshot.rs` — F12, and the `--shot` command-line capture
-
-### Conventions
-
-- **The base unit is the shaku**, not the metre. One world unit is one 尺 (10/33 m, ~30.3 cm); every length in the crate is shaku unless it says otherwise, and metres appear only in comments to give a familiar sense of scale. Round numbers tend to land on 間 (6 shaku) and 町 (360 shaku). The sense grid is one shaku flat-to-flat, so a sense range in shaku is also a count of cells — which is why those ranges are integers rather than floats. Provisional: exp-05 is building the real ri/cho/ken/shaku system.
-- **Each module registers itself through a `Plugin`.** `main.rs` adds plugins and knows nothing about what they need; a module's resources, systems and spawns are its own business.
-- **Pausing is `Time<Virtual>`, not a flag.** Pausing the clock stops everything driven by elapsed time, so no system has to know a menu exists. `Time<Real>` keeps running, which keeps the UI responsive. Input is gated separately, with `run_if(in_state(AppState::Playing))`.
-- **Settings are resources; `settings.rs` persists them.** Anything that edits a settings resource gets saved automatically. Nothing else writes the file.
-- **One directory holds everything belonging to the player**, `~/.config/murabito/`, and `user_data.rs` is the only place that works out where it is. A module joins its own filename onto `UserData::root()` rather than resolving a path itself, so saves and anything else later land beside the settings. `UserDataPlugin` goes first in the plugin list: plugins read the resource while the app is being built, not once it runs.
-- **Settings live at `settings.yaml` in that directory** (YAML, one top-level key per group). A missing file means defaults and is created; a file that fails to parse warns and is left alone so the user can fix it.
 - **Windowed runs need the desktop display.** Shells in the user's terminal may have no `DISPLAY`/`WAYLAND_DISPLAY`; take them from the systemd user session (`systemctl --user show-environment`), as the experiments' scripts do.
-- **Check visual work with a screenshot, not by asking.** F12 saves one to `screenshots/` (gitignored) while playing, and `cargo run -- --shot <path> --screen playing|menu|settings` drives the app to a screen, captures it and exits — no keyboard needed. Add `--settle <frames>` if 150 isn't long enough; capture too early and the PNG is a bare clear colour, because render pipelines compile on first use. Add `--zoom <shaku>` to frame anything drawn in the world — at the starting zoom, world-space overlays run off the edge — and `--debug` to open the F3 screen first.
-- **Running the binary directly needs `BEVY_ASSET_ROOT`.** Bevy resolves `assets/` relative to the executable unless `cargo run` sets it, so a direct `./target/debug/murabito` can't find the font or the locales.
-- **UI text is never a literal.** Every string comes from `assets/locales/{en,ja}.yaml` through a `Localized` key, and both catalogues must carry the same keys — a gap warns at startup. Text that is the same in every language (a language's own name, a number) uses `ui::spawn_literal_button` instead.
-- **A fixed-width text node wraps.** Bevy UI text in a node with an explicit width will line-break, possibly onto an invisible whitespace line, which doubles the node's height and pushes the glyphs off centre. Use `LineBreak::NoWrap` on labels with a fixed width.
-- **Tests run headless, and must stay that way.** `MinimalPlugins` brings the schedules
-  and `Time`; add `bevy::state::app::StatesPlugin` for anything touching `AppState`, as it
-  arrives with `DefaultPlugins` in the real app but not in `MinimalPlugins`. Drive frames
-  with `app.update()`, never `app.run()`. No test may open a window or need a GPU.
-- **Tests must not touch the player's real files.** Point `UserDataPlugin::at` at a
-  temporary directory; never let a test fall back on the real one.
-- **The F3 debug screen is not an `AppState`.** Every state but `Playing` pauses `Time<Virtual>`, and the point of that screen is watching the world carry on while you change what is drawn over it — so it spawns and despawns a UI root instead, and does its own hover tinting because `ui::button_visuals` runs only while a menu is up. Debug labels are localised like any other text; taxonomy keys are namespaced by their axis (`分類.狐`), and a key with no entry renders as itself, which on a debug screen is a fine answer.
 - **Never kill, signal or otherwise touch a process you didn't start.**
 
 
 ## Rust + Bevy experiments
 
-Each Rust + Bevy experiment is its own Cargo workspace, separate from the main project's crate at the repo root.
+Each Rust + Bevy experiment is its own Cargo workspace, separate from the main project at the repo root.
 
-- **Build and test from the experiment's directory**, e.g. `cd Experiments/exp-05 && cargo test`. Run from the repo root, `cargo` builds the main project instead. Workspace members also work from there (`cargo run -p viewer --release`, `cargo test -p hexworld`).
+- **Build and test from the experiment's directory**, e.g. `cd Experiments/exp-05 && cargo test`. Run from the repo root, `cargo` finds the main project instead, or nothing while the root is empty. Workspace members also work from there (`cargo run -p viewer --release`, `cargo test -p hexworld`).
 - **Keep an experiment's core crate engine-free.** exp-05's `hexworld` has no dependencies at all, not even dev-dependencies: it is the part meant to outlive whatever engine or graphics stack sits on top. Engine types and rendering code belong in the plugin crate or the app.
 - **No Rust build directory under `/tmp`.** It is a RAM-backed tmpfs on this machine, and a Bevy `target/` there fills it. Keep `cargo`'s default `target/` inside the experiment, and don't point `CARGO_TARGET_DIR` under `/tmp`.
 - **Windowed runs need the desktop display**, as for the main project.
@@ -127,11 +92,13 @@ Each Rust + Bevy experiment is its own Cargo workspace, separate from the main p
 
 - **Public MIT repo: never copy engine code or assets in.** Reading engine headers and source to check an API is fine; pasting them, or Epic copyright headers, into the repo is not.
 - **Two licences: code is MIT, assets are CC BY-SA 4.0.** See `LICENSING.md` for what counts as an asset. Third-party files (fonts, Epic/Fab content, anything not made for this repo) keep their own licences: add their licence file next to them and list them in `LICENSING.md`, and never commit anything whose licence doesn't allow redistribution.
-- **Binary assets go through Git LFS.** `.gitattributes` at the repo root routes Unreal assets, source art, textures, audio, video, fonts, raw data, third-party binaries and PDFs to LFS (not lockable yet). Check a new binary type is covered before committing it; adding it afterwards means rewriting history. The main project has no binary assets: its world is built in code at runtime.
+- **Binary assets go through Git LFS.** `.gitattributes` at the repo root routes Unreal assets, source art, textures, audio, video, fonts, raw data, third-party binaries and PDFs to LFS (not lockable yet). Check a new binary type is covered before committing it; adding it afterwards means rewriting history. The main project has no binary assets yet; the archived Bevy attempt's one is its UI font.
 - **Naming:** code and docs don't name games that inspired the project.
 
 
-## The archived Unreal attempt
+## The archived attempts
+
+`_Archives/Bevy-Try-1/` holds the first Bevy attempt: a single crate, `murabito`, on Bevy 0.19, with its `src/`, `tests/`, `assets/`, `scripts/` and `Docs/`. It is kept for reference and is **not** maintained. It moved intact and its paths are relative to itself, so it should still build from its own directory; start from its `README.md`.
 
 `_Archives/UE-Try/` holds the Unreal Engine 5.8 project the repo started as: `Murabito.uproject`, `Config/`, `Source/Murabito/`, `Content/` and `Tools/`. It is kept for reference and is **not** built or maintained. Its `Tools/` scripts expect it at the repo root and won't work where it now sits.
 
