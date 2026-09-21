@@ -319,6 +319,14 @@ And by eye:
 - **Ball-on-sticks shrubs look like topiary.** Wild shrubs sit on the ground.
 - **Preview frames are fixed:** a tall version can clip at the top. Frame by the model's
   own height when versions differ (`sugi.py`, `hinoki.py` do).
+- **A limb's first ring must fit inside the face it grows from.** Where a thick thigh
+  reaches past its base face, front or back, it tucks under the body and leaves a notch
+  (the deer took several rounds). Make the segment it grows from as long as the thigh is
+  deep, by dropping a ring if needed, and keep the ring inside the body's width too, or
+  its square corner pokes out.
+- **A ring bigger than both neighbours shows as a ridge**, and a rump that ends in one
+  ring looks chopped off. Round rumps over two or three rings, from the side and from
+  above (the hare, the deer).
 
 ## Ideas waiting
 
