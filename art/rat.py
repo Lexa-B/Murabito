@@ -65,6 +65,7 @@ HIND_LEG = [
     (0.08, -0.16, 0.00, 0.03, 0.06, PINK),  # sole
 ]
 EAR = [  # big and round: wide in the middle, thin front to back
+    (0.10, 0.21, 0.405, 0.055, 0.022, GREY),  # the base, where the ear meets the head
     (0.10, 0.21, 0.42, 0.06, 0.02, PINK),
     (0.12, 0.21, 0.48, 0.065, 0.018, PINK),
     (0.13, 0.21, 0.53, 0.04, 0.015, PINK),
@@ -83,7 +84,12 @@ def build_rat():
         limbs.append((segments[HIND_SEGMENT][lower], HIND_LEG, mirror, None))
         limbs.append((segments[EAR_SEGMENT][upper], EAR, mirror, EAR_TIP))
     for face, rings, mirror, tip in limbs:
-        b.limb(face, rings, mirror, tip)
+        rows = b.limb(face, rings, mirror, tip)
+        if rings is EAR:
+            # The grey base keeps the pink off the head, but the inside of the ear
+            # faces forward and stays pink all the way down.
+            front = max(rows[0], key=lambda f: f.calc_center_median().y)
+            b.paint([front], PINK)
     return b.finish("Rat")
 
 
