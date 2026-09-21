@@ -98,19 +98,12 @@ permutations of `(+1, −1, 0)`.
 
 **Corner neighbours** touch at a single point: six of them, √3 shaku away, 2 steps each. They are
 the permutations of `(+2, −1, −1)`. Each one is the sum of the two edge directions on either side
-of it, so the corner move from direction `a` to direction `b` passes between the hexes at
-`from + a` and `from + b`.
+of it, so the line to a corner neighbour passes between the two edge neighbours that flank it.
 
-## 12-direction movement
+Together they give 12 directions, evenly spaced every 30°, alternating edge and corner. Looking
+straight down, with angles running clockwise on screen from +X:
 
-Entities move in 12 directions: the 6 edge moves plus the 6 corner moves. **A corner move is
-allowed only when both flanking faces are unobstructed**, i.e. both hexes it passes between are
-open. Otherwise an entity could slip diagonally between two blocked hexes.
-
-On screen, looking straight down, the 12 directions are evenly spaced every 30°, alternating edge
-and corner. Angles run clockwise on screen from +X:
-
-| Angle | On screen | Kind | Axial `(q, r)` | Cube `(q, r, s)` | Length (shaku) | Flanked by |
+| Angle | On screen | Kind | Axial `(q, r)` | Cube `(q, r, s)` | Distance (shaku) | Flanked by |
 |---|---|---|---|---|---|---|
 | 0°   | right                | edge   | `( 1,  0)` | `( 1,  0, −1)` | 1  | |
 | 30°  | right, a little down | corner | `( 1,  1)` | `( 1,  1, −2)` | √3 | 0° and 60° |
@@ -125,41 +118,18 @@ and corner. Angles run clockwise on screen from +X:
 | 300° | up-right             | edge   | `( 1, −1)` | `( 1, −1,  0)` | 1  | |
 | 330° | right, a little up   | corner | `( 2, −1)` | `( 2, −1, −1)` | √3 | 300° and 0° |
 
-**Cost:** an edge move costs 1 and a corner move costs √3 ≈ 1.732, less than the 2 it would take
-to make the same trip in two edge moves.
-
-## A\* heuristic
-
-With corner moves, plain hex step count overestimates: two steps can cost √3 < 2. That breaks
-A*'s guarantee of finding the shortest path. Square grids with diagonals have the same problem
-and solve it with octile distance. The hex equivalent is:
-
-take the displacement's cube components, sort their absolute values into `lo ≤ mid ≤ hi`, and
-
-```
-cost = √3 · lo + (mid − lo)
-```
-
-That's `lo` corner moves plus `mid − lo` edge moves. `hi` drops out, since it's always
-`lo + mid`. Example: `(3, 1, −4)` costs `√3 · 1 + (3 − 1) ≈ 3.73`.
-
-It's exact on open ground, and obstacles can only lengthen a path, so it never overestimates.
-That makes it admissible, and tight enough that A* doesn't waste time exploring off to the sides.
+Which of these an entity may actually move to is a movement rule, covered in `movement.md`.
 
 ## Build order
 
 1. `VoxelCoord`, `new`, the getters and their tests.
 2. Voxel ↔ world conversion and cube rounding.
-3. Later: the `units` module, the direction tables, neighbours, distance, the heuristic.
+3. Later: the `units` module, the direction tables, neighbours, distance.
 
 ## Open questions
 
-- **Direction indexing:** is there a numbered `DIRECTIONS` table, and if so where does index 0
+- **Direction indexing:** is there a numbered direction table, and if so where does index 0
   start and which way does it go? The table above is only a listing, not an agreed order.
-- **Movement between layers:** 12-direction movement is defined within one layer. Can entities
-  step up or down layers, how far, and can a move change layer and go diagonally at once?
-- **Obstruction and entity height:** a corner move needs both flanking faces open, but on which
-  layers? Only the entity's own layer, or every layer it occupies if it's taller than one voxel?
 - **World-space type:** plain `(f32, f32, f32)`, a small struct of our own, or Bevy's `Vec3`? The
   first two keep the module free of Bevy.
 - **`units` API:** plain `f32` conversion functions, or `Shaku` / `Metres` types that the compiler
