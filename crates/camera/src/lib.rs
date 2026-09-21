@@ -41,6 +41,13 @@ const ZOOM_MAX: f32 = 198.0;
 /// changes the view by the same proportion however far out the camera is.
 const ZOOM_STEP: f32 = 1.15;
 
+/// How sharply `zoom` chases `zoom_target`, per second. Snappier than the pan's ease:
+/// a wheel notch is a discrete request, not a held key.
+const ZOOM_RESPONSE: f32 = 16.0;
+
+/// Closer to its target than this, in shaku, an easing zoom has arrived.
+const ZOOM_ARRIVED_WITHIN: f32 = 0.001;
+
 /// The widest range the player's pan-speed multiplier is allowed to have an effect
 /// over. Anything outside it, or not a number at all, is pulled back in where it is
 /// used, so a hand-edited file can't reverse the pan or send it to infinity.
@@ -95,6 +102,9 @@ struct CameraRig {
     /// How fast the focus is moving across the ground, in shaku per second. Eased toward
     /// what the binds ask for rather than set from them, so a pan ramps up and coasts.
     velocity: Vec3,
+    /// Where the wheel has asked `zoom` to end up. `zoom` eases toward it, so the wheel
+    /// glides rather than snaps.
+    zoom_target: f32,
 }
 
 impl Default for CameraRig {
@@ -105,6 +115,7 @@ impl Default for CameraRig {
             direction: Vec3::new(0.0, 1.0, 1.0).normalize(),
             zoom: START_ZOOM,
             velocity: Vec3::ZERO,
+            zoom_target: START_ZOOM,
         }
     }
 }
@@ -189,13 +200,31 @@ fn pan_direction(held: &Held, settings: &CameraSettings) -> Vec3 {
     direction.normalize_or_zero()
 }
 
-fn zoom_camera(mut wheel: MessageReader<MouseWheel>, mut rigs: Query<&mut CameraRig>) {
+fn zoom_camera(
+    mut wheel: MessageReader<MouseWheel>,
+    time: Res<Time>,
+    mut rigs: Query<&mut CameraRig>,
+) {
     let notches: f32 = wheel.read().map(notches_of).sum();
-    if notches == 0.0 {
-        return;
-    }
+    let dt = time.delta_secs();
     for mut rig in &mut rigs {
-        rig.zoom = zoomed(rig.zoom, notches);
+        if notches != 0.0 {
+            rig.zoom_target = zoomed(rig.zoom_target, notches);
+        }
+        if rig.zoom != rig.zoom_target {
+            rig.zoom = eased_zoom(rig.zoom, rig.zoom_target, dt);
+        }
+    }
+}
+
+/// The zoom distance one frame later: eased toward `target`, and set to it exactly once
+/// it is close enough that the difference can't be seen.
+fn eased_zoom(zoom: f32, target: f32, dt: f32) -> f32 {
+    let eased = zoom.lerp(target, ease_fraction(ZOOM_RESPONSE, dt));
+    if (eased - target).abs() < ZOOM_ARRIVED_WITHIN {
+        target
+    } else {
+        eased
     }
 }
 
@@ -277,11 +306,12 @@ mod tests {
     }
 
     /// A rig somewhere other than the default, so a test can't pass by coincidence
-    /// with the origin or the starting zoom.
+    /// with the origin or the starting zoom. At rest: its zoom is where it wants to be.
     fn rig_off_centre() -> CameraRig {
         CameraRig {
             focus: Vec3::new(10.0, 0.0, -5.0),
             zoom: 20.0,
+            zoom_target: 20.0,
             ..default()
         }
     }
@@ -589,27 +619,92 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_wheel_notch_zooms_the_rig() {
-        let mut app = headless_app();
-        app.update();
+    fn notch(app: &mut App, notches: f32) {
         app.world_mut()
-            .write_message(scroll(MouseScrollUnit::Line, 1.0));
+            .write_message(scroll(MouseScrollUnit::Line, notches));
+    }
 
-        app.update();
-
+    fn rig_zoom_and_target(app: &mut App) -> (f32, f32) {
         let world = app.world_mut();
-        let zoom = world
+        let rig = world
             .query::<&CameraRig>()
             .single(world)
-            .expect("exactly one rig")
-            .zoom;
+            .expect("exactly one rig");
+        (rig.zoom, rig.zoom_target)
+    }
+
+    #[test]
+    fn a_wheel_notch_moves_the_zoom_target_at_once() {
+        let mut app = app_in_tenths_of_a_second();
+        notch(&mut app, 1.0);
+
+        app.update();
+
+        let (_, target) = rig_zoom_and_target(&mut app);
         assert!(
-            (zoom - START_ZOOM / ZOOM_STEP).abs() < 1e-4,
-            "zoom is {zoom}"
+            (target - START_ZOOM / ZOOM_STEP).abs() < 1e-4,
+            "the target is {target}"
         );
     }
 
+    #[test]
+    fn the_zoom_glides_toward_its_target_rather_than_jumping() {
+        let mut app = app_in_tenths_of_a_second();
+        notch(&mut app, 1.0);
+
+        app.update();
+
+        let (zoom, target) = rig_zoom_and_target(&mut app);
+        assert!(
+            target < zoom && zoom < START_ZOOM,
+            "zoom {zoom}, target {target}"
+        );
+    }
+
+    #[test]
+    fn the_zoom_arrives_exactly_at_its_target() {
+        let mut app = app_in_tenths_of_a_second();
+        notch(&mut app, 1.0);
+
+        (0..A_GOOD_WHILE).for_each(|_| app.update());
+
+        let (zoom, target) = rig_zoom_and_target(&mut app);
+        assert_eq!(zoom, target);
+    }
+
+    #[test]
+    fn a_fast_spin_lands_where_the_same_notches_one_at_a_time_would() {
+        let mut spun = app_in_tenths_of_a_second();
+        (0..5).for_each(|_| notch(&mut spun, 1.0));
+        (0..A_GOOD_WHILE).for_each(|_| spun.update());
+
+        let mut stepped = app_in_tenths_of_a_second();
+        for _ in 0..5 {
+            notch(&mut stepped, 1.0);
+            (0..A_GOOD_WHILE).for_each(|_| stepped.update());
+        }
+
+        let (spun_zoom, _) = rig_zoom_and_target(&mut spun);
+        let (stepped_zoom, _) = rig_zoom_and_target(&mut stepped);
+        assert!(
+            (spun_zoom - stepped_zoom).abs() < 1e-3,
+            "{spun_zoom} against {stepped_zoom}"
+        );
+    }
+
+    #[test]
+    fn a_zoom_close_enough_to_its_target_is_set_to_it() {
+        let nearly = 20.0 + ZOOM_ARRIVED_WITHIN * 0.5;
+
+        assert_eq!(eased_zoom(nearly, 20.0, 0.016), 20.0);
+    }
+
+    #[test]
+    fn a_zoom_far_from_its_target_closes_part_of_the_gap() {
+        let eased = eased_zoom(40.0, 20.0, 0.016);
+
+        assert!(20.0 < eased && eased < 40.0, "eased to {eased}");
+    }
     #[test]
     fn at_the_reference_zoom_the_pan_runs_at_pan_speed() {
         assert_eq!(pan_speed(PAN_REF_ZOOM, 1.0), PAN_SPEED);
