@@ -44,15 +44,15 @@ SPINE = [
     (-1.85, 0.95, 0.30, 0.28, CREAM, CREAM),
     (-1.50, 0.92, 0.34, 0.31, ORANGE, ORANGE),
     (-1.18, 1.02, 0.26, 0.24, ORANGE, ORANGE),
-    (-0.95, 1.13, 0.13, 0.13, ORANGE, ORANGE),  # tail root
-    # body: short
-    (-0.78, 1.08, 0.22, 0.25, ORANGE, ORANGE),  # rump
-    (-0.55, 1.07, 0.27, 0.29, ORANGE, ORANGE),  # hip
-    (-0.20, 1.03, 0.25, 0.26, ORANGE, ORANGE),
-    (0.10, 1.07, 0.27, 0.30, ORANGE, CREAM),  # chest
-    (0.32, 1.15, 0.26, 0.30, ORANGE, CREAM),  # shoulder
+    (-0.95, 1.13, 0.17, 0.17, ORANGE, ORANGE),  # tail root
+    # body: short and even, no waist
+    (-0.78, 1.08, 0.28, 0.29, ORANGE, ORANGE),  # rump
+    (-0.55, 1.07, 0.31, 0.32, ORANGE, ORANGE),  # hip
+    (-0.20, 1.05, 0.31, 0.31, ORANGE, ORANGE),
+    (0.10, 1.07, 0.32, 0.33, ORANGE, CREAM),  # chest
+    (0.32, 1.15, 0.30, 0.32, ORANGE, CREAM),  # shoulder
     # neck: short and thick
-    (0.50, 1.38, 0.22, 0.24, ORANGE, CREAM),
+    (0.50, 1.38, 0.27, 0.27, ORANGE, CREAM),
     # head: about 1.3x natural, big cheeks, short sharp snout
     (0.58, 1.62, 0.32, 0.30, ORANGE, CREAM),  # back of the skull
     (0.80, 1.72, 0.42, 0.34, ORANGE, CREAM),  # cheeks, the widest point
@@ -71,16 +71,16 @@ EAR_SEGMENT = 11  # back of skull -> cheeks
 # (x, y, z, half-width, half-depth, colour), each colour painting the segment
 # arriving at that ring. The last ring is capped flat, or closed to `tip`.
 FRONT_LEG = [
-    (0.16, 0.22, 0.72, 0.09, 0.10, ORANGE),  # shoulder
-    (0.15, 0.24, 0.45, 0.075, 0.08, ORANGE),  # elbow
+    (0.18, 0.22, 0.72, 0.10, 0.11, ORANGE),  # shoulder
+    (0.16, 0.24, 0.45, 0.075, 0.08, ORANGE),  # elbow
     (0.15, 0.26, 0.14, 0.06, 0.065, SOOT),  # wrist
     (0.15, 0.30, 0.07, 0.075, 0.105, SOOT),  # paw
     (0.15, 0.30, 0.00, 0.075, 0.105, SOOT),  # sole
 ]
 HIND_LEG = [
-    (0.17, -0.66, 0.72, 0.11, 0.15, ORANGE),  # hip
-    (0.16, -0.55, 0.45, 0.08, 0.09, ORANGE),  # knee
-    (0.15, -0.70, 0.20, 0.055, 0.065, SOOT),  # hock
+    (0.19, -0.66, 0.72, 0.12, 0.15, ORANGE),  # hip
+    (0.17, -0.61, 0.45, 0.08, 0.09, ORANGE),  # knee
+    (0.15, -0.67, 0.20, 0.055, 0.065, SOOT),  # hock
     (0.15, -0.63, 0.07, 0.075, 0.105, SOOT),  # paw
     (0.15, -0.63, 0.00, 0.075, 0.105, SOOT),  # sole
 ]
