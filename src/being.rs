@@ -15,7 +15,7 @@ use bevy::prelude::*;
 
 #[cfg(test)]
 use crate::senses::rotate;
-use crate::senses::{Hearing, SenseOverlay, Vision, VisionBand};
+use crate::senses::{Hearing, SeenCells, SenseOverlay, Vision, VisionBand};
 use crate::諸法::種;
 
 /// Marks a body that senses and (later) acts. What perception will query for.
@@ -24,6 +24,30 @@ use crate::諸法::種;
 /// were never alive; and not "entity", which is Bevy's own ID type.
 #[derive(Component, Clone, Copy, Debug)]
 pub struct Being;
+
+/// Where each stands, and where it looks. Constants rather than locals so the tableau
+/// can be asserted: "a predator watching prey that has not noticed" is a claim, and a
+/// claim belongs in a test rather than in a screenshot read through a projection that
+/// makes ground angles hard to judge.
+///
+/// Both stand at half their body height, so they sit on the ground rather than in it,
+/// and both look at a point at their own height, so `looking_at` turns them about Y
+/// only and leaves them level.
+pub(crate) const FOX_AT: Vec3 = Vec3::new(-16.0, 0.8, 10.0);
+pub(crate) const RABBIT_AT: Vec3 = Vec3::new(13.0, 0.6, -10.0);
+
+/// Off toward the far corner: the fox is behind the rabbit, in the wedge its 240 degree
+/// cone does not cover.
+const RABBIT_LOOKS_AT: Vec3 = Vec3::new(30.0, RABBIT_AT.y, -26.0);
+
+/// Watching the rabbit.
+pub(crate) fn fox_transform() -> Transform {
+    Transform::from_translation(FOX_AT).looking_at(RABBIT_AT.with_y(FOX_AT.y), Vec3::Y)
+}
+
+pub(crate) fn rabbit_transform() -> Transform {
+    Transform::from_translation(RABBIT_AT).looking_at(RABBIT_LOOKS_AT, Vec3::Y)
+}
 
 const FOX_COLOR: Color = Color::srgb(0.78, 0.36, 0.12);
 const RABBIT_COLOR: Color = Color::srgb(0.74, 0.70, 0.64);
@@ -104,12 +128,6 @@ fn spawn_beings(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Both stand at the height of half their body, so they sit on the ground rather
-    // than in it, and both look at a point at their own height, so `looking_at` turns
-    // them about Y only and leaves them level.
-    let fox_at = Vec3::new(-16.0, 0.8, 10.0);
-    let rabbit_at = Vec3::new(13.0, 0.6, -10.0);
-
     commands.spawn((
         // Which kind it is, as a taxonomy key rather than a Rust type: the same reason
         // the tree is data. A `Fox` component would put the ontology back in the type
@@ -118,9 +136,9 @@ fn spawn_beings(
         Being,
         Mesh3d(meshes.add(Cuboid::new(1.6, 1.6, 3.6))),
         MeshMaterial3d(materials.add(FOX_COLOR)),
-        // Watching the rabbit.
-        Transform::from_translation(fox_at).looking_at(rabbit_at.with_y(fox_at.y), Vec3::Y),
+        fox_transform(),
         fox_vision(),
+        SeenCells::default(),
         fox_hearing(),
         SenseOverlay { color: FOX_OVERLAY },
     ));
@@ -130,16 +148,160 @@ fn spawn_beings(
         Being,
         Mesh3d(meshes.add(Cuboid::new(1.2, 1.2, 1.8))),
         MeshMaterial3d(materials.add(RABBIT_COLOR)),
-        // Facing away, off toward the far corner: the fox is behind it, in the part of
-        // its vision the 240 degree cone does not cover.
-        Transform::from_translation(rabbit_at)
-            .looking_at(Vec3::new(30.0, rabbit_at.y, -26.0), Vec3::Y),
+        rabbit_transform(),
         rabbit_vision(),
+        SeenCells::default(),
         rabbit_hearing(),
         SenseOverlay {
             color: RABBIT_OVERLAY,
         },
     ));
+}
+
+#[cfg(test)]
+mod tableau {
+    //! What the starting arrangement claims: a predator watching prey that has not
+    //! noticed, with something in the way so that looking is not enough.
+    //!
+    //! Built from the same constants the app spawns from, through the same
+    //! `gather_occluders` and the same taxonomy, so the test cannot drift from the scene
+    //! by agreeing with a copy of it.
+
+    use bevy::prelude::*;
+
+    use super::*;
+    use crate::hex::Hex;
+    use crate::scene::{BUSHES, GRASS, TREES};
+    use crate::senses::facing;
+    use crate::senses::occlusion::{Height, Occluders, gather_occluders};
+    use crate::senses::vision::cast;
+    use crate::諸法::実相;
+
+    fn ground(at: Vec3) -> Vec2 {
+        Vec2::new(at.x, at.z)
+    }
+
+    /// The real plants, through the real gather: what blocks is read off 木 and 草
+    /// carrying 不透明 and 半透明, not asserted here.
+    fn plants() -> Occluders {
+        let mut app = App::new();
+        app.insert_resource(実相::load())
+            .init_resource::<Occluders>()
+            .add_systems(Update, gather_occluders);
+        for (kind, places) in [
+            ("木", &TREES[..]),
+            ("茂み", &BUSHES[..]),
+            ("草", &GRASS[..]),
+        ] {
+            for (x, z) in places {
+                app.world_mut().spawn((
+                    種::new(kind),
+                    Transform::from_xyz(*x, 0.0, *z),
+                    GlobalTransform::from_xyz(*x, 0.0, *z),
+                ));
+            }
+        }
+        app.update();
+        app.world_mut().remove_resource::<Occluders>().unwrap()
+    }
+
+    fn fox_sees(occluders: &Occluders) -> crate::senses::SeenCells {
+        let eye = GlobalTransform::from(fox_transform());
+        cast(ground(FOX_AT), facing(&eye), &fox_vision(), occluders)
+    }
+
+    /// The half of the claim that is about geometry: the rabbit is in range and in the
+    /// cone. Without this, "the fox cannot see the rabbit" would pass for the boring
+    /// reason that it never could.
+    #[test]
+    fn with_the_ground_bare_the_fox_would_see_the_rabbit() {
+        let seen = fox_sees(&Occluders::default());
+        // At the rabbit's height, which is the question actually being asked: could the
+        // fox make out something rabbit-sized standing there.
+        assert!(seen.contains(Hex::from_world(ground(RABBIT_AT)), Height::Knee));
+    }
+
+    /// The half that is about the world: something stands in the way.
+    #[test]
+    fn the_trees_hide_the_rabbit_from_the_fox() {
+        let seen = fox_sees(&plants());
+        assert!(
+            !seen.contains(Hex::from_world(ground(RABBIT_AT)), Height::Knee),
+            "the rabbit should be behind a tree"
+        );
+    }
+
+    /// And the prey has not noticed — not because it is blind, but because the fox is in
+    /// the wedge even a 240 degree cone leaves behind.
+    #[test]
+    fn the_rabbit_does_not_see_the_fox() {
+        let eye = GlobalTransform::from(rabbit_transform());
+        let seen = cast(ground(RABBIT_AT), facing(&eye), &rabbit_vision(), &plants());
+        assert!(!seen.contains(Hex::from_world(ground(FOX_AT)), Height::Knee));
+    }
+
+    /// Grass is knee-high, so it is the rabbit's problem and not a person's. The same
+    /// cells, the same fox, two answers.
+    #[test]
+    fn the_grass_troubles_the_rabbit_and_not_a_person() {
+        let bare = fox_sees(&Occluders::default());
+        let grown = fox_sees(&plants());
+
+        let dimmed_for_a_rabbit = bare
+            .iter(Height::Knee)
+            .filter(|(hex, band)| {
+                grown
+                    .band(*hex, Height::Knee)
+                    .is_some_and(|now| now > *band)
+            })
+            .count();
+        let dimmed_for_a_person = bare
+            .iter(Height::Full)
+            .filter(|(hex, band)| {
+                grown
+                    .band(*hex, Height::Full)
+                    .is_some_and(|now| now > *band)
+            })
+            .count();
+
+        assert!(
+            dimmed_for_a_rabbit > 0,
+            "grass should cost sight of a rabbit"
+        );
+        assert_eq!(
+            dimmed_for_a_person, 0,
+            "and none at all of someone standing"
+        );
+    }
+
+    /// The two kinds of occluder do different things, and both do something.
+    ///
+    /// Asserted over the whole visible set rather than at a chosen cell: picking one
+    /// means guessing how much grass happens to lie along that bearing, and the answer
+    /// moves whenever a tuft does. The first version of this test picked a cell behind
+    /// four stacked tufts — demoted past the last band, so hidden outright, which is the
+    /// model working rather than failing. A deep enough thicket *is* a wall.
+    #[test]
+    fn the_grass_costs_sight_where_the_trees_take_it() {
+        let bare = fox_sees(&Occluders::default());
+        let grown = fox_sees(&plants());
+
+        let dimmed = bare
+            .iter(Height::Knee)
+            .filter(|(hex, band)| {
+                grown
+                    .band(*hex, Height::Knee)
+                    .is_some_and(|now| now > *band)
+            })
+            .count();
+        assert!(dimmed > 0, "the grass should cost a band somewhere");
+
+        let lost = bare
+            .iter(Height::Knee)
+            .filter(|(hex, _)| !grown.contains(*hex, Height::Knee))
+            .count();
+        assert!(lost > 0, "the trees should take sight outright somewhere");
+    }
 }
 
 #[cfg(test)]

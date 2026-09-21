@@ -26,6 +26,7 @@
 //! shaku, the crate's base unit.
 
 pub mod hearing;
+pub mod occlusion;
 pub mod vision;
 
 use bevy::gizmos::AppGizmoBuilder;
@@ -33,7 +34,7 @@ use bevy::gizmos::config::{GizmoConfig, GizmoConfigGroup, GizmoLineConfig};
 use bevy::prelude::*;
 
 pub use hearing::Hearing;
-pub use vision::{Vision, VisionBand};
+pub use vision::{SeenCells, Vision, VisionBand};
 
 /// How high above the ground the debug overlay is drawn, to keep it off the surface.
 /// Shaku, like every other length.
@@ -48,10 +49,27 @@ impl Plugin for SensesPlugin {
         // stroke weight means a group. Three of them is what lets density read as
         // heaviness as well as count — at a cell ten to thirty pixels across, stroke
         // count alone does not carry it.
-        app.insert_gizmo_config(BoldStroke, stroke_config(2.6))
+        app.init_resource::<occlusion::Occluders>()
+            // In `PreUpdate` so the commands that add the component are applied before
+            // anything in `Update` reads it.
+            .add_systems(PreUpdate, occlusion::read_heights)
+            .insert_gizmo_config(BoldStroke, stroke_config(2.6))
             .insert_gizmo_config(MidStroke, stroke_config(1.7))
             .insert_gizmo_config(FaintStroke, stroke_config(1.0))
-            .add_systems(Update, (vision::draw_vision, hearing::draw_hearing));
+            .add_systems(
+                Update,
+                // Gathered first: both senses read the map in the same frame it is built.
+                (
+                    occlusion::gather_occluders,
+                    vision::cast_vision,
+                    (
+                        occlusion::draw_occluders,
+                        vision::draw_vision,
+                        hearing::draw_hearing,
+                    ),
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -89,7 +107,7 @@ pub struct SenseOverlay {
 }
 
 /// Where a being faces, in the ground plane. Bevy's forward is local -Z.
-fn facing(transform: &GlobalTransform) -> Vec2 {
+pub(crate) fn facing(transform: &GlobalTransform) -> Vec2 {
     let forward = transform.forward();
     Vec2::new(forward.x, forward.z).normalize_or(Vec2::new(0.0, -1.0))
 }

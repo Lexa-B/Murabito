@@ -1,4 +1,5 @@
 # 諸法 → 物 → 者 → 生き物 → 人間
 #
 # This node's properties. The tree itself is assets/ontology/諸法.yaml.
-属性: []
+属性:
+  - 背丈

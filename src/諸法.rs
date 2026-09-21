@@ -643,7 +643,7 @@ mod tests {
     fn the_real_ontology_loads() {
         let tree = tree();
         assert_eq!(tree.root(), "諸法");
-        assert_eq!(tree.len(), 19);
+        assert_eq!(tree.len(), 20);
     }
 
     #[test]
@@ -865,7 +865,20 @@ mod tests {
         let tree = tree();
         assert_eq!(tree.parent("狐"), tree.parent("兎"));
         assert_eq!(tree.nodes_with("捕食者"), ["狐", "狼"]);
-        assert_eq!(tree.nodes_with("被食者"), ["兎"]);
+        assert_eq!(tree.nodes_with("被食者"), ["兎", "狐"]);
+    }
+
+    /// 食物連鎖 is not an alternation, and 狐 is the reason. A fox is 捕食者 to a rabbit
+    /// and 被食者 to a bear, and both are true of foxes at once — so 実相 holds both,
+    /// and it is each being's 仮諦 that keeps whichever half it has any use for.
+    ///
+    /// The axis being a tag set is what allows that. Were it exclusive, the world would
+    /// have to pick one, and every relation would want storing as a relation.
+    #[test]
+    fn a_fox_is_both_predator_and_prey() {
+        let tree = tree();
+        assert!(tree.has_facet("狐", "捕食者"));
+        assert!(tree.has_facet("狐", "被食者"));
     }
 
     #[test]
@@ -886,9 +899,11 @@ mod tests {
     #[test]
     fn an_axis_is_exclusive_unless_it_opts_out() {
         let tree = tree();
-        for axis in ["年齢", "食物連鎖", "音", "視界", "匂い"] {
+        for axis in ["年齢", "音", "視界", "匂い", "高さ"] {
             assert!(tree.is_exclusive(axis), "{axis} should be exclusive");
         }
+        // The half of this test's name that had nothing to test until 食物連鎖 opted out.
+        assert!(!tree.is_exclusive("食物連鎖"));
     }
 
     /// Arity is irrelevant to exclusivity: 匂い has four values and is exclusive exactly
