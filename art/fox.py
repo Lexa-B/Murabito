@@ -85,7 +85,7 @@ def build_fox():
         limbs.append((segments[EAR_SEGMENT][upper], EAR, mirror, EAR_TIP))
     for face, rings, mirror, tip in limbs:
         b.limb(face, rings, mirror, tip)
-    return b.finish("Fox")
+    return b.finish("Fox", shaded=True)
 
 
 if __name__ == "__main__":

@@ -90,7 +90,7 @@ def build_rat():
             # faces forward and stays pink all the way down.
             front = max(rows[0], key=lambda f: f.calc_center_median().y)
             b.paint([front], PINK)
-    return b.finish("Rat")
+    return b.finish("Rat", shaded=True)
 
 
 if __name__ == "__main__":

@@ -109,6 +109,7 @@ sampler), so faces get exactly the swatch colour.
 | | |
 |---|---|
 | `PALETTE`, `SWATCH`, `PALETTE_SIZE` | the palette, name → index, texture size |
+| `SHADES` | fur and feather colours → the swatch plus its `_light` and `_deep` shades, for shaded animals |
 | `reset_scene()` | start from an empty Blender scene |
 | `apply_swatches(obj, names)` | give a mesh the palette material and point each face's UVs at its swatch |
 | `export_glb(obj, path)` | export one object as `.glb` (Y-up) |
@@ -118,7 +119,7 @@ sampler), so faces get exactly the swatch colour.
 
 | | |
 |---|---|
-| `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `finish(name)` → a coloured object |
+| `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `finish(name, shaded=False)` → a coloured object; `shaded=True` varies each fur or feather face among its `SHADES`, from a stream seeded by `name` |
 | `Builder.spine(start_tip, rings, end_tip)` | loft an animal's body along a spine in the YZ plane, octagonal rings from tail tip to nose; returns the faces per segment |
 | `Builder.limb(face, rings, mirror, tip)` | replace one of those faces with a limb (leg, ear) lofted through square rings; returns its faces |
 | `run(build, name, target, extent)` | the shared command line (`--out`, `--renders`); scripts parse their own extra flags first |
@@ -166,7 +167,7 @@ before showing it.
 ### An animal
 
 1. Copy the closest animal (`fox.py` for four-legged and standing, `hare.py` for crouched
-   with long ears).
+   with long ears, `crane.py` for a bird on two legs with a long neck).
 2. Edit `SPINE`: rings from tail tip to nose as `(y, z, half-width, half-height, colour,
    underside colour)`. Keep neighbouring rings in proportion: a ring bigger than both its
    neighbours shows as a ridge.
@@ -176,7 +177,10 @@ before showing it.
 4. Patches that don't follow rings (calico, masks): paint them after building with
    `b.paint(...)` on spine or limb faces (see `cat.py`). Limb faces come back from
    `b.limb(...)`.
-5. Add any new swatches to the palette, build, render, iterate.
+5. Finish with `b.finish(name, shaded=True)`, so the coat varies a little face by face.
+   A new coat colour needs `_light` and `_deep` swatches beside it and an entry in
+   `SHADES`; small details (a crown, a bill, legs) can stay a single swatch.
+6. Add any new swatches to the palette, build, render, iterate.
 
 ### A plant
 
@@ -242,7 +246,7 @@ way.
   whose counts only come in steps of four, so they run a little finer (about 1.3–1.4).
 - **Shrubs** scale the edge down (`FACET = 0.6` in `azalea.py`), or a small plant gets only
   a few dozen chunky facets.
-- **Current costs:** animals 400–450 triangles; shrubs about 900; broadleaf trees
+- **Current costs:** animals 370–450 triangles; shrubs about 900; broadleaf trees
   1,500–6,600; conifers 4,500–10,000; bamboo up to 17,600. That's accepted for now: the
   plan is to come back and make **low-LoD versions** of everything to fade to at distance.
 
@@ -285,6 +289,7 @@ And by eye:
 | hare | – | – | – | Japanese hare (野兎), sitting in a loaf |
 | cat | – | – | – | mike (三毛) calico, long tail, standing |
 | rat | – | – | – | black rat (クマネズミ) |
+| crane | – | – | – | red-crowned crane (丹頂), standing; the tallest animal, about 4.5 shaku |
 | maple (イロハモミジ) | `00`, `pruned-00` | a–e | summer | wild mushroom crown; `pruned-00` is cloud-pruned, kept to shrink into a garden prop |
 | redpine (アカマツ) | `00`–`04` | a | summer | crooked, flat pads, bark blending grey to red |
 | sugi (スギ) | `00`–`04` | a | summer | straight spire of knobbly tufts |

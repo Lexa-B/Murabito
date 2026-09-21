@@ -8,6 +8,7 @@ Coordinates are Blender's, in shaku: +Y forward, +Z up, +X the animal's right.
 """
 
 import math
+import random
 
 import bmesh
 import bpy
@@ -125,10 +126,17 @@ class Builder:
             rows.append([self.face((point, prev[j], prev[(j + 1) % 4]), colour) for j in range(4)])
         return rows
 
-    def finish(self, name):
-        """Turn the bmesh into a palette-coloured object linked into the scene."""
+    def finish(self, name, shaded=False):
+        """Turn the bmesh into a palette-coloured object linked into the scene.
+
+        shaded varies fur and feathers face by face (see style.SHADES), from a
+        random stream seeded by name, so a rebuild comes out the same.
+        """
         bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)
         swatches = [style.PALETTE[f[self._swatch]][0] for f in self.bm.faces]
+        if shaded:
+            rng = random.Random(name)
+            swatches = [rng.choice(style.SHADES[s]) if s in style.SHADES else s for s in swatches]
         self.bm.faces.layers.int.remove(self._swatch)
 
         mesh = bpy.data.meshes.new(name)

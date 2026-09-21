@@ -115,10 +115,50 @@ PALETTE = [
     ("sakura_bark", "#5B403B"),
     ("sakura_bark_band", "#7D5E54"),
     ("sakura_twig", "#6E4A42"),
+    # near shades of the animals' colours, for SHADES
+    ("fox_orange_light", "#DF8537"),
+    ("fox_orange_deep", "#CF6B24"),
+    ("cream_light", "#F8F2E7"),
+    ("cream_deep", "#E9DFCE"),
+    ("soot_light", "#45332D"),
+    ("soot_deep", "#33251F"),
+    ("hare_brown_light", "#987E5F"),
+    ("hare_brown_deep", "#84694D"),
+    ("rat_grey_light", "#746C66"),
+    ("rat_grey_deep", "#625A55"),
+    ("flesh_pink_light", "#D0A398"),
+    ("flesh_pink_deep", "#C09085"),
+    # the red-crowned crane
+    ("feather_white", "#F4F3EE"),
+    ("feather_white_light", "#FAF9F5"),
+    ("feather_white_deep", "#E9E7E0"),
+    ("feather_black", "#2B2A2C"),
+    ("feather_black_light", "#353436"),
+    ("feather_black_deep", "#232224"),
+    ("crown_red", "#C8322C"),
+    ("bill_olive", "#8B8A68"),
+    ("crane_leg", "#4A4946"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
 SWATCH = {name: i for i, (name, _) in enumerate(PALETTE)}
+
+# Fur and feathers: in a shaded model (loft.Builder.finish(shaded=True)) each face
+# of one of these swatches takes it or a near shade at random, so a coat isn't one
+# flat colour. The base is listed twice so it stays the most common.
+SHADES = {
+    base: [base, base, f"{base}_light", f"{base}_deep"]
+    for base in (
+        "fox_orange",
+        "cream",
+        "soot",
+        "hare_brown",
+        "rat_grey",
+        "flesh_pink",
+        "feather_white",
+        "feather_black",
+    )
+}
 
 
 def reset_scene():
