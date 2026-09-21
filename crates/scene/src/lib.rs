@@ -16,11 +16,15 @@ const GROUND_COLOUR: Color = Color::srgb(0.35, 0.42, 0.30);
 /// directional light has no position, so every point is lit from the same angle.
 const SUN_SHINES_FROM: Vec3 = Vec3::new(4.0, 8.0, 4.0);
 
+/// What the camera paints where nothing else is drawn. Stands in for a sky.
+const SKY_COLOUR: Color = Color::srgb(0.53, 0.81, 0.92);
+
 pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (spawn_ground, spawn_sun));
+        app.insert_resource(ClearColor(SKY_COLOUR))
+            .add_systems(Startup, (spawn_ground, spawn_sun));
     }
 }
 
@@ -87,6 +91,13 @@ mod tests {
 
         assert_eq!(count::<Ground>(&mut app), 1);
         assert_eq!(count::<Sun>(&mut app), 1);
+    }
+
+    #[test]
+    fn the_sky_is_what_the_screen_is_cleared_to() {
+        let app = app_after_startup();
+
+        assert_eq!(app.world().resource::<ClearColor>().0, SKY_COLOUR);
     }
 
     #[test]

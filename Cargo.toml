@@ -10,6 +10,7 @@ publish = false
 [workspace.dependencies]
 bevy = "0.19.1"
 murabito_scene = { path = "crates/scene" }
+murabito_camera = { path = "crates/camera" }
 
 # Bevy is slow in a plain debug build. Our own code is lightly optimised and
 # every dependency (the engine) fully: the engine is rebuilt rarely, our code often.

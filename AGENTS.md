@@ -28,7 +28,9 @@ Murabito/
 ├─ AGENTS.md, CLAUDE.md, LICENSE, LICENSE-ASSETS, LICENSING.md, .gitignore, .gitattributes
 ├─ Cargo.toml, Cargo.lock, rust-toolchain.toml   the main project: a Cargo workspace
 ├─ crates/                 its members, one directory each (see "Main project" below)
-│  └─ murabito/            the app: the one binary
+│  ├─ murabito/            the app: the one binary, a plugin list and nothing else
+│  ├─ scene/               `murabito_scene`: the placeholder world (ground, sun, sky colour)
+│  └─ camera/              `murabito_camera`: the overhead camera
 ├─ scripts/run.sh          launches the app; what a desktop entry points at. Finds the display itself, logs to ~/.cache/murabito/run.log
 ├─ Docs/                   project docs (no specs or plans; see below)
 ├─ _Archives/
