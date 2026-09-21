@@ -138,6 +138,16 @@ PALETTE = [
     ("crown_red", "#C8322C"),
     ("bill_olive", "#8B8A68"),
     ("crane_leg", "#4A4946"),
+    # the Japanese wild boar
+    ("boar_brown", "#6A5747"),
+    ("boar_brown_light", "#735F4E"),
+    ("boar_brown_deep", "#605040"),
+    ("boar_dark", "#463A31"),
+    ("boar_dark_light", "#4F4238"),
+    ("boar_dark_deep", "#3E332B"),
+    ("boar_snout", "#6E5650"),
+    ("boar_cheek", "#A89A88"),
+    ("tusk_ivory", "#E8DFC6"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -157,6 +167,8 @@ SHADES = {
         "flesh_pink",
         "feather_white",
         "feather_black",
+        "boar_brown",
+        "boar_dark",
     )
 }
 

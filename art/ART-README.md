@@ -290,6 +290,7 @@ And by eye:
 | cat | – | – | – | mike (三毛) calico, long tail, standing |
 | rat | – | – | – | black rat (クマネズミ) |
 | crane | – | – | – | red-crowned crane (丹頂), standing; the tallest animal, about 4.5 shaku |
+| boar | – | – | – | Japanese wild boar (ニホンイノシシ), a tusked male, standing; front-heavy, dark crest, pale jaw fringe |
 | maple (イロハモミジ) | `00`, `pruned-00` | a–e | summer | wild mushroom crown; `pruned-00` is cloud-pruned, kept to shrink into a garden prop |
 | redpine (アカマツ) | `00`–`04` | a | summer | crooked, flat pads, bark blending grey to red |
 | sugi (スギ) | `00`–`04` | a | summer | straight spire of knobbly tufts |
