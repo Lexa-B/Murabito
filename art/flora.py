@@ -68,5 +68,48 @@ def clump(b, centre, radius, up, down, leaves, shades, rng, lumpiness=0.12):
         b.paint([f], rng.choice(shades if f.normal.z < -0.35 else leaves))
 
 
+def _exit_distance(origin, direction, centre, radius, up, down):
+    """How far along a ray from origin it leaves a lump: an ellipsoid reaching
+    up above its centre and down below it. None if the ray misses it."""
+    for height, upper in ((up, True), (down, False)):
+        scale = (1 / radius, 1 / radius, 1 / height)
+        o = Vector([(origin[i] - centre[i]) * scale[i] for i in range(3)])
+        d = Vector([direction[i] * scale[i] for i in range(3)])
+        qa, qb, qc = d.dot(d), 2 * o.dot(d), o.dot(o) - 1
+        disc = qb * qb - 4 * qa * qc
+        if disc < 0:
+            return None
+        t = (-qb + math.sqrt(disc)) / (2 * qa)
+        if t > 0 and ((origin + direction * t).z >= centre[2]) == upper:
+            return t
+    return None
+
+
+def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03):
+    """One continuous crown shrink-wrapped over lumps, each (centre, radius, up,
+    down) as in clump.
+
+    A single icosphere around centre has each vertex pushed out along its ray to
+    where it leaves the last lump, so the triangles are an even size all over
+    and the lumps blend into one skin instead of cutting through each other.
+    The lumps together should be star-shaped from centre, as a crown is.
+    Faces are coloured as in clump.
+    """
+    made = bmesh.ops.create_icosphere(b.bm, subdivisions=subdivisions, radius=1.0)
+    verts = made["verts"]
+    centre = Vector(centre)
+    for v in verts:
+        direction = v.co.normalized()
+        reach = [_exit_distance(centre, direction, Vector(c), r, up, down) for c, r, up, down in lumps]
+        distance = max(t for t in reach if t is not None)
+        v.co = centre + direction * distance * (1 + rng.uniform(-lumpiness, lumpiness))
+    faces = []  # in a fixed order, so a seed always paints the same faces
+    for v in verts:
+        faces.extend(f for f in v.link_faces if f not in faces)
+    for f in faces:
+        f.normal_update()
+        b.paint([f], rng.choice(shades if f.normal.z < -0.35 else leaves))
+
+
 def rng_for(seed):
     return random.Random(seed)

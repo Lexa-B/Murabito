@@ -39,6 +39,8 @@ LEADER = [0.7, 0.45, 0.25]
 
 # A version is a trunk, leaders and foliage clumps, in shaku. Trunk and leaders
 # are polylines with a radius per point; clumps are (centre, radius, up, down).
+# With a "canopy" centre the clumps are wrapped in one continuous skin (a wild
+# crown); without one each clump is its own blob (clipped pads).
 VERSIONS = {
     "00": {
         "seed": 0,
@@ -55,6 +57,7 @@ VERSIONS = {
             ([(0.3, 0.2, 4.5), (3, 5, 9), (4, 8, 13)], [0.6, 0.4, 0.22]),
             ([(0.3, 0.2, 5), (0.6, 0.6, 10), (1, 1, 15)], [0.75, 0.55, 0.35]),
         ],
+        "canopy": (1, 0, 16),  # the crown is one skin over these lumps
         "clumps": [
             # the cap: a tall dome with a flattish underside
             ((1, 0, 15), 14, 11, 2.5),
@@ -114,8 +117,11 @@ def build_maple(version="00", colour="a", season="summer"):
     flora.branch(b, *spec["trunk"], BARK)
     for points, radii in spec["leaders"]:
         flora.branch(b, points, radii, BARK)
-    for centre, radius, up, down in spec["clumps"]:
-        flora.clump(b, centre, radius, up, down, leaves, shades, rng, spec["lumpiness"])
+    if "canopy" in spec:
+        flora.canopy(b, spec["canopy"], spec["clumps"], leaves, shades, rng)
+    else:
+        for centre, radius, up, down in spec["clumps"]:
+            flora.clump(b, centre, radius, up, down, leaves, shades, rng, spec["lumpiness"])
     return b.finish(f"Maple-{version}-{colour}-{season}")
 
 
