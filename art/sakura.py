@@ -15,6 +15,8 @@ Named sakura-<version>-<colour>-<season>, as the other trees are.
 """
 
 import argparse
+import math
+import random
 import sys
 from pathlib import Path
 
@@ -70,6 +72,56 @@ VERSIONS = {
         "fill": [((4, -4, 18), 8, 5, 3.0), ((-4, 4, 18), 8, 5, 3.0), ((0, 0, 21), 7, 4, 3.0)],
     },
 }
+
+
+def _grown(seed, fork=7.0, limbs=6, reach=(13, 19), rise=1.0, girth=1.0, gnarl=(0.3, 0.8)):
+    """A version whose trunk and limbs come from its seed: fork is the trunk's
+    height in shaku, reach the range of limb lengths, rise how much the limbs
+    climb (1 is version 00's; less is more level), girth scales the trunk."""
+    rng = random.Random(seed * 7919 + 1)  # its own stream, apart from the build's
+    top = Vector((0.3, 0.2, fork))
+    trunk = (
+        [(0, 0, -0.5), (0.2, 0, fork * 0.33), (0.6, 0.3, fork * 0.66), tuple(top)],
+        [r * girth for r in (2.8, 2.05, 1.8, 1.6)],
+    )
+    out = []
+    for i in range(limbs):
+        angle = i * flora.GOLDEN_ANGLE + rng.uniform(-0.3, 0.3)
+        way = Vector((math.cos(angle), math.sin(angle), 0))
+        length = rng.uniform(*reach)
+        lift = rng.uniform(3.5, 5.5) * rise
+        out.append((
+            [tuple(top - Vector((0, 0, 0.5))),
+             tuple(top + way * length * 0.22 + Vector((0, 0, lift * 0.6))),
+             tuple(top + way * length * 0.6 + Vector((0, 0, lift * 0.85))),
+             tuple(top + way * length + Vector((0, 0, lift)))],
+            LIMB,
+        ))
+    out.append((  # the one that climbs, holding up the top
+        [tuple(top), tuple(top + Vector((0.7, 0.8, 4.5))), tuple(top + Vector((1.7, 0.8, 8.5))),
+         tuple(top + Vector((0.7, 1.8, 11.5)))],
+        LIMB,
+    ))
+    return {
+        **VERSIONS["00"],
+        "seed": seed,
+        "trunk": trunk,
+        "gnarl": gnarl,
+        "limbs": out,
+        "fill": [
+            (tuple(top + Vector((4, -4, 10.5))), 8, 5, 3.0),
+            (tuple(top + Vector((-4, 4, 10.5))), 8, 5, 3.0),
+            (tuple(top + Vector((0, 0, 13.5))), 7, 4, 3.0),
+        ],
+    }
+
+
+VERSIONS.update({
+    "01": _grown(1, fork=6, limbs=5, reach=(11, 15), girth=0.85),  # a younger, compact tree
+    "02": _grown(2, fork=7, limbs=7, reach=(16, 22), girth=1.25, gnarl=(0.45, 1.1)),  # a vast old tree
+    "03": _grown(3, fork=5.5, limbs=6, reach=(14, 19), rise=0.55),  # low and sprawling, limbs almost flat
+    "04": _grown(4, fork=8.5, limbs=6, reach=(12, 17), rise=1.4, girth=0.95),  # a taller trunk, limbs lifting
+})
 
 
 def _masses(points, spec, rng):
