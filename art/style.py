@@ -230,6 +230,12 @@ PALETTE = [
     ("pheasant_red", "#D4001F"),
     ("pheasant_wing", "#9FB2C6"),
     ("eye_yellow", "#F2C12E"),
+    # the grey heron
+    ("heron_grey", "#8A9098"),
+    ("heron_grey_light", "#959BA3"),
+    ("heron_grey_deep", "#7F858D"),
+    ("heron_bill", "#D9A53A"),
+    ("heron_leg", "#B89A6A"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -270,6 +276,7 @@ SHADES = {
         "pheasant_neck",
         "pheasant_back",
         "pheasant_tail",
+        "heron_grey",
     )
 }
 

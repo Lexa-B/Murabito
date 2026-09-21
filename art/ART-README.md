@@ -303,6 +303,7 @@ And by eye:
 | macaque | – | – | – | Japanese macaque (ニホンザル) on all fours; a flat, trapezoid red face with stud eyes in a poofy mane, a red rump, a stubby tail |
 | wolf | – | – | – | Japanese wolf (ニホンオオカミ), extinct since about 1905; the dog's layout at 1.5×, tawny after a specimen, stud eyes, a hanging bushy tail |
 | pheasant | – | – | – | green pheasant cock (キジ) in vivid colours; a big lipstick-red oval round each yellow eye, royal-blue head, ear tufts, long low tail |
+| heron | – | – | – | grey heron (アオサギ), built like the crane; S-necked, black eye stripe and plume, the pheasant's yellow eyes |
 | maple (イロハモミジ) | `00`, `pruned-00` | a–e | summer | wild mushroom crown; `pruned-00` is cloud-pruned, kept to shrink into a garden prop |
 | redpine (アカマツ) | `00`–`04` | a | summer | crooked, flat pads, bark blending grey to red |
 | sugi (スギ) | `00`–`04` | a | summer | straight spire of knobbly tufts |
