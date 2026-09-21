@@ -1,140 +1,139 @@
 # Handoff — root project, Rust + Bevy
 
-Written 2026-09-20, at the end of the session that replaced the Unreal root project
-with a Bevy one and added i18n. Everything here is merged to `main`; nothing is
-outstanding.
+Rewritten 2026-09-21, at the end of the session that built the senses: the hex grid,
+the pattern-filled overlay, the F3 screen, occluders, line of sight and height.
 
-## Where things are
+Session context only. **`AGENTS.md` is the rules and `Docs/brain-hitlist.md` is the
+roadmap** — read both before this, and don't expect either to be repeated here.
+
+## State, and the one thing to check first
 
 | | |
 |---|---|
-| Repo | `/home/lexa/DevProjects/_GameDev/Murabito` (main checkout, usually on another session's branch) |
-| Our worktree | `.claude/worktrees/murabito`, parked on `main` |
-| `main` at handoff | `6be7a22` (merge of PR #11) |
-| Merged this session | PR #10 (Bevy project becomes the root), PR #11 (English and Japanese UI text) |
+| Repo | `/home/lexa/DevProjects/_GameDev/Murabito` (main checkout, often on another session's branch) |
+| Our worktree | `.claude/worktrees/murabito` |
+| Worktree branch | **`line-of-sight`**, pushed |
+| **PR #14** | **OPEN, not merged** — <https://github.com/Lexa-B/Murabito/pull/14> |
+| Merged so far | #10 Bevy at the root, #11 i18n, #12 test harness, #13 ontology + senses |
 
-One worktree is the agreed arrangement: cut a branch inside it for a task, open the PR,
-and it returns to `main` after the merge. Spin up a second worktree only if work splits
-across parallel root-project tasks. The 12 GB `target/` has to be moved by hand when a
-worktree is retired, or the next build is a full 4½-minute recompile.
+**Check PR #14 before doing anything.** If Lexa merged it, `git checkout main && git
+pull && git branch -d line-of-sight` and branch fresh. If not, either keep working on
+that branch or branch from `origin/main` and accept that #14's work is missing.
 
-## What the project is now
+Git rules that have bitten before: `main` is PR-only, every git command takes
+`git -C <absolute path>`, and the shell's cwd drifts between calls — it has landed in
+the main checkout (on a *different* branch) several times this session, which silently
+reads the wrong files.
 
-The repo root is a single Rust crate, `murabito`, on Bevy 0.19.1 (Rust 1.95). The
-Unreal Engine 5 attempt it started as is archived, unbuilt, in `_Archives/UE-Try/`.
-`Experiments/` (exp-00 … exp-05) is untouched and still live; exp-04 is Unreal.
+## What the project is
 
-`AGENTS.md` was rewritten for all of this and is the authority — read it first. This
-file is the session's context, not a second copy of the rules.
+One Rust crate, `murabito`, Bevy 0.19.1. A fox and a rabbit stand in a field with grass,
+thickets and trees, and you can see what each of them can sense. Nothing decides
+anything yet: there are bodies and no brains.
 
-### What runs
-
-A window with placeholder scene (ground plane, a slowly spinning cube, a sun) and:
-
-- An overhead camera: WASD/arrows pan, wheel zooms, both eased.
-- Escape opens a menu (設定 / 再開 / 終了, or Settings / Resume / Quit) and pauses.
-- A settings page: pan-speed slider, language picker, Back.
-- Settings persist to `~/.config/murabito/settings.yaml`.
-- F12, or `--shot`, saves a screenshot.
+`Experiments/` is untouched and still live. The Unreal attempt is archived in
+`_Archives/UE-Try/`.
 
 ### Modules
 
-`main.rs` is a plugin list and nothing else. Each module registers what it needs through
-its own `Plugin`: `camera`, `scene`, `settings`, `settings_page`, `menu`, `state`, `ui`,
-`i18n`, `screenshot`.
+`main.rs` is a plugin list. `being`, `camera`, `debug_screen`, `hex`, `i18n`, `menu`,
+`scene`, `screenshot`, `senses/{mod,vision,hearing,occlusion}`, `settings`,
+`settings_page`, `state`, `ui`, `user_data`, `諸法`.
 
-## Build, run, verify
+### Tests
 
-```sh
-cargo build                                    # ~3-8s incremental; first build ~4.5 min
-cargo run                                      # or the binary, with BEVY_ASSET_ROOT set
-cargo clippy && cargo fmt --check              # both clean at handoff
-cargo run -- --shot shots/x.png --screen settings   # capture a screen and exit
-```
+**109** — 100 in the lib, 4 in `tests/pause.rs`, 5 in `tests/settings_persistence.rs`.
+`cargo clippy --all-targets` and `cargo fmt --check` are clean.
 
-Tests arrived just after this was written: `cargo test` covers the pan-speed curve as
-unit tests and the pause-on-state-change behaviour headlessly in `tests/`. The settings
-file's load/save behaviour is the next obvious candidate.
-
-Running the binary directly (rather than `cargo run`) needs two things:
+## Running it
 
 ```sh
-# the display, since terminal tabs have neither DISPLAY nor WAYLAND_DISPLAY
-while IFS= read -r line; do case "$line" in DISPLAY=*|WAYLAND_DISPLAY=*|XAUTHORITY=*) export "$line";; esac
-done < <(systemctl --user show-environment)
-BEVY_ASSET_ROOT="$PWD" ./target/debug/murabito      # else assets/ resolves next to the exe
+scripts/run.sh                                   # handles display env and asset root
+cargo run -- --shot shots/x.png --zoom 45        # capture and exit
+cargo run -- --shot x.png --screen menu --debug  # a screen, with F3 open
 ```
 
-System libraries `libwayland-dev`, `libxkbcommon-dev` and `libudev-dev` were installed
-this session; without them the build dies in `wayland-sys`'s build script.
+`--zoom` is in **shaku** and matters: at the starting zoom every sense field runs off
+the edge. 45–70 frames the whole tableau. `--settle <frames>` if 150 isn't enough.
 
-## Decisions worth not relitigating
+Screenshots at these zooms compress a 1-shaku cell to ~10 px, and **I twice misread one
+and concluded working code was broken.** Crop before judging:
 
-- **Pausing is `Time<Virtual>`**, not a flag. Input is gated separately by state. They
-  solve different problems: what the world does, versus where clicks go.
-- **Settings are resources; `settings.rs` alone writes the file**, on any change to one.
-  A page, a keybind or a console command all persist for free.
-- **A broken settings file is never overwritten.** Missing means defaults and is created;
-  unparseable means warn, use defaults, and leave the file alone to be fixed. The first
-  version overwrote it, because `insert_resource` counts as a change on frame 1 — that is
-  what `is_added()` guards against now.
-- **YAML for everything hand-written** (settings, locales), on Lexa's call: one markup.
-  `serde_yaml` is deprecated; `serde_yaml_ng` is the fork in use.
-- **Catalogues are compiled in** with `include_str!`. Editing a translation needs a
-  rebuild; that was accepted deliberately.
-- **Pan speed follows zoom as a power curve**, exponent 0.75, `PAN_SPEED = 13.5` at the
-  13 m reference zoom, `PAN_RESPONSE = 13.0`. Four rounds of feel-testing landed there:
-  0 (fixed) felt sluggish close in, 1.0 (proportional) frantic far out. Only the overall
-  multiplier is exposed as a setting — the curve's shape is a design decision.
-- **The zoom slider runs in octaves** (log2 of the multiplier) so the default sits centre
-  and every step is the same proportional change.
-- **Both languages are shown as buttons**, each named in its own script, never translated.
-  A single button naming the other language was tried and read as a label, not a choice.
+```sh
+uv run --with pillow python3 -c "
+from PIL import Image; im = Image.open('screenshots/x.png'); w,h = im.size
+box = (int(w*0.3), int(h*0.25), int(w*0.8), int(h*0.7))
+im.crop(box).resize(((box[2]-box[0])*2, (box[3]-box[1])*2), Image.LANCZOS).save('screenshots/crop.png')"
+```
 
-## Bevy 0.19 gotchas, all of which cost time
+Better still, write the test first. Both times, a test settled in a minute what the
+picture had made ambiguous for several.
 
-- `EventReader`/`EventWriter` are **`MessageReader`/`MessageWriter`**; events are
-  registered with `add_message`. Observers take `On<E>`.
-- `TextFont::font` is a **`FontSource`**, so `FontSource::Handle(handle)`.
-- `TextFont::font_size` is a **`FontSize`** enum: `FontSize::Px(20.0)`.
-- **`BorderRadius` is a field of `Node`**, not a component.
-- `DirectionalLight` has **`shadow_maps_enabled`**, not `shadows_enabled`.
-- **`AmbientLight` is a component on the camera**, not a resource.
-- `ChildSpawnerCommands` takes no generic parameter.
-- **`UiWidgetsPlugins` is already in `DefaultPlugins`** — adding it again panics. The
-  `ui` feature pulls in `bevy_ui_widgets` and picking.
-- The slider is **headless**: it handles drag and range, you draw it and place the thumb.
-  Thumb travel is the track width *less the thumb width*, or it drifts from the cursor.
-- **A fixed-width text node wraps**, possibly onto an invisible whitespace line, which
-  doubles the node's height and pushes glyphs off the row's centre. `LineBreak::NoWrap`.
-  This was diagnosed by dumping `ComputedNode` sizes; all three items were correctly
-  centred and the *boxes* were wrong.
-- Bevy's built-in font has **no CJK glyphs**. Noto Sans JP (OFL, LFS) is the UI font.
-- A screen's `OnEnter` needs `PreStartup`/`Startup` resources (the font), so the `--shot`
-  flag asks for its state transition on frame 2, not frame 1.
-- **Capture late.** Render pipelines compile on first use; an early screenshot is a bare
-  clear colour. `--settle` defaults to 150 frames.
+## The senses, as built
 
-## How Lexa wants the work done
+The shape and the reasoning are in the hitlist (settled items 24–31). What the code
+does, briefly:
 
-- **Small, visible steps.** Smallest thing that puts something on screen, then check in.
-  This project exists because a previous session disappeared into a 4,000-line build-out.
-- **One fix at a time** when something is broken: propose it, wait for confirmation, then
-  move on. Don't chain "and once that works…".
+- **`hex.rs`** — 1 shaku flat-to-flat, pointy-up, axial. `ring` (ordered walk),
+  `within` (a bag), `edge`, `steps_covering`. Provisional; exp-05's unit system replaces
+  it.
+- **`senses/occlusion.rs`** — the only part of `senses` that knows a taxonomy exists.
+  Turns a 種 into `(Opacity, Height)` per cell, and stamps `Height` onto anything with a
+  種 so the rest can ask how tall something is without learning what a 種 is.
+- **`senses/vision.rs`** — `band_at` is pure cone geometry; `cast` is the shadowcast;
+  `SeenCells` is the result, per height class, as a component.
+- **`senses/hearing.rs`** — a *receiver* polar pattern only. Propagation does not exist.
+
+### Gotchas, each of which cost real time
+
+- **A radius in shaku is not a radius in steps.** Use `hex::steps_covering`. Coverage
+  otherwise stops early *in the diagonal directions only*, which reads as a rendering
+  artefact rather than a logic error. Sound and smell will both need it.
+- **Test cells must be exactly collinear.** `Hex::new(0, -r)` is; `Hex::from_world(dir *
+  n)` is not — it snaps to whichever cell contains the point, and the drift walks a far
+  cell out of a near cell's shadow. Two tests failed for a reason unrelated to the code.
+- **`ButtonInput::press` only registers `just_pressed` if the key was up**, and `clear()`
+  leaves it held. Simulated input needs `reset(key)`.
+- **Japanese paths typed into a shell heredoc don't always match what's on disk.** Use
+  `find … -exec`, or read the bytes `os.walk` hands back. `sort` is locale-aware and
+  will reorder paths misleadingly.
+- **`cargo fmt` reformats between edits**, so a string an earlier edit matched may no
+  longer exist. Assert the match before replacing.
+- `gizmos.linestrip` is fine; line *width* is a property of the config group, not the
+  call, hence `BoldStroke` / `MidStroke` / `FaintStroke`.
+
+## Next: 0g, sound that bends
+
+Everything needed is decided; none of it is built.
+
+- A noise is an **event cast from its maker**, not a field. Propagation attenuates it by
+  shortest *unobstructed* path length, so a wall muffles rather than silences — that is
+  what diffraction is.
+- It delivers an **intensity and a bearing**. The listener's existing polar pattern turns
+  that into what it actually hears. The cardioid is a receiver gain, not a propagation
+  shape.
+- Occluders already carry a 音 facet — `遮音` blocks, `吸音` muffles, `透音` transmits —
+  and a 高さ. `occlusion.rs` currently exposes sight only, and its header says why: sound
+  wants an **attenuation cost**, not a three-way verdict.
+- Smell (0h) is deliberately *not* the same primitive. Lexa's call: smell emanates from a
+  物 and drifts, sound is cast instantly and normalised at the ear. Share pieces, keep
+  them separate.
+- Falloff is drawn with **size**, not weight or opacity — see settled item 28, which was
+  arrived at by getting it wrong twice.
+
+0f (a legible overlay) is still open but may already be answered by the pattern fills and
+the F3 toggles; worth re-reading against what's on screen before doing anything to it.
+
+## How Lexa wants this done
+
+- **Discuss, then implement.** Especially for anything with a design choice in it. This
+  session's best work came out of dialogue, not from me guessing well.
+- **One change at a time**, visible before the next is agreed. I bundled three things
+  twice and was told to stop, twice.
+- **One fix at a time** when something is broken: propose it, wait, then move on.
 - **Never presuppose project goals.** Ask; an inference is not a fact.
-- **Commit locally and report. Push or open a PR only when told.** `main` is PR-only.
-- Screenshots, not questions, for anything visual.
-- `rg`, not `grep`. `uv` for any Python.
-
-## Loose ends, in the order I'd raise them
-
-1. **The Japanese is mine, not a translator's.** `カメラ移動速度` for pan speed is the
-   one I'd question; it describes the camera, where the setting is a multiplier.
-2. **The settings label column is a fixed 230 px stopgap.** Fine for two rows; a grid
-   that sizes to its widest label is the real fix when the page grows.
-3. **No `scripts/run.sh`.** The display and `BEVY_ASSET_ROOT` dance is re-typed each
-   time; a script would bundle it.
-4. **`sccache`** would end the target-dir shuffling between worktrees without
-   serialising builds the way a shared `CARGO_TARGET_DIR` would.
-5. **An orphaned `~/.config/murabito/exp-06/settings.yaml`** is left over from before the
-   rename. Nothing reads it.
+- **Commit locally and report. Push or open a PR only when told.**
+- Lexa's professional interest was world-model emergence in embodied AI. He is new to
+  game-AI *convention*, not to the subject. Don't explain world models to him; do explain
+  Bevy and Rust. Building cheaply is not a reason to build something stupid — "it must
+  have been the wind" is the explicit anti-goal.
