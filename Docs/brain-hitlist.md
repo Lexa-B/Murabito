@@ -67,6 +67,14 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
 12. Coarse-vs-fine is **the same split as the two visual pathways** — retinotectal fast
     and coarse, geniculostriate slow and fine. Not one signal at two speeds; two tiers
     of one index.
+12o. **Three files, three functions.** `assets/ontology/諸法.yaml` is the tree and only
+    the tree; `assets/item_properties/属性.yaml` declares what facet types exist;
+    `assets/item_properties/諸法/` holds one file per node with that node's facets,
+    mirroring the tree's shape. A node with children is a folder holding its own
+    `<name>.yaml`; a leaf is a file in its parent's folder. Every node has a file, and a
+    disagreement between the two structures is a load error — stating the structure
+    twice is only worth it if they are held to agree. A stray 属性 in the tree is
+    refused rather than ignored.
 12a. **The ontology is data, not Rust types.** YAML, `include_str!`-ed like the locale
     catalogues. Not a style choice: Rust types cannot be traversed at runtime, and the
     whole tiered-index mechanism *is* runtime traversal. Enums would also make every new

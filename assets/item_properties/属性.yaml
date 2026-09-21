@@ -1,0 +1,46 @@
+# 属性 — the facet types: every axis, and the values it allows.
+#
+# The second axis of the ontology. assets/ontology/諸法.yaml says what a thing is; these
+# say what it is like, and they cut across the tree — a child fox and a child human share
+# 子供 while sharing no branch. What carries what is in the node files beside this one.
+#
+# An 軸 is exclusive by default: a thing holds at most one of its values. `排他: false`
+# opts out for a group that is a tag set rather than an alternation. Arity is irrelevant;
+# 匂い's four values are exclusive exactly as 年齢's two are.
+#
+# Exclusivity is not enforced *down* the tree. A more precise node supersedes a vaguer
+# one on the same axis: walls are 不透明, a 硝子壁 is 透明. Only a single node holding two
+# values at once is a contradiction, and that is refused.
+#
+# A value may be declared in one group only, which is why the sense axes do not each have
+# a bare 遮る. Japanese namespaces them for free: the sense kanji is part of the word.
+
+年齢:
+  - 子供
+  - 大人
+
+# Coarse trophic role. A relation strictly speaking — a fox is 被食者 to a bear — but one
+# position per kind is enough until something eats a fox. 栄養段階 is the more technical
+# name for the axis if this ever needs more than two values.
+食物連鎖:
+  - 捕食者
+  - 被食者
+
+# How a thing treats each sense channel. One axis per channel, because a thicket can hide
+# you from sight while doing nothing to your footsteps.
+#
+# 遮音, 吸音, 不透明, 半透明, 透明 and 防臭 are ordinary words. 透音, 混臭, 保臭 and 通臭
+# are coinages: readable compounds rather than dictionary entries.
+音:
+  - 遮音      # blocks
+  - 吸音      # muffles
+  - 透音      # transmits
+視界:
+  - 不透明    # blocks
+  - 半透明    # obscures
+  - 透明      # transmits
+匂い:
+  - 防臭      # blocks
+  - 混臭      # obscures
+  - 保臭      # holds, so a scent lingers there
+  - 通臭      # transmits

@@ -1,15 +1,12 @@
 # 諸法実相 — all phenomena as they truly are.
 #
-# The world's own taxonomy: what a thing IS. This file is 実相, the engine's ground
-# truth. A being's private, partial copy of it — most branches missing, impressions
-# attached to the ones it has — is 仮諦, and is built at runtime, not written here.
+# The world's own taxonomy: what a thing IS, and nothing else. Structure only. What a
+# thing is *like* is a different function and lives under assets/item_properties/.
+#
+# Every node here has exactly one file there, at the matching path. The loader refuses
+# the pair if they disagree.
 #
 # 法 here is dharma, a constituent of reality. Not 法律.
-#
-# Two axes, and only the first is this tree:
-#
-#   分類   what a thing is      — hierarchical, always walked from 諸法 downward
-#   属性   what a thing is like — flat tags; any node or instance may carry any of them
 #
 # The 者 / 物 boundary is Japanese grammar, not a judgement call. Ask which verb it takes:
 #
@@ -17,98 +14,31 @@
 #   ある   inanimate  木がある・石がある・死体がある      → 物
 #
 # Note the last one. Dying moves a being from いる to ある — 者 becomes 物 — so death is
-# a reclassification, not a special case.
+# a reclassification, not a special case, and 付喪神 is the same move in reverse.
 #
-# 未知 is reserved and is never a node here. It names what a stopped traversal means:
-# a being that gets as far as 狼 and no further knows "something of this kind, and no
-# more", and the impression it acts on hangs off 狼 in that being's 仮諦, where
-# impressions live. The world tree has none to hang. 諸法 → 未知 is the floor beneath
-# everything and can never be missing, because it is where fight, flight, freeze and
-# fawn live.
+# 未知 is reserved and is never a node. It names what a stopped traversal means: a being
+# that gets as far as 狼 and no further knows "something of this kind, and no more".
+# 諸法 → 未知 is the floor beneath everything, where fight, flight, freeze and fawn live.
 #
 # Display names are not here. Keys are the identity; what a player reads comes from
 # assets/locales/, like all other text.
 
-分類:
-  諸法:
-
-    # 物 — that which takes ある. Occupies space, does not act.
-    物:
-
-      # 者 — that which takes いる. Acts, and so may be given a brain.
-      者:
-
-        # Narrower than everyday 生き物, which would include 植物. Here it means the
-        # living things that act. 有情 is the Buddhist term for exactly this narrowing
-        # if the everyday reading proves too confusing.
-        生き物:
-          動物:
-            # 属性 is reserved: on a node it lists that node's facets, and everything
-            # else under a node is a child. Facets are inherited downward.
-            狐:
-              属性: [捕食者]
-            狼:
-              属性: [捕食者]
-            兎:
-              属性: [被食者]
-          人間: {}
-
-        # 幽 — the hidden realm, 幽世, as against the manifest 顕世. Classifies by realm
-        # rather than by kind, so 神 and 妖怪 sit together without either being filed
-        # under the other.
-        幽:
-          神: {}
-          妖怪:
-            # A 物 that became a 者: a tool old enough to acquire a self. The transition
-            # 死体 makes in one direction, 付喪神 makes in the other.
-            付喪神: {}
-
-      # Alive, but takes ある, so not a 者. It will never have senses or an intent.
-      植物:
-        木:
-          属性: [不透明, 吸音, 保臭]
-        草:
-          属性: [半透明, 透音]
-
-      物体:
-        道具: {}
-
-    # 事 — that which happens, as against that which is. The contrast pair with 物, not
-    # a child of it. Nothing under it yet: events are undesigned.
-    事: {}
-
-# 属性 — facets. Non-hierarchical, and deliberately so: a child fox and a child human
-# share 子供 while sharing no branch. Closer to tags on a paper than to a class.
-属性:
-  年齢:
-    - 子供
-    - 大人
-  # Coarse trophic role. A relation strictly speaking — a fox is 被食者 to a bear — but
-  # one position per kind is enough until something eats a fox. 栄養段階 is the more
-  # technical name for the axis if this ever needs to be more than two values.
-  食物連鎖:
-    - 捕食者
-    - 被食者
-
-  # How a thing treats each sense channel. One axis per channel, because a thicket can
-  # hide you from sight while doing nothing to your footsteps.
-  #
-  # The three axes need words for "blocks" and "transmits" apiece, and a facet may only
-  # be declared once across all groups. Japanese namespaces them for free: the sense
-  # kanji is already part of the word, so there is no need for 音.遮る.
-  #
-  # 遮音, 吸音, 不透明, 半透明, 透明 and 防臭 are ordinary words. 透音, 混臭, 保臭 and
-  # 通臭 are coinages: readable compounds rather than dictionary entries.
-  音:
-    - 遮音      # blocks
-    - 吸音      # muffles
-    - 透音      # transmits
-  視界:
-    - 不透明    # blocks
-    - 半透明    # obscures
-    - 透明      # transmits
-  匂い:
-    - 防臭      # blocks
-    - 混臭      # obscures
-    - 保臭      # holds, so a scent lingers there
-    - 通臭      # transmits
+諸法:
+  物:
+    者:
+      生き物:
+        動物:
+          狐: {}
+          狼: {}
+          兎: {}
+        人間: {}
+      幽:
+        神: {}
+        妖怪:
+          付喪神: {}
+    植物:
+      木: {}
+      草: {}
+    物体:
+      道具: {}
+  事: {}

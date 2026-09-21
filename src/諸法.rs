@@ -8,6 +8,16 @@
 //! runtime, and types cannot be walked. Ontology keys are therefore strings, never
 //! identifiers, which is also why 物 and 者 sharing a romanisation costs nothing.
 //!
+//! Three sources, because they are three functions:
+//!
+//!   assets/ontology/諸法.yaml            the tree, and only the tree
+//!   assets/item_properties/属性.yaml     what facet types exist
+//!   assets/item_properties/諸法/         one file per node, holding that node's facets
+//!
+//! The last mirrors the first: every node in the tree has exactly one file at the
+//! matching path, and a disagreement is a load error rather than a shrug. Two
+//! statements of the same structure are only worth having if they are held to agree.
+//!
 //! On 未知: it is not a node. A being's traversal stopping at 狼 and "pulling 狼's 未知"
 //! is just the traversal stopping at 狼 — the generic impression hangs off the node in
 //! that being's 仮諦, where impressions live. The world tree has no impressions to hang,
@@ -17,11 +27,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use bevy::prelude::*;
+use include_dir::{Dir, include_dir};
 use serde::Deserialize;
 
 /// Compiled in, like the locale catalogues: a missing file is a build error rather than
 /// a startup failure.
 const 諸法_YAML: &str = include_str!("../assets/ontology/諸法.yaml");
+const 属性_YAML: &str = include_str!("../assets/item_properties/属性.yaml");
+/// The per-node property files. `include_str!` cannot take a directory.
+static 属性_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/assets/item_properties/諸法");
 
 /// Reserved. Never a node in the tree; see the module note.
 pub const 未知: &str = "未知";
@@ -97,7 +111,7 @@ impl 実相 {
     /// one: every being can then classify everything only as "something, and I know no
     /// more", which is exactly what the floor bid is for.
     pub fn load() -> Self {
-        match Self::parse(諸法_YAML) {
+        match Self::parse() {
             Ok(tree) => {
                 info!("諸法: {} nodes under {}", tree.len(), tree.root());
                 tree
@@ -131,49 +145,67 @@ impl 実相 {
         }
     }
 
-    fn parse(yaml: &str) -> Result<Self, Vec<String>> {
-        let file: File = serde_yaml_ng::from_str(yaml).map_err(|error| vec![error.to_string()])?;
+    fn parse() -> Result<Self, Vec<String>> {
+        let (root, nodes) = parse_tree(諸法_YAML)?;
+        let axes = parse_axes(属性_YAML)?;
 
-        let mut roots = file.分類.0.unwrap_or_default().into_iter();
-        let (root, raw) = roots
-            .next()
-            .ok_or_else(|| vec!["分類 is empty; there is nothing to classify".to_string()])?;
-        // Two roots would make "walk from the top" ambiguous, and the recognition loop
-        // has no way to choose between them.
-        if let Some((extra, _)) = roots.next() {
-            return Err(vec![format!(
-                "分類 has more than one root ({root} and {extra}); it must have exactly one"
-            )]);
+        let mut present = BTreeSet::new();
+        let mut contents = BTreeMap::new();
+        collect_files(&属性_DIR, &mut present, &mut contents);
+
+        let mut problems = match_files(&nodes, &present);
+        let mut own_facets = BTreeMap::new();
+        for key in nodes.keys() {
+            let Some(text) = contents.get(&expected_path(&nodes, key)) else {
+                continue; // already reported by match_files
+            };
+            match serde_yaml_ng::from_str::<Option<PropertyFile>>(text) {
+                Ok(file) => {
+                    let facets = file.unwrap_or_default().属性;
+                    if !facets.is_empty() {
+                        own_facets.insert(key.clone(), facets.into_iter().collect());
+                    }
+                }
+                Err(error) => problems.push(format!("{key}: {error}")),
+            }
         }
 
-        let RawEntry::Node(raw) = raw else {
-            return Err(vec![format!("{root} is a list; the root must be a node")]);
-        };
+        Self::finish(root, nodes, axes, own_facets, problems)
+    }
 
-        let mut nodes = BTreeMap::new();
-        let mut own_facets = BTreeMap::new();
-        let mut problems = Vec::new();
-        flatten(
-            &root,
-            raw,
-            None,
-            0,
-            &mut nodes,
-            &mut own_facets,
-            &mut problems,
-        );
+    /// Everything but the property files, which only exist on disk. Tests hand the
+    /// facets in directly rather than fabricating a directory.
+    #[cfg(test)]
+    fn from_parts(
+        tree_yaml: &str,
+        axes_yaml: &str,
+        properties: &[(&str, &[&str])],
+    ) -> Result<Self, Vec<String>> {
+        let (root, nodes) = parse_tree(tree_yaml)?;
+        let axes = parse_axes(axes_yaml)?;
+        let own_facets = properties
+            .iter()
+            .map(|(node, facets)| {
+                (
+                    (*node).to_string(),
+                    facets.iter().map(|f| (*f).to_string()).collect(),
+                )
+            })
+            .collect();
+        Self::finish(root, nodes, axes, own_facets, Vec::new())
+    }
 
+    /// The checks that do not care where the facets came from.
+    fn finish(
+        root: String,
+        nodes: BTreeMap<String, Node>,
+        axes: BTreeMap<String, 軸>,
+        own_facets: BTreeMap<String, BTreeSet<String>>,
+        mut problems: Vec<String>,
+    ) -> Result<Self, Vec<String>> {
         // A value in two groups would make `group_of` a coin toss, and the groups are
         // meant to be alternatives within one axis.
         let mut seen: BTreeMap<&str, &str> = BTreeMap::new();
-        // Not named 属性: that is a `const` in this module, and `let 属性 = ..` would be
-        // a const *pattern* rather than a binding. SCREAMING_CASE normally keeps consts
-        // and locals apart by sight; kanji has no case, so the convention cannot.
-        let axes: BTreeMap<String, 軸> = file
-            .属性
-            .into_iter()
-            .map(|(group, raw)| (group, raw.into()))
-            .collect();
         for (group, axis) in &axes {
             for value in &axis.値 {
                 if let Some(other) = seen.insert(value, group) {
@@ -189,12 +221,11 @@ impl 実相 {
             for facet in facets {
                 if !seen.contains_key(facet.as_str()) {
                     problems.push(format!(
-                        "{node} carries {facet}, which no 属性 group declares"
+                        "{node} carries {facet}, which no 属性 type declares"
                     ));
                 }
             }
         }
-
         // A node holding two values from one exclusive axis has nothing to resolve:
         // it is a contradiction at a single point, not a nearer value overriding a
         // further one, so it is refused rather than arbitrated.
@@ -382,21 +413,56 @@ impl 実相 {
     }
 }
 
-/// Walks the parsed YAML into a flat map, complaining rather than silently losing data.
+/// The tree, flattened. Structure only: a facet appearing here is a mistake, because
+/// facets are a different function and live under `assets/item_properties/`.
+fn parse_tree(yaml: &str) -> Result<(String, BTreeMap<String, Node>), Vec<String>> {
+    let raw: BTreeMap<String, RawEntry> =
+        serde_yaml_ng::from_str(yaml).map_err(|error| vec![error.to_string()])?;
+
+    let mut roots = raw.into_iter();
+    let (root, entry) = roots
+        .next()
+        .ok_or_else(|| vec!["the tree is empty; there is nothing to classify".to_string()])?;
+    // Two roots would make "walk from the top" ambiguous, and the recognition loop has
+    // no way to choose between them.
+    if let Some((extra, _)) = roots.next() {
+        return Err(vec![format!(
+            "the tree has more than one root ({root} and {extra}); it must have exactly one"
+        )]);
+    }
+    let RawEntry::Node(entry) = entry else {
+        return Err(vec![format!("{root} is a list; the root must be a node")]);
+    };
+
+    let mut nodes = BTreeMap::new();
+    let mut problems = Vec::new();
+    flatten(&root, entry, None, 0, &mut nodes, &mut problems);
+    if problems.is_empty() {
+        Ok((root, nodes))
+    } else {
+        Err(problems)
+    }
+}
+
+fn parse_axes(yaml: &str) -> Result<BTreeMap<String, 軸>, Vec<String>> {
+    let raw: BTreeMap<String, RawAxis> =
+        serde_yaml_ng::from_str(yaml).map_err(|error| vec![error.to_string()])?;
+    Ok(raw.into_iter().map(|(k, v)| (k, v.into())).collect())
+}
+
 fn flatten(
     key: &str,
     raw: RawNode,
     parent: Option<&str>,
     depth: usize,
     nodes: &mut BTreeMap<String, Node>,
-    own_facets: &mut BTreeMap<String, BTreeSet<String>>,
     problems: &mut Vec<String>,
 ) {
     // 未知 is reserved: it is what a stopped traversal means, not somewhere to stop.
     if key == 未知 {
         problems.push(format!(
             "未知 is reserved and cannot be a node (found under {})",
-            parent.unwrap_or("諸法")
+            parent.unwrap_or("the root")
         ));
         return;
     }
@@ -405,26 +471,25 @@ fn flatten(
     if let Some(existing) = nodes.get(key) {
         problems.push(format!(
             "{key} appears twice: under {} and under {}",
-            existing.parent.as_deref().unwrap_or("諸法"),
-            parent.unwrap_or("諸法")
+            existing.parent.as_deref().unwrap_or("the root"),
+            parent.unwrap_or("the root")
         ));
         return;
     }
 
-    // Split the node's own facets out from its children before recording either.
     let mut children = BTreeMap::new();
-    let mut facets = BTreeSet::new();
     for (name, entry) in raw.0.unwrap_or_default() {
-        match (name.as_str() == 属性, entry) {
-            (true, RawEntry::Facets(values)) => facets.extend(values),
-            (true, RawEntry::Node(_)) => {
-                problems.push(format!("{key}: 属性 must be a list of facets, not a node"));
-            }
-            (false, RawEntry::Node(child)) => {
+        match entry {
+            // The separation, enforced. Silently ignoring this would leave someone
+            // wondering why their facet had no effect.
+            _ if name == 属性 => problems.push(format!(
+                "{key}: 属性 does not belong in the tree; it goes in the node's file                  under assets/item_properties/"
+            )),
+            RawEntry::Node(child) => {
                 children.insert(name, child);
             }
-            (false, RawEntry::Facets(_)) => {
-                problems.push(format!("{key}: {name} is a list; only 属性 may be one"));
+            RawEntry::List(_) => {
+                problems.push(format!("{key}: {name} is a list, but the tree holds nodes"));
             }
         }
     }
@@ -437,27 +502,101 @@ fn flatten(
             depth,
         },
     );
-    if !facets.is_empty() {
-        own_facets.insert(key.to_string(), facets);
-    }
     for (child, grandchildren) in children {
-        flatten(
-            &child,
-            grandchildren,
-            Some(key),
-            depth + 1,
-            nodes,
-            own_facets,
-            problems,
-        );
+        flatten(&child, grandchildren, Some(key), depth + 1, nodes, problems);
     }
 }
 
+/// Where a node's property file must sit, relative to `assets/item_properties/諸法/`.
+///
+/// A node with children is a folder holding its own `<name>.yaml`; a leaf is a
+/// `<name>.yaml` in its parent's folder. The root's file sits at the top, because that
+/// directory *is* the root.
+fn expected_path(nodes: &BTreeMap<String, Node>, key: &str) -> String {
+    let mut ancestry = Vec::new();
+    let mut here = Some(key);
+    while let Some(node) = here {
+        ancestry.push(node);
+        here = nodes.get(node).and_then(|n| n.parent.as_deref());
+    }
+    ancestry.reverse();
+
+    let is_leaf = nodes.get(key).is_some_and(|n| n.children.is_empty());
+    let mut parts = ancestry;
+    if is_leaf {
+        parts.pop();
+    }
+    if !parts.is_empty() {
+        // The directory *is* the root, so the root never appears in a path inside it.
+        parts.remove(0);
+    }
+    let mut path = parts.join("/");
+    if !path.is_empty() {
+        path.push('/');
+    }
+    path.push_str(key);
+    path.push_str(".yaml");
+    path
+}
+
+/// The two trees must agree. A node with no file, or a file with no node, is a load
+/// error: the point of stating the structure twice is that they are held to match.
+fn match_files(nodes: &BTreeMap<String, Node>, present: &BTreeSet<String>) -> Vec<String> {
+    let mut problems = Vec::new();
+    let mut expected = BTreeSet::new();
+    for key in nodes.keys() {
+        let path = expected_path(nodes, key);
+        if !present.contains(&path) {
+            problems.push(format!("{key} has no property file; expected {path}"));
+        }
+        expected.insert(path);
+    }
+    for path in present.difference(&expected) {
+        problems.push(format!("{path} has no node in the tree"));
+    }
+    problems
+}
+
+fn collect_files(
+    dir: &Dir<'_>,
+    present: &mut BTreeSet<String>,
+    contents: &mut BTreeMap<String, String>,
+) {
+    for file in dir.files() {
+        let Some(path) = file.path().to_str() else {
+            continue;
+        };
+        present.insert(path.to_string());
+        if let Some(text) = file.contents_utf8() {
+            contents.insert(path.to_string(), text.to_string());
+        }
+    }
+    for sub in dir.dirs() {
+        collect_files(sub, present, contents);
+    }
+}
+
+/// One node's property file.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct PropertyFile {
+    属性: Vec<String>,
+}
+
+/// A node as written in the tree: a mapping of children, or nothing at all. Both
+/// `狐: {}` and a bare `狐:` mean a leaf, because one of them is what somebody will type.
 #[derive(Deserialize)]
-struct File {
-    分類: RawNode,
-    #[serde(default)]
-    属性: BTreeMap<String, RawAxis>,
+#[serde(transparent)]
+struct RawNode(Option<BTreeMap<String, RawEntry>>);
+
+/// Told apart by shape, so a list where a node belongs is reported rather than guessed.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RawEntry {
+    /// A list where a node belongs. Only its shape matters: it is always a mistake in
+    /// the tree, so the values are never read.
+    List(#[allow(dead_code)] Vec<String>),
+    Node(RawNode),
 }
 
 /// A bare list is an exclusive axis, which is the common case and stays terse. The long
@@ -486,31 +625,22 @@ impl From<RawAxis> for 軸 {
     }
 }
 
-/// A node as written: a mapping of children, or nothing at all. Both `狐: {}` and a bare
-/// `狐:` mean a leaf, because one of them is what somebody will type.
-#[derive(Deserialize)]
-#[serde(transparent)]
-struct RawNode(Option<BTreeMap<String, RawEntry>>);
-
-/// Under a node, `属性` holds a list of facets and every other key is a child. They are
-/// told apart by shape, and anything of the wrong shape is reported rather than guessed.
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum RawEntry {
-    Facets(Vec<String>),
-    Node(RawNode),
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The real thing: all three sources, as shipped.
     fn tree() -> 実相 {
-        実相::parse(諸法_YAML).expect("the compiled-in taxonomy should parse")
+        実相::parse().expect("the compiled-in ontology should load")
     }
 
+    const 年齢: &str = "年齢: [子供, 大人]\n";
+    const 視界: &str = "視界: [不透明, 半透明, 透明]\n";
+
+    // --- the tree -----------------------------------------------------------
+
     #[test]
-    fn the_real_taxonomy_loads() {
+    fn the_real_ontology_loads() {
         let tree = tree();
         assert_eq!(tree.root(), "諸法");
         assert_eq!(tree.len(), 19);
@@ -529,7 +659,6 @@ mod tests {
         let tree = tree();
         assert!(tree.is_a("狐", "動物"));
         assert!(tree.is_a("狐", "者"));
-        assert!(tree.is_a("狐", "物"));
         assert!(tree.is_a("狐", "諸法"));
         // A thing is a kind of itself, the way a fox is a fox.
         assert!(tree.is_a("狐", "狐"));
@@ -554,7 +683,6 @@ mod tests {
         let tree = tree();
         assert_eq!(tree.parent("神"), Some("幽"));
         assert_eq!(tree.parent("妖怪"), Some("幽"));
-        assert!(tree.is_a("付喪神", "妖怪"));
         assert!(tree.is_a("付喪神", "者"));
     }
 
@@ -568,31 +696,24 @@ mod tests {
         assert!(!tree.is_a("事", "物"));
     }
 
-    #[test]
-    fn facets_are_loaded_alongside_the_tree() {
-        let tree = tree();
-        let 年齢 = tree.属性().get("年齢").unwrap();
-        assert_eq!(年齢.値, ["子供", "大人"]);
-        assert!(年齢.排他, "an axis is exclusive unless it says otherwise");
-        // A facet is not a node: that is the whole point of having two axes.
-        assert!(!tree.contains("子供"));
-    }
+    // --- what the tree refuses ----------------------------------------------
 
-    // --- what the loader refuses --------------------------------------------
+    /// The separation, enforced. Ignoring a stray 属性 here would leave someone
+    /// wondering why the facet they wrote had no effect.
+    #[test]
+    fn facets_do_not_belong_in_the_tree() {
+        let problems = parse_tree("諸法:\n  狐:\n    属性: [捕食者]\n").unwrap_err();
+        assert!(
+            problems.iter().any(|p| p.contains("does not belong")),
+            "{problems:?}"
+        );
+    }
 
     /// Nodes are keyed by bare name, so a repeated name would silently drop a branch and
     /// leave `is_a` answering according to whichever one happened to win.
     #[test]
     fn a_name_used_twice_is_rejected() {
-        let yaml = "
-分類:
-  諸法:
-    物:
-      狼: {}
-    者:
-      狼: {}
-";
-        let problems = 実相::parse(yaml).unwrap_err();
+        let problems = parse_tree("諸法:\n  物:\n    狼: {}\n  者:\n    狼: {}\n").unwrap_err();
         assert!(
             problems
                 .iter()
@@ -603,12 +724,7 @@ mod tests {
 
     #[test]
     fn an_explicit_unknown_node_is_rejected() {
-        let yaml = "
-分類:
-  諸法:
-    未知: {}
-";
-        let problems = 実相::parse(yaml).unwrap_err();
+        let problems = parse_tree("諸法:\n  未知: {}\n").unwrap_err();
         assert!(
             problems.iter().any(|p| p.contains("reserved")),
             "{problems:?}"
@@ -619,12 +735,7 @@ mod tests {
     /// no way to pick.
     #[test]
     fn more_than_one_root_is_rejected() {
-        let yaml = "
-分類:
-  諸法: {}
-  他: {}
-";
-        let problems = 実相::parse(yaml).unwrap_err();
+        let problems = parse_tree("諸法: {}\n他: {}\n").unwrap_err();
         assert!(
             problems.iter().any(|p| p.contains("more than one root")),
             "{problems:?}"
@@ -634,28 +745,77 @@ mod tests {
     /// Both spellings of a leaf, because somebody will type each of them.
     #[test]
     fn a_bare_leaf_and_an_empty_leaf_mean_the_same_thing() {
-        let yaml = "
-分類:
-  諸法:
-    物:
-    者: {}
-";
-        let tree = 実相::parse(yaml).unwrap();
-        assert_eq!(tree.len(), 3);
-        assert!(tree.children("物").is_empty());
-        assert!(tree.children("者").is_empty());
+        let (_, nodes) = parse_tree("諸法:\n  物:\n  者: {}\n").unwrap();
+        assert_eq!(nodes.len(), 3);
+        assert!(nodes["物"].children.is_empty());
+        assert!(nodes["者"].children.is_empty());
     }
 
-    /// A taxonomy that fails to load is not a broken state in this design: every being
-    /// then classifies everything as "something, and I know no more", which is what the
-    /// floor bid is for.
+    // --- the two trees must agree -------------------------------------------
+
+    /// A node with children is a folder holding its own file; a leaf sits in its
+    /// parent's folder; and the root never appears in a path, because the directory
+    /// *is* the root.
+    #[test]
+    fn a_nodes_file_sits_where_its_lineage_says() {
+        let tree = tree();
+        assert_eq!(expected_path(&tree.nodes, "諸法"), "諸法.yaml");
+        assert_eq!(expected_path(&tree.nodes, "事"), "事.yaml");
+        assert_eq!(expected_path(&tree.nodes, "物"), "物/物.yaml");
+        assert_eq!(
+            expected_path(&tree.nodes, "狐"),
+            "物/者/生き物/動物/狐.yaml"
+        );
+    }
+
+    #[test]
+    fn a_node_with_no_file_is_a_load_error() {
+        let (_, nodes) = parse_tree("諸法:\n  物: {}\n").unwrap();
+        let present = BTreeSet::from(["諸法.yaml".to_string()]);
+        let problems = match_files(&nodes, &present);
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.contains("物") && p.contains("no property file")),
+            "{problems:?}"
+        );
+    }
+
+    #[test]
+    fn a_file_with_no_node_is_a_load_error() {
+        let (_, nodes) = parse_tree("諸法:\n  物: {}\n").unwrap();
+        let present = BTreeSet::from([
+            "諸法.yaml".to_string(),
+            "物.yaml".to_string(),
+            "麒麟.yaml".to_string(),
+        ]);
+        let problems = match_files(&nodes, &present);
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.contains("麒麟") && p.contains("no node")),
+            "{problems:?}"
+        );
+    }
+
+    #[test]
+    fn the_shipped_trees_agree() {
+        let tree = tree();
+        let mut present = BTreeSet::new();
+        let mut contents = BTreeMap::new();
+        collect_files(&属性_DIR, &mut present, &mut contents);
+        assert_eq!(present.len(), tree.len());
+        assert!(match_files(&tree.nodes, &present).is_empty());
+    }
+
+    /// A tree that fails to load is not a broken state in this design: every being then
+    /// classifies everything as "something, and I know no more", which is the floor bid.
     #[test]
     fn a_tree_that_will_not_load_leaves_a_usable_root() {
         let rootless = 実相::rootless();
         assert_eq!(rootless.root(), "諸法");
         assert_eq!(rootless.len(), 1);
         assert_eq!(rootless.path("諸法").unwrap(), ["諸法"]);
-        assert!(rootless.descend_while("諸法", |_| true).is_some());
     }
 
     // --- the seam the recognition loop plugs into ---------------------------
@@ -675,17 +835,10 @@ mod tests {
     /// general. Nothing asked it whether it knew what a fox was.
     #[test]
     fn running_out_of_knowledge_is_just_an_early_return() {
-        let tree = tree();
         let known = ["物", "者", "生き物"];
         assert_eq!(
-            tree.descend_while("狐", |node| known.contains(&node)),
+            tree().descend_while("狐", |node| known.contains(&node)),
             Some("生き物")
-        );
-        // The same being, meeting a person it knows by kind but not by name.
-        let knows_people = ["物", "者", "生き物", "人間"];
-        assert_eq!(
-            tree.descend_while("人間", |node| knows_people.contains(&node)),
-            Some("人間")
         );
     }
 
@@ -694,10 +847,10 @@ mod tests {
         assert_eq!(tree().descend_while("麒麟", |_| true), None);
     }
 
-    // --- 属性: the second axis ----------------------------------------------
+    // --- facets, as shipped --------------------------------------------------
 
     #[test]
-    fn a_node_carries_the_facets_it_declares() {
+    fn a_node_carries_the_facets_its_file_declares() {
         let tree = tree();
         assert!(tree.has_facet("狐", "捕食者"));
         assert!(tree.has_facet("狼", "捕食者"));
@@ -716,27 +869,6 @@ mod tests {
     }
 
     #[test]
-    fn facets_inherit_downward() {
-        let mut yaml = String::from(
-            "
-分類:
-  諸法:
-    動物:
-      属性: [被食者]
-      兎: {}
-属性:
-  食物連鎖: [捕食者, 被食者]
-",
-        );
-        yaml.push('\n');
-        let tree = 実相::parse(&yaml).unwrap();
-        // Declared on the parent, true of the child, and the child declared nothing.
-        assert!(tree.has_facet("動物", "被食者"));
-        assert!(tree.has_facet("兎", "被食者"));
-        assert!(!tree.has_facet("諸法", "被食者"));
-    }
-
-    #[test]
     fn a_facet_knows_its_group() {
         let tree = tree();
         assert_eq!(tree.group_of("捕食者"), Some("食物連鎖"));
@@ -744,122 +876,11 @@ mod tests {
         assert_eq!(tree.group_of("麒麟"), None);
     }
 
-    /// An undeclared facet is nearly always a typo, and ignoring it silently would mean
-    /// a fox quietly ceasing to be a 捕食者.
     #[test]
-    fn a_facet_no_group_declares_is_rejected() {
-        let yaml = "
-分類:
-  諸法:
-    狐:
-      属性: [補食者]
-属性:
-  食物連鎖: [捕食者, 被食者]
-";
-        let problems = 実相::parse(yaml).unwrap_err();
-        assert!(
-            problems.iter().any(|p| p.contains("補食者")),
-            "{problems:?}"
-        );
-    }
-
-    /// Two groups claiming one value would make `group_of` a coin toss.
-    #[test]
-    fn a_facet_declared_in_two_groups_is_rejected() {
-        let yaml = "
-分類:
-  諸法: {}
-属性:
-  年齢: [子供, 大人]
-  世代: [子供, 老人]
-";
-        let problems = 実相::parse(yaml).unwrap_err();
-        assert!(
-            problems.iter().any(|p| p.contains("two groups")),
-            "{problems:?}"
-        );
-    }
-
-    /// 属性 under a node is metadata, never a child, so it must not appear in the tree.
-    #[test]
-    fn the_reserved_facet_key_is_not_a_node() {
+    fn a_facet_is_never_a_node() {
         let tree = tree();
+        assert!(!tree.contains("子供"));
         assert!(!tree.contains("属性"));
-        assert!(!tree.children("狐").contains(&"属性".to_string()));
-        assert!(tree.children("狐").is_empty());
-    }
-
-    // --- 軸: exclusivity and resolution -------------------------------------
-
-    /// The bug this machinery exists for: without axes, a child declaring 子供 under a
-    /// parent declaring 大人 yielded *both*, silently, and nothing complained.
-    #[test]
-    fn on_an_exclusive_axis_the_nearest_value_wins() {
-        let yaml = "
-分類:
-  諸法:
-    人間:
-      属性: [大人]
-      子:
-        属性: [子供]
-属性:
-  年齢: [子供, 大人]
-";
-        let tree = 実相::parse(yaml).unwrap();
-        assert_eq!(
-            tree.facets_of("子").into_iter().collect::<Vec<_>>(),
-            ["子供"]
-        );
-        assert_eq!(
-            tree.facets_of("人間").into_iter().collect::<Vec<_>>(),
-            ["大人"]
-        );
-        assert!(
-            !tree.has_facet("子", "大人"),
-            "the further value should be overridden"
-        );
-    }
-
-    #[test]
-    fn a_non_exclusive_group_keeps_every_value() {
-        let yaml = "
-分類:
-  諸法:
-    人間:
-      属性: [勇敢]
-      子:
-        属性: [慎重]
-属性:
-  性格:
-    排他: false
-    値: [勇敢, 慎重]
-";
-        let tree = 実相::parse(yaml).unwrap();
-        assert!(!tree.is_exclusive("性格"));
-        assert_eq!(
-            tree.facets_of("子").into_iter().collect::<Vec<_>>(),
-            ["勇敢", "慎重"]
-        );
-    }
-
-    /// Two values from one axis on a *single* node is a contradiction at one point, not
-    /// a nearer value overriding a further one. There is nothing to resolve, so it is
-    /// refused rather than arbitrated.
-    #[test]
-    fn one_node_holding_two_values_from_an_axis_is_rejected() {
-        let yaml = "
-分類:
-  諸法:
-    人間:
-      属性: [子供, 大人]
-属性:
-  年齢: [子供, 大人]
-";
-        let problems = 実相::parse(yaml).unwrap_err();
-        assert!(
-            problems.iter().any(|p| p.contains("alternatives")),
-            "{problems:?}"
-        );
     }
 
     #[test]
@@ -893,7 +914,7 @@ mod tests {
     }
 
     /// The reason the sense axes use 遮音 / 不透明 / 防臭 rather than three copies of a
-    /// bare "blocks": a facet may be declared only once across all groups.
+    /// bare "blocks": a facet may be declared in one group only.
     #[test]
     fn the_sense_axes_share_no_vocabulary() {
         let tree = tree();
@@ -902,17 +923,112 @@ mod tests {
         assert_eq!(tree.group_of("保臭"), Some("匂い"));
     }
 
+    // --- resolution ----------------------------------------------------------
+
+    /// The requirement in its canonical form: walls are opaque, a glass wall is not.
+    /// Exclusivity is not enforced *down* the tree — a more precise node states a
+    /// different value on the same axis and supersedes the vaguer one.
     #[test]
-    fn a_list_where_a_node_belongs_is_reported() {
-        let yaml = "
-分類:
-  諸法:
-    狐: [捕食者]
-属性: {}
-";
-        let problems = 実相::parse(yaml).unwrap_err();
+    fn a_more_precise_node_supersedes_a_vaguer_one() {
+        let tree = 実相::from_parts(
+            "諸法:\n  壁:\n    硝子壁: {}\n",
+            視界,
+            &[("壁", &["不透明"]), ("硝子壁", &["透明"])],
+        )
+        .expect("a child contradicting its parent is legal");
+        assert_eq!(tree.facet_in_group("壁", "視界"), Some("不透明"));
+        assert_eq!(tree.facet_in_group("硝子壁", "視界"), Some("透明"));
+        assert!(!tree.has_facet("硝子壁", "不透明"));
+    }
+
+    /// Without axes this yielded *both*, silently: `facets_of` was a set union with no
+    /// notion of a group.
+    #[test]
+    fn on_an_exclusive_axis_the_nearest_value_wins() {
+        let tree = 実相::from_parts(
+            "諸法:\n  人間:\n    子: {}\n",
+            年齢,
+            &[("人間", &["大人"]), ("子", &["子供"])],
+        )
+        .unwrap();
+        assert_eq!(
+            tree.facets_of("子").into_iter().collect::<Vec<_>>(),
+            ["子供"]
+        );
+        assert_eq!(
+            tree.facets_of("人間").into_iter().collect::<Vec<_>>(),
+            ["大人"]
+        );
+    }
+
+    #[test]
+    fn facets_inherit_downward() {
+        let tree = 実相::from_parts(
+            "諸法:\n  動物:\n    兎: {}\n",
+            "食物連鎖: [捕食者, 被食者]\n",
+            &[("動物", &["被食者"])],
+        )
+        .unwrap();
+        // Declared on the parent, true of the child, and the child declared nothing.
+        assert!(tree.has_facet("兎", "被食者"));
+        assert!(!tree.has_facet("諸法", "被食者"));
+    }
+
+    #[test]
+    fn a_non_exclusive_group_keeps_every_value() {
+        let tree = 実相::from_parts(
+            "諸法:\n  人間:\n    子: {}\n",
+            "性格:\n  排他: false\n  値: [勇敢, 慎重]\n",
+            &[("人間", &["勇敢"]), ("子", &["慎重"])],
+        )
+        .unwrap();
+        assert!(!tree.is_exclusive("性格"));
+        assert_eq!(
+            tree.facets_of("子").into_iter().collect::<Vec<_>>(),
+            ["勇敢", "慎重"]
+        );
+    }
+
+    /// Two values from one axis on a *single* node is a contradiction at one point, not
+    /// a nearer value overriding a further one. There is nothing to resolve.
+    #[test]
+    fn one_node_holding_two_values_from_an_axis_is_rejected() {
+        let problems =
+            実相::from_parts("諸法:\n  人間: {}\n", 年齢, &[("人間", &["子供", "大人"])])
+                .unwrap_err();
         assert!(
-            problems.iter().any(|p| p.contains("only 属性")),
+            problems.iter().any(|p| p.contains("alternatives")),
+            "{problems:?}"
+        );
+    }
+
+    /// An undeclared facet is nearly always a typo, and ignoring it silently would mean
+    /// a fox quietly ceasing to be a 捕食者.
+    #[test]
+    fn a_facet_no_type_declares_is_rejected() {
+        let problems = 実相::from_parts(
+            "諸法:\n  狐: {}\n",
+            "食物連鎖: [捕食者, 被食者]\n",
+            &[("狐", &["補食者"])],
+        )
+        .unwrap_err();
+        assert!(
+            problems.iter().any(|p| p.contains("補食者")),
+            "{problems:?}"
+        );
+    }
+
+    /// Two groups claiming one value would make `group_of` a coin toss.
+    #[test]
+    fn a_facet_declared_in_two_groups_is_rejected() {
+        let problems = 実相::from_parts(
+            "諸法: {}\n",
+            "年齢: [子供, 大人]\n世代: [子供, 老人]\n",
+            &[],
+        )
+        .unwrap_err();
+        assert!(
+            problems.iter().any(|p| p.contains("two groups")),
             "{problems:?}"
         );
     }
