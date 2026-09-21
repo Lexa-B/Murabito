@@ -14,6 +14,7 @@ import bmesh
 from mathutils import Vector
 
 BRANCH_RING = 6
+ROOT_DEPTH = -1.5  # shaku: how far trunks reach below the ground, so sloping ground shows no gap
 
 
 def branch(b, points, radii, colour, upright=0):
@@ -82,6 +83,13 @@ def gnarl(points, radii, rng, amount, step):
     out_points.append(points[-1])
     out_radii.append(radii[-1])
     return out_points, out_radii
+
+
+def sink(points, radii, depth=ROOT_DEPTH):
+    """A trunk polyline with a point added straight below its base at depth,
+    to bury it; draw it with branch(..., upright=2) so both rings are level."""
+    points = [Vector(p) for p in points]
+    return [Vector((points[0].x, points[0].y, depth))] + points, [radii[0] * 1.05] + list(radii)
 
 
 def point_at_height(points, z):
@@ -295,8 +303,9 @@ def conifer(b, spec, needles, shades, bark):
     With spec["clusters"] (tier, sectors), the tufts aren't separate: each
     tier and sector of the crown is wrapped in one skin, see clustered_crown."""
     rng = rng_for(spec["seed"])
-    points, radii = densify(*spec["trunk"], step=3)
-    for segment in branch(b, points, radii, bark[0]):
+    points, radii = sink(*densify(*spec["trunk"], step=3))
+    # the buried segment keeps bark[0], drawing nothing from the random stream
+    for segment in branch(b, points, radii, bark[0], upright=2)[1:]:
         for face in segment:
             b.paint([face], rng.choice(bark))
 

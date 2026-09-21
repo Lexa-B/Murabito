@@ -138,7 +138,7 @@ def build_maple(version="00", colour="a", season="summer"):
     leaves, shades = COLOURS[colour][season]
     rng = flora.rng_for(spec["seed"])
     b = loft.Builder()
-    flora.branch(b, *spec["trunk"], BARK)
+    flora.branch(b, *flora.sink(*spec["trunk"]), BARK, upright=2)
     for points, radii in spec["leaders"]:
         flora.branch(b, points, radii, BARK)
     if "canopy" in spec:

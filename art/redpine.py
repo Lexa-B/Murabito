@@ -109,7 +109,9 @@ def build_redpine(version="00", colour="a", season="summer"):
 
     points, radii = flora.densify(*spec["trunk"], step=3)
     lo, hi = spec["bark_blend"]
-    for segment in flora.branch(b, points, radii, GREY):
+    points, radii = flora.sink(points, radii)
+    # the buried segment stays grey, drawing nothing from the random stream
+    for segment in flora.branch(b, points, radii, GREY, upright=2)[1:]:
         for face in segment:
             # a ragged change of bark: each face picks by height, with noise
             u = (face.calc_center_median().z - lo) / (hi - lo) + rng.uniform(-0.4, 0.4)

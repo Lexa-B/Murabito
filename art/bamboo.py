@@ -73,7 +73,7 @@ def _culm(b, base, height, out, lean, radius, spec):
     def at(t):
         return base + out * (lean * height * t * t) + Vector((0, 0, height * t))
 
-    points, radii, colours = [at(0)], [radius], []
+    points, radii, colours = [at(0) + Vector((0, 0, flora.ROOT_DEPTH + 0.3)), at(0)], [radius, radius], [CULM_OLD]
     z = spec["node_step"]
     while z + NODE_BAND < height:
         t = z / height
@@ -85,7 +85,7 @@ def _culm(b, base, height, out, lean, radius, spec):
     points.append(at(1))
     radii.append(radius * 0.3)
     colours.append(CULM)
-    flora.branch(b, points, radii, colours)
+    flora.branch(b, points, radii, colours, upright=2)  # buried and level at the base
     return at
 
 

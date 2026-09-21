@@ -27,7 +27,6 @@ import loft  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
 BARK, BAND, TWIG = "sakura_bark", "sakura_bark_band", "sakura_twig"
-ROOT_DEPTH = -1.5  # shaku: how far the trunk reaches below the ground
 
 # colour variant: season: (leaf colours, underside colours), picked per triangle.
 # A season of None is bare, as a cherry is in winter.
@@ -189,8 +188,7 @@ def build_sakura(version="00", colour="a", season="spring"):
     points, radii = flora.gnarl(*spec["trunk"], rng, trunk_gnarl, step=1.5)
     points, radii = flora.densify(points, radii, step=0.6)
     # sunk deep and level at the base, so it sits in sloping ground with no gap
-    points.insert(0, Vector((points[0].x, points[0].y, ROOT_DEPTH)))
-    radii.insert(0, radii[0] * 1.05)
+    points, radii = flora.sink(points, radii)
     bands = [BAND if i % 3 == 2 else BARK for i in range(len(points) - 1)]
     flora.branch(b, points, radii, bands, upright=2)
 
