@@ -23,15 +23,16 @@ BROWN, CREAM, SOOT = "hare_brown", "cream", "soot"
 
 # The spine, tail tip to nose: (y, z, half-width, half-height, colour, underside
 # colour). See loft.Builder.spine.
-TAIL_TIP = Vector((0, -1.11, 0.68))
+TAIL_TIP = Vector((0, -1.05, 0.69))
 SPINE = [
     # tail: a small round cream puff
-    (-1.04, 0.66, 0.12, 0.12, CREAM, CREAM),
-    (-0.97, 0.62, 0.09, 0.09, CREAM, CREAM),
-    # body: a domed rump, high round haunches, the back sloping down to low shoulders
-    (-0.94, 0.58, 0.14, 0.16, BROWN, BROWN),  # rump, rounding off
-    (-0.87, 0.55, 0.25, 0.27, BROWN, BROWN),
-    (-0.76, 0.53, 0.33, 0.35, BROWN, BROWN),
+    (-0.98, 0.67, 0.12, 0.12, CREAM, CREAM),
+    (-0.91, 0.63, 0.09, 0.09, CREAM, CREAM),
+    # body: a rounded rump whose top curves gently down from the haunches (the
+    # rings rise as they shrink), then the back sloping down to low shoulders
+    (-0.88, 0.60, 0.17, 0.16, BROWN, BROWN),  # rump, rounding off
+    (-0.81, 0.58, 0.27, 0.25, BROWN, BROWN),
+    (-0.72, 0.55, 0.33, 0.33, BROWN, BROWN),
     (-0.62, 0.52, 0.36, 0.38, BROWN, BROWN),  # haunches, the widest point
     (-0.35, 0.52, 0.35, 0.35, BROWN, CREAM),
     (-0.08, 0.50, 0.30, 0.30, BROWN, CREAM),  # chest
