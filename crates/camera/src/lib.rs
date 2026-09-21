@@ -2,6 +2,7 @@
 //!
 //! Lengths are in shaku: one world unit is one 尺, about 30.3 cm.
 
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 
 /// How far the camera starts from its focus: 7 間 (42 shaku, about 12.7 m).
@@ -11,12 +12,20 @@ const START_ZOOM: f32 = 42.0;
 /// second, about 7.5 間.
 const PAN_SPEED: f32 = 45.0;
 
+/// Closest and furthest the camera may sit from its focus, in shaku: about 4 m to 60 m.
+const ZOOM_MIN: f32 = 13.0;
+const ZOOM_MAX: f32 = 198.0;
+
+/// How much one wheel notch changes the distance. A ratio, not a length, so a notch
+/// changes the view by the same proportion however far out the camera is.
+const ZOOM_STEP: f32 = 1.15;
+
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn_camera)
-            .add_systems(Update, (pan_camera, apply_rig).chain());
+            .add_systems(Update, (pan_camera, zoom_camera, apply_rig).chain());
     }
 }
 
@@ -82,6 +91,31 @@ fn pan_direction(keys: &ButtonInput<KeyCode>) -> Vec3 {
         direction += Vec3::X;
     }
     direction.normalize_or_zero()
+}
+
+fn zoom_camera(mut wheel: MessageReader<MouseWheel>, mut rigs: Query<&mut CameraRig>) {
+    let notches: f32 = wheel.read().map(notches_of).sum();
+    if notches == 0.0 {
+        return;
+    }
+    for mut rig in &mut rigs {
+        rig.zoom = zoomed(rig.zoom, notches);
+    }
+}
+
+/// One wheel message as a count of notches. A mouse reports whole lines, one per notch;
+/// a touchpad reports pixels, many per notch, so those are scaled down to match.
+fn notches_of(scroll: &MouseWheel) -> f32 {
+    match scroll.unit {
+        MouseScrollUnit::Line => scroll.y,
+        MouseScrollUnit::Pixel => scroll.y / MouseScrollUnit::SCROLL_UNIT_CONVERSION_FACTOR,
+    }
+}
+
+/// The zoom distance after scrolling by `notches`. Scrolling up is positive and moves
+/// the camera closer, hence the negated exponent.
+fn zoomed(zoom: f32, notches: f32) -> f32 {
+    (zoom * ZOOM_STEP.powf(-notches)).clamp(ZOOM_MIN, ZOOM_MAX)
 }
 
 fn apply_rig(mut cameras: Query<(&CameraRig, &mut Transform)>) {
@@ -275,6 +309,88 @@ mod tests {
         assert!(
             focus.abs_diff_eq(a_tenth_of_a_second, 1e-4),
             "focus is at {focus}"
+        );
+    }
+
+    fn scroll(unit: MouseScrollUnit, y: f32) -> MouseWheel {
+        MouseWheel {
+            unit,
+            x: 0.0,
+            y,
+            window: Entity::PLACEHOLDER,
+            phase: bevy::input::touch::TouchPhase::Moved,
+        }
+    }
+
+    #[test]
+    fn scrolling_up_moves_the_camera_closer() {
+        assert!(zoomed(START_ZOOM, 1.0) < START_ZOOM);
+    }
+
+    #[test]
+    fn a_notch_changes_the_distance_by_the_same_proportion_anywhere() {
+        let near = 20.0 / zoomed(20.0, 1.0);
+        let far = 100.0 / zoomed(100.0, 1.0);
+
+        assert!(
+            (near - ZOOM_STEP).abs() < 1e-4,
+            "near, a notch is a factor of {near}"
+        );
+        assert!(
+            (far - ZOOM_STEP).abs() < 1e-4,
+            "far, a notch is a factor of {far}"
+        );
+    }
+
+    #[test]
+    fn scrolling_in_and_back_out_returns_to_the_start() {
+        let there_and_back = zoomed(zoomed(START_ZOOM, 3.0), -3.0);
+
+        assert!(
+            (there_and_back - START_ZOOM).abs() < 1e-3,
+            "ended at {there_and_back}"
+        );
+    }
+
+    #[test]
+    fn the_camera_stops_at_its_closest_and_furthest() {
+        assert_eq!(zoomed(START_ZOOM, 1000.0), ZOOM_MIN);
+        assert_eq!(zoomed(START_ZOOM, -1000.0), ZOOM_MAX);
+    }
+
+    #[test]
+    fn a_mouse_line_is_one_notch() {
+        assert_eq!(notches_of(&scroll(MouseScrollUnit::Line, 1.0)), 1.0);
+    }
+
+    #[test]
+    fn touchpad_pixels_are_scaled_down_to_notches() {
+        let one_notch_of_pixels = MouseScrollUnit::SCROLL_UNIT_CONVERSION_FACTOR;
+
+        assert_eq!(
+            notches_of(&scroll(MouseScrollUnit::Pixel, one_notch_of_pixels)),
+            1.0
+        );
+    }
+
+    #[test]
+    fn a_wheel_notch_zooms_the_rig() {
+        let mut app = headless_app();
+        app.update();
+        app.world_mut()
+            .write_message(scroll(MouseScrollUnit::Line, 1.0));
+
+        app.update();
+
+        let world = app.world_mut();
+        let zoom = world
+            .query::<&CameraRig>()
+            .single(world)
+            .expect("exactly one rig")
+            .zoom;
+        assert!(
+            (zoom - START_ZOOM / ZOOM_STEP).abs() < 1e-4,
+            "zoom is {zoom}"
         );
     }
 }
