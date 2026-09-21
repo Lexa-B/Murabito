@@ -28,55 +28,59 @@ RED, CREAM, SOOT = "shiba_red", "cream", "soot"
 # colour). See loft.Builder.spine. The tail starts with its tip resting over the
 # back and curls up, back and down into the rump; round the curl, a ring's
 # "underside" faces outwards, which is where a curled Shiba tail shows its cream.
-TAIL_TIP = Vector((0, -0.32, 1.13))  # tucked into the fur of the back
+TAIL_TIP = Vector((0, -0.54, 1.10))  # tucked into the fur of the back
 SPINE = [
     # the curled tail: thick and tight, its tip resting on the back
-    (-0.40, 1.24, 0.09, 0.09, RED, CREAM),
-    (-0.50, 1.29, 0.11, 0.11, RED, CREAM),  # the top of the curl
-    (-0.59, 1.23, 0.11, 0.11, RED, CREAM),
-    (-0.61, 1.11, 0.10, 0.10, RED, CREAM),
-    (-0.57, 1.00, 0.085, 0.085, RED, RED),  # tail root
-    # body: a rump rounded over three rings, then compact, deep and even
-    (-0.54, 0.91, 0.15, 0.17, RED, RED),
-    (-0.46, 0.89, 0.23, 0.25, RED, RED),
-    (-0.34, 0.87, 0.27, 0.29, RED, RED),  # the buttock; the hind legs grow from the long segment in front
-    (0.00, 0.86, 0.28, 0.30, RED, CREAM),  # a pale belly; the front legs grow from the segment in front
-    (0.26, 0.89, 0.27, 0.31, RED, CREAM),  # chest
+    (-0.62, 1.24, 0.09, 0.09, RED, CREAM),
+    (-0.72, 1.29, 0.11, 0.11, RED, CREAM),  # the top of the curl
+    (-0.81, 1.23, 0.11, 0.11, RED, CREAM),
+    (-0.83, 1.11, 0.10, 0.10, RED, CREAM),
+    (-0.79, 1.00, 0.085, 0.085, RED, RED),  # tail root
+    # body: a flat, upright rump under the tail, a tucked-up flank, a deep belly;
+    # the back level from the tail, rising a little to the shoulders
+    (-0.76, 0.90, 0.15, 0.16, RED, RED),
+    (-0.72, 0.86, 0.25, 0.26, RED, RED),  # the rump; the hind legs grow from the segment in front
+    (-0.36, 0.845, 0.27, 0.285, RED, CREAM),  # the front of the hips, low to meet the thigh
+    (-0.28, 0.92, 0.27, 0.22, RED, CREAM),  # the groin, tucked up just in front of the thigh
+    (-0.06, 0.89, 0.28, 0.29, RED, CREAM),  # a pale belly; the front legs grow from the segment in front
+    (0.26, 0.90, 0.27, 0.30, RED, CREAM),  # chest, under the withers; it leans with the neck, so it sits a hair higher to stay level with the back behind
     # neck
     (0.40, 1.04, 0.20, 0.21, RED, CREAM),
     (0.48, 1.22, 0.18, 0.18, RED, CREAM),
     # head: fox-like but short-muzzled, about 1.3x natural, with broad cheeks
     (0.52, 1.38, 0.23, 0.21, RED, RED),  # back of the skull
     (0.68, 1.42, 0.27, 0.21, RED, CREAM),  # cheeks, the widest point
-    (0.82, 1.36, 0.16, 0.14, RED, CREAM),
-    (0.92, 1.31, 0.10, 0.09, RED, CREAM),  # muzzle
-    (0.98, 1.29, 0.06, 0.055, SOOT, SOOT),  # nose
+    (0.80, 1.35, 0.18, 0.15, RED, CREAM),
+    (0.88, 1.31, 0.13, 0.11, RED, CREAM),  # a short, blunt muzzle
+    (0.93, 1.30, 0.09, 0.08, SOOT, SOOT),  # nose
 ]
-NOSE_TIP = Vector((0, 1.02, 1.28))
+NOSE_TIP = Vector((0, 0.96, 1.30))  # close behind the last ring: a broad, flat nose
+
+RUMP_RINGS = (5, 6)  # stand upright: squared to the spine diving from the tail, they'd point out under it
 
 # Which spine segment (index of its tail-side ring) and face each limb grows from.
 # Each leg's first ring fits inside its base face, front, back and sides.
-HIND_SEGMENT = 7  # buttock -> belly
-FRONT_SEGMENT = 8  # belly -> chest
-EAR_SEGMENT = 12  # back of the skull -> cheeks
+HIND_SEGMENT = 6  # rump -> flank: the back of the thigh drops straight from under the tail
+FRONT_SEGMENT = 9  # belly -> chest
+EAR_SEGMENT = 13  # back of the skull -> cheeks
 
 # Limbs, for the right side: rings of (x, y, z, half-width, half-depth, colour).
 # See loft.Builder.limb. Sturdy, with cream paws.
 FRONT_LEG = [
-    (0.13, 0.13, 0.52, 0.09, 0.12, RED),  # shoulder
-    (0.12, 0.13, 0.34, 0.07, 0.08, RED),  # elbow
+    (0.13, 0.10, 0.50, 0.09, 0.15, RED),  # shoulder, reaching down and back into the armpit
+    (0.12, 0.12, 0.33, 0.07, 0.08, RED),  # elbow
     (0.11, 0.14, 0.16, 0.055, 0.06, RED),  # wrist
     (0.11, 0.16, 0.05, 0.055, 0.06, CREAM),
     (0.11, 0.19, 0.02, 0.065, 0.08, CREAM),  # paw
     (0.11, 0.19, 0.00, 0.065, 0.08, CREAM),  # sole
 ]
 HIND_LEG = [
-    (0.14, -0.17, 0.52, 0.10, 0.15, RED),  # thigh, flush under the buttock
-    (0.13, -0.15, 0.34, 0.075, 0.09, RED),  # knee
-    (0.12, -0.20, 0.17, 0.055, 0.06, RED),  # hock
-    (0.12, -0.17, 0.05, 0.055, 0.06, CREAM),
-    (0.12, -0.14, 0.02, 0.065, 0.08, CREAM),  # paw
-    (0.12, -0.14, 0.00, 0.065, 0.08, CREAM),  # sole
+    (0.14, -0.55, 0.48, 0.10, 0.17, RED),  # the haunch: as long as the body above it
+    (0.13, -0.56, 0.30, 0.075, 0.085, RED),  # narrowing to the knee, under the back half
+    (0.12, -0.61, 0.15, 0.055, 0.06, RED),  # hock, back under the rump
+    (0.12, -0.60, 0.05, 0.055, 0.06, CREAM),
+    (0.12, -0.58, 0.02, 0.065, 0.08, CREAM),  # paw
+    (0.12, -0.58, 0.00, 0.065, 0.08, CREAM),  # sole
 ]
 EAR = [(0.17, 0.58, 1.65, 0.085, 0.045, RED)]  # pricked triangles, tipped forward
 EAR_TIP = Vector((0.20, 0.60, 1.82))
@@ -84,14 +88,14 @@ EAR_TIP = Vector((0.20, 0.60, 1.82))
 # The urajiro on the face: pale cheeks and sides of the muzzle.
 # (spine segment, faces, colour); faces are numbered as in loft: 3 left, 7 right.
 URAJIRO = [
-    (13, (3, 7), CREAM),
     (14, (3, 7), CREAM),
+    (15, (3, 7), CREAM),
 ]
 
 
 def build_dog():
     b = loft.Builder()
-    segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP)
+    segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP, upright=RUMP_RINGS)
     for segment, faces, colour in URAJIRO:
         b.paint([segments[segment][k] for k in faces], colour)
 
@@ -107,4 +111,4 @@ def build_dog():
 
 
 if __name__ == "__main__":
-    loft.run(build_dog, "dog", target=(0, -0.05, 0.85), extent=1.9)
+    loft.run(build_dog, "dog", target=(0, -0.15, 0.85), extent=2.1)

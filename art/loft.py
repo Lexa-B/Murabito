@@ -50,17 +50,19 @@ class Builder:
         rings run from start_tip to end_tip, each (y, z, half-width, half-height,
         colour, underside colour). A ring's colours paint the segment arriving at
         it from the start_tip side. Each ring stands square to the spine, except
-        the first upright rings, which stand straight up: for a fan of a tail on a
-        sharply curving spine, whose squared rings would swing past each other and
-        fold. Returns segments[i][k]: face k between ring i and ring i + 1, for
-        growing limbs from.
+        the upright ones, which stand straight up: where the spine curves sharply
+        (a fan of a tail, a rump under a high tail), squared rings swing past each
+        other and fold. upright is how many rings from the start, or a collection
+        of ring indices. Returns segments[i][k]: face k between ring i and ring
+        i + 1, for growing limbs from.
         """
+        is_upright = (lambda i: i < upright) if isinstance(upright, int) else (lambda i: i in upright)
         points = [start_tip] + [Vector((0, y, z)) for y, z, *_ in rings] + [end_tip]
         side = Vector((1, 0, 0))
         verts = []
         for i, (y, z, hw, hh, *_) in enumerate(rings, start=1):
             tangent = (points[i + 1] - points[i - 1]).normalized()
-            up = Vector((0, 0, 1)) if i <= upright else side.cross(tangent).normalized()
+            up = Vector((0, 0, 1)) if is_upright(i - 1) else side.cross(tangent).normalized()
             centre = points[i]
             verts.append(
                 [

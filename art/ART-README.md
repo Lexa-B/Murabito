@@ -120,7 +120,7 @@ sampler), so faces get exactly the swatch colour.
 | | |
 |---|---|
 | `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `finish(name, shaded=False)` → a coloured object; `shaded=True` varies each fur or feather face among its `SHADES`, from a stream seeded by `name` |
-| `Builder.spine(start_tip, rings, end_tip, upright=0)` | loft an animal's body along a spine in the YZ plane, octagonal rings from tail tip to nose, each square to the spine except the first `upright`, which stand straight up (for a tail fan); returns the faces per segment |
+| `Builder.spine(start_tip, rings, end_tip, upright=0)` | loft an animal's body along a spine in the YZ plane, octagonal rings from tail tip to nose, each square to the spine except the `upright` ones (a count from the start, or ring indices), which stand straight up (a tail fan, a rump under a high tail); returns the faces per segment |
 | `Builder.limb(face, rings, mirror, tip)` | replace one of those faces with a limb (leg, ear) lofted through square rings; returns its faces |
 | `run(build, name, target, extent)` | the shared command line (`--out`, `--renders`); scripts parse their own extra flags first |
 
@@ -330,8 +330,10 @@ And by eye:
   deep, by dropping a ring if needed, and keep the ring inside the body's width too, or
   its square corner pokes out.
 - **Rings square to a sharply curving spine swing past each other and fold**, leaving a
-  hook on the inside of the curve (the rooster's tail). Stand those rings upright
-  (`spine(..., upright=n)`).
+  hook on the inside of the curve (the rooster's tail), or a point under a high tail (the
+  dog's rump). Stand those rings upright (`spine(..., upright=...)`).
+- **A ring on a rising spine leans back, and its top sits lower than its numbers say.**
+  To line up a topline, check the ring vertices, not the ring centres (the dog's withers).
 - **A ring bigger than both neighbours shows as a ridge**, and a rump that ends in one
   ring looks chopped off. Round rumps over two or three rings, from the side and from
   above (the hare, the deer).
