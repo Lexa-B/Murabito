@@ -226,7 +226,14 @@ apart, and 60/10/1 Hz lands on a 60 Hz game loop with no tuning.
     Anything that scans by radius needs it — hearing did, and sound and smell will. The
     failure mode is why this is written down: coverage stops early *only in the diagonal
     directions*, which reads as a rendering artefact rather than as a logic error.
-30. **AI code lives under `gestalt_ai/`.** Everything brain-side — the layers, 仮諦, the
+30. **A relation is not stored as a relation.** 食物連鎖 looked like it needed one — a
+    fox is 被食者 *to a bear* — and does not. 実相 holds the whole truth, 狐 being both
+    捕食者 and 被食者 at once; each being's 仮諦 keeps only the half it has a use for.
+    A bear's copy files the fox under 被食者, the fox's copy files the bear under 捕食者,
+    neither is wrong, and neither has to name the other. A being holding both simply
+    weighs fleeing above hunting. This is what 排他: false is for, and the perspective
+    half of it arrives with 3d.
+31. **AI code lives under `gestalt_ai/`.** Everything brain-side — the layers, 仮諦, the
     arena, episodes, replay — goes there once it is built. Senses are body, not brain,
     and stay in `senses/`.
 

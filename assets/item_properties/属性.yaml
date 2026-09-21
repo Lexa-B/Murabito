@@ -19,12 +19,21 @@
   - 子供
   - 大人
 
-# Coarse trophic role. A relation strictly speaking — a fox is 被食者 to a bear — but one
-# position per kind is enough until something eats a fox. 栄養段階 is the more technical
-# name for the axis if this ever needs more than two values.
+# Coarse trophic role, and a tag set rather than an alternation: a fox is 捕食者 to a
+# rabbit and 被食者 to a bear, and both are true of foxes at once.
+#
+# It looks like it wants to be a relation, and it is not. 実相 holds the whole truth —
+# 狐 is both — and each being's 仮諦 keeps only the half it has any use for. A bear's
+# copy files the fox under 被食者; the fox's copy files the bear under 捕食者; neither
+# is wrong, and neither needs to name the other. A being that holds both simply weighs
+# fleeing above hunting.
+#
+# 栄養段階 is the more technical name for the axis if it ever needs more than two values.
 食物連鎖:
-  - 捕食者
-  - 被食者
+  排他: false
+  値:
+    - 捕食者
+    - 被食者
 
 # How a thing treats each sense channel. One axis per channel, because a thicket can hide
 # you from sight while doing nothing to your footsteps.
