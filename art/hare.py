@@ -23,13 +23,15 @@ BROWN, CREAM, SOOT = "hare_brown", "cream", "soot"
 
 # The spine, tail tip to nose: (y, z, half-width, half-height, colour, underside
 # colour). See loft.Builder.spine.
-TAIL_TIP = Vector((0, -1.03, 0.67))
+TAIL_TIP = Vector((0, -1.11, 0.68))
 SPINE = [
     # tail: a small round cream puff
-    (-0.96, 0.65, 0.12, 0.12, CREAM, CREAM),
-    (-0.87, 0.62, 0.10, 0.10, CREAM, CREAM),
-    # body: high round haunches, the back sloping down to low shoulders
-    (-0.80, 0.52, 0.26, 0.30, BROWN, BROWN),  # rump
+    (-1.04, 0.66, 0.12, 0.12, CREAM, CREAM),
+    (-0.97, 0.62, 0.09, 0.09, CREAM, CREAM),
+    # body: a domed rump, high round haunches, the back sloping down to low shoulders
+    (-0.94, 0.58, 0.14, 0.16, BROWN, BROWN),  # rump, rounding off
+    (-0.87, 0.55, 0.25, 0.27, BROWN, BROWN),
+    (-0.76, 0.53, 0.33, 0.35, BROWN, BROWN),
     (-0.62, 0.52, 0.36, 0.38, BROWN, BROWN),  # haunches, the widest point
     (-0.35, 0.52, 0.35, 0.35, BROWN, CREAM),
     (-0.08, 0.50, 0.30, 0.30, BROWN, CREAM),  # chest
@@ -46,9 +48,9 @@ SPINE = [
 NOSE_TIP = Vector((0, 0.79, 0.77))
 
 # Which spine segment (index of its tail-side ring) and face each limb grows from.
-HIND_SEGMENT = 3  # haunches -> behind the chest
-FRONT_SEGMENT = 5  # chest -> shoulder
-EAR_SEGMENT = 8  # back of skull -> cheeks
+HIND_SEGMENT = 5  # haunches -> behind the chest
+FRONT_SEGMENT = 7  # chest -> shoulder
+EAR_SEGMENT = 10  # back of skull -> cheeks
 
 # Limbs, for the right side: rings of (x, y, z, half-width, half-depth, colour).
 # See loft.Builder.limb.
