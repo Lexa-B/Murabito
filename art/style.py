@@ -153,6 +153,11 @@ PALETTE = [
     ("deer_brown_light", "#AA6E43"),
     ("deer_brown_deep", "#955A33"),
     ("antler", "#B9A57F"),
+    # the Japanese black bear
+    ("bear_black", "#36312E"),
+    ("bear_black_light", "#403A36"),
+    ("bear_black_deep", "#2E2A27"),
+    ("bear_muzzle", "#A08566"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -175,6 +180,7 @@ SHADES = {
         "boar_brown",
         "boar_dark",
         "deer_brown",
+        "bear_black",
     )
 }
 
