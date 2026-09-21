@@ -1,0 +1,6 @@
+# Bevy looks for `assets/` beside the crate being run, which in a workspace would be
+# `crates/murabito/assets/`. The art pipeline writes to `assets/` at the repo root, so
+# point Bevy there. `relative = true` resolves the value against the directory that
+# holds `.cargo/`, so this works from the main checkout and from any worktree.
+[env]
+BEVY_ASSET_ROOT = { value = "", relative = true }

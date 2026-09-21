@@ -1,10 +1,8 @@
 [package]
-name = "murabito"
+name = "murabito_scene"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [dependencies]
 bevy.workspace = true
-murabito_scene.workspace = true
-murabito_camera.workspace = true

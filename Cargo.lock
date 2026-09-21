@@ -3436,6 +3436,30 @@ name = "murabito"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "murabito_camera",
+ "murabito_scene",
+]
+
+[[package]]
+name = "murabito_camera"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_keybinds",
+]
+
+[[package]]
+name = "murabito_keybinds"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
+name = "murabito_scene"
+version = "0.1.0"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]
