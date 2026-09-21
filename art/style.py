@@ -74,8 +74,17 @@ PALETTE = [
     ("sugi_bark", "#7A4E36"),
     ("sugi_bark_light", "#8C5C40"),
     ("sugi_bark_dark", "#613D2C"),
+    ("hinoki_green", "#3E6B3A"),
+    ("hinoki_green_light", "#4F8045"),
+    ("hinoki_green_deep", "#315A30"),
+    ("hinoki_green_blue", "#437248"),
+    ("hinoki_under_pale", "#6F8F6C"),
+    ("hinoki_shade", "#2C4A2C"),
+    ("hinoki_bark", "#8A4F36"),
+    ("hinoki_bark_light", "#9C6045"),
+    ("hinoki_bark_dark", "#6E3E2C"),
 ]
-PALETTE_SIZE = 8  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels
+PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
 SWATCH = {name: i for i, (name, _) in enumerate(PALETTE)}
 
@@ -95,6 +104,7 @@ def swatch_uv(name):
 
 
 def palette_image():
+    assert len(PALETTE) <= PALETTE_SIZE**2, "the palette has outgrown its texture: raise PALETTE_SIZE"
     img = bpy.data.images.new("palette", PALETTE_SIZE, PALETTE_SIZE, alpha=False)
     px = np.ones((PALETTE_SIZE, PALETTE_SIZE, 4), dtype=np.float32)
     px[:, :, :3] = 0.5  # unused pixels: neutral grey

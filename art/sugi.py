@@ -18,7 +18,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import flora  # noqa: E402
 import loft  # noqa: E402
-from mathutils import Vector  # noqa: E402
 
 BARK = ["sugi_bark", "sugi_bark", "sugi_bark_light", "sugi_bark_dark"]  # stringy: picked per face
 
@@ -100,28 +99,9 @@ VERSIONS.update({
 
 
 def build_sugi(version="00", colour="a", season="summer"):
-    spec = VERSIONS[version]
     needles, shades = COLOURS[colour][season]
-    rng = flora.rng_for(spec["seed"])
     b = loft.Builder()
-
-    points, radii = flora.densify(*spec["trunk"], step=3)
-    for segment in flora.branch(b, points, radii, BARK[0]):
-        for face in segment:
-            b.paint([face], rng.choice(BARK))
-
-    tuft = spec["tuft"]
-    for branch_points, branch_radii, pad_centre, pad_radius in flora.grow_branches(
-        spec["trunk"][0], spec["branches"], rng
-    ):
-        flora.branch(b, branch_points, branch_radii, BARK[0])
-        flora.pad(
-            b, pad_centre, pad_radius, needles, shades, rng, up=tuft["up"], down=tuft["down"],
-            subdivisions=3 if pad_radius >= 4 else 2,  # keeps the triangles one size
-        )
-    tip = spec["tip"]
-    top = Vector(spec["trunk"][0][-1]) + Vector((0, 0, 1))
-    flora.pad(b, top, tip["radius"], needles, shades, rng, up=tip["up"], down=tip["down"], lumps=2, subdivisions=2)
+    flora.conifer(b, VERSIONS[version], needles, shades, BARK)
     return b.finish(f"Sugi-{version}-{colour}-{season}")
 
 

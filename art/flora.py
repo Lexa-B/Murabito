@@ -212,5 +212,30 @@ def grow_branches(trunk_points, rules, rng):
     return out
 
 
+def conifer(b, spec, needles, shades, bark):
+    """A conifer from a version spec: a straight trunk whose faces each pick a
+    bark colour, branches grown by grow_branches each carrying a tuft, and a
+    tuft on the tip. Tufts and the tip take their up and down from spec["tuft"]
+    and spec["tip"]; bark is a list of swatches to pick from."""
+    rng = rng_for(spec["seed"])
+    points, radii = densify(*spec["trunk"], step=3)
+    for segment in branch(b, points, radii, bark[0]):
+        for face in segment:
+            b.paint([face], rng.choice(bark))
+
+    tuft = spec["tuft"]
+    for branch_points, branch_radii, pad_centre, pad_radius in grow_branches(
+        spec["trunk"][0], spec["branches"], rng
+    ):
+        branch(b, branch_points, branch_radii, bark[0])
+        pad(
+            b, pad_centre, pad_radius, needles, shades, rng, up=tuft["up"], down=tuft["down"],
+            subdivisions=3 if pad_radius >= 4 else 2,  # keeps the triangles one size
+        )
+    tip = spec["tip"]
+    top = Vector(spec["trunk"][0][-1]) + Vector((0, 0, 1))
+    pad(b, top, tip["radius"], needles, shades, rng, up=tip["up"], down=tip["down"], lumps=2, subdivisions=2)
+
+
 def rng_for(seed):
     return random.Random(seed)
