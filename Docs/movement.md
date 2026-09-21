@@ -57,3 +57,6 @@ That makes it admissible, and tight enough that A* doesn't waste time exploring 
 - **Sizes:** are normal and small the only sizes, and what decides which one an entity is?
 - **Obstruction and entity height:** a corner move needs both flanking faces open, but on which
   layers? Only the entity's own layer, or every layer it occupies if it's taller than one voxel?
+- **Cost of climbing:** does stepping up cost extra on top of the move's horizontal cost? The A*
+  heuristic stays admissible either way, since it counts only horizontal distance and climbing can
+  only add to a path's cost.
