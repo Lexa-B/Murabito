@@ -24,8 +24,13 @@ const SKY_COLOUR: Color = Color::srgb(0.53, 0.81, 0.92);
 const SKY_GLOW: f32 = 200.0;
 
 /// Relative to `assets/`. The model is in shaku, faces forward (-Z) and stands with
-/// its soles at y = 0, so it needs no scaling or turning: see `art/ART-README.md`.
+/// its soles at y = 0, so it needs no scaling or righting: see `art/ART-README.md`.
 const FOX_MODEL: &str = "models/fox.glb";
+
+/// How far the fox is turned from facing away from the camera, clockwise seen from
+/// above. 135 degrees is half past four on a clock face whose twelve is straight ahead:
+/// toward the camera and to its right, which shows the fox's face and its flank at once.
+const FOX_TURNED_CLOCKWISE: f32 = 135.0;
 
 pub struct ScenePlugin;
 
@@ -78,7 +83,9 @@ fn spawn_sun(mut commands: Commands) {
 
 fn spawn_fox(mut commands: Commands, assets: Res<AssetServer>) {
     let model = assets.load(GltfAssetLabel::Scene(0).from_asset(FOX_MODEL));
-    commands.spawn((Fox, WorldAssetRoot(model)));
+    // A positive turn about Y runs counter-clockwise seen from above, hence the minus.
+    let facing = Quat::from_rotation_y(-FOX_TURNED_CLOCKWISE.to_radians());
+    commands.spawn((Fox, WorldAssetRoot(model), Transform::from_rotation(facing)));
 }
 
 #[cfg(test)]
@@ -127,6 +134,24 @@ mod tests {
             .expect("exactly one fox");
 
         assert_eq!(fox.translation, Vec3::ZERO);
+    }
+
+    #[test]
+    fn the_fox_faces_half_past_four_toward_the_camera_and_to_its_right() {
+        let mut app = app_after_startup();
+        let world = app.world_mut();
+
+        let fox = world
+            .query_filtered::<&Transform, With<Fox>>()
+            .single(world)
+            .expect("exactly one fox");
+
+        let right_and_toward_the_camera = Vec3::new(1.0, 0.0, 1.0).normalize();
+        assert!(
+            fox.forward().abs_diff_eq(right_and_toward_the_camera, 1e-5),
+            "the fox faces {:?}",
+            fox.forward()
+        );
     }
 
     /// The model is made by the art pipeline, not by this crate. A rename there would
