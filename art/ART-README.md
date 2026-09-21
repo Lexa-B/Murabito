@@ -119,7 +119,7 @@ sampler), so faces get exactly the swatch colour.
 
 | | |
 |---|---|
-| `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `stud(centre, normal, size, colour)` (a small closed stud standing on a surface: eyes, spots), `finish(name, shaded=False)` → a coloured object; `shaded=True` varies each fur or feather face among its `SHADES`, from a stream seeded by `name` |
+| `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `stud(centre, normal, size, colour, sides=4, tall=1.0)` (a small closed stud standing on a surface: eyes, spots; more sides make it rounder, `tall` stretches it up and down), `finish(name, shaded=False)` → a coloured object; `shaded=True` varies each fur or feather face among its `SHADES`, from a stream seeded by `name` |
 | `Builder.spine(start_tip, rings, end_tip, upright=0)` | loft an animal's body along a spine in the YZ plane, octagonal rings from tail tip to nose (an optional seventh value tapers a ring, wider at the top: a trapezoid face), each square to the spine except the `upright` ones (a count from the start, or ring indices), which stand straight up (a tail fan, a rump under a high tail); returns the faces per segment |
 | `Builder.limb(face, rings, mirror, tip)` | replace one of those faces with a limb (leg, ear) lofted through square rings; returns its faces |
 | `run(build, name, target, extent)` | the shared command line (`--out`, `--renders`); scripts parse their own extra flags first |
@@ -287,7 +287,7 @@ And by eye:
 
 | Model | Versions | Colours | Seasons | Notes |
 |---|---|---|---|---|
-| fox | – | – | – | the style reference; red fox, standing |
+| fox | – | – | – | the style reference; red fox, standing; big round eyes with a white glint, in little sockets (poked faces) |
 | hare | – | – | – | Japanese hare (野兎), sitting in a loaf |
 | cat | – | – | – | mike (三毛) calico, long tail, standing |
 | rat | – | – | – | black rat (クマネズミ) |

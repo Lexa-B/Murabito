@@ -211,6 +211,7 @@ PALETTE = [
     ("wolf_tail", "#7D6E5E"),
     ("wolf_tail_light", "#877868"),
     ("wolf_tail_deep", "#736455"),
+    ("eye_glint", "#F6F3EC"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 

@@ -39,24 +39,28 @@ class Builder:
         f[self._swatch] = style.SWATCH[colour]
         return f
 
-    def stud(self, centre, normal, size, colour, inset=0.006, height=0.014):
+    def stud(self, centre, normal, size, colour, inset=0.006, height=0.014, sides=4, tall=1.0):
         """A small, closed, faceted stud standing on a surface: an eye, a spot.
 
-        Four corners a little below the surface round centre, and an apex a
-        little above it along normal, closed underneath so it stays manifold.
+        Its corners sit a little below the surface round centre, size out (tall
+        times that up and down), with an apex a little above it along normal;
+        closed underneath so it stays manifold. Four sides make a diamond; more
+        make it rounder. Returns the local frame (up, across) it was built in.
         """
         normal = normal.normalized()
         across = normal.cross(Vector((0, 0, 1)))
         across = across.normalized() if across.length > 1e-6 else Vector((1, 0, 0))
         up = across.cross(normal)
-        corners = [
-            self.bm.verts.new(centre - normal * inset + offset)
-            for offset in (up * size, across * size, -up * size, -across * size)
-        ]
+        corners = []
+        for k in range(sides):
+            angle = 2 * math.pi * k / sides
+            c, s = round(math.cos(angle), 12), round(math.sin(angle), 12)
+            corners.append(self.bm.verts.new(centre - normal * inset + up * size * tall * c + across * size * s))
         apex = self.bm.verts.new(centre + normal * height)
-        for k in range(4):
-            self.face((apex, corners[k], corners[(k + 1) % 4]), colour)
+        for k in range(sides):
+            self.face((apex, corners[k], corners[(k + 1) % sides]), colour)
         self.face(list(reversed(corners)), colour)
+        return up, across
 
     def paint(self, faces, colour):
         """Recolour faces already built, for patches that don't follow rings."""

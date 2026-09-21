@@ -10,13 +10,14 @@ height is about 1.35 shaku (~41 cm), feet on z = 0.
 import sys
 from pathlib import Path
 
+import bmesh
 from mathutils import Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import loft  # noqa: E402
 from loft import LOWER_LEFT, LOWER_RIGHT, UPPER_LEFT, UPPER_RIGHT  # noqa: E402
 
-ORANGE, CREAM, SOOT = "fox_orange", "cream", "soot"
+ORANGE, CREAM, SOOT, EYE, GLINT = "fox_orange", "cream", "soot", "eye_black", "eye_glint"
 
 # The spine, tail tip to nose: (y, z, half-width, half-height, colour, underside
 # colour). See loft.Builder.spine.
@@ -38,8 +39,9 @@ SPINE = [
     (0.50, 1.38, 0.27, 0.27, ORANGE, CREAM),
     # head: about 1.3x natural, big cheeks, short sharp snout
     (0.58, 1.62, 0.32, 0.30, ORANGE, CREAM),  # back of the skull
-    (0.80, 1.72, 0.42, 0.34, ORANGE, CREAM),  # cheeks, the widest point
-    (1.02, 1.68, 0.30, 0.24, ORANGE, CREAM),
+    (0.80, 1.74, 0.42, 0.32, ORANGE, CREAM),  # cheeks, the widest point; the underside in line with its neighbours', or it hangs as a point
+    (0.96, 1.691, 0.333, 0.267, ORANGE, CREAM),  # two rings round where the eyes sit,
+    (1.08, 1.653, 0.247, 0.197, ORANGE, CREAM),  # on the head's profile
     (1.20, 1.60, 0.14, 0.11, ORANGE, CREAM),  # snout
     (1.32, 1.57, 0.07, 0.06, SOOT, SOOT),
 ]
@@ -49,6 +51,8 @@ NOSE_TIP = Vector((0, 1.39, 1.57))
 HIND_SEGMENT = 5  # rump -> hip
 FRONT_SEGMENT = 8  # chest -> shoulder
 EAR_SEGMENT = 11  # back of skull -> cheeks
+EYE_SEGMENT = 13  # between the two rings round the eyes: an eye on each upper side, in a little socket
+EYE_SIZE = 0.075  # big, round and a little tall, with a white glint: cute
 
 # Limbs, for the right side: rings of (x, y, z, half-width, half-depth, colour).
 # See loft.Builder.limb.
@@ -76,6 +80,18 @@ EAR_TIP = Vector((0.29, 0.73, 2.50))
 def build_fox():
     b = loft.Builder()
     segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP)
+    for face, outward in ((segments[EYE_SEGMENT][UPPER_RIGHT], 1), (segments[EYE_SEGMENT][UPPER_LEFT], -1)):
+        face.normal_update()
+        normal = face.normal if face.normal.x * outward > 0 else -face.normal
+        # Poke the face into four triangles round its centre: they read as a little
+        # eye socket, and a poked face splits the same way on both sides, so the
+        # eyes match (a plain quad and its mirror can split along different diagonals).
+        centre = bmesh.ops.poke(b.bm, faces=[face])["verts"][0].co.copy()
+        up, _ = b.stud(centre, normal, EYE_SIZE, EYE, sides=8, tall=1.2)
+        forward = Vector((0, 1, 0))
+        forward = (forward - normal * normal.dot(forward)).normalized()
+        glint = centre + up * EYE_SIZE * 0.45 + forward * EYE_SIZE * 0.3 + normal * 0.006
+        b.stud(glint, normal, EYE_SIZE * 0.28, GLINT, sides=6)
 
     # Collect every base face before growing anything: growing removes faces.
     limbs = []
