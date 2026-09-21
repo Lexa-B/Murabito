@@ -29,11 +29,12 @@ TOP = 1  # the top face of a ring segment
 # colour). See loft.Builder.spine. The tail is a tall, thin fan.
 TAIL_TIP = Vector((0, -0.72, 0.54))
 SPINE = [
-    # sickle tail: arching up and back, drooping at the tip
-    (-0.66, 0.74, 0.03, 0.10, BLACK, BLACK),
-    (-0.55, 0.94, 0.04, 0.14, BLACK, BLACK),
-    (-0.40, 1.00, 0.05, 0.15, BLACK, BLACK),  # the top of the arch
-    (-0.30, 0.87, 0.07, 0.13, BLACK, BLACK),  # tail base
+    # sickle tail: a broad fan, arching up and back above and running almost
+    # straight beneath, drooping at the tip
+    (-0.66, 0.71, 0.03, 0.13, BLACK, BLACK),
+    (-0.55, 0.85, 0.045, 0.23, BLACK, BLACK),
+    (-0.40, 0.895, 0.055, 0.255, BLACK, BLACK),  # the top of the arch
+    (-0.30, 0.81, 0.07, 0.19, BLACK, BLACK),  # tail base
     # body: a full egg, red-brown above and black beneath
     (-0.24, 0.72, 0.14, 0.14, RED, BLACK),  # saddle
     (-0.14, 0.64, 0.22, 0.20, RED, BLACK),  # the legs grow from the segment in front
@@ -48,6 +49,8 @@ SPINE = [
     (0.40, 1.14, 0.05, 0.045, BEAK, BEAK),  # beak
 ]
 BEAK_TIP = Vector((0, 0.47, 1.11))
+
+TAIL_RINGS = 5  # the tail and saddle rings stand upright: a flat fan, with no fold where it meets the body
 
 LEG_SEGMENT = 5  # under the middle of the body
 COMB_SEGMENT = 10  # back of the head -> face, its top face
@@ -83,7 +86,7 @@ WINGS = [
 
 def build_chicken():
     b = loft.Builder()
-    segments = b.spine(TAIL_TIP, SPINE, BEAK_TIP)
+    segments = b.spine(TAIL_TIP, SPINE, BEAK_TIP, upright=TAIL_RINGS)
     for segment, faces, colour in WINGS:
         b.paint([segments[segment][k] for k in faces], colour)
 

@@ -120,7 +120,7 @@ sampler), so faces get exactly the swatch colour.
 | | |
 |---|---|
 | `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `finish(name, shaded=False)` → a coloured object; `shaded=True` varies each fur or feather face among its `SHADES`, from a stream seeded by `name` |
-| `Builder.spine(start_tip, rings, end_tip)` | loft an animal's body along a spine in the YZ plane, octagonal rings from tail tip to nose; returns the faces per segment |
+| `Builder.spine(start_tip, rings, end_tip, upright=0)` | loft an animal's body along a spine in the YZ plane, octagonal rings from tail tip to nose, each square to the spine except the first `upright`, which stand straight up (for a tail fan); returns the faces per segment |
 | `Builder.limb(face, rings, mirror, tip)` | replace one of those faces with a limb (leg, ear) lofted through square rings; returns its faces |
 | `run(build, name, target, extent)` | the shared command line (`--out`, `--renders`); scripts parse their own extra flags first |
 
@@ -328,6 +328,9 @@ And by eye:
   (the deer took several rounds). Make the segment it grows from as long as the thigh is
   deep, by dropping a ring if needed, and keep the ring inside the body's width too, or
   its square corner pokes out.
+- **Rings square to a sharply curving spine swing past each other and fold**, leaving a
+  hook on the inside of the curve (the rooster's tail). Stand those rings upright
+  (`spine(..., upright=n)`).
 - **A ring bigger than both neighbours shows as a ridge**, and a rump that ends in one
   ring looks chopped off. Round rumps over two or three rings, from the side and from
   above (the hare, the deer).

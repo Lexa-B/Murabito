@@ -44,20 +44,23 @@ class Builder:
         for f in faces:
             f[self._swatch] = style.SWATCH[colour]
 
-    def spine(self, start_tip, rings, end_tip):
+    def spine(self, start_tip, rings, end_tip, upright=0):
         """Loft a body along a spine in the YZ plane.
 
         rings run from start_tip to end_tip, each (y, z, half-width, half-height,
         colour, underside colour). A ring's colours paint the segment arriving at
-        it from the start_tip side. Returns segments[i][k]: face k between ring i
-        and ring i + 1, for growing limbs from.
+        it from the start_tip side. Each ring stands square to the spine, except
+        the first upright rings, which stand straight up: for a fan of a tail on a
+        sharply curving spine, whose squared rings would swing past each other and
+        fold. Returns segments[i][k]: face k between ring i and ring i + 1, for
+        growing limbs from.
         """
         points = [start_tip] + [Vector((0, y, z)) for y, z, *_ in rings] + [end_tip]
         side = Vector((1, 0, 0))
         verts = []
         for i, (y, z, hw, hh, *_) in enumerate(rings, start=1):
             tangent = (points[i + 1] - points[i - 1]).normalized()
-            up = side.cross(tangent).normalized()
+            up = Vector((0, 0, 1)) if i <= upright else side.cross(tangent).normalized()
             centre = points[i]
             verts.append(
                 [
