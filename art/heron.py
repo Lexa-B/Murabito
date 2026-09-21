@@ -32,10 +32,10 @@ LEFT, RIGHT = 3, 7  # the side faces of a ring segment
 # The spine, tail tip to bill tip: (y, z, half-width, half-height, colour,
 # underside colour). See loft.Builder.spine. Up the neck, a ring's "underside"
 # faces point forward, so they are the front of the neck.
-TAIL_TIP = Vector((0, -0.92, 1.78))  # close behind the last ring: a rounded tail
+TAIL_TIP = Vector((0, -1.00, 1.76))  # close behind the last ring: a rounded tail
 SPINE = [
     # a short tail
-    (-0.86, 1.83, 0.16, 0.11, GREY, GREY),
+    (-0.93, 1.81, 0.15, 0.10, GREY, GREY),
     (-0.74, 1.92, 0.28, 0.21, GREY, GREY),
     # body: a full egg, grey above and white beneath
     (-0.55, 2.02, 0.36, 0.32, GREY, WHITE),
