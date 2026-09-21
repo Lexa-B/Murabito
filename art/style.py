@@ -114,6 +114,7 @@ PALETTE = [
     ("sakura_shade_light", "#3A5A32"),
     ("sakura_bark", "#5B403B"),
     ("sakura_bark_band", "#7D5E54"),
+    ("sakura_twig", "#6E4A42"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 

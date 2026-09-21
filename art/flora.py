@@ -16,10 +16,12 @@ from mathutils import Vector
 BRANCH_RING = 6
 
 
-def branch(b, points, radii, colour):
+def branch(b, points, radii, colour, upright=0):
     """Loft a closed tube through points (3D), with a radius per point.
 
     colour is one swatch, or a list with one per segment (len(points) - 1).
+    The first upright rings are kept level, whichever way the tube leans: for
+    a trunk, whose base should sit flat in the ground.
     Returns the side faces, one list per segment, for recolouring.
     """
     points = [Vector(p) for p in points]
@@ -28,7 +30,7 @@ def branch(b, points, radii, colour):
     for i, (centre, r) in enumerate(zip(points, radii, strict=True)):
         prev = points[max(i - 1, 0)]
         nxt = points[min(i + 1, len(points) - 1)]
-        tangent = (nxt - prev).normalized()
+        tangent = Vector((0, 0, 1)) if i < upright else (nxt - prev).normalized()
         ref = Vector((0, 1, 0)) if abs(tangent.y) < 0.9 else Vector((1, 0, 0))
         side = tangent.cross(ref).normalized()
         up = side.cross(tangent)

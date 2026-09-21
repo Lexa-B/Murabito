@@ -9,7 +9,8 @@ banded with pale rings splits low into big limbs that rise briefly and then
 run out nearly level, kinking and twisting as they go, as a cherry's do, each
 carrying lumpy masses of foliage wrapped as its own skin; together they close
 into a broad, full dome, the limbs showing beneath and in a few gaps. In spring its white-to-pale-pink flowers open with reddish-
-bronze young leaves among them; in summer it is dark green.
+bronze young leaves among them; in summer it is dark green; in winter it is
+bare, its limbs branching and forking into reddish twigs.
 
 Named sakura-<version>-<colour>-<season>, as the other trees are.
 """
@@ -25,10 +26,12 @@ import flora  # noqa: E402
 import loft  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
-BARK, BAND = "sakura_bark", "sakura_bark_band"
+BARK, BAND, TWIG = "sakura_bark", "sakura_bark_band", "sakura_twig"
+ROOT_DEPTH = -1.5  # shaku: how far the trunk reaches below the ground
 
 # colour variant: season: (leaf colours, underside colours), picked per triangle.
-# Within a variant every season's lists must be the same lengths: picking
+# A season of None is bare, as a cherry is in winter.
+# Within a variant every leafy season's lists must be the same lengths: picking
 # draws from the same random stream as the lumps' shapes, and a different
 # length would change the tree's shape between seasons, not just its colour.
 COLOURS = {
@@ -41,10 +44,12 @@ COLOURS = {
             ["sakura_green"] * 6 + ["sakura_green_light"] * 3 + ["sakura_green_deep"] * 3,
             ["sakura_shade", "sakura_shade", "sakura_shade_light", "sakura_green_deep"],
         ),
+        "winter": None,  # bare: twigs instead of foliage
     },
 }
 for _seasons in COLOURS.values():
-    assert len({tuple(map(len, lists)) for lists in _seasons.values()}) == 1, "season lists differ in length"
+    _leafy = [lists for lists in _seasons.values() if lists]
+    assert len({tuple(map(len, lists)) for lists in _leafy}) == 1, "season lists differ in length"
 
 LIMB = [1.3, 0.85, 0.5, 0.25]  # thick where they leave the trunk
 
@@ -141,24 +146,64 @@ def _masses(points, spec, rng):
     return masses
 
 
+def _twigs(b, start, direction, length, radius, depth, rng):
+    """A bare branch that forks, and forks again, into twigs."""
+    end = start + direction.normalized() * length
+    middle = start.lerp(end, 0.5) + Vector([rng.uniform(-0.3, 0.3) * length * 0.3 for _ in range(3)])
+    flora.branch(b, [start, middle, end], [radius, radius * 0.75, radius * 0.5], TWIG)
+    if depth == 0:
+        return
+    for _ in range(2):  # forks spread mostly sideways
+        spread = Vector((rng.uniform(-0.8, 0.8), rng.uniform(-0.8, 0.8), rng.uniform(-0.15, 0.3)))
+        _twigs(b, end, direction.normalized() + spread, length * 0.7, radius * 0.5, depth - 1, rng)
+
+
+def _bare_branches(b, points, radii, rng):
+    """Branches rising off a limb along its length, where its foliage would be."""
+    climbing = Vector((points[-1].x - points[0].x, points[-1].y - points[0].y, 0)).length < 4
+    for fraction in (0.5, 1.0) if climbing else (0.45, 0.75, 1.0):
+        i = min(int(fraction * (len(points) - 1)), len(points) - 1)
+        outward = Vector((points[i].x - points[0].x, points[i].y - points[0].y, 0))
+        if outward.length < 0.5 or climbing:  # the climbing limb: out to a random side
+            angle = rng.uniform(0, 2 * math.pi)
+            outward = Vector((math.cos(angle), math.sin(angle), 0))
+        # mostly outward, only a little up, as a cherry's branches spread
+        way = outward.normalized() + Vector((0, 0, rng.uniform(0.2, 0.45)))
+        way += Vector((rng.uniform(-0.3, 0.3), rng.uniform(-0.3, 0.3), 0))
+        _twigs(b, points[i], way, rng.uniform(5, 7), max(radii[i] * 0.6, 0.15), 2, rng)
+
+
 def build_sakura(version="00", colour="a", season="spring"):
     spec = VERSIONS[version]
-    leaves, shades = COLOURS[colour][season]
+    bare = COLOURS[colour][season] is None
+    # a bare season still draws its foliage, into a builder thrown away after,
+    # so the random stream, and so the trunk and limbs, match the leafy seasons
+    leaves, shades = next(lists for lists in COLOURS[colour].values() if lists) if bare else COLOURS[colour][season]
     rng = flora.rng_for(spec["seed"])
+    twig_rng = random.Random(spec["seed"] * 7919 + 2)
     b = loft.Builder()
+    foliage = loft.Builder() if bare else b
 
     # a gnarled trunk in short rings, every third a pale band, as cherry bark is
     trunk_gnarl, limb_gnarl = spec["gnarl"]
     points, radii = flora.gnarl(*spec["trunk"], rng, trunk_gnarl, step=1.5)
     points, radii = flora.densify(points, radii, step=0.6)
+    # sunk deep and level at the base, so it sits in sloping ground with no gap
+    points.insert(0, Vector((points[0].x, points[0].y, ROOT_DEPTH)))
+    radii.insert(0, radii[0] * 1.05)
     bands = [BAND if i % 3 == 2 else BARK for i in range(len(points) - 1)]
-    flora.branch(b, points, radii, bands)
+    flora.branch(b, points, radii, bands, upright=2)
 
     for points, radii in spec["limbs"]:
-        flora.branch(b, *flora.gnarl(points, radii, rng, limb_gnarl, step=2.0), BARK)
-        flora.wrap_sprays(b, _masses(points, spec, rng), leaves, shades, rng)
+        limb_points, limb_radii = flora.gnarl(points, radii, rng, limb_gnarl, step=2.0)
+        flora.branch(b, limb_points, limb_radii, BARK)
+        flora.wrap_sprays(foliage, _masses(points, spec, rng), leaves, shades, rng)
+        if bare:
+            _bare_branches(b, limb_points, limb_radii, twig_rng)
     fill = [(Vector(c), r, up, down) for c, r, up, down in spec["fill"]]
-    flora.wrap_sprays(b, fill, leaves, shades, rng)
+    flora.wrap_sprays(foliage, fill, leaves, shades, rng)
+    if bare:
+        foliage.bm.free()
     return b.finish(f"Sakura-{version}-{colour}-{season}")
 
 
