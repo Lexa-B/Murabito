@@ -4,6 +4,7 @@
 
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
+use murabito_keybinds::{Binds, Held, Inputs};
 
 /// How far the camera starts from its focus: 7 間 (42 shaku, about 12.7 m).
 const START_ZOOM: f32 = 42.0;
@@ -29,11 +30,42 @@ const ZOOM_MAX: f32 = 198.0;
 /// changes the view by the same proportion however far out the camera is.
 const ZOOM_STEP: f32 = 1.15;
 
+/// The widest range the player's pan-speed multiplier is allowed to have an effect
+/// over. Anything outside it, or not a number at all, is pulled back in where it is
+/// used, so a hand-edited file can't reverse the pan or send it to infinity.
+const PAN_SPEED_SCALE_MIN: f32 = 0.1;
+const PAN_SPEED_SCALE_MAX: f32 = 10.0;
+
+/// How the player has asked the camera to feel. Owned here, and edited by whoever
+/// depends on this crate: a settings screen, a saved file. The camera only reads it.
+#[derive(Resource, Clone, Debug, PartialEq)]
+pub struct CameraSettings {
+    /// Multiplies pan speed. 1.0 is the designed speed.
+    pub pan_speed_scale: f32,
+    pub pan_forward: Binds,
+    pub pan_back: Binds,
+    pub pan_left: Binds,
+    pub pan_right: Binds,
+}
+
+impl Default for CameraSettings {
+    fn default() -> Self {
+        Self {
+            pan_speed_scale: 1.0,
+            pan_forward: Binds::new([KeyCode::KeyW, KeyCode::ArrowUp]),
+            pan_back: Binds::new([KeyCode::KeyS, KeyCode::ArrowDown]),
+            pan_left: Binds::new([KeyCode::KeyA, KeyCode::ArrowLeft]),
+            pan_right: Binds::new([KeyCode::KeyD, KeyCode::ArrowRight]),
+        }
+    }
+}
+
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_camera)
+        app.init_resource::<CameraSettings>()
+            .add_systems(Startup, spawn_camera)
             .add_systems(Update, (pan_camera, zoom_camera, apply_rig).chain());
     }
 }
@@ -76,33 +108,40 @@ fn spawn_camera(mut commands: Commands) {
     commands.spawn((Camera3d::default(), CameraRig::default()));
 }
 
-fn pan_camera(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut rigs: Query<&mut CameraRig>) {
-    let direction = pan_direction(&keys);
+fn pan_camera(
+    inputs: Inputs,
+    settings: Res<CameraSettings>,
+    time: Res<Time>,
+    mut rigs: Query<&mut CameraRig>,
+) {
+    let direction = pan_direction(&inputs.held(), &settings);
     for mut rig in &mut rigs {
-        let step = direction * pan_speed(rig.zoom) * time.delta_secs();
-        rig.focus += step;
+        let speed = pan_speed(rig.zoom, settings.pan_speed_scale);
+        rig.focus += direction * speed * time.delta_secs();
     }
 }
 
-/// Top pan speed at a zoom distance, in shaku per second.
-fn pan_speed(zoom: f32) -> f32 {
-    PAN_SPEED * (zoom / PAN_REF_ZOOM).powf(PAN_ZOOM_EXPONENT)
+/// Top pan speed at a zoom distance, in shaku per second, with the player's multiplier.
+fn pan_speed(zoom: f32, scale: f32) -> f32 {
+    let scale = if scale.is_nan() { 1.0 } else { scale };
+    let scale = scale.clamp(PAN_SPEED_SCALE_MIN, PAN_SPEED_SCALE_MAX);
+    PAN_SPEED * scale * (zoom / PAN_REF_ZOOM).powf(PAN_ZOOM_EXPONENT)
 }
 
-/// Which way the held keys ask to go across the ground, as a unit vector, or zero when
+/// Which way the held binds ask to go across the ground, as a unit vector, or zero when
 /// none are held or they cancel out. Forward is away from the camera: -Z.
-fn pan_direction(keys: &ButtonInput<KeyCode>) -> Vec3 {
+fn pan_direction(held: &Held, settings: &CameraSettings) -> Vec3 {
     let mut direction = Vec3::ZERO;
-    if keys.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]) {
+    if settings.pan_forward.pressed(held) {
         direction -= Vec3::Z;
     }
-    if keys.any_pressed([KeyCode::KeyS, KeyCode::ArrowDown]) {
+    if settings.pan_back.pressed(held) {
         direction += Vec3::Z;
     }
-    if keys.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]) {
+    if settings.pan_left.pressed(held) {
         direction -= Vec3::X;
     }
-    if keys.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]) {
+    if settings.pan_right.pressed(held) {
         direction += Vec3::X;
     }
     direction.normalize_or_zero()
@@ -245,22 +284,32 @@ mod tests {
         assert!(camera.translation.abs_diff_eq(rig_off_centre().eye(), 1e-4));
     }
 
-    fn holding(keys: &[KeyCode]) -> ButtonInput<KeyCode> {
-        let mut held = ButtonInput::default();
-        for key in keys {
-            held.press(*key);
-        }
-        held
+    /// Which way the camera is asked to pan with exactly these held, under `settings`.
+    fn direction_with(
+        keys: &[KeyCode],
+        buttons: &[MouseButton],
+        settings: &CameraSettings,
+    ) -> Vec3 {
+        let mut keyboard = ButtonInput::default();
+        let mut mouse = ButtonInput::default();
+        keys.iter().for_each(|key| keyboard.press(*key));
+        buttons.iter().for_each(|button| mouse.press(*button));
+        pan_direction(&Held::new(&keyboard, &mouse), settings)
+    }
+
+    /// The same, with the default binds: what a new player gets.
+    fn direction_holding(keys: &[KeyCode]) -> Vec3 {
+        direction_with(keys, &[], &CameraSettings::default())
     }
 
     #[test]
     fn no_keys_held_pans_nowhere() {
-        assert_eq!(pan_direction(&holding(&[])), Vec3::ZERO);
+        assert_eq!(direction_holding(&[]), Vec3::ZERO);
     }
 
     #[test]
     fn w_pans_away_from_the_camera() {
-        assert_eq!(pan_direction(&holding(&[KeyCode::KeyW])), -Vec3::Z);
+        assert_eq!(direction_holding(&[KeyCode::KeyW]), -Vec3::Z);
     }
 
     #[test]
@@ -273,8 +322,8 @@ mod tests {
         ];
         for (arrow, letter) in pairs {
             assert_eq!(
-                pan_direction(&holding(&[arrow])),
-                pan_direction(&holding(&[letter])),
+                direction_holding(&[arrow]),
+                direction_holding(&[letter]),
                 "{arrow:?} and {letter:?} disagree"
             );
         }
@@ -282,14 +331,14 @@ mod tests {
 
     #[test]
     fn opposite_keys_cancel_out() {
-        let both = holding(&[KeyCode::KeyW, KeyCode::KeyS]);
+        let both = direction_holding(&[KeyCode::KeyW, KeyCode::KeyS]);
 
-        assert_eq!(pan_direction(&both), Vec3::ZERO);
+        assert_eq!(both, Vec3::ZERO);
     }
 
     #[test]
     fn a_diagonal_pan_is_no_faster_than_a_straight_one() {
-        let diagonal = pan_direction(&holding(&[KeyCode::KeyW, KeyCode::KeyD]));
+        let diagonal = direction_holding(&[KeyCode::KeyW, KeyCode::KeyD]);
 
         assert!(
             (diagonal.length() - 1.0).abs() < 1e-6,
@@ -411,12 +460,12 @@ mod tests {
 
     #[test]
     fn at_the_reference_zoom_the_pan_runs_at_pan_speed() {
-        assert_eq!(pan_speed(PAN_REF_ZOOM), PAN_SPEED);
+        assert_eq!(pan_speed(PAN_REF_ZOOM, 1.0), PAN_SPEED);
     }
 
     #[test]
     fn zooming_out_four_times_pans_about_2_8_times_faster() {
-        let ratio = pan_speed(PAN_REF_ZOOM * 4.0) / pan_speed(PAN_REF_ZOOM);
+        let ratio = pan_speed(PAN_REF_ZOOM * 4.0, 1.0) / pan_speed(PAN_REF_ZOOM, 1.0);
 
         assert!(
             (ratio - 2.828).abs() < 0.01,
@@ -426,7 +475,105 @@ mod tests {
 
     #[test]
     fn the_further_out_the_faster_the_pan() {
-        assert!(pan_speed(ZOOM_MIN) < pan_speed(PAN_REF_ZOOM));
-        assert!(pan_speed(PAN_REF_ZOOM) < pan_speed(ZOOM_MAX));
+        assert!(pan_speed(ZOOM_MIN, 1.0) < pan_speed(PAN_REF_ZOOM, 1.0));
+        assert!(pan_speed(PAN_REF_ZOOM, 1.0) < pan_speed(ZOOM_MAX, 1.0));
+    }
+
+    const SIDE_BUTTON: MouseButton = MouseButton::Other(7);
+
+    #[test]
+    fn a_pan_speed_scale_of_two_doubles_the_pan() {
+        assert_eq!(pan_speed(PAN_REF_ZOOM, 2.0), PAN_SPEED * 2.0);
+    }
+
+    #[test]
+    fn a_scale_no_player_could_mean_is_pulled_back_into_range() {
+        let reversed = pan_speed(PAN_REF_ZOOM, -5.0);
+        let runaway = pan_speed(PAN_REF_ZOOM, f32::INFINITY);
+
+        assert_eq!(reversed, PAN_SPEED * PAN_SPEED_SCALE_MIN);
+        assert_eq!(runaway, PAN_SPEED * PAN_SPEED_SCALE_MAX);
+    }
+
+    #[test]
+    fn a_scale_that_is_not_a_number_pans_at_the_designed_speed() {
+        assert_eq!(pan_speed(PAN_REF_ZOOM, f32::NAN), PAN_SPEED);
+    }
+
+    #[test]
+    fn a_pan_can_be_rebound_to_a_mouse_button() {
+        let settings = CameraSettings {
+            pan_forward: Binds::new([SIDE_BUTTON]),
+            ..default()
+        };
+
+        assert_eq!(direction_with(&[], &[SIDE_BUTTON], &settings), -Vec3::Z);
+    }
+
+    #[test]
+    fn a_key_that_was_rebound_away_no_longer_pans() {
+        let settings = CameraSettings {
+            pan_forward: Binds::new([SIDE_BUTTON]),
+            ..default()
+        };
+
+        assert_eq!(direction_with(&[KeyCode::KeyW], &[], &settings), Vec3::ZERO);
+    }
+
+    #[test]
+    fn the_camera_starts_with_the_default_settings() {
+        let mut app = headless_app();
+        app.update();
+
+        assert_eq!(
+            *app.world().resource::<CameraSettings>(),
+            CameraSettings::default()
+        );
+    }
+
+    #[test]
+    fn settings_already_there_when_the_plugin_is_added_are_kept() {
+        let loaded = CameraSettings {
+            pan_speed_scale: 2.0,
+            ..default()
+        };
+        let mut app = App::new();
+        app.insert_resource(loaded.clone());
+        app.add_plugins((MinimalPlugins, InputPlugin, CameraPlugin));
+        app.update();
+
+        assert_eq!(*app.world().resource::<CameraSettings>(), loaded);
+    }
+
+    #[test]
+    fn editing_the_settings_changes_how_the_camera_pans() {
+        use bevy::time::TimeUpdateStrategy;
+        use std::time::Duration;
+
+        let mut app = headless_app();
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+            100,
+        )));
+        app.update();
+        app.world_mut()
+            .resource_mut::<CameraSettings>()
+            .pan_speed_scale = 2.0;
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyD);
+
+        app.update();
+
+        let world = app.world_mut();
+        let focus = world
+            .query::<&CameraRig>()
+            .single(world)
+            .expect("exactly one rig")
+            .focus;
+        let twice_a_tenth_of_a_second = Vec3::X * PAN_SPEED * 2.0 * 0.1;
+        assert!(
+            focus.abs_diff_eq(twice_a_tenth_of_a_second, 1e-4),
+            "focus is at {focus}"
+        );
     }
 }

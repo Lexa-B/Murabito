@@ -3445,6 +3445,7 @@ name = "murabito_camera"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "murabito_keybinds",
 ]
 
 [[package]]
