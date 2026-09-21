@@ -83,6 +83,15 @@ PALETTE = [
     ("hinoki_bark", "#8A4F36"),
     ("hinoki_bark_light", "#9C6045"),
     ("hinoki_bark_dark", "#6E3E2C"),
+    ("bamboo_culm", "#6F9440"),
+    ("bamboo_culm_old", "#8C9448"),
+    ("bamboo_node", "#A7B374"),
+    ("bamboo_leaf", "#7FA34A"),
+    ("bamboo_leaf_light", "#95B95A"),
+    ("bamboo_leaf_deep", "#678C3C"),
+    ("bamboo_leaf_yellow", "#A2B35A"),
+    ("bamboo_leaf_shade", "#4F6E33"),
+    ("bamboo_leaf_shade_light", "#5E7F3A"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 

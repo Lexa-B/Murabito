@@ -310,8 +310,7 @@ def clustered_crown(b, sprays, leaves, shades, rng, tier, sectors, lumps=2):
     cut into tiers tier shaku tall, and each tier into sectors round the trunk,
     and every piece is shrink-wrapped as one lumpy skin with even triangles.
 
-    sprays are (centre, radius, up, down). A core lump at each piece's middle
-    fills it, so every ray from there meets foliage."""
+    sprays are (centre, radius, up, down); each piece is wrapped by wrap_sprays."""
     bottom = min(c.z for c, *_ in sprays)
     pieces = {}
     for spray in sprays:
@@ -319,19 +318,64 @@ def clustered_crown(b, sprays, leaves, shades, rng, tier, sectors, lumps=2):
         sector = int((math.atan2(c.y, c.x) % (2 * math.pi)) / (2 * math.pi) * sectors) % sectors
         pieces.setdefault((int((c.z - bottom) // tier), sector), []).append(spray)
     for key in sorted(pieces):
-        group = pieces[key]
-        middle = sum((Vector(c) for c, *_ in group), Vector()) / len(group)
-        parts = []
-        for c, r, up, down in group:
-            parts += _pad_parts(Vector(c), r, up, down, lumps, rng)
-        reach = max((Vector((c.x - middle.x, c.y - middle.y, 0))).length + r * 1.2 for c, r, *_ in group)
-        rise = max(c.z + up * 1.3 for c, _, up, _ in group) - middle.z
-        sink = middle.z - min(c.z - down for c, _, _, down in group)
-        parts.append((middle, max(1.5, reach * 0.45), rise * 0.6, sink * 0.6))  # the core
-        shape = (reach, rise, sink)
-        canopy(
-            b, middle, parts, leaves, shades, rng,
-            lumpiness=0.04, shape=shape, triangles=even_triangles(middle, parts, shape),
+        wrap_sprays(b, pieces[key], leaves, shades, rng, lumps)
+
+
+def wrap_sprays(b, group, leaves, shades, rng, lumps=2):
+    """Wrap a group of sprays, each (centre, radius, up, down), as one lumpy skin
+    with even triangles; a core lump at the group's middle fills it, so every
+    ray from there meets foliage."""
+    middle = sum((Vector(c) for c, *_ in group), Vector()) / len(group)
+    parts = []
+    for c, r, up, down in group:
+        parts += _pad_parts(Vector(c), r, up, down, lumps, rng)
+    reach = max((Vector((c.x - middle.x, c.y - middle.y, 0))).length + r * 1.2 for c, r, *_ in group)
+    rise = max(c.z + up * 1.3 for c, _, up, _ in group) - middle.z
+    sink = middle.z - min(c.z - down for c, _, _, down in group)
+    parts.append((middle, max(1.5, reach * 0.45), rise * 0.6, sink * 0.6))  # the core
+    shape = (reach, rise, sink)
+    canopy(
+        b, middle, parts, leaves, shades, rng,
+        lumpiness=0.04, shape=shape, triangles=even_triangles(middle, parts, shape),
+    )
+
+
+def blade(b, origin, direction, length, width, leaf, shade, droop=0.25):
+    """One long, pointed leaf: a thin closed shape, ridged along its midrib so it
+    catches the light in two facets, lying flat-ish along direction with its tip
+    drooping by droop of its length. Upper faces take leaf, lower take shade."""
+    d = Vector(direction).normalized()
+    side = d.cross(Vector((0, 0, 1)))
+    side = side.normalized() if side.length > 1e-6 else Vector((1, 0, 0))
+    normal = side.cross(d)
+    o = Vector(origin)
+    verts = [b.bm.verts.new(p) for p in (
+        o,  # base
+        o + d * length * 0.35 + side * width / 2,  # left
+        o + d * length * 0.35 - side * width / 2,  # right
+        o + d * length - Vector((0, 0, droop * length)),  # tip
+        o + d * length * 0.4 + normal * width * 0.18,  # midrib, above
+        o + d * length * 0.4 - normal * width * 0.08,  # midrib, below
+    )]
+    base, left, right, tip, above, below = verts
+    for f in ((base, left, above), (base, above, right), (above, left, tip), (above, tip, right)):
+        b.face(f, leaf)
+    for f in ((base, below, left), (base, right, below), (below, tip, left), (below, right, tip)):
+        b.face(f, shade)
+
+
+def blade_cluster(b, origin, direction, count, length, width, leaves, shades, rng, spread=0.6, droop=(0.3, 0.8)):
+    """A few blades fanning out from one point round direction, each dipping by
+    a random angle in droop (radians) and turned within spread either side."""
+    d = Vector(direction)
+    heading = math.atan2(d.y, d.x)
+    for i in range(count):
+        turn = heading + (i / max(count - 1, 1) - 0.5) * 2 * spread + rng.uniform(-0.15, 0.15)
+        dip = rng.uniform(*droop)
+        way = Vector((math.cos(turn) * math.cos(dip), math.sin(turn) * math.cos(dip), -math.sin(dip)))
+        blade(
+            b, origin, way, length * rng.uniform(0.8, 1.15), width * rng.uniform(0.85, 1.1),
+            rng.choice(leaves), rng.choice(shades),
         )
 
 
