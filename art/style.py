@@ -179,6 +179,10 @@ PALETTE = [
     ("plumage_black_light", "#2C322F"),
     ("plumage_black_deep", "#1C201F"),
     ("beak_yellow", "#CDAE5C"),
+    # the native dog
+    ("shiba_red", "#C47A3E"),
+    ("shiba_red_light", "#CD8748"),
+    ("shiba_red_deep", "#B86F36"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -207,6 +211,7 @@ SHADES = {
         "rooster_red",
         "rooster_gold",
         "plumage_black",
+        "shiba_red",
     )
 }
 
