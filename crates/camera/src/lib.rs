@@ -7,12 +7,16 @@ use bevy::prelude::*;
 /// How far the camera starts from its focus: 7 間 (42 shaku, about 12.7 m).
 const START_ZOOM: f32 = 42.0;
 
+/// How fast the focus moves across the ground while a pan key is held: 45 shaku per
+/// second, about 7.5 間.
+const PAN_SPEED: f32 = 45.0;
+
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn_camera)
-            .add_systems(Update, apply_rig);
+            .add_systems(Update, (pan_camera, apply_rig).chain());
     }
 }
 
@@ -54,6 +58,32 @@ fn spawn_camera(mut commands: Commands) {
     commands.spawn((Camera3d::default(), CameraRig::default()));
 }
 
+fn pan_camera(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut rigs: Query<&mut CameraRig>) {
+    let step = pan_direction(&keys) * PAN_SPEED * time.delta_secs();
+    for mut rig in &mut rigs {
+        rig.focus += step;
+    }
+}
+
+/// Which way the held keys ask to go across the ground, as a unit vector, or zero when
+/// none are held or they cancel out. Forward is away from the camera: -Z.
+fn pan_direction(keys: &ButtonInput<KeyCode>) -> Vec3 {
+    let mut direction = Vec3::ZERO;
+    if keys.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]) {
+        direction -= Vec3::Z;
+    }
+    if keys.any_pressed([KeyCode::KeyS, KeyCode::ArrowDown]) {
+        direction += Vec3::Z;
+    }
+    if keys.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]) {
+        direction -= Vec3::X;
+    }
+    if keys.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]) {
+        direction += Vec3::X;
+    }
+    direction.normalize_or_zero()
+}
+
 fn apply_rig(mut cameras: Query<(&CameraRig, &mut Transform)>) {
     for (rig, mut transform) in &mut cameras {
         *transform = rig.transform();
@@ -63,12 +93,20 @@ fn apply_rig(mut cameras: Query<(&CameraRig, &mut Transform)>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::input::InputPlugin;
 
-    /// A headless app, run for one frame: no window, no GPU. Spawning a camera needs
-    /// neither; drawing through one does, and no test here draws.
-    fn camera_after_startup() -> Transform {
+    /// A headless app: no window, no GPU. Spawning a camera needs neither; drawing
+    /// through one does, and no test here draws. `InputPlugin` is the keyboard the pan
+    /// system asks for, with no keys held; in the real app it arrives with
+    /// `DefaultPlugins`.
+    fn headless_app() -> App {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, CameraPlugin));
+        app.add_plugins((MinimalPlugins, InputPlugin, CameraPlugin));
+        app
+    }
+
+    fn camera_after_startup() -> Transform {
+        let mut app = headless_app();
         app.update();
 
         let world = app.world_mut();
@@ -142,8 +180,7 @@ mod tests {
 
     #[test]
     fn the_camera_follows_its_rig() {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, CameraPlugin));
+        let mut app = headless_app();
         app.update();
         let world = app.world_mut();
         let mut rigs = world.query::<&mut CameraRig>();
@@ -157,5 +194,87 @@ mod tests {
             .single(world)
             .expect("exactly one camera");
         assert!(camera.translation.abs_diff_eq(rig_off_centre().eye(), 1e-4));
+    }
+
+    fn holding(keys: &[KeyCode]) -> ButtonInput<KeyCode> {
+        let mut held = ButtonInput::default();
+        for key in keys {
+            held.press(*key);
+        }
+        held
+    }
+
+    #[test]
+    fn no_keys_held_pans_nowhere() {
+        assert_eq!(pan_direction(&holding(&[])), Vec3::ZERO);
+    }
+
+    #[test]
+    fn w_pans_away_from_the_camera() {
+        assert_eq!(pan_direction(&holding(&[KeyCode::KeyW])), -Vec3::Z);
+    }
+
+    #[test]
+    fn the_arrow_keys_pan_as_wasd_does() {
+        let pairs = [
+            (KeyCode::ArrowUp, KeyCode::KeyW),
+            (KeyCode::ArrowDown, KeyCode::KeyS),
+            (KeyCode::ArrowLeft, KeyCode::KeyA),
+            (KeyCode::ArrowRight, KeyCode::KeyD),
+        ];
+        for (arrow, letter) in pairs {
+            assert_eq!(
+                pan_direction(&holding(&[arrow])),
+                pan_direction(&holding(&[letter])),
+                "{arrow:?} and {letter:?} disagree"
+            );
+        }
+    }
+
+    #[test]
+    fn opposite_keys_cancel_out() {
+        let both = holding(&[KeyCode::KeyW, KeyCode::KeyS]);
+
+        assert_eq!(pan_direction(&both), Vec3::ZERO);
+    }
+
+    #[test]
+    fn a_diagonal_pan_is_no_faster_than_a_straight_one() {
+        let diagonal = pan_direction(&holding(&[KeyCode::KeyW, KeyCode::KeyD]));
+
+        assert!(
+            (diagonal.length() - 1.0).abs() < 1e-6,
+            "length {}",
+            diagonal.length()
+        );
+    }
+
+    #[test]
+    fn a_held_key_pans_at_pan_speed_in_shaku_per_second() {
+        use bevy::time::TimeUpdateStrategy;
+        use std::time::Duration;
+
+        let mut app = headless_app();
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+            100,
+        )));
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyD);
+
+        app.update();
+
+        let world = app.world_mut();
+        let focus = world
+            .query::<&CameraRig>()
+            .single(world)
+            .expect("exactly one rig")
+            .focus;
+        let a_tenth_of_a_second = Vec3::X * PAN_SPEED * 0.1;
+        assert!(
+            focus.abs_diff_eq(a_tenth_of_a_second, 1e-4),
+            "focus is at {focus}"
+        );
     }
 }
