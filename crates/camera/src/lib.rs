@@ -22,6 +22,17 @@ const PAN_REF_ZOOM: f32 = START_ZOOM;
 /// proportional: zooming out 4x speeds the pan up about 2.8x rather than 4x.
 const PAN_ZOOM_EXPONENT: f32 = 0.75;
 
+/// How sharply the pan velocity chases the velocity the binds ask for, per second.
+/// Higher is snappier; at 13.0 a pan reaches about 63% of top speed in 0.077 s and 95%
+/// in 0.23 s, and coasts to a stop over about the same time when the binds are let go.
+/// Not scaled by zoom: the top speed scales instead, so the ramp takes the same time,
+/// and so looks the same on screen, however far out the camera is.
+const PAN_RESPONSE: f32 = 13.0;
+
+/// Below this fraction of top speed, a pan that is coasting to a stop is stopped. An
+/// exponential ease never quite arrives, and would leave the camera creeping forever.
+const PAN_REST_FRACTION: f32 = 1e-3;
+
 /// Closest and furthest the camera may sit from its focus, in shaku: about 4 m to 60 m.
 const ZOOM_MIN: f32 = 13.0;
 const ZOOM_MAX: f32 = 198.0;
@@ -81,6 +92,9 @@ struct CameraRig {
     direction: Vec3,
     /// How far from the focus the camera sits, in shaku.
     zoom: f32,
+    /// How fast the focus is moving across the ground, in shaku per second. Eased toward
+    /// what the binds ask for rather than set from them, so a pan ramps up and coasts.
+    velocity: Vec3,
 }
 
 impl Default for CameraRig {
@@ -90,6 +104,7 @@ impl Default for CameraRig {
             // Up and back in equal parts: 45 degrees above the ground.
             direction: Vec3::new(0.0, 1.0, 1.0).normalize(),
             zoom: START_ZOOM,
+            velocity: Vec3::ZERO,
         }
     }
 }
@@ -115,10 +130,37 @@ fn pan_camera(
     mut rigs: Query<&mut CameraRig>,
 ) {
     let direction = pan_direction(&inputs.held(), &settings);
+    let dt = time.delta_secs();
     for mut rig in &mut rigs {
-        let speed = pan_speed(rig.zoom, settings.pan_speed_scale);
-        rig.focus += direction * speed * time.delta_secs();
+        let top_speed = pan_speed(rig.zoom, settings.pan_speed_scale);
+        let velocity = eased_velocity(rig.velocity, direction * top_speed, top_speed, dt);
+        if velocity == Vec3::ZERO && rig.velocity == Vec3::ZERO {
+            continue;
+        }
+        rig.velocity = velocity;
+        rig.focus += velocity * dt;
     }
+}
+
+/// The pan velocity one frame later: eased toward `wanted`, and brought to a dead stop
+/// once a pan that is coasting down is too slow to see.
+fn eased_velocity(current: Vec3, wanted: Vec3, top_speed: f32, dt: f32) -> Vec3 {
+    let eased = current.lerp(wanted, ease_fraction(PAN_RESPONSE, dt));
+    let coasting_to_rest = wanted == Vec3::ZERO;
+    if coasting_to_rest && eased.length() < top_speed * PAN_REST_FRACTION {
+        Vec3::ZERO
+    } else {
+        eased
+    }
+}
+
+/// How much of the gap to a target to close in `dt` seconds, from 0 (none) to 1 (all).
+///
+/// `1 - e^(-response * dt)` rather than a fixed fraction per frame, so the ease covers
+/// the same ground in the same time at any frame rate: two 8 ms frames close exactly as
+/// much of the gap as one 16 ms frame.
+fn ease_fraction(response: f32, dt: f32) -> f32 {
+    1.0 - (-response * dt).exp()
 }
 
 /// Top pan speed at a zoom distance, in shaku per second, with the player's multiplier.
@@ -347,8 +389,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_held_key_pans_at_pan_speed_in_shaku_per_second() {
+    /// A headless app whose every frame is a tenth of a second, run once so the camera
+    /// exists.
+    fn app_in_tenths_of_a_second() -> App {
         use bevy::time::TimeUpdateStrategy;
         use std::time::Duration;
 
@@ -357,22 +400,131 @@ mod tests {
             100,
         )));
         app.update();
+        app
+    }
+
+    fn hold(app: &mut App, key: KeyCode, frames: usize) {
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyD);
+            .press(key);
+        (0..frames).for_each(|_| app.update());
+    }
 
-        app.update();
+    fn let_go(app: &mut App, key: KeyCode, frames: usize) {
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(key);
+        (0..frames).for_each(|_| app.update());
+    }
 
+    fn pan_velocity(app: &mut App) -> Vec3 {
         let world = app.world_mut();
-        let focus = world
+        world
             .query::<&CameraRig>()
             .single(world)
             .expect("exactly one rig")
-            .focus;
-        let a_tenth_of_a_second = Vec3::X * PAN_SPEED * 0.1;
+            .velocity
+    }
+
+    /// Long enough for the ease to have arrived, to well within any tolerance here.
+    const A_GOOD_WHILE: usize = 20;
+
+    #[test]
+    fn a_held_key_reaches_pan_speed_in_shaku_per_second() {
+        let mut app = app_in_tenths_of_a_second();
+
+        hold(&mut app, KeyCode::KeyD, A_GOOD_WHILE);
+
+        let velocity = pan_velocity(&mut app);
         assert!(
-            focus.abs_diff_eq(a_tenth_of_a_second, 1e-4),
-            "focus is at {focus}"
+            velocity.abs_diff_eq(Vec3::X * PAN_SPEED, 1e-3),
+            "panning at {velocity}"
+        );
+    }
+
+    #[test]
+    fn editing_the_settings_changes_how_fast_the_camera_pans() {
+        let mut app = app_in_tenths_of_a_second();
+        app.world_mut()
+            .resource_mut::<CameraSettings>()
+            .pan_speed_scale = 2.0;
+
+        hold(&mut app, KeyCode::KeyD, A_GOOD_WHILE);
+
+        let velocity = pan_velocity(&mut app);
+        assert!(
+            velocity.abs_diff_eq(Vec3::X * PAN_SPEED * 2.0, 1e-3),
+            "panning at {velocity}"
+        );
+    }
+
+    #[test]
+    fn a_pan_ramps_up_rather_than_starting_at_full_speed() {
+        let mut app = app_in_tenths_of_a_second();
+
+        hold(&mut app, KeyCode::KeyD, 1);
+
+        let speed = pan_velocity(&mut app).x;
+        assert!(
+            0.0 < speed && speed < PAN_SPEED,
+            "after one frame the pan runs at {speed}"
+        );
+    }
+
+    #[test]
+    fn letting_go_coasts_rather_than_stopping_dead() {
+        let mut app = app_in_tenths_of_a_second();
+        hold(&mut app, KeyCode::KeyD, A_GOOD_WHILE);
+
+        let_go(&mut app, KeyCode::KeyD, 1);
+
+        let speed = pan_velocity(&mut app).x;
+        assert!(
+            0.0 < speed && speed < PAN_SPEED,
+            "a frame after letting go: {speed}"
+        );
+    }
+
+    #[test]
+    fn a_coasting_pan_comes_to_a_dead_stop() {
+        let mut app = app_in_tenths_of_a_second();
+        hold(&mut app, KeyCode::KeyD, A_GOOD_WHILE);
+
+        let_go(&mut app, KeyCode::KeyD, A_GOOD_WHILE);
+
+        assert_eq!(pan_velocity(&mut app), Vec3::ZERO);
+    }
+
+    #[test]
+    fn an_ease_closes_none_of_the_gap_in_no_time_and_nearly_all_of_it_in_a_long_time() {
+        assert_eq!(ease_fraction(PAN_RESPONSE, 0.0), 0.0);
+        assert!(ease_fraction(PAN_RESPONSE, 10.0) > 0.999_999);
+    }
+
+    #[test]
+    fn two_short_frames_ease_exactly_as_far_as_one_long_one() {
+        let one_long = ease_fraction(PAN_RESPONSE, 0.016);
+        let left_after_a_short_one = 1.0 - ease_fraction(PAN_RESPONSE, 0.008);
+        let two_short = 1.0 - left_after_a_short_one * left_after_a_short_one;
+
+        assert!(
+            (one_long - two_short).abs() < 1e-6,
+            "{one_long} against {two_short}"
+        );
+    }
+
+    #[test]
+    fn a_pan_too_slow_to_see_is_stopped_only_when_it_is_coasting_down() {
+        let barely_moving = Vec3::X * PAN_SPEED * PAN_REST_FRACTION * 0.5;
+        let a_frame = 0.016;
+
+        let coasting = eased_velocity(barely_moving, Vec3::ZERO, PAN_SPEED, a_frame);
+        let setting_off = eased_velocity(Vec3::ZERO, Vec3::X * PAN_SPEED, PAN_SPEED, 1e-7);
+
+        assert_eq!(coasting, Vec3::ZERO);
+        assert!(
+            setting_off.x > 0.0,
+            "a pan setting off was stopped at {setting_off}"
         );
     }
 
@@ -543,37 +695,5 @@ mod tests {
         app.update();
 
         assert_eq!(*app.world().resource::<CameraSettings>(), loaded);
-    }
-
-    #[test]
-    fn editing_the_settings_changes_how_the_camera_pans() {
-        use bevy::time::TimeUpdateStrategy;
-        use std::time::Duration;
-
-        let mut app = headless_app();
-        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
-            100,
-        )));
-        app.update();
-        app.world_mut()
-            .resource_mut::<CameraSettings>()
-            .pan_speed_scale = 2.0;
-        app.world_mut()
-            .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyD);
-
-        app.update();
-
-        let world = app.world_mut();
-        let focus = world
-            .query::<&CameraRig>()
-            .single(world)
-            .expect("exactly one rig")
-            .focus;
-        let twice_a_tenth_of_a_second = Vec3::X * PAN_SPEED * 2.0 * 0.1;
-        assert!(
-            focus.abs_diff_eq(twice_a_tenth_of_a_second, 1e-4),
-            "focus is at {focus}"
-        );
     }
 }
