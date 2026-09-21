@@ -6,7 +6,8 @@ headless. Nobody opens the Blender UI. Each script builds its mesh from numbers
 a `.glb` that Bevy loads directly. Changing a model means changing numbers and re-running
 its script, so every change is a readable diff.
 
-- Scripts live in `art/`. They are code, under MIT.
+- Scripts live in `art/`, and tools for checking the models in `art/tools/`. They are
+  code, under MIT.
 - What they produce lives in `assets/models/`. That is an asset, under CC BY-SA 4.0, stored
   through Git LFS (`.glb` and `.png` are already routed there by `.gitattributes`).
 
@@ -93,7 +94,9 @@ sampler), so faces get exactly the swatch colour.
 - **Every `.glb` embeds the whole palette texture.** Any palette change (even adding a
   swatch another model never uses) changes the bytes of every model. To keep committed
   models carrying the current palette, **re-export all of them when the palette changes**
-  (their geometry and colours don't change, only the embedded texture).
+  (their geometry and colours don't change, only the embedded texture): run
+  `art/tools/check.sh <dir>`, and if it reports `ALL MATCH`, copy `<dir>/rebuild/*.glb`
+  into `assets/models/`.
 - The texture holds 256 swatches; about 100 are used. If it fills, raise `PALETTE_SIZE`
   (`palette_image` asserts before it overflows). That changes every model's UVs, so
   re-export everything, as happened when it grew from 8×8.
@@ -227,9 +230,9 @@ of everything after it. Rules that follow from that:
 - **Generated versions take their trunk from a separate stream** (`seed * 7919 + 1`),
   apart from the build's.
 
-When changing shared code, **prove existing models didn't change**: rebuild them and
-compare byte for byte (if the palette didn't change), or face by face (geometry plus the
-colour each face's UVs land on) if it did. Every refactor so far was checked that way.
+When changing shared code, **prove existing models didn't change** with
+`art/tools/check.sh` (see *Checking your work*). Every refactor so far was checked that
+way.
 
 ## Triangle size
 
@@ -245,11 +248,32 @@ colour each face's UVs land on) if it did. Every refactor so far was checked tha
 
 ## Checking your work
 
-- **Look at every render sheet**, and zoom in (crop and enlarge a view) on anything subtle:
-  bark blends, ear bases, branch tips. Several problems only showed up close.
+The tools in `art/tools/` do the checking. Run them from anywhere in the repo; the
+Blender ones take their arguments after `--`, and the shell ones find the repo root
+themselves.
+
+| Tool | What it does |
+|---|---|
+| `check.sh <dir> [--above Z]` | rebuilds every committed model into `<dir>/rebuild` and compares each, face by face, with the committed file: `ALL MATCH`, or the models that differ. `--above Z` compares only faces wholly above height Z, for a change meant to touch only what's below (burying trunks was checked with it). Takes under a minute. |
+| `rebuild.sh <dir>` | rebuilds every committed model into `<dir>`, working out each one's script and flags from its file name. `check.sh` uses it; on its own it's how to re-export everything after a palette change. |
+| `fingerprint.py -- [--above Z] <glb>…` | the face-by-face fingerprint `check.sh` compares: each face's corners and the palette colour its UVs land on, so two exports match even when their UVs or embedded palette differ. |
+| `ground.py -- <glb>…` | each model's lowest heights: trunks should bottom out at −1.5, animals' soles at 0, a shrub's skirt a little below 0. |
+| `sheet.py -- --renders <dir> --out <png> <name>…` | the front and three-quarter views of several rendered models side by side, to compare versions, colours or seasons. |
+| `zoom.py -- <in.png> <out.png> <x> <y> <w> <h> [scale]` | crop part of a render and enlarge it. |
+
+For example:
+
+```sh
+art/tools/check.sh /tmp/art-check                    # did my change leave every model alone?
+cp /tmp/art-check/rebuild/*.glb assets/models/       # after a palette change: take the re-exports
+blender -b --python art/tools/ground.py -- assets/models/sugi-00-a-summer.glb
+```
+
+And by eye:
+
+- **Look at every render sheet**, and zoom in on anything subtle (bark blends, ear
+  bases, branch tips). Several problems only showed up close.
 - **The top view matters:** it's close to what the game camera sees.
-- **Ground contact:** check the lowest vertices sit where you meant (trunks at −1.5,
-  animals' soles at 0, shrub skirts at the ground).
 - **Seasons share a shape:** a variant's seasons should report the same triangle count.
   If they don't, the random stream diverged (see above).
 
