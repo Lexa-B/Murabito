@@ -55,6 +55,16 @@ VERSIONS = {
     },
 }
 
+VERSIONS.update({
+    "01": {**VERSIONS["00"], "seed": 1, "culms": 7, "height": (24, 34), "spread": 1.8},  # a young, sparse tuft
+    "02": {**VERSIONS["00"], "seed": 2, "culms": 16, "height": (32, 44), "spread": 3.5,
+           "lean": (0.12, 0.28)},  # a big, dense, old clump
+    "03": {**VERSIONS["00"], "seed": 3, "culms": 10, "lean": (0.3, 0.5),
+           "droop": (0.4, 0.9)},  # arching far over, heavy with leaves
+    "04": {**VERSIONS["00"], "seed": 4, "culms": 12, "height": (30, 42), "lean": (0.04, 0.12),
+           "spread": 2.0, "leaves_from": 0.65},  # tall and upright, bare stems below
+})
+
 
 def _culm(b, base, height, out, lean, radius, spec):
     """Loft one culm, node by node, arching out along out; returns where along
