@@ -92,6 +92,15 @@ PALETTE = [
     ("bamboo_leaf_yellow", "#A2B35A"),
     ("bamboo_leaf_shade", "#4F6E33"),
     ("bamboo_leaf_shade_light", "#5E7F3A"),
+    ("azalea_green", "#4F7A3A"),
+    ("azalea_green_light", "#5F8C45"),
+    ("azalea_green_deep", "#3F6630"),
+    ("azalea_green_yellow", "#6E8A40"),
+    ("azalea_shade", "#2F4C28"),
+    ("azalea_shade_light", "#3A5A30"),
+    ("azalea_flower_red", "#E0553A"),
+    ("azalea_flower_red_light", "#EE6A48"),
+    ("azalea_flower_red_deep", "#C9432E"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 

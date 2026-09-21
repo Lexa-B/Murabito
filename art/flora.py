@@ -173,7 +173,7 @@ def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03
 
     By default the sphere is an icosphere of the given subdivisions, whose
     triangle count only comes in steps of four; give triangles instead for a
-    sphere of about that many (see even_triangles).
+    sphere of about that many (see even_triangles). Returns the skin's faces.
     """
     if triangles is None:
         verts = bmesh.ops.create_icosphere(b.bm, subdivisions=subdivisions, radius=1.0)["verts"]
@@ -189,6 +189,7 @@ def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03
     for f in faces:
         f.normal_update()
         b.paint([f], rng.choice(shades if f.normal.z < -0.35 else leaves))
+    return faces
 
 
 def _pad_parts(centre, radius, up, down, lumps, rng):
