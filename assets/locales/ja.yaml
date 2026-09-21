@@ -1,0 +1,18 @@
+# 日本語のUI文字列。キーは en.yaml と同じものを揃える。
+menu.settings: 設定
+menu.resume: 再開
+menu.quit: 終了
+
+settings.title: 設定
+settings.back: 戻る
+settings.pan_speed: カメラ移動速度
+settings.language: 言語
+# 切り替え先の言語を、その言語自身の文字で示す。翻訳しない。
+settings.language_toggle: English
+
+# F3のデバッグ画面。開発者向けだが、他と同じく翻訳する。
+debug.senses: 感覚
+
+# 分類キーの表示名。諸法.yaml は識別子のみを持ち、読める名前はここから。
+分類.狐: 狐
+分類.兎: 兎

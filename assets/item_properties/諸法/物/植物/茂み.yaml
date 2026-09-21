@@ -1,0 +1,8 @@
+# 諸法 → 物 → 植物 → 茂み
+#
+# This node's properties. The tree itself is assets/ontology/諸法.yaml.
+属性:
+  - 半透明
+  - 腰丈
+  - 吸音
+  - 保臭

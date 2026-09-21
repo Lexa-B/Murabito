@@ -4,6 +4,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# Rust / Cargo (the root project)
+/target/
+
 # Local artifacts
 screenshots/
 
@@ -15,25 +18,25 @@ screenshots/
 .vscode/
 .idea/
 
-# Unreal (root project): build outputs, caches and per-user state
-/Binaries/
-/Intermediate/
-/Saved/
-/DerivedDataCache/
-/Content/Developers/
-/Content/Collections/
+# Unreal (the archived project): build outputs, caches and per-user state
+/_Archives/UE-Try/Binaries/
+/_Archives/UE-Try/Intermediate/
+/_Archives/UE-Try/Saved/
+/_Archives/UE-Try/DerivedDataCache/
+/_Archives/UE-Try/Content/Developers/
+/_Archives/UE-Try/Content/Collections/
 
-# Generated IDE / project files for the root project
+# Generated IDE / project files for the archived Unreal project
 .vs/
 *.code-workspace
-/Makefile
-/CMakeLists.txt
-/*.pro
-/*.pri
-/*.kdev4
-/.kdev4/
-/compile_commands.json
-/.clangd
+/_Archives/UE-Try/Makefile
+/_Archives/UE-Try/CMakeLists.txt
+/_Archives/UE-Try/*.pro
+/_Archives/UE-Try/*.pri
+/_Archives/UE-Try/*.kdev4
+/_Archives/UE-Try/.kdev4/
+/_Archives/UE-Try/compile_commands.json
+/_Archives/UE-Try/.clangd
 
 # SDD scratch (subagent-driven development workspaces)
 .superpowers/

@@ -4,17 +4,19 @@ This file provides guidance to AI coding agents when working with code in this r
 
 ## Project Overview
 
-Murabito is a new project, described by its author as halfway between a game and a fun AI experiment / population-dynamics simulator. It's being built in Unreal Engine 5, starting with exp-04.
+Murabito is a new project, described by its author as halfway between a game and a fun AI experiment / population-dynamics simulator. The main project at the repo root is **Rust + Bevy**.
 
-Ideas are tried out as small, self-contained **experiments**. They come in three kinds:
+It was first built in Unreal Engine 5. That attempt is kept, unbuilt, in `_Archives/UE-Try/`; see "The archived Unreal attempt" below.
 
-- **Unreal Engine 5 (C++)**: where most of the code is headed. exp-04 is the first: a UE 5.8 project with procedural hilly terrain, a hex grid draped over it, an overhead camera, and hover highlighting.
-- **Python + pygame**: mostly for quick testing of ideas.
-  - **exp-00** is a "hello world" of pathing and object use, meant to show what the AI systems will be like in UE.
+Ideas are tried out as small, self-contained **experiments** under `Experiments/`. They come in three kinds:
+
+- **Rust + Bevy**: what the main project is now. exp-05 is the first: hex coordinates, addresses and chunks.
+- **Unreal Engine 5 (C++)**: exp-04, a UE 5.8 project with procedural hilly terrain, a hex grid draped over it, an overhead camera, and hover highlighting.
+- **Python + pygame**: quick testing of ideas.
+  - **exp-00** is a "hello world" of pathing and object use.
   - **exp-01** builds on it with objects that wander.
   - **exp-02** adds fog of war and a believed world.
   - **exp-03** is a tiered hex world: hierarchical hex addresses at historical Japanese scale, loaded in tiers of detail (moderngl).
-- **Rust + Bevy**: a second scaffolding line, tried when the user wanted something FOSS to build the coordinate system in. **exp-05** is the first: ri/cho/ken/shaku hex addresses with a vertical layer, hot-loaded chunks holding voxel columns, and an overhead viewer, in an engine-free core crate plus a Bevy plugin and app.
 
 Don't assume goals beyond what `Experiments/manifest.md` and each experiment's spec state.
 
@@ -24,50 +26,90 @@ Don't assume goals beyond what `Experiments/manifest.md` and each experiment's s
 ```
 Murabito/
 ├─ AGENTS.md, CLAUDE.md, LICENSE, LICENSE-ASSETS, LICENSING.md, .gitignore, .gitattributes
-├─ Murabito.uproject       the main project (see "Main project" below)
-├─ Config/                 its text config
-├─ Source/Murabito/        its C++ module; Private/Tests/ holds automation tests
-├─ Content/                its assets (.uasset/.umap, through Git LFS)
-├─ Plugins/                project plugins (none yet)
-├─ Tools/                  build.sh, editor.sh, game.sh, test.sh for the main project
+├─ Cargo.toml, Cargo.lock, rust-toolchain.toml   the main project: one crate, `murabito`
+├─ src/                    its code (see "Main project" below)
 ├─ Docs/                   project docs (no specs or plans; see below)
+├─ _Archives/
+│  └─ UE-Try/              the Unreal Engine 5 attempt, kept for reference, not built
 └─ Experiments/
    ├─ manifest.md          one entry per experiment: what, why, how to run
    ├─ exp-NN/              a Python + pygame experiment
    │  ├─ pyproject.toml    its own uv project (Python deps managed with `uv add`)
-   │  ├─ src/              code
-   │  │  └─ ai/            AI code (decision logic, pathing, etc.)
+   │  ├─ src/              code, with `src/ai/` for decision logic, pathing, etc.
    │  ├─ tests/            pytest; run with `uv run pytest` from the experiment dir
    │  └─ docs/             specs/ and plans/, as below
-   ├─ exp-NN/              an Unreal Engine 5 (C++) experiment
-   │  ├─ MuraBito.uproject, Config/       project file and text config
-   │  ├─ Source/MuraBito/                 the C++ module; Private/Tests/ holds automation tests
-   │  ├─ scripts/                         build.sh, editor.sh, game.sh, test.sh (wrap the local engine)
-   │  ├─ .gitignore                       Binaries/ Intermediate/ Saved/ DerivedDataCache/ …
-   │  └─ docs/
-   │     ├─ specs/         design specs    (YYYY-MM-DD-<topic>-design.md)
-   │     └─ plans/         implementation plans (YYYY-MM-DD-<topic>-plan.md)
-   └─ exp-NN/              a Rust + Bevy experiment
-      ├─ Cargo.toml        workspace
-      ├─ crates/           an engine-free core crate, a Bevy plugin, the viewer app
-      └─ docs/             specs/ and plans/, as below
+   ├─ exp-NN/              a Rust + Bevy experiment: its own Cargo workspace, crates/, docs/
+   └─ exp-NN/              an Unreal Engine 5 (C++) experiment
+      ├─ MuraBito.uproject, Config/       project file and text config
+      ├─ Source/MuraBito/                 the C++ module; Private/Tests/ holds automation tests
+      ├─ scripts/                         build.sh, editor.sh, game.sh, test.sh
+      └─ docs/specs/, docs/plans/
 ```
 
 - **Experiments are self-contained.** Code, tests, dependencies and docs live inside `Experiments/exp-NN/`. Nothing experiment-specific goes at the repo root.
-- **A new experiment can start as a copy of an earlier one.** exp-01 started as a copy of exp-00. The copy gets its own project name (uv project, or UE project/module), and the earlier experiment is left unchanged.
+- **A new experiment can start as a copy of an earlier one.** The copy gets its own project name, and the earlier experiment is left unchanged.
 - **Every new experiment gets an entry in `Experiments/manifest.md`.** Update the entry when the experiment's design changes.
 - **An experiment's specs go in its `docs/specs/` and plans in its `docs/plans/`.** This replaces the superpowers default of `docs/superpowers/specs/` and `docs/superpowers/plans/`. Don't create a `superpowers/` folder. Name specs `YYYY-MM-DD-<topic>-design.md` and plans `YYYY-MM-DD-<topic>-plan.md`.
 
 
 ## Main project
 
-The repo root is the Murabito Unreal Engine 5.8 project. The user drives it; AI assists.
+The repo root is the Murabito game: a single Rust crate, `murabito`, built on Bevy 0.19. The user drives it; AI assists.
 
 - **No spec or plan files for the main project.** Agree the design with the user in chat, wait for a yes, then implement it and open a PR. Specs and plans are only for experiments.
-- **Build, test and run with `Tools/`:** `Tools/build.sh`, `Tools/test.sh [TestPathPrefix]` (default prefix `Murabito`), `Tools/editor.sh`, `Tools/game.sh`. The test mirror is `~/.cache/murabito/main-test-mirror`.
-- **`AGameRules`** is the project's game mode (`/Script/Murabito.GameRules`).
-- The Unreal Engine rules below apply to the main project as well as the UE experiments.
+- **Work in small, visible steps.** Build the smallest thing that puts something on screen, let the user see it, then agree the next step. Don't disappear into a long build-out.
+- **Build, run and test:** `cargo build`, `cargo run`, `cargo test`, `cargo clippy --all-targets`, `cargo fmt`.
+- **Bevy compiles into the binary.** There is no engine install: `bevy = "0.19"` in `Cargo.toml` is the whole thing. The first build takes about 4.5 minutes (551 crates, dependencies at `opt-level = 3`); after that, a change to `src/` rebuilds in about 3 seconds. `target/` runs to roughly 10 GB.
+- **Linux system libraries.** Bevy's default features build winit with the Wayland backend, which needs `libwayland-dev`, `libxkbcommon-dev` and `libudev-dev`. Without them the build fails in `wayland-sys`'s build script with a pkg-config error.
 
+### Layout
+
+- `src/lib.rs` — the module list; everything lives in the library so the tests can reach it
+- `src/main.rs` — the window and the plugin list, and nothing else
+- `tests/` — integration tests, each file its own binary against the library
+- `src/camera.rs` — `CameraRig` (a ground focus, a zoom distance, a pan velocity) and the pan/zoom/apply systems
+- `src/scene.rs` — the placeholder world: ground, a cube, a sun
+- `src/settings.rs` — `CameraSettings` and the settings file
+- `src/settings_page.rs` — the settings screen
+- `src/menu.rs` — the escape menu
+- `src/state.rs` — `AppState` (Playing / Menu / Settings), and pausing
+- `src/ui.rs` — what the screens share: scrim, buttons, slider visuals
+- `src/i18n.rs` — the string catalogues, `Language`, and the `Localized` component
+- `src/user_data.rs` — where the player's files live; the only place that decides that
+- `src/debug_screen.rs` — the F3 screen: terse clickable lines over the live world
+- `src/screenshot.rs` — F12, and the `--shot` command-line capture
+
+### Conventions
+
+- **The base unit is the shaku**, not the metre. One world unit is one 尺 (10/33 m, ~30.3 cm); every length in the crate is shaku unless it says otherwise, and metres appear only in comments to give a familiar sense of scale. Round numbers tend to land on 間 (6 shaku) and 町 (360 shaku). The sense grid is one shaku flat-to-flat, so a sense range in shaku is also a count of cells — which is why those ranges are integers rather than floats. Provisional: exp-05 is building the real ri/cho/ken/shaku system.
+- **Each module registers itself through a `Plugin`.** `main.rs` adds plugins and knows nothing about what they need; a module's resources, systems and spawns are its own business.
+- **Pausing is `Time<Virtual>`, not a flag.** Pausing the clock stops everything driven by elapsed time, so no system has to know a menu exists. `Time<Real>` keeps running, which keeps the UI responsive. Input is gated separately, with `run_if(in_state(AppState::Playing))`.
+- **Settings are resources; `settings.rs` persists them.** Anything that edits a settings resource gets saved automatically. Nothing else writes the file.
+- **One directory holds everything belonging to the player**, `~/.config/murabito/`, and `user_data.rs` is the only place that works out where it is. A module joins its own filename onto `UserData::root()` rather than resolving a path itself, so saves and anything else later land beside the settings. `UserDataPlugin` goes first in the plugin list: plugins read the resource while the app is being built, not once it runs.
+- **Settings live at `settings.yaml` in that directory** (YAML, one top-level key per group). A missing file means defaults and is created; a file that fails to parse warns and is left alone so the user can fix it.
+- **Windowed runs need the desktop display.** Shells in the user's terminal may have no `DISPLAY`/`WAYLAND_DISPLAY`; take them from the systemd user session (`systemctl --user show-environment`), as the experiments' scripts do.
+- **Check visual work with a screenshot, not by asking.** F12 saves one to `screenshots/` (gitignored) while playing, and `cargo run -- --shot <path> --screen playing|menu|settings` drives the app to a screen, captures it and exits — no keyboard needed. Add `--settle <frames>` if 150 isn't long enough; capture too early and the PNG is a bare clear colour, because render pipelines compile on first use. Add `--zoom <shaku>` to frame anything drawn in the world — at the starting zoom, world-space overlays run off the edge — and `--debug` to open the F3 screen first.
+- **Running the binary directly needs `BEVY_ASSET_ROOT`.** Bevy resolves `assets/` relative to the executable unless `cargo run` sets it, so a direct `./target/debug/murabito` can't find the font or the locales.
+- **UI text is never a literal.** Every string comes from `assets/locales/{en,ja}.yaml` through a `Localized` key, and both catalogues must carry the same keys — a gap warns at startup. Text that is the same in every language (a language's own name, a number) uses `ui::spawn_literal_button` instead.
+- **A fixed-width text node wraps.** Bevy UI text in a node with an explicit width will line-break, possibly onto an invisible whitespace line, which doubles the node's height and pushes the glyphs off centre. Use `LineBreak::NoWrap` on labels with a fixed width.
+- **Tests run headless, and must stay that way.** `MinimalPlugins` brings the schedules
+  and `Time`; add `bevy::state::app::StatesPlugin` for anything touching `AppState`, as it
+  arrives with `DefaultPlugins` in the real app but not in `MinimalPlugins`. Drive frames
+  with `app.update()`, never `app.run()`. No test may open a window or need a GPU.
+- **Tests must not touch the player's real files.** Point `UserDataPlugin::at` at a
+  temporary directory; never let a test fall back on the real one.
+- **The F3 debug screen is not an `AppState`.** Every state but `Playing` pauses `Time<Virtual>`, and the point of that screen is watching the world carry on while you change what is drawn over it — so it spawns and despawns a UI root instead, and does its own hover tinting because `ui::button_visuals` runs only while a menu is up. Debug labels are localised like any other text; taxonomy keys are namespaced by their axis (`分類.狐`), and a key with no entry renders as itself, which on a debug screen is a fine answer.
+- **Never kill, signal or otherwise touch a process you didn't start.**
+
+
+## Rust + Bevy experiments
+
+Each Rust + Bevy experiment is its own Cargo workspace, separate from the main project's crate at the repo root.
+
+- **Build and test from the experiment's directory**, e.g. `cd Experiments/exp-05 && cargo test`. Run from the repo root, `cargo` builds the main project instead. Workspace members also work from there (`cargo run -p viewer --release`, `cargo test -p hexworld`).
+- **Keep an experiment's core crate engine-free.** exp-05's `hexworld` has no dependencies at all, not even dev-dependencies: it is the part meant to outlive whatever engine or graphics stack sits on top. Engine types and rendering code belong in the plugin crate or the app.
+- **No Rust build directory under `/tmp`.** It is a RAM-backed tmpfs on this machine, and a Bevy `target/` there fills it. Keep `cargo`'s default `target/` inside the experiment, and don't point `CARGO_TARGET_DIR` under `/tmp`.
+- **Windowed runs need the desktop display**, as for the main project.
 
 ## Git workflow
 
@@ -81,22 +123,21 @@ The repo root is the Murabito Unreal Engine 5.8 project. The user drives it; AI 
 - **Use `git -C <absolute path>` for every git command.** Worktrees and a shell working directory that persists between commands make relative paths easy to get wrong.
 
 
-## Unreal Engine (main project and experiments)
+## Licensing and binary files
 
-- **Public MIT repo: never copy engine code or assets in.** Projects use the local engine install by path (`UE_ROOT`, default `/home/lexa/DevProjects/_GameDev/_GameEngines/UnrealEngine/5.8.2`). Reading engine headers and source to check an API is fine; pasting them, or Epic copyright headers, into the repo is not.
+- **Public MIT repo: never copy engine code or assets in.** Reading engine headers and source to check an API is fine; pasting them, or Epic copyright headers, into the repo is not.
 - **Two licences: code is MIT, assets are CC BY-SA 4.0.** See `LICENSING.md` for what counts as an asset. Third-party files (fonts, Epic/Fab content, anything not made for this repo) keep their own licences: add their licence file next to them and list them in `LICENSING.md`, and never commit anything whose licence doesn't allow redistribution.
-- **Binary assets go through Git LFS.** `.gitattributes` at the repo root routes Unreal assets, source art, textures, audio, video, fonts, raw data, third-party binaries and PDFs to LFS (not lockable yet). Check a new binary type is covered before committing it; adding it afterwards means rewriting history. exp-04 itself has no binary assets: its world is built in C++ at runtime.
-- **Naming:** keep UE's type prefixes (`A`, `F`, `U`), but the names after them are plain and say what the class does (`ACameraRig`, not a "…Pawn"). Code and docs don't name games that inspired the project.
-- **Build and test with the scripts** (`Tools/` for the main project, `scripts/` in a UE experiment): `build.sh`, `test.sh [TestPathPrefix]` (headless automation tests; pass/fail comes from the log, since the editor's exit code is always 1 under `-TestExit`).
-- **Never kill, signal or otherwise touch an Unreal Editor (or any process) you didn't start.**
-- **The user may have the editor open on the same checkout while you work.** `build.sh` then does a hot-reload build, and the open editor loads it by itself within about a second. While the user is in Play, the reload waits until they stop. Changes to class layout (new or changed `UPROPERTY`/`UCLASS`, header changes) don't hot-reload reliably: tell the user to restart the editor after those.
-- **`test.sh` is safe with an editor open.** It copies the project into a private mirror under `~/.cache/murabito/` and builds that with `-NoHotReloadFromIDE`, so the tests run the code on disk and never touch the editor's modules.
-- **Windowed runs need the desktop display.** Shells in the user's terminal may have no `DISPLAY`/`WAYLAND_DISPLAY`; `game.sh` and `editor.sh` take them from the systemd user session. The main project's `Tools/` scripts run the editor on X11 (`SDL_VIDEODRIVER=x11`), because on SDL's Wayland backend editor pop-ups such as the Pick Parent Class tree stop taking clicks; set `SDL_VIDEODRIVER=wayland` to override.
+- **Binary assets go through Git LFS.** `.gitattributes` at the repo root routes Unreal assets, source art, textures, audio, video, fonts, raw data, third-party binaries and PDFs to LFS (not lockable yet). Check a new binary type is covered before committing it; adding it afterwards means rewriting history. The main project has no binary assets: its world is built in code at runtime.
+- **Naming:** code and docs don't name games that inspired the project.
 
 
-## Rust + Bevy experiments
+## The archived Unreal attempt
 
-- **Build and test from the experiment directory:** `cargo build --release` and `cargo test`, e.g. `cd Experiments/exp-05 && cargo test`. A workspace member's own commands (`cargo run -p viewer --release`, `cargo test -p hexworld`) also work from there.
-- **The core crate is engine-free** (no Bevy, no graphics, no dependencies at all in exp-05's case) and is the part meant to outlive whatever engine or graphics stack sits on top of it. Keep it that way: engine types and rendering code belong in the plugin crate or the app, not the core.
-- **No Rust build directory under `/tmp`.** It is a RAM-backed tmpfs on this machine, and a `target/` there can silently blow the build past available memory. `cargo`'s default `target/` inside the experiment directory is fine; don't set `CARGO_TARGET_DIR` (or a temp working directory) to anywhere under `/tmp`.
-- **Windowed runs need the desktop display**, same as the Unreal Engine experiments: take `DISPLAY`/`XAUTHORITY` from the systemd user session when the shell doesn't have them (`export $(systemctl --user show-environment | rg '^(DISPLAY|XAUTHORITY)=' | xargs)`).
+`_Archives/UE-Try/` holds the Unreal Engine 5.8 project the repo started as: `Murabito.uproject`, `Config/`, `Source/Murabito/`, `Content/` and `Tools/`. It is kept for reference and is **not** built or maintained. Its `Tools/` scripts expect it at the repo root and won't work where it now sits.
+
+The rules below still apply to the UE experiment, exp-04, which is live:
+
+- **Use the local engine install by path** (`UE_ROOT`, default `/home/lexa/DevProjects/_GameDev/_GameEngines/UnrealEngine/5.8.2`).
+- **Build and test with the experiment's `scripts/`:** `build.sh`, `test.sh [TestPathPrefix]` (headless automation tests; pass/fail comes from the log, since the editor's exit code is always 1 under `-TestExit`).
+- **Keep UE's type prefixes** (`A`, `F`, `U`), with plain names after them that say what the class does (`ACameraRig`, not a "…Pawn").
+- **The user may have the editor open on the same checkout.** `build.sh` then does a hot-reload build. Changes to class layout don't hot-reload reliably: tell the user to restart the editor after those. `test.sh` copies the project into a private mirror under `~/.cache/murabito/`, so it is safe with an editor open.

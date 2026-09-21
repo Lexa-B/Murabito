@@ -1,0 +1,6 @@
+# 諸法 → 物 → 者 → 生き物 → 動物 → 狼
+#
+# This node's properties. The tree itself is assets/ontology/諸法.yaml.
+属性:
+  - 捕食者
+  - 腰丈
