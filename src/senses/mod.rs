@@ -104,7 +104,7 @@ pub struct SenseOverlay {
 }
 
 /// Where a being faces, in the ground plane. Bevy's forward is local -Z.
-fn facing(transform: &GlobalTransform) -> Vec2 {
+pub(crate) fn facing(transform: &GlobalTransform) -> Vec2 {
     let forward = transform.forward();
     Vec2::new(forward.x, forward.z).normalize_or(Vec2::new(0.0, -1.0))
 }

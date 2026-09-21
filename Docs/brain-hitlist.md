@@ -354,15 +354,16 @@ proposal, not a commitment.
       world, which at a cho of ground would be ~150,000 cells almost none of which are
       ever on screen. Terrain went to one cho at the same time.
       **Provisional** — see settled item 27; exp-05's unit system replaces it.
-- [ ] **0d. Line of sight.** Vision gated by what stands in the way. Obstacles register
+- [x] **0d. Line of sight.** Vision gated by what stands in the way. Obstacles register
       as occluders; shadowcasting over the grid gives a visible set per perceiver that is
       computed once and reused for every candidate, rather than a ray per pair.
-- [ ] **0e. Assert the tableau.** The starting arrangement is a predator watching prey
-      that hasn't noticed — and the placeholder cube sits within 0.27 m of the fox-rabbit
-      line, so once 0d lands the fox *cannot* see the rabbit, which is the more
-      interesting starting position anyway. Currently eyeballed off a screenshot through
-      a projection that makes ground angles hard to judge. It is a claim, so it should be
-      a test.
+- [x] **0e. Assert the tableau.** Four tests in `being`, built from the same constants
+      the app spawns from and run through the same `gather_occluders` and taxonomy, so
+      they cannot drift from the scene by agreeing with a copy of it. Bare ground: the
+      fox *would* see the rabbit, so the next one cannot pass for the boring reason.
+      Planted: it cannot. The rabbit does not see the fox, being in the wedge even a 240
+      degree cone leaves behind. And grass costs a band where trees take sight outright.
+      The placeholder cube is gone; it stood on the line while occluding nothing.
 - [x] **0f-i. The F3 screen.** A debug screen over the live world — no scrim, no chrome,
       terse lines, some clickable — with one line per 種 showing or hiding that kind's
       sense overlay. Deliberately not an `AppState`, since those pause the clock and the

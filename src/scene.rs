@@ -9,6 +9,15 @@ use bevy::prelude::*;
 
 use crate::諸法::種;
 
+/// Where the trees stand, in shaku. Across the line from the fox to the rabbit, so that
+/// the one cannot simply look at the other — see `being`'s tableau tests, which assert
+/// that arrangement rather than leaving it to a screenshot.
+pub(crate) const TREES: [(f32, f32); 3] = [(3.0, -2.6), (4.6, -3.8), (6.2, -1.8)];
+
+/// Where the grass grows. Nearer the fox than the trees are, so that costing sight a
+/// band and stopping it outright are separable in one picture.
+pub(crate) const GRASS: [(f32, f32); 4] = [(-8.0, 4.6), (-7.0, 3.8), (-6.4, 5.2), (-8.8, 3.6)];
+
 /// The colour the framebuffer is cleared to each frame: everything the camera doesn't
 /// draw over. Stands in for a sky.
 const SKY: Color = Color::srgb(0.53, 0.81, 0.92);
@@ -44,7 +53,7 @@ fn spawn_scene(
     // it, so that costing sight a band and stopping it outright show up in one picture.
     let trunk = meshes.add(Cuboid::new(0.9, 8.0, 0.9));
     let bark = materials.add(Color::srgb(0.24, 0.30, 0.18));
-    for (x, z) in [(3.0, -2.6), (4.6, -3.8), (6.2, -1.8)] {
+    for (x, z) in TREES {
         commands.spawn((
             種::new("木"),
             Mesh3d(trunk.clone()),
@@ -55,7 +64,7 @@ fn spawn_scene(
 
     let tuft = meshes.add(Cuboid::new(0.9, 1.6, 0.9));
     let blade = materials.add(Color::srgb(0.46, 0.60, 0.28));
-    for (x, z) in [(-8.0, 4.6), (-7.0, 3.8), (-6.4, 5.2), (-8.8, 3.6)] {
+    for (x, z) in GRASS {
         commands.spawn((
             種::new("草"),
             Mesh3d(tuft.clone()),

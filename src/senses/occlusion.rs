@@ -79,7 +79,7 @@ impl Occluders {
 /// Rebuilt whole each frame rather than maintained. There are a handful of occluders and
 /// none of them move; when either changes, this becomes a system that runs on
 /// `Changed<GlobalTransform>` and the map stops being rebuilt from nothing.
-pub(super) fn gather_occluders(
+pub(crate) fn gather_occluders(
     mut occluders: ResMut<Occluders>,
     taxonomy: Res<実相>,
     things: Query<(&GlobalTransform, &種)>,
