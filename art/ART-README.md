@@ -109,6 +109,7 @@ sampler), so faces get exactly the swatch colour.
 | | |
 |---|---|
 | `PALETTE`, `SWATCH`, `PALETTE_SIZE` | the palette, name → index, texture size |
+| `SHADES` | fur and feather colours → the swatch plus its `_light` and `_deep` shades, for shaded animals |
 | `reset_scene()` | start from an empty Blender scene |
 | `apply_swatches(obj, names)` | give a mesh the palette material and point each face's UVs at its swatch |
 | `export_glb(obj, path)` | export one object as `.glb` (Y-up) |
@@ -118,8 +119,8 @@ sampler), so faces get exactly the swatch colour.
 
 | | |
 |---|---|
-| `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `finish(name)` → a coloured object |
-| `Builder.spine(start_tip, rings, end_tip)` | loft an animal's body along a spine in the YZ plane, octagonal rings from tail tip to nose; returns the faces per segment |
+| `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `stud(centre, normal, size, colour, sides=4, tall=1.0)` (a small closed stud standing on a surface: eyes, spots; more sides make it rounder, `tall` stretches it up and down), `finish(name, shaded=False)` → a coloured object; `shaded=True` varies each fur or feather face among its `SHADES`, from a stream seeded by `name` |
+| `Builder.spine(start_tip, rings, end_tip, upright=0)` | loft an animal's body along a spine in the YZ plane, octagonal rings from tail tip to nose (an optional seventh value tapers a ring, wider at the top: a trapezoid face), each square to the spine except the `upright` ones (a count from the start, or ring indices), which stand straight up (a tail fan, a rump under a high tail); returns the faces per segment |
 | `Builder.limb(face, rings, mirror, tip)` | replace one of those faces with a limb (leg, ear) lofted through square rings; returns its faces |
 | `run(build, name, target, extent)` | the shared command line (`--out`, `--renders`); scripts parse their own extra flags first |
 
@@ -166,7 +167,7 @@ before showing it.
 ### An animal
 
 1. Copy the closest animal (`fox.py` for four-legged and standing, `hare.py` for crouched
-   with long ears).
+   with long ears, `crane.py` for a bird on two legs with a long neck).
 2. Edit `SPINE`: rings from tail tip to nose as `(y, z, half-width, half-height, colour,
    underside colour)`. Keep neighbouring rings in proportion: a ring bigger than both its
    neighbours shows as a ridge.
@@ -175,8 +176,13 @@ before showing it.
    half-depth, colour)` for the right side; the left is mirrored).
 4. Patches that don't follow rings (calico, masks): paint them after building with
    `b.paint(...)` on spine or limb faces (see `cat.py`). Limb faces come back from
-   `b.limb(...)`.
-5. Add any new swatches to the palette, build, render, iterate.
+   `b.limb(...)`. Markings smaller than a face (spots) are small closed studs set on
+   a face (`deer.py`'s `spot`): painting whole faces for them reads as a checkerboard.
+   Rigid parts that branch (antlers) can be `flora.branch` tubes rooted in the body.
+5. Finish with `b.finish(name, shaded=True)`, so the coat varies a little face by face.
+   A new coat colour needs `_light` and `_deep` swatches beside it and an entry in
+   `SHADES`; small details (a crown, a bill, legs) can stay a single swatch.
+6. Add any new swatches to the palette, build, render, iterate.
 
 ### A plant
 
@@ -242,7 +248,7 @@ way.
   whose counts only come in steps of four, so they run a little finer (about 1.3–1.4).
 - **Shrubs** scale the edge down (`FACET = 0.6` in `azalea.py`), or a small plant gets only
   a few dozen chunky facets.
-- **Current costs:** animals 400–450 triangles; shrubs about 900; broadleaf trees
+- **Current costs:** animals 370–450 triangles (the deer, with spots and antlers, about 1,000); shrubs about 900; broadleaf trees
   1,500–6,600; conifers 4,500–10,000; bamboo up to 17,600. That's accepted for now: the
   plan is to come back and make **low-LoD versions** of everything to fade to at distance.
 
@@ -281,10 +287,23 @@ And by eye:
 
 | Model | Versions | Colours | Seasons | Notes |
 |---|---|---|---|---|
-| fox | – | – | – | the style reference; red fox, standing |
+| fox | – | – | – | the style reference; red fox, standing; big round eyes with a white glint, in little sockets (poked faces) |
 | hare | – | – | – | Japanese hare (野兎), sitting in a loaf |
 | cat | – | – | – | mike (三毛) calico, long tail, standing |
 | rat | – | – | – | black rat (クマネズミ) |
+| crane | – | – | – | red-crowned crane (丹頂), standing; the tallest animal, about 4.5 shaku |
+| boar | – | – | – | Japanese wild boar (ニホンイノシシ), a tusked male, standing; front-heavy, dark crest, pale jaw fringe |
+| deer | – | – | – | sika stag (ニホンジカ) in summer coat, standing; kanoko spots as studs, antlers as `flora.branch` tubes |
+| bear | – | – | – | Japanese black bear (ツキノワグマ), on all fours; big round head, pale chest crescent, tan muzzle |
+| horse | – | – | – | Kiso horse (木曽馬), a small, stocky native breed, bay, unsaddled |
+| ox | – | – | – | native black draft ox (like 見島牛), unharnessed; horns and ears as `flora.branch` tubes |
+| chicken | – | – | – | native rooster (地鶏) in wild-type colours (赤笹); comb and wattles grown from the head's top and bottom faces |
+| dog | – | – | – | native dog of the Shiba type (柴犬), red with cream urajiro; a ring-curled tail resting on the back |
+| tanuki | – | – | – | Japanese raccoon dog (ホンドタヌキ), the real animal; round and low, with the dark mask and shoulder band |
+| macaque | – | – | – | Japanese macaque (ニホンザル) on all fours; a flat, trapezoid red face with stud eyes in a poofy mane, a red rump, a stubby tail |
+| wolf | – | – | – | Japanese wolf (ニホンオオカミ), extinct since about 1905; the dog's layout at 1.5×, tawny after a specimen, stud eyes, a hanging bushy tail |
+| pheasant | – | – | – | green pheasant cock (キジ) in vivid colours; a big lipstick-red oval round each yellow eye, royal-blue head, ear tufts, long low tail |
+| heron | – | – | – | grey heron (アオサギ), built like the crane; S-necked, black eye stripe and plume, the pheasant's yellow eyes |
 | maple (イロハモミジ) | `00`, `pruned-00` | a–e | summer | wild mushroom crown; `pruned-00` is cloud-pruned, kept to shrink into a garden prop |
 | redpine (アカマツ) | `00`–`04` | a | summer | crooked, flat pads, bark blending grey to red |
 | sugi (スギ) | `00`–`04` | a | summer | straight spire of knobbly tufts |
@@ -310,6 +329,29 @@ And by eye:
 - **Ball-on-sticks shrubs look like topiary.** Wild shrubs sit on the ground.
 - **Preview frames are fixed:** a tall version can clip at the top. Frame by the model's
   own height when versions differ (`sugi.py`, `hinoki.py` do).
+- **A limb's first ring must fit inside the face it grows from.** Where a thick thigh
+  reaches past its base face, front or back, it tucks under the body and leaves a notch
+  (the deer took several rounds). Make the segment it grows from as long as the thigh is
+  deep, by dropping a ring if needed, and keep the ring inside the body's width too, or
+  its square corner pokes out.
+- **Rings square to a sharply curving spine swing past each other and fold**, leaving a
+  hook on the inside of the curve (the rooster's tail), or a point under a high tail (the
+  dog's rump). Stand those rings upright (`spine(..., upright=...)`).
+- **A ring whose underside hangs below both neighbours' shows as a point** (the macaque's
+  chin), just as one that bulges out on top shows as a ridge. Measure each ring's bottom
+  edge to find it; guessing at the rings around it didn't work.
+- **A stud on a four-sided face can come out bigger on one side than its mirror.** The
+  face isn't flat, and mirrored faces can split into triangles along different diagonals,
+  sinking one stud deeper (the wolf's eyes). Poke the face first and set the stud on
+  its centre.
+- **An eye bigger than its face, or standing tall, clips.** Space the rings round an eye
+  so it fits its face, and keep eye studs low (`height`, `inset`) so they sit nearly
+  flush (the pheasant's eyes).
+- **A ring on a rising spine leans back, and its top sits lower than its numbers say.**
+  To line up a topline, check the ring vertices, not the ring centres (the dog's withers).
+- **A ring bigger than both neighbours shows as a ridge**, and a rump that ends in one
+  ring looks chopped off. Round rumps over two or three rings, from the side and from
+  above (the hare, the deer).
 
 ## Ideas waiting
 

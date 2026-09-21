@@ -87,7 +87,7 @@ def build_hare():
         limbs.append((segments[EAR_SEGMENT][upper], EAR, mirror, EAR_TIP))
     for face, rings, mirror, tip in limbs:
         b.limb(face, rings, mirror, tip)
-    return b.finish("Hare")
+    return b.finish("Hare", shaded=True)
 
 
 if __name__ == "__main__":

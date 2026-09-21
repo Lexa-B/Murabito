@@ -8,6 +8,7 @@ Coordinates are Blender's, in shaku: +Y forward, +Z up, +X the animal's right.
 """
 
 import math
+import random
 
 import bmesh
 import bpy
@@ -38,29 +39,64 @@ class Builder:
         f[self._swatch] = style.SWATCH[colour]
         return f
 
+    def stud(self, centre, normal, size, colour, inset=0.006, height=0.014, sides=4, tall=1.0):
+        """A small, closed, faceted stud standing on a surface: an eye, a spot.
+
+        Its corners sit a little below the surface round centre, size out (tall
+        times that up and down), with an apex a little above it along normal;
+        closed underneath so it stays manifold. Four sides make a diamond; more
+        make it rounder. Returns the local frame (up, across) it was built in.
+        """
+        normal = normal.normalized()
+        across = normal.cross(Vector((0, 0, 1)))
+        across = across.normalized() if across.length > 1e-6 else Vector((1, 0, 0))
+        up = across.cross(normal)
+        corners = []
+        for k in range(sides):
+            angle = 2 * math.pi * k / sides
+            c, s = round(math.cos(angle), 12), round(math.sin(angle), 12)
+            corners.append(self.bm.verts.new(centre - normal * inset + up * size * tall * c + across * size * s))
+        apex = self.bm.verts.new(centre + normal * height)
+        for k in range(sides):
+            self.face((apex, corners[k], corners[(k + 1) % sides]), colour)
+        self.face(list(reversed(corners)), colour)
+        return up, across
+
     def paint(self, faces, colour):
         """Recolour faces already built, for patches that don't follow rings."""
         for f in faces:
             f[self._swatch] = style.SWATCH[colour]
 
-    def spine(self, start_tip, rings, end_tip):
+    def spine(self, start_tip, rings, end_tip, upright=0):
         """Loft a body along a spine in the YZ plane.
 
         rings run from start_tip to end_tip, each (y, z, half-width, half-height,
-        colour, underside colour). A ring's colours paint the segment arriving at
-        it from the start_tip side. Returns segments[i][k]: face k between ring i
-        and ring i + 1, for growing limbs from.
+        colour, underside colour), with an optional seventh item, a taper: the
+        ring is that much wider at the top and narrower at the bottom (0.3: 30%),
+        for a face shaped like a trapezoid rather than an oval. A ring's colours
+        paint the segment arriving at it from the start_tip side. Each ring stands square to the spine, except
+        the upright ones, which stand straight up: where the spine curves sharply
+        (a fan of a tail, a rump under a high tail), squared rings swing past each
+        other and fold. upright is how many rings from the start, or a collection
+        of ring indices. Returns segments[i][k]: face k between ring i and ring
+        i + 1, for growing limbs from.
         """
+        is_upright = (lambda i: i < upright) if isinstance(upright, int) else (lambda i: i in upright)
         points = [start_tip] + [Vector((0, y, z)) for y, z, *_ in rings] + [end_tip]
         side = Vector((1, 0, 0))
         verts = []
-        for i, (y, z, hw, hh, *_) in enumerate(rings, start=1):
+        for i, (y, z, hw, hh, *rest) in enumerate(rings, start=1):
+            taper = rest[2] if len(rest) > 2 else 0.0
             tangent = (points[i + 1] - points[i - 1]).normalized()
-            up = side.cross(tangent).normalized()
+            up = Vector((0, 0, 1)) if is_upright(i - 1) else side.cross(tangent).normalized()
             centre = points[i]
             verts.append(
                 [
-                    self.bm.verts.new(centre + side * hw * math.cos(a) + up * hh * math.sin(a))
+                    self.bm.verts.new(
+                        centre
+                        + side * hw * (1 + taper * math.sin(a)) * math.cos(a)
+                        + up * hh * math.sin(a)
+                    )
                     for a in ANGLES
                 ]
             )
@@ -72,7 +108,7 @@ class Builder:
         segments = []
         for i in range(len(verts) - 1):
             a, b = verts[i], verts[i + 1]
-            _, _, _, _, colour, under = rings[i]
+            colour, under = rings[i][4], rings[i][5]
             segments.append(
                 [
                     self.face(
@@ -125,10 +161,17 @@ class Builder:
             rows.append([self.face((point, prev[j], prev[(j + 1) % 4]), colour) for j in range(4)])
         return rows
 
-    def finish(self, name):
-        """Turn the bmesh into a palette-coloured object linked into the scene."""
+    def finish(self, name, shaded=False):
+        """Turn the bmesh into a palette-coloured object linked into the scene.
+
+        shaded varies fur and feathers face by face (see style.SHADES), from a
+        random stream seeded by name, so a rebuild comes out the same.
+        """
         bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)
         swatches = [style.PALETTE[f[self._swatch]][0] for f in self.bm.faces]
+        if shaded:
+            rng = random.Random(name)
+            swatches = [rng.choice(style.SHADES[s]) if s in style.SHADES else s for s in swatches]
         self.bm.faces.layers.int.remove(self._swatch)
 
         mesh = bpy.data.meshes.new(name)

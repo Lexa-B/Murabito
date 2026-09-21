@@ -107,7 +107,7 @@ def build_cat():
         rows = b.limb(face, rings, mirror, tip)
         if rings is EAR:
             b.paint([f for row in rows for f in row], EAR_COLOURS[mirror])
-    return b.finish("Cat")
+    return b.finish("Cat", shaded=True)
 
 
 if __name__ == "__main__":
