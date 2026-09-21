@@ -212,6 +212,21 @@ PALETTE = [
     ("wolf_tail_light", "#877868"),
     ("wolf_tail_deep", "#736455"),
     ("eye_glint", "#F6F3EC"),
+    # the green pheasant
+    ("pheasant_green", "#2F5A3C"),
+    ("pheasant_green_light", "#386645"),
+    ("pheasant_green_deep", "#284F34"),
+    ("pheasant_neck", "#3A3F7A"),
+    ("pheasant_neck_light", "#444A88"),
+    ("pheasant_neck_deep", "#33376C"),
+    ("pheasant_back", "#6E6A45"),
+    ("pheasant_back_light", "#787450"),
+    ("pheasant_back_deep", "#64603E"),
+    ("pheasant_tail", "#8A8768"),
+    ("pheasant_tail_light", "#949174"),
+    ("pheasant_tail_deep", "#807D5E"),
+    ("pheasant_rump", "#7E8C8E"),
+    ("pheasant_leg", "#9C8E86"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -248,6 +263,10 @@ SHADES = {
         "wolf_saddle",
         "wolf_pale",
         "wolf_tail",
+        "pheasant_green",
+        "pheasant_neck",
+        "pheasant_back",
+        "pheasant_tail",
     )
 }
 
