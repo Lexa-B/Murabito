@@ -643,7 +643,7 @@ mod tests {
     fn the_real_ontology_loads() {
         let tree = tree();
         assert_eq!(tree.root(), "諸法");
-        assert_eq!(tree.len(), 19);
+        assert_eq!(tree.len(), 20);
     }
 
     #[test]

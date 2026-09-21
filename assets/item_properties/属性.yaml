@@ -31,6 +31,22 @@
 #
 # 遮音, 吸音, 不透明, 半透明, 透明 and 防臭 are ordinary words. 透音, 混臭, 保臭 and 通臭
 # are coinages: readable compounds rather than dictionary entries.
+# How much of the world a thing reaches up to — and so, when it stands in the way, how
+# much of the world it stands in the way of. An occluder affects what is no taller than
+# itself: grass hides a rabbit and not a human, a hedge hides both unless the human
+# stands, a tree hides everything.
+#
+# One axis, read by all three sense channels, because height is not a fact about sight.
+# A knee-high wall muffles less than a tall one and holds less scent.
+#
+# Carried by beings as well as by obstacles, and it is the *same* number: what a thing
+# hides and what can hide it are one property. That makes the rule a comparison between
+# two things' facets rather than a property of either, which is a first here.
+高さ:
+  - 背丈      # full height
+  - 腰丈      # waist
+  - 膝丈      # knee
+
 音:
   - 遮音      # blocks
   - 吸音      # muffles
