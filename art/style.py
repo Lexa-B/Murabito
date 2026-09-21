@@ -55,6 +55,16 @@ PALETTE = [
     ("leaf_blackred_green", "#2F3B27"),
     ("leaf_blackred_shade", "#2A1216"),
     ("leaf_blackred_shade_green", "#1E2A1C"),
+    ("needle_green", "#4B7545"),
+    ("needle_green_light", "#5A8750"),
+    ("needle_green_deep", "#3D663D"),
+    ("needle_green_blue", "#47704F"),
+    ("needle_green_shade", "#2F4E31"),
+    ("needle_green_shade_deep", "#25402A"),
+    ("pine_bark_red", "#B0643E"),
+    ("pine_bark_grey", "#6B5B4E"),
+    ("pine_bark_mid", "#935F45"),
+    ("pine_bark_warm", "#7B5D4D"),
 ]
 PALETTE_SIZE = 8  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels
 

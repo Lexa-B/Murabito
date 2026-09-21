@@ -17,8 +17,13 @@ BRANCH_RING = 6
 
 
 def branch(b, points, radii, colour):
-    """Loft a closed tube through points (3D), with a radius per point."""
+    """Loft a closed tube through points (3D), with a radius per point.
+
+    colour is one swatch, or a list with one per segment (len(points) - 1).
+    Returns the side faces, one list per segment, for recolouring.
+    """
     points = [Vector(p) for p in points]
+    colours = [colour] * (len(points) - 1) if isinstance(colour, str) else list(colour)
     rings = []
     for i, (centre, r) in enumerate(zip(points, radii, strict=True)):
         prev = points[max(i - 1, 0)]
@@ -38,11 +43,35 @@ def branch(b, points, radii, colour):
             ]
         )
     n = BRANCH_RING
-    for a, c in zip(rings, rings[1:]):
-        for k in range(n):
-            b.face((a[k], a[(k + 1) % n], c[(k + 1) % n], c[k]), colour)
-    b.face(list(reversed(rings[0])), colour)
-    b.face(rings[-1], colour)
+    segments = []
+    for a, c, segment_colour in zip(rings[:-1], rings[1:], colours, strict=True):
+        segments.append(
+            [b.face((a[k], a[(k + 1) % n], c[(k + 1) % n], c[k]), segment_colour) for k in range(n)]
+        )
+    b.face(list(reversed(rings[0])), colours[0])
+    b.face(rings[-1], colours[-1])
+    return segments
+
+
+def densify(points, radii, step):
+    """Put extra points along a polyline, at most step apart, radii following."""
+    points = [Vector(p) for p in points]
+    out_points, out_radii = [points[0]], [radii[0]]
+    for (p0, r0), (p1, r1) in zip(zip(points, radii), zip(points[1:], radii[1:])):
+        n = max(1, math.ceil((p1 - p0).length / step))
+        for i in range(1, n + 1):
+            out_points.append(p0.lerp(p1, i / n))
+            out_radii.append(r0 + (r1 - r0) * i / n)
+    return out_points, out_radii
+
+
+def point_at_height(points, z):
+    """Where a mostly upright polyline passes height z."""
+    points = [Vector(p) for p in points]
+    for p0, p1 in zip(points, points[1:]):
+        if p0.z <= z <= p1.z:
+            return p0.lerp(p1, (z - p0.z) / (p1.z - p0.z))
+    return points[-1].copy()
 
 
 def clump(b, centre, radius, up, down, leaves, shades, rng, lumpiness=0.12):
@@ -85,7 +114,7 @@ def _exit_distance(origin, direction, centre, radius, up, down):
     return None
 
 
-def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03):
+def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03, shape=None):
     """One continuous crown shrink-wrapped over lumps, each (centre, radius, up,
     down) as in clump.
 
@@ -94,12 +123,21 @@ def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03
     and the lumps blend into one skin instead of cutting through each other.
     The lumps together should be star-shaped from centre, as a crown is.
     Faces are coloured as in clump.
+
+    For a flat shape, give shape = (radius, up, down) roughly matching the
+    lumps: the sphere is squashed to it before its rays are cast, so the
+    triangles stay even across a flat top instead of bunching at the rim.
     """
     made = bmesh.ops.create_icosphere(b.bm, subdivisions=subdivisions, radius=1.0)
     verts = made["verts"]
     centre = Vector(centre)
     for v in verts:
-        direction = v.co.normalized()
+        if shape is None:
+            direction = v.co.normalized()
+        else:
+            radius, up, down = shape
+            x, y, z = v.co
+            direction = Vector((x * radius, y * radius, z * (up if z > 0 else down))).normalized()
         reach = [_exit_distance(centre, direction, Vector(c), r, up, down) for c, r, up, down in lumps]
         distance = max(t for t in reach if t is not None)
         v.co = centre + direction * distance * (1 + rng.uniform(-lumpiness, lumpiness))
@@ -109,6 +147,23 @@ def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03
     for f in faces:
         f.normal_update()
         b.paint([f], rng.choice(shades if f.normal.z < -0.35 else leaves))
+
+
+def pad(b, centre, radius, leaves, shades, rng, up=2.2, down=1.0, lumps=4, subdivisions=3):
+    """A flat, lumpy pad of foliage, like a pine's tuft of needles: a low dome
+    with a few smaller lumps rising from its top at random, wrapped in one skin
+    whose triangles match a canopy's."""
+    centre = Vector(centre)
+    parts = [(centre, radius, up, down)]
+    for i in range(lumps):
+        angle = 2 * math.pi * i / lumps + rng.uniform(-0.5, 0.5)
+        reach = radius * rng.uniform(0.35, 0.6)
+        offset = Vector((math.cos(angle) * reach, math.sin(angle) * reach, rng.uniform(0.2, 0.8)))
+        parts.append((centre + offset, radius * rng.uniform(0.45, 0.65), up * rng.uniform(0.8, 1.2), down * 0.8))
+    canopy(
+        b, centre, parts, leaves, shades, rng,
+        subdivisions=subdivisions, lumpiness=0.04, shape=(radius * 1.25, up * 1.3, down),
+    )
 
 
 def rng_for(seed):
