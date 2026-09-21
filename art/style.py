@@ -168,6 +168,17 @@ PALETTE = [
     ("cattle_black_light", "#4C4440"),
     ("cattle_black_deep", "#39322F"),
     ("cattle_muzzle", "#6E655F"),
+    # the native rooster
+    ("rooster_red", "#A8452A"),
+    ("rooster_red_light", "#B45031"),
+    ("rooster_red_deep", "#9A3C24"),
+    ("rooster_gold", "#D08A3A"),
+    ("rooster_gold_light", "#DA9848"),
+    ("rooster_gold_deep", "#C27C30"),
+    ("plumage_black", "#232826"),
+    ("plumage_black_light", "#2C322F"),
+    ("plumage_black_deep", "#1C201F"),
+    ("beak_yellow", "#CDAE5C"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -193,6 +204,9 @@ SHADES = {
         "bear_black",
         "horse_bay",
         "cattle_black",
+        "rooster_red",
+        "rooster_gold",
+        "plumage_black",
     )
 }
 
