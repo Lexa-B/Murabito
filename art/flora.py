@@ -114,7 +114,50 @@ def _exit_distance(origin, direction, centre, radius, up, down):
     return None
 
 
-def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03, shape=None):
+GOLDEN_ANGLE = 2.39996  # radians: spreads branches evenly round a trunk
+TRI_EDGE = 1.8  # shaku: the triangle edge foliage skins aim for (the maple's is ~1.9)
+
+
+def _even_sphere(bm, count):
+    """A unit sphere of count vertices spread evenly by a golden-angle spiral,
+    joined into triangles. Unlike an icosphere, any count will do."""
+    verts = []
+    for i in range(count):
+        z = 1 - 2 * (i + 0.5) / count
+        r = math.sqrt(1 - z * z)
+        verts.append(bm.verts.new((r * math.cos(i * GOLDEN_ANGLE), r * math.sin(i * GOLDEN_ANGLE), z)))
+    bmesh.ops.convex_hull(bm, input=verts)
+    return verts
+
+
+def _reach(co, centre, lumps, shape):
+    """The ray a sphere vertex at co casts from centre, and how far along it the
+    last lump ends."""
+    if shape is None:
+        direction = co.normalized()
+    else:
+        radius, up, down = shape
+        x, y, z = co
+        direction = Vector((x * radius, y * radius, z * (up if z > 0 else down))).normalized()
+    reach = [_exit_distance(centre, direction, Vector(c), r, up, down) for c, r, up, down in lumps]
+    return direction, max(t for t in reach if t is not None)
+
+
+def even_triangles(centre, lumps, shape, edge=TRI_EDGE):
+    """How many triangles a skin wrapped over lumps needs for edges of about
+    edge: a trial wrap measures its real surface first."""
+    bm = bmesh.new()
+    verts = _even_sphere(bm, 402)
+    centre = Vector(centre)
+    for v in verts:
+        direction, distance = _reach(v.co, centre, lumps, shape)
+        v.co = centre + direction * distance
+    area = sum(f.calc_area() for f in bm.faces)
+    bm.free()
+    return max(20, int(area / (math.sqrt(3) / 4 * edge**2)))
+
+
+def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03, shape=None, triangles=None):
     """One continuous crown shrink-wrapped over lumps, each (centre, radius, up,
     down) as in clump.
 
@@ -127,19 +170,18 @@ def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03
     For a flat shape, give shape = (radius, up, down) roughly matching the
     lumps: the sphere is squashed to it before its rays are cast, so the
     triangles stay even across a flat top instead of bunching at the rim.
+
+    By default the sphere is an icosphere of the given subdivisions, whose
+    triangle count only comes in steps of four; give triangles instead for a
+    sphere of about that many (see even_triangles).
     """
-    made = bmesh.ops.create_icosphere(b.bm, subdivisions=subdivisions, radius=1.0)
-    verts = made["verts"]
+    if triangles is None:
+        verts = bmesh.ops.create_icosphere(b.bm, subdivisions=subdivisions, radius=1.0)["verts"]
+    else:
+        verts = _even_sphere(b.bm, triangles // 2 + 2)
     centre = Vector(centre)
     for v in verts:
-        if shape is None:
-            direction = v.co.normalized()
-        else:
-            radius, up, down = shape
-            x, y, z = v.co
-            direction = Vector((x * radius, y * radius, z * (up if z > 0 else down))).normalized()
-        reach = [_exit_distance(centre, direction, Vector(c), r, up, down) for c, r, up, down in lumps]
-        distance = max(t for t in reach if t is not None)
+        direction, distance = _reach(v.co, centre, lumps, shape)
         v.co = centre + direction * distance * (1 + rng.uniform(-lumpiness, lumpiness))
     faces = []  # in a fixed order, so a seed always paints the same faces
     for v in verts:
@@ -149,24 +191,28 @@ def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03
         b.paint([f], rng.choice(shades if f.normal.z < -0.35 else leaves))
 
 
-def pad(b, centre, radius, leaves, shades, rng, up=2.2, down=1.0, lumps=4, subdivisions=3):
-    """A flat, lumpy pad of foliage, like a pine's tuft of needles: a low dome
-    with a few smaller lumps rising from its top at random, wrapped in one skin
-    whose triangles match a canopy's."""
-    centre = Vector(centre)
+def _pad_parts(centre, radius, up, down, lumps, rng):
+    """A pad's lumps: a low dome with a few smaller lumps rising from its top."""
     parts = [(centre, radius, up, down)]
     for i in range(lumps):
         angle = 2 * math.pi * i / lumps + rng.uniform(-0.5, 0.5)
         reach = radius * rng.uniform(0.35, 0.6)
         offset = Vector((math.cos(angle) * reach, math.sin(angle) * reach, rng.uniform(0.2, 0.8)))
         parts.append((centre + offset, radius * rng.uniform(0.45, 0.65), up * rng.uniform(0.8, 1.2), down * 0.8))
+    return parts
+
+
+def pad(b, centre, radius, leaves, shades, rng, up=2.2, down=1.0, lumps=4, subdivisions=3):
+    """A flat, lumpy pad of foliage, like a pine's tuft of needles: a low dome
+    with a few smaller lumps rising from its top at random, wrapped in one skin
+    whose triangles match a canopy's."""
+    parts = _pad_parts(Vector(centre), radius, up, down, lumps, rng)
     canopy(
         b, centre, parts, leaves, shades, rng,
         subdivisions=subdivisions, lumpiness=0.04, shape=(radius * 1.25, up * 1.3, down),
     )
 
 
-GOLDEN_ANGLE = 2.39996  # radians: spreads branches evenly round a trunk
 
 
 def _lerp(a, b, t):
@@ -182,8 +228,14 @@ def grow_branches(trunk_points, rules, rng):
     length and pad ((bottom, top) pairs), fork_chance, and optionally rise (a
     range, as a fraction of length), droop (the kink sags by this fraction of
     length instead of rising), wander (sideways kink, in shaku) and thickness
-    ((bottom, top) radius at the trunk).
+    ((bottom, top) radius at the trunk) and taper (lengths and pads follow
+    t ** taper up the crown: above 1 they stay long higher up, then pull in
+    quickly near the top, for a rounded crown rather than a cone) and lift
+    (how far above a branch's tip, and a fork's, its pad is centred; keep the
+    tip inside the pad, so a flat pad wants a small lift).
     """
+    taper = rules.get("taper", 1.0)
+    lift, fork_lift = rules.get("lift", (1.0, 0.8))
     rise_range = rules.get("rise", (0.2, 0.45))
     droop = rules.get("droop")
     wander = rules.get("wander", 1)
@@ -196,19 +248,21 @@ def grow_branches(trunk_points, rules, rng):
         angle = i * GOLDEN_ANGLE + rng.uniform(-0.3, 0.3)
         out_dir = Vector((math.cos(angle), math.sin(angle), 0))
         across = Vector((-out_dir.y, out_dir.x, 0))
-        length = _lerp(*rules["length"], t) * rng.uniform(0.8, 1.2)
+        length = _lerp(*rules["length"], t**taper) * rng.uniform(0.8, 1.2)
         rise = length * rng.uniform(*rise_range)
         kink_z = rise * 0.4 if droop is None else -length * droop
         kink = base + out_dir * length * 0.5 + across * rng.uniform(-wander, wander) + Vector((0, 0, kink_z))
         end = base + out_dir * length + across * rng.uniform(-wander, wander) + Vector((0, 0, rise))
         thick = _lerp(*thickness, t)
-        pad_radius = _lerp(*rules["pad"], t) * rng.uniform(0.85, 1.15)
-        out.append(([base, kink, end], [thick, thick * 0.65, 0.15], end + Vector((0, 0, 1)), pad_radius))
+        pad_radius = _lerp(*rules["pad"], t**taper) * rng.uniform(0.85, 1.15)
+        out.append(([base, kink, end], [thick, thick * 0.65, 0.15], end + Vector((0, 0, lift)), pad_radius))
         if rng.random() < rules["fork_chance"]:
             turn = rng.choice((-1, 1)) * rng.uniform(0.6, 1.0)
             fork_dir = Vector((math.cos(angle + turn), math.sin(angle + turn), 0))
             fork_end = kink + fork_dir * length * 0.45 + Vector((0, 0, rise * 0.5))
-            out.append(([kink, fork_end], [thick * 0.45, 0.12], fork_end + Vector((0, 0, 0.8)), pad_radius * 0.7))
+            out.append(
+                ([kink, fork_end], [thick * 0.45, 0.12], fork_end + Vector((0, 0, fork_lift)), pad_radius * 0.7)
+            )
     return out
 
 
@@ -216,7 +270,10 @@ def conifer(b, spec, needles, shades, bark):
     """A conifer from a version spec: a straight trunk whose faces each pick a
     bark colour, branches grown by grow_branches each carrying a tuft, and a
     tuft on the tip. Tufts and the tip take their up and down from spec["tuft"]
-    and spec["tip"]; bark is a list of swatches to pick from."""
+    and spec["tip"]; bark is a list of swatches to pick from.
+
+    With spec["clusters"] (tier, sectors), the tufts aren't separate: each
+    tier and sector of the crown is wrapped in one skin, see clustered_crown."""
     rng = rng_for(spec["seed"])
     points, radii = densify(*spec["trunk"], step=3)
     for segment in branch(b, points, radii, bark[0]):
@@ -224,6 +281,19 @@ def conifer(b, spec, needles, shades, bark):
             b.paint([face], rng.choice(bark))
 
     tuft = spec["tuft"]
+    tip = spec["tip"]
+    top = Vector(spec["trunk"][0][-1]) + Vector((0, 0, 1))
+    if "clusters" in spec:
+        sprays = []
+        for branch_points, branch_radii, pad_centre, pad_radius in grow_branches(
+            spec["trunk"][0], spec["branches"], rng
+        ):
+            branch(b, branch_points, branch_radii, bark[0])
+            sprays.append((pad_centre, pad_radius, tuft["up"], tuft["down"]))
+        sprays.append((top, tip["radius"], tip["up"], tip["down"]))
+        clustered_crown(b, sprays, needles, shades, rng, **spec["clusters"])
+        return
+
     for branch_points, branch_radii, pad_centre, pad_radius in grow_branches(
         spec["trunk"][0], spec["branches"], rng
     ):
@@ -232,9 +302,37 @@ def conifer(b, spec, needles, shades, bark):
             b, pad_centre, pad_radius, needles, shades, rng, up=tuft["up"], down=tuft["down"],
             subdivisions=3 if pad_radius >= 4 else 2,  # keeps the triangles one size
         )
-    tip = spec["tip"]
-    top = Vector(spec["trunk"][0][-1]) + Vector((0, 0, 1))
     pad(b, top, tip["radius"], needles, shades, rng, up=tip["up"], down=tip["down"], lumps=2, subdivisions=2)
+
+
+def clustered_crown(b, sprays, leaves, shades, rng, tier, sectors, lumps=2):
+    """Wrap sprays of foliage in a few skins rather than one each: the crown is
+    cut into tiers tier shaku tall, and each tier into sectors round the trunk,
+    and every piece is shrink-wrapped as one lumpy skin with even triangles.
+
+    sprays are (centre, radius, up, down). A core lump at each piece's middle
+    fills it, so every ray from there meets foliage."""
+    bottom = min(c.z for c, *_ in sprays)
+    pieces = {}
+    for spray in sprays:
+        c = spray[0]
+        sector = int((math.atan2(c.y, c.x) % (2 * math.pi)) / (2 * math.pi) * sectors) % sectors
+        pieces.setdefault((int((c.z - bottom) // tier), sector), []).append(spray)
+    for key in sorted(pieces):
+        group = pieces[key]
+        middle = sum((Vector(c) for c, *_ in group), Vector()) / len(group)
+        parts = []
+        for c, r, up, down in group:
+            parts += _pad_parts(Vector(c), r, up, down, lumps, rng)
+        reach = max((Vector((c.x - middle.x, c.y - middle.y, 0))).length + r * 1.2 for c, r, *_ in group)
+        rise = max(c.z + up * 1.3 for c, _, up, _ in group) - middle.z
+        sink = middle.z - min(c.z - down for c, _, _, down in group)
+        parts.append((middle, max(1.5, reach * 0.45), rise * 0.6, sink * 0.6))  # the core
+        shape = (reach, rise, sink)
+        canopy(
+            b, middle, parts, leaves, shades, rng,
+            lumpiness=0.04, shape=shape, triangles=even_triangles(middle, parts, shape),
+        )
 
 
 def rng_for(seed):
