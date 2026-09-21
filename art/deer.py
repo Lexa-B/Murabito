@@ -27,21 +27,20 @@ BROWN, CREAM, SOOT, ANTLER = "deer_brown", "cream", "soot", "antler"
 
 # The spine, tail tip to nose: (y, z, half-width, half-height, colour, underside
 # colour). See loft.Builder.spine.
-TAIL_TIP = Vector((0, -1.72, 1.37))
+TAIL_TIP = Vector((0, -1.84, 1.37))
 SPINE = [
     # tail: short, black on top and white beneath
-    (-1.66, 1.45, 0.07, 0.05, SOOT, CREAM),
-    (-1.58, 1.57, 0.08, 0.07, CREAM, CREAM),  # tail root; the rump patch is white
-    # body: a rounded rump, full and even to the chest
-    (-1.52, 1.59, 0.25, 0.28, BROWN, CREAM),
-    (-1.40, 1.61, 0.36, 0.38, BROWN, CREAM),
-    (-1.20, 1.63, 0.42, 0.43, BROWN, CREAM),  # haunches
-    (-1.00, 1.63, 0.42, 0.43, BROWN, CREAM),
-    (-0.80, 1.63, 0.41, 0.42, BROWN, CREAM),
-    (-0.57, 1.64, 0.41, 0.42, BROWN, CREAM),
-    (-0.35, 1.65, 0.41, 0.43, BROWN, CREAM),
-    (-0.15, 1.67, 0.415, 0.44, BROWN, CREAM),
-    (0.05, 1.70, 0.42, 0.45, BROWN, CREAM),  # chest
+    (-1.78, 1.45, 0.07, 0.05, SOOT, CREAM),
+    (-1.70, 1.57, 0.08, 0.07, CREAM, CREAM),  # tail root; the rump patch is white
+    # body: a rump rounded from above as well as from the side, full and even to the chest
+    (-1.64, 1.57, 0.20, 0.23, BROWN, BROWN),
+    (-1.53, 1.56, 0.32, 0.34, BROWN, BROWN),  # the buttock; the thighs grow from the segment in front
+    (-1.00, 1.57, 0.42, 0.49, BROWN, CREAM),  # haunches; the thighs grow from the long segment behind
+    (-0.80, 1.58, 0.42, 0.47, BROWN, CREAM),  # a little belly, sagging in the middle
+    (-0.57, 1.56, 0.43, 0.50, BROWN, CREAM),
+    (-0.35, 1.57, 0.43, 0.51, BROWN, CREAM),
+    (-0.15, 1.60, 0.425, 0.51, BROWN, CREAM),
+    (0.05, 1.66, 0.42, 0.49, BROWN, CREAM),  # chest
     (0.30, 1.80, 0.36, 0.40, BROWN, BROWN),  # shoulders
     # neck: short and thick, up and forward
     (0.46, 2.08, 0.26, 0.27, BROWN, BROWN),
@@ -58,27 +57,28 @@ NOSE_TIP = Vector((0, 1.48, 2.63))
 BODY_AXIS_Z = 1.65  # roughly the height of the body's spine, for telling outside from in
 
 # Which spine segment (index of its tail-side ring) and face each limb grows from.
-HIND_SEGMENT = 4  # haunches
-FRONT_SEGMENT = 10  # chest -> shoulders
-EAR_SEGMENT = 15  # back of the head -> cheeks
+HIND_SEGMENT = 3  # buttock -> haunches: as long as the thigh is deep, so it tucks in neither behind nor in front
+FRONT_SEGMENT = 9  # chest -> shoulders
+EAR_SEGMENT = 14  # back of the head -> cheeks
 
 # Limbs, for the right side: rings of (x, y, z, half-width, half-depth, colour).
 # See loft.Builder.limb.
 FRONT_LEG = [
-    (0.20, 0.18, 1.22, 0.11, 0.13, BROWN),  # shoulder
-    (0.18, 0.18, 0.82, 0.07, 0.08, BROWN),  # elbow
-    (0.17, 0.20, 0.40, 0.05, 0.055, BROWN),  # knee
-    (0.17, 0.22, 0.10, 0.045, 0.05, BROWN),  # fetlock
-    (0.17, 0.25, 0.05, 0.05, 0.065, SOOT),  # hoof
-    (0.17, 0.26, 0.00, 0.05, 0.07, SOOT),  # sole
+    (0.20, 0.18, 1.14, 0.13, 0.15, BROWN),  # shoulder
+    (0.18, 0.18, 0.80, 0.09, 0.10, BROWN),  # elbow
+    (0.17, 0.20, 0.40, 0.065, 0.07, BROWN),  # knee
+    (0.17, 0.22, 0.10, 0.055, 0.06, BROWN),  # fetlock
+    (0.17, 0.25, 0.05, 0.06, 0.075, SOOT),  # hoof
+    (0.17, 0.26, 0.00, 0.06, 0.08, SOOT),  # sole
 ]
 HIND_LEG = [
-    (0.21, -1.05, 1.16, 0.13, 0.17, BROWN),  # thigh
-    (0.19, -0.98, 0.80, 0.08, 0.10, BROWN),  # stifle
-    (0.17, -1.03, 0.42, 0.05, 0.06, BROWN),  # hock
-    (0.17, -1.00, 0.10, 0.045, 0.05, BROWN),  # fetlock
-    (0.17, -0.97, 0.05, 0.05, 0.065, SOOT),  # hoof
-    (0.17, -0.96, 0.00, 0.05, 0.07, SOOT),  # sole
+    (0.18, -1.21, 1.02, 0.13, 0.22, BROWN),  # a full thigh, inside its base face and the haunch's width
+    (0.19, -1.13, 0.88, 0.125, 0.18, BROWN),  # tapering, so the back of the leg curves down to the hock
+    (0.19, -0.99, 0.72, 0.10, 0.12, BROWN),  # stifle
+    (0.17, -1.03, 0.42, 0.065, 0.075, BROWN),  # hock
+    (0.17, -1.00, 0.10, 0.055, 0.06, BROWN),  # fetlock
+    (0.17, -0.97, 0.05, 0.06, 0.075, SOOT),  # hoof
+    (0.17, -0.96, 0.00, 0.06, 0.08, SOOT),  # sole
 ]
 EAR = [  # big, held out to the side and up
     (0.30, 0.74, 3.08, 0.09, 0.045, BROWN),
@@ -111,7 +111,7 @@ MARKINGS = [
 SPOT_SIZE = 0.055
 SPOTS = [
     (segment, face, along, around)
-    for segment in range(4, 11)
+    for segment in range(4, 10)
     for face, along, around in (
         # a row high on each side, two spots per face, staggered
         (0, 0.06 if segment % 2 else -0.05, -0.04),
