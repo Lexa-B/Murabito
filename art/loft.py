@@ -38,6 +38,11 @@ class Builder:
         f[self._swatch] = style.SWATCH[colour]
         return f
 
+    def paint(self, faces, colour):
+        """Recolour faces already built, for patches that don't follow rings."""
+        for f in faces:
+            f[self._swatch] = style.SWATCH[colour]
+
     def spine(self, start_tip, rings, end_tip):
         """Loft a body along a spine in the YZ plane.
 
@@ -92,6 +97,8 @@ class Builder:
         closed to the point tip. Each ring is a quad in the XY plane, its corners
         matched to the base face's corners by which side of the face centre they
         lie on, so the limb comes out untwisted whatever the face's orientation.
+
+        Returns the limb's faces, one list per ring plus one for the end.
         """
         base = list(face.verts)
         centre = face.calc_center_median()
@@ -100,18 +107,23 @@ class Builder:
         self.bm.faces.remove(face)
 
         prev = base
+        rows = []
         for x, y, z, hw, hd, colour in rings:
             ring = [self.bm.verts.new((x * mirror + sx * hw, y + sy * hd, z)) for sx, sy in signs]
-            for j in range(4):
-                self.face((prev[j], prev[(j + 1) % 4], ring[(j + 1) % 4], ring[j]), colour)
+            rows.append(
+                [
+                    self.face((prev[j], prev[(j + 1) % 4], ring[(j + 1) % 4], ring[j]), colour)
+                    for j in range(4)
+                ]
+            )
             prev = ring
         colour = rings[-1][5]
         if tip is None:
-            self.face(prev, colour)
+            rows.append([self.face(prev, colour)])
         else:
             point = self.bm.verts.new((tip.x * mirror, tip.y, tip.z))
-            for j in range(4):
-                self.face((point, prev[j], prev[(j + 1) % 4]), colour)
+            rows.append([self.face((point, prev[j], prev[(j + 1) % 4]), colour) for j in range(4)])
+        return rows
 
     def finish(self, name):
         """Turn the bmesh into a palette-coloured object linked into the scene."""
