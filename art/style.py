@@ -198,6 +198,16 @@ PALETTE = [
     ("macaque_face", "#C4655A"),
     ("macaque_skin", "#5E514A"),
     ("eye_black", "#1A1716"),
+    # the Japanese wolf
+    ("wolf_grey", "#8E8374"),
+    ("wolf_grey_light", "#998E7F"),
+    ("wolf_grey_deep", "#837869"),
+    ("wolf_saddle", "#5A5048"),
+    ("wolf_saddle_light", "#635950"),
+    ("wolf_saddle_deep", "#524940"),
+    ("wolf_pale", "#DDD3C2"),
+    ("wolf_pale_light", "#E4DBCC"),
+    ("wolf_pale_deep", "#D3C8B6"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -230,6 +240,9 @@ SHADES = {
         "tanuki_grey",
         "tanuki_dark",
         "macaque_brown",
+        "wolf_grey",
+        "wolf_saddle",
+        "wolf_pale",
     )
 }
 
