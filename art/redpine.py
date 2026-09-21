@@ -13,6 +13,7 @@ Named redpine-<version>-<colour>-<season>, as the maple is.
 
 import argparse
 import math
+import random
 import sys
 from pathlib import Path
 
@@ -60,6 +61,47 @@ VERSIONS = {
 }
 
 GOLDEN_ANGLE = 2.39996  # radians: spreads branches evenly round the trunk
+
+
+def _wild(seed, height=50.0, lean=(1.5, 1.0), branches=16, crown=0.46, fork_chance=0.5):
+    """A version whose trunk grows from its seed too: height and crown in shaku
+    and as a fraction of the height, lean as the (x, y) drift at the top."""
+    rng = random.Random(seed * 7919 + 1)  # its own stream, apart from the build's
+    scale = height / 50
+    heights = [-0.5, 4] + [height * f for f in (0.25, 0.4, 0.56, 0.72, 0.86)] + [height - 2.5]
+    points = []
+    for z in heights:
+        t = max(z, 0) / height
+        wobble = 0 if z <= 4 else 0.8
+        points.append((
+            lean[0] * t + rng.uniform(-wobble, wobble),
+            lean[1] * t + rng.uniform(-wobble, wobble),
+            z,
+        ))
+    radii = [r * scale for r in (2.0, 1.5, 1.3, 1.15, 1.0, 0.8, 0.55, 0.3)]
+    return {
+        "seed": seed,
+        "trunk": (points, radii),
+        "bark_blend": (height * 0.2, height * 0.64),
+        "stubs": [(height * f, rng.uniform(0, 2 * math.pi)) for f in (crown - 0.14, crown - 0.07, crown - 0.03)],
+        "branches": {
+            "count": branches,
+            "from": height * crown,
+            "to": height * 0.9,
+            "length": (11 * scale, 4 * scale),
+            "pad": (5.0, 3.2),
+            "fork_chance": fork_chance,
+        },
+        "top_pad": 4.5,
+    }
+
+
+VERSIONS.update({
+    "01": _wild(1, height=46, lean=(-2, 1), branches=14, crown=0.5, fork_chance=0.6),
+    "02": _wild(2, height=54, lean=(1, -2.5), branches=18, crown=0.42, fork_chance=0.4),
+    "03": _wild(3, height=42, lean=(2.5, 2), branches=13, crown=0.4, fork_chance=0.55),
+    "04": _wild(4, height=50, lean=(0, 0), branches=17, crown=0.55, fork_chance=0.5),
+})
 
 
 def _lerp(a, b, t):
