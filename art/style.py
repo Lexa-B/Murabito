@@ -163,6 +163,11 @@ PALETTE = [
     ("horse_bay_light", "#94643C"),
     ("horse_bay_deep", "#7F512E"),
     ("hoof_grey", "#4B4541"),
+    # native draft cattle
+    ("cattle_black", "#423A36"),
+    ("cattle_black_light", "#4C4440"),
+    ("cattle_black_deep", "#39322F"),
+    ("cattle_muzzle", "#6E655F"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -187,6 +192,7 @@ SHADES = {
         "deer_brown",
         "bear_black",
         "horse_bay",
+        "cattle_black",
     )
 }
 
