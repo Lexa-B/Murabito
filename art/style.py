@@ -158,6 +158,11 @@ PALETTE = [
     ("bear_black_light", "#403A36"),
     ("bear_black_deep", "#2E2A27"),
     ("bear_muzzle", "#A08566"),
+    # the Kiso horse
+    ("horse_bay", "#8A5A34"),
+    ("horse_bay_light", "#94643C"),
+    ("horse_bay_deep", "#7F512E"),
+    ("hoof_grey", "#4B4541"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -181,6 +186,7 @@ SHADES = {
         "boar_dark",
         "deer_brown",
         "bear_black",
+        "horse_bay",
     )
 }
 

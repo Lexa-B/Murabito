@@ -295,6 +295,7 @@ And by eye:
 | boar | – | – | – | Japanese wild boar (ニホンイノシシ), a tusked male, standing; front-heavy, dark crest, pale jaw fringe |
 | deer | – | – | – | sika stag (ニホンジカ) in summer coat, standing; kanoko spots as studs, antlers as `flora.branch` tubes |
 | bear | – | – | – | Japanese black bear (ツキノワグマ), on all fours; big round head, pale chest crescent, tan muzzle |
+| horse | – | – | – | Kiso horse (木曽馬), a small, stocky native breed, bay, unsaddled |
 | maple (イロハモミジ) | `00`, `pruned-00` | a–e | summer | wild mushroom crown; `pruned-00` is cloud-pruned, kept to shrink into a garden prop |
 | redpine (アカマツ) | `00`–`04` | a | summer | crooked, flat pads, bark blending grey to red |
 | sugi (スギ) | `00`–`04` | a | summer | straight spire of knobbly tufts |
