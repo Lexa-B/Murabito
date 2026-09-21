@@ -4,8 +4,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
-# Rust / Cargo (the root project)
+# Rust / Cargo (the root project, and the archived first Bevy attempt)
 /target/
+/_Archives/Bevy-Try-1/target/
 
 # Local artifacts
 screenshots/

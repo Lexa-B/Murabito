@@ -24,6 +24,6 @@ Files made by others keep their own licences, and they are not covered by either
 
 | File | What | Licence |
 |---|---|---|
-| `assets/fonts/NotoSansJP-Regular.otf` | Noto Sans JP, Regular — the Japanese subset from [notofonts/noto-cjk](https://github.com/notofonts/noto-cjk), © The Noto Project Authors. The UI's font: it covers Latin as well as Japanese. | SIL Open Font License 1.1, in [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt) |
+| `_Archives/Bevy-Try-1/assets/fonts/NotoSansJP-Regular.otf` | Noto Sans JP, Regular — the Japanese subset from [notofonts/noto-cjk](https://github.com/notofonts/noto-cjk), © The Noto Project Authors. The archived Bevy attempt's UI font: it covers Latin as well as Japanese. | SIL Open Font License 1.1, in [`_Archives/Bevy-Try-1/assets/fonts/OFL.txt`](_Archives/Bevy-Try-1/assets/fonts/OFL.txt) |
 
 The Unreal Engine itself is not part of this repository and is not covered by either licence; it is used under Epic's own terms.

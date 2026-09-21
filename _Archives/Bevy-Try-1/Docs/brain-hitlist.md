@@ -1,14 +1,8 @@
 # Brain hitlist
 
-The agent architecture for the root project, and the order we're building it in.
-
-Working document. Decisions land here so they stop being relitigated; open questions
-stay visible so they stop being forgotten. Derived from a design conversation on
-2026-09-20 — the reasoning is compressed to a line each here, not reproduced.
-
-Not a spec and not a plan. `AGENTS.md` rules both of those out for the main project,
-and that still holds: this is a decision register and a queue, and the design of each
-bite is still agreed in chat before it is built.
+A first draft of the agent architecture, written for the first Bevy attempt and archived
+with it. Derived from a design conversation on 2026-09-20 — the reasoning is compressed
+to a line each here, not reproduced.
 
 ---
 
