@@ -8,6 +8,7 @@
 //! The catalogues are compiled in with `include_str!`, so a missing file is a build
 //! error rather than a startup failure. Editing a translation needs a rebuild.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use bevy::platform::collections::HashSet;
@@ -47,8 +48,18 @@ pub enum Language {
 }
 
 /// Marks a text entity as holding a translated string. The value is the catalogue key.
-#[derive(Component, Clone, Copy)]
-pub struct Localized(pub &'static str);
+///
+/// `Cow` rather than `&'static str` because not every key is known at compile time: the
+/// debug screen names a being by its 種, which is read out of the taxonomy YAML at
+/// startup. A literal key still costs no allocation.
+#[derive(Component, Clone, Debug)]
+pub struct Localized(pub Cow<'static, str>);
+
+impl Localized {
+    pub fn new(key: impl Into<Cow<'static, str>>) -> Self {
+        Self(key.into())
+    }
+}
 
 /// Every language's strings, parsed once at startup.
 #[derive(Resource)]
@@ -108,7 +119,7 @@ fn localize_new(
     mut texts: Query<(&Localized, &mut Text), Added<Localized>>,
 ) {
     for (localized, mut text) in &mut texts {
-        **text = catalogues.get(*language, localized.0);
+        **text = catalogues.get(*language, &localized.0);
     }
 }
 
@@ -118,6 +129,6 @@ fn localize_all(
     mut texts: Query<(&Localized, &mut Text)>,
 ) {
     for (localized, mut text) in &mut texts {
-        **text = catalogues.get(*language, localized.0);
+        **text = catalogues.get(*language, &localized.0);
     }
 }

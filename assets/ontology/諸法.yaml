@@ -1,0 +1,44 @@
+# 諸法実相 — all phenomena as they truly are.
+#
+# The world's own taxonomy: what a thing IS, and nothing else. Structure only. What a
+# thing is *like* is a different function and lives under assets/item_properties/.
+#
+# Every node here has exactly one file there, at the matching path. The loader refuses
+# the pair if they disagree.
+#
+# 法 here is dharma, a constituent of reality. Not 法律.
+#
+# The 者 / 物 boundary is Japanese grammar, not a judgement call. Ask which verb it takes:
+#
+#   いる   animate    猫がいる・神がいる・妖怪がいる      → 者
+#   ある   inanimate  木がある・石がある・死体がある      → 物
+#
+# Note the last one. Dying moves a being from いる to ある — 者 becomes 物 — so death is
+# a reclassification, not a special case, and 付喪神 is the same move in reverse.
+#
+# 未知 is reserved and is never a node. It names what a stopped traversal means: a being
+# that gets as far as 狼 and no further knows "something of this kind, and no more".
+# 諸法 → 未知 is the floor beneath everything, where fight, flight, freeze and fawn live.
+#
+# Display names are not here. Keys are the identity; what a player reads comes from
+# assets/locales/, like all other text.
+
+諸法:
+  物:
+    者:
+      生き物:
+        動物:
+          狐: {}
+          狼: {}
+          兎: {}
+        人間: {}
+      幽:
+        神: {}
+        妖怪:
+          付喪神: {}
+    植物:
+      木: {}
+      草: {}
+    物体:
+      道具: {}
+  事: {}

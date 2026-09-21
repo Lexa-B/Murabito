@@ -11,14 +11,15 @@ use bevy::prelude::*;
 use crate::settings::CameraSettings;
 use crate::state::AppState;
 
-/// Default top pan speed in metres per second at `PAN_REF_ZOOM`, before the zoom
+/// Default top pan speed in shaku per second at `PAN_REF_ZOOM`, before the zoom
 /// scaling below and before the player's own multiplier in `CameraSettings`.
-const PAN_SPEED: f32 = 13.5;
+/// About 7.5 ken a second.
+const PAN_SPEED: f32 = 45.0;
 
-/// The zoom distance at which the pan runs at exactly `PAN_SPEED`.
-const PAN_REF_ZOOM: f32 = 13.0;
+/// The zoom distance at which the pan runs at exactly `PAN_SPEED`. 7 ken.
+const PAN_REF_ZOOM: f32 = 42.0;
 
-/// How strongly pan speed follows zoom distance. 0.0 pans at a fixed speed in metres
+/// How strongly pan speed follows zoom distance. 0.0 pans at a fixed speed in shaku
 /// (fine zoomed out, sluggish up close); 1.0 pans at a fixed speed in screen-widths
 /// (fine up close, frantic zoomed out). 0.75 sits three-quarters of the way toward
 /// proportional: zooming out 4x speeds the pan up about 2.8x rather than 4x.
@@ -31,9 +32,9 @@ const PAN_ZOOM_EXPONENT: f32 = 0.75;
 /// the same time (and therefore looks the same on screen) however far out you are.
 const PAN_RESPONSE: f32 = 13.0;
 
-/// Closest and furthest the camera may sit from its focus, in metres.
-const ZOOM_MIN: f32 = 4.0;
-const ZOOM_MAX: f32 = 60.0;
+/// Closest and furthest the camera may sit from its focus, in shaku.
+const ZOOM_MIN: f32 = 13.0;
+const ZOOM_MAX: f32 = 198.0;
 
 /// Distance multiplier per wheel notch. Multiplicative, not additive, so one notch
 /// covers the same *proportion* of the view whether you are close in or far out.
@@ -70,12 +71,12 @@ pub struct CameraRig {
     /// Which way the camera sits from that spot — up and back, a fixed 45 degrees.
     /// A unit vector: distance is `zoom`, not baked in here.
     direction: Vec3,
-    /// How far back along `direction` the camera sits, in metres. Eased toward
+    /// How far back along `direction` the camera sits, in shaku. Eased toward
     /// `zoom_target` so the wheel glides rather than snaps.
     zoom: f32,
     /// Where the wheel has asked `zoom` to end up.
     zoom_target: f32,
-    /// Current pan velocity, in metres per second across the ground. Eased toward the
+    /// Current pan velocity, in shaku per second across the ground. Eased toward the
     /// velocity the keys ask for rather than set from them directly.
     velocity: Vec3,
 }
@@ -85,19 +86,33 @@ impl Default for CameraRig {
         Self {
             focus: Vec3::ZERO,
             direction: Vec3::new(0.0, 1.0, 1.0).normalize(),
-            zoom: 13.0,
-            zoom_target: 13.0,
+            zoom: PAN_REF_ZOOM,
+            zoom_target: PAN_REF_ZOOM,
             velocity: Vec3::ZERO,
         }
     }
 }
 
 impl CameraRig {
-    /// Top pan speed at the current zoom, in metres per second, including the player's
+    /// Top pan speed at the current zoom, in shaku per second, including the player's
     /// speed multiplier. The zoom curve's shape is fixed; the multiplier only shifts the
     /// whole curve up or down, which is the knob that turned out to be worth exposing.
     fn pan_speed(&self, settings: &CameraSettings) -> f32 {
         PAN_SPEED * settings.pan_speed_scale * (self.zoom / PAN_REF_ZOOM).powf(PAN_ZOOM_EXPONENT)
+    }
+
+    /// The point on the ground the camera is aimed at.
+    pub fn focus(&self) -> Vec3 {
+        self.focus
+    }
+
+    /// Jumps straight to a zoom distance, skipping the ease.
+    ///
+    /// For the one-shot capture, which has no time to glide: it needs the framing it
+    /// asked for on the very next frame, not half a second later.
+    pub fn jump_to_zoom(&mut self, zoom: f32) {
+        self.zoom = zoom.clamp(ZOOM_MIN, ZOOM_MAX);
+        self.zoom_target = self.zoom;
     }
 
     fn transform(&self) -> Transform {
@@ -232,6 +247,20 @@ mod tests {
         CameraSettings {
             pan_speed_scale: scale,
         }
+    }
+
+    #[test]
+    fn jumping_to_a_zoom_skips_the_ease_and_respects_the_limits() {
+        let mut rig = CameraRig::default();
+        rig.jump_to_zoom(100.0);
+        // Both, or the ease would drag it straight back toward the old target.
+        assert_eq!(rig.zoom, 100.0);
+        assert_eq!(rig.zoom_target, 100.0);
+
+        rig.jump_to_zoom(ZOOM_MAX * 10.0);
+        assert_eq!(rig.zoom, ZOOM_MAX);
+        rig.jump_to_zoom(0.0);
+        assert_eq!(rig.zoom, ZOOM_MIN);
     }
 
     #[test]

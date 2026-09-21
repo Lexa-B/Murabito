@@ -1,0 +1,5 @@
+# 諸法 → 物 → 者 → 生き物 → 動物 → 兎
+#
+# This node's properties. The tree itself is assets/ontology/諸法.yaml.
+属性:
+  - 被食者

@@ -74,7 +74,7 @@ fn spawn_page(mut commands: Commands, font: Res<UiFont>, settings: Res<CameraSet
         .with_children(|page| {
             page.spawn((
                 Text::default(),
-                Localized("settings.title"),
+                Localized::new("settings.title"),
                 ui::text_font(&font, 28.0),
                 TextColor(ui::TEXT),
                 Node {
