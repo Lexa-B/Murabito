@@ -1,5 +1,9 @@
-//! The starter scene: ground, one cube, and a sun. Placeholder content — the point of
-//! it is to give the camera something to look at.
+//! The starter scene: ground, plants, and a sun.
+//!
+//! Nothing here moves. The spinning cube that used to stand in for motion is gone — it
+//! existed so a pause was visible, and pausing is covered by `tests/pause.rs` rather
+//! than by watching a box. Bite 0i puts motion back as an idle turn, which shows
+//! something true about a being instead of standing in for it.
 
 use bevy::prelude::*;
 
@@ -14,20 +18,9 @@ pub struct ScenePlugin;
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ClearColor(SKY))
-            .add_systems(Startup, spawn_scene)
-            // Not gated on `AppState`: it stops because the clock stops, which is the
-            // point of pausing `Time<Virtual>` rather than gating every system by hand.
-            .add_systems(Update, spin);
+            .add_systems(Startup, spawn_scene);
     }
 }
-
-/// Marks something that turns slowly on the spot. Placeholder motion: without it the
-/// scene is completely static and a pause would be impossible to see.
-#[derive(Component)]
-struct Spinner;
-
-/// A quarter turn a second, in radians.
-const SPIN_RATE: f32 = std::f32::consts::FRAC_PI_2;
 
 /// Runs once, before the first frame. `Commands` queues entity spawns; the two
 /// `ResMut<Assets<_>>` are the engine's mesh and material stores — `add` uploads an
@@ -41,14 +34,6 @@ fn spawn_scene(
     commands.spawn((
         Mesh3d(meshes.add(Plane3d::default().mesh().size(360.0, 360.0))),
         MeshMaterial3d(materials.add(Color::srgb(0.35, 0.42, 0.30))),
-    ));
-
-    // A 3.3 shaku cube (1 m), lifted half its height so it sits on the ground.
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(3.3, 3.3, 3.3))),
-        MeshMaterial3d(materials.add(Color::srgb(0.85, 0.45, 0.20))),
-        Transform::from_xyz(0.0, 1.65, 0.0),
-        Spinner,
     ));
 
     // Plants, so that sight has something to stop against. They carry a 種 and nothing
@@ -88,12 +73,4 @@ fn spawn_scene(
         },
         Transform::from_xyz(-33.0, 46.0, -13.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
-}
-
-/// Turns every `Spinner` on the spot. `time.delta_secs()` is zero while the game is
-/// paused, so this keeps running and simply moves nothing.
-fn spin(time: Res<Time>, mut spinners: Query<&mut Transform, With<Spinner>>) {
-    for mut transform in &mut spinners {
-        transform.rotate_y(SPIN_RATE * time.delta_secs());
-    }
 }
