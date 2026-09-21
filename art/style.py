@@ -183,6 +183,14 @@ PALETTE = [
     ("shiba_red", "#C47A3E"),
     ("shiba_red_light", "#CD8748"),
     ("shiba_red_deep", "#B86F36"),
+    # the tanuki
+    ("tanuki_grey", "#8C7C68"),
+    ("tanuki_grey_light", "#978774"),
+    ("tanuki_grey_deep", "#80705D"),
+    ("tanuki_dark", "#2E2825"),
+    ("tanuki_dark_light", "#38312D"),
+    ("tanuki_dark_deep", "#262120"),
+    ("tanuki_pale", "#C9BCA8"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -212,6 +220,8 @@ SHADES = {
         "rooster_gold",
         "plumage_black",
         "shiba_red",
+        "tanuki_grey",
+        "tanuki_dark",
     )
 }
 

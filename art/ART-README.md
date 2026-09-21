@@ -299,6 +299,7 @@ And by eye:
 | ox | – | – | – | native black draft ox (like 見島牛), unharnessed; horns and ears as `flora.branch` tubes |
 | chicken | – | – | – | native rooster (地鶏) in wild-type colours (赤笹); comb and wattles grown from the head's top and bottom faces |
 | dog | – | – | – | native dog of the Shiba type (柴犬), red with cream urajiro; a ring-curled tail resting on the back |
+| tanuki | – | – | – | Japanese raccoon dog (ホンドタヌキ), the real animal; round and low, with the dark mask and shoulder band |
 | maple (イロハモミジ) | `00`, `pruned-00` | a–e | summer | wild mushroom crown; `pruned-00` is cloud-pruned, kept to shrink into a garden prop |
 | redpine (アカマツ) | `00`–`04` | a | summer | crooked, flat pads, bark blending grey to red |
 | sugi (スギ) | `00`–`04` | a | summer | straight spire of knobbly tufts |
