@@ -1,10 +1,10 @@
-//! The placeholder world: a ground to stand things on, and a sun to see them by.
+//! The placeholder world: a ground, a sun and sky to see it by, and a fox standing at
+//! the origin so that there is something to look at.
 //!
 //! Lengths are in shaku: one world unit is one 尺, about 30.3 cm. Metres appear only in
 //! comments, to give a familiar sense of scale.
 //!
-//! This crate spawns no camera. Without one nothing is drawn, so until a camera module
-//! exists the window stays grey; the tests below are what show the scene is there.
+//! This crate spawns no camera: seeing the world is another module's job.
 
 use bevy::prelude::*;
 
@@ -19,12 +19,24 @@ const SUN_SHINES_FROM: Vec3 = Vec3::new(4.0, 8.0, 4.0);
 /// What the camera paints where nothing else is drawn. Stands in for a sky.
 const SKY_COLOUR: Color = Color::srgb(0.53, 0.81, 0.92);
 
+/// Light that reaches everywhere equally, standing in for the sky's glow. Without it,
+/// whatever faces away from the sun is pure black.
+const SKY_GLOW: f32 = 200.0;
+
+/// Relative to `assets/`. The model is in shaku, faces forward (-Z) and stands with
+/// its soles at y = 0, so it needs no scaling or turning: see `art/ART-README.md`.
+const FOX_MODEL: &str = "models/fox.glb";
+
 pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ClearColor(SKY_COLOUR))
-            .add_systems(Startup, (spawn_ground, spawn_sun));
+            .insert_resource(GlobalAmbientLight {
+                brightness: SKY_GLOW,
+                ..default()
+            })
+            .add_systems(Startup, (spawn_ground, spawn_sun, spawn_fox));
     }
 }
 
@@ -35,6 +47,10 @@ struct Ground;
 /// Marks the sun.
 #[derive(Component)]
 struct Sun;
+
+/// Marks the fox.
+#[derive(Component)]
+struct Fox;
 
 fn spawn_ground(
     mut commands: Commands,
@@ -60,18 +76,25 @@ fn spawn_sun(mut commands: Commands) {
     ));
 }
 
+fn spawn_fox(mut commands: Commands, assets: Res<AssetServer>) {
+    let model = assets.load(GltfAssetLabel::Scene(0).from_asset(FOX_MODEL));
+    commands.spawn((Fox, WorldAssetRoot(model)));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// A headless app, run for one frame: no window, no GPU. `MinimalPlugins` brings the
-    /// schedules; the asset stores are what `spawn_ground` asks for, and in the real app
-    /// they arrive with `DefaultPlugins`.
+    /// schedules; the asset stores are what the spawn systems ask for, and in the real
+    /// app they arrive with `DefaultPlugins`. No glTF loader is registered, so the fox's
+    /// handle never resolves to a model, which no test here needs.
     fn app_after_startup() -> App {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, AssetPlugin::default()))
             .init_asset::<Mesh>()
             .init_asset::<StandardMaterial>()
+            .init_asset::<WorldAsset>()
             .add_plugins(ScenePlugin);
         app.update();
         app
@@ -91,6 +114,30 @@ mod tests {
 
         assert_eq!(count::<Ground>(&mut app), 1);
         assert_eq!(count::<Sun>(&mut app), 1);
+    }
+
+    #[test]
+    fn a_fox_stands_at_the_origin() {
+        let mut app = app_after_startup();
+        let world = app.world_mut();
+
+        let fox = world
+            .query_filtered::<&Transform, With<Fox>>()
+            .single(world)
+            .expect("exactly one fox");
+
+        assert_eq!(fox.translation, Vec3::ZERO);
+    }
+
+    /// The model is made by the art pipeline, not by this crate. A rename there would
+    /// otherwise show up only as a fox quietly missing from the screen.
+    #[test]
+    fn the_fox_model_is_where_the_scene_looks_for_it() {
+        let model = bevy::asset::io::file::FileAssetReader::get_base_path()
+            .join("assets")
+            .join(FOX_MODEL);
+
+        assert!(model.is_file(), "no model at {}", model.display());
     }
 
     #[test]
