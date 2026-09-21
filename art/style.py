@@ -191,6 +191,12 @@ PALETTE = [
     ("tanuki_dark_light", "#38312D"),
     ("tanuki_dark_deep", "#262120"),
     ("tanuki_pale", "#C9BCA8"),
+    # the Japanese macaque
+    ("macaque_brown", "#968067"),
+    ("macaque_brown_light", "#A08A70"),
+    ("macaque_brown_deep", "#8A755D"),
+    ("macaque_face", "#C4655A"),
+    ("macaque_skin", "#5E514A"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -222,6 +228,7 @@ SHADES = {
         "shiba_red",
         "tanuki_grey",
         "tanuki_dark",
+        "macaque_brown",
     )
 }
 
