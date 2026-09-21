@@ -3,6 +3,8 @@
 
 use bevy::prelude::*;
 
+use crate::諸法::種;
+
 /// The colour the framebuffer is cleared to each frame: everything the camera doesn't
 /// draw over. Stands in for a sky.
 const SKY: Color = Color::srgb(0.53, 0.81, 0.92);
@@ -48,6 +50,34 @@ fn spawn_scene(
         Transform::from_xyz(0.0, 1.65, 0.0),
         Spinner,
     ));
+
+    // Plants, so that sight has something to stop against. They carry a 種 and nothing
+    // else: what they do to a sense is read off the taxonomy, which is why neither the
+    // mesh nor any marker component says anything about blocking.
+    //
+    // Placed across the line from the fox to the rabbit, grass first and trees beyond
+    // it, so that costing sight a band and stopping it outright show up in one picture.
+    let trunk = meshes.add(Cuboid::new(0.9, 8.0, 0.9));
+    let bark = materials.add(Color::srgb(0.24, 0.30, 0.18));
+    for (x, z) in [(3.0, -2.6), (4.6, -3.8), (6.2, -1.8)] {
+        commands.spawn((
+            種::new("木"),
+            Mesh3d(trunk.clone()),
+            MeshMaterial3d(bark.clone()),
+            Transform::from_xyz(x, 4.0, z),
+        ));
+    }
+
+    let tuft = meshes.add(Cuboid::new(0.9, 1.6, 0.9));
+    let blade = materials.add(Color::srgb(0.46, 0.60, 0.28));
+    for (x, z) in [(-8.0, 4.6), (-7.0, 3.8), (-6.4, 5.2), (-8.8, 3.6)] {
+        commands.spawn((
+            種::new("草"),
+            Mesh3d(tuft.clone()),
+            MeshMaterial3d(blade.clone()),
+            Transform::from_xyz(x, 0.8, z),
+        ));
+    }
 
     // Sun. A directional light has no position — only a direction, which is why this is
     // aimed with `looking_at` and the translation only serves to set that angle.
