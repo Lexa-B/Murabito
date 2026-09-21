@@ -34,11 +34,11 @@ SPINE = [
     (-1.34, 1.22, 0.05, 0.05, BROWN, BROWN),  # tail root
     # body: a rounded rump, widening and rising to high, heavy shoulders
     (-1.27, 1.20, 0.20, 0.22, BROWN, BROWN),
-    (-1.13, 1.20, 0.32, 0.34, BROWN, BROWN),
-    (-0.92, 1.22, 0.38, 0.40, BROWN, BROWN),  # haunches
-    (-0.55, 1.30, 0.42, 0.47, BROWN, BROWN),
-    (-0.15, 1.40, 0.48, 0.55, BROWN, BROWN),
-    (0.20, 1.45, 0.50, 0.58, BROWN, BROWN),  # shoulders, the highest and widest point
+    (-1.13, 1.17, 0.32, 0.37, BROWN, BROWN),
+    (-0.92, 1.16, 0.38, 0.46, BROWN, BROWN),  # haunches
+    (-0.55, 1.22, 0.42, 0.55, BROWN, BROWN),  # a deep belly
+    (-0.15, 1.30, 0.48, 0.65, BROWN, BROWN),
+    (0.20, 1.36, 0.50, 0.67, BROWN, BROWN),  # shoulders, the highest and widest point
     (0.48, 1.38, 0.40, 0.46, BROWN, BROWN),  # a thick neck
     # head: a big wedge sloping down to the snout, about 1.3x natural
     (0.72, 1.32, 0.42, 0.46, BROWN, BROWN),  # back of the head
@@ -57,19 +57,19 @@ TUSK_SEGMENT = 12  # along the snout
 
 # Limbs, for the right side: rings of (x, y, z, half-width, half-depth, colour).
 # See loft.Builder.limb.
-FRONT_LEG = [
-    (0.22, 0.03, 0.80, 0.12, 0.14, BROWN),  # shoulder
-    (0.20, 0.05, 0.50, 0.08, 0.09, BROWN),  # elbow
-    (0.19, 0.06, 0.18, 0.06, 0.07, DARK),  # wrist
-    (0.19, 0.09, 0.07, 0.065, 0.08, HOOF),  # hoof
-    (0.19, 0.10, 0.00, 0.065, 0.085, HOOF),  # sole
+FRONT_LEG = [  # short, and well forward under the shoulders
+    (0.22, 0.12, 0.64, 0.12, 0.14, BROWN),  # shoulder
+    (0.20, 0.14, 0.40, 0.08, 0.09, BROWN),  # elbow
+    (0.19, 0.15, 0.16, 0.06, 0.07, DARK),  # wrist
+    (0.19, 0.18, 0.07, 0.065, 0.08, HOOF),  # hoof
+    (0.19, 0.19, 0.00, 0.065, 0.085, HOOF),  # sole
 ]
-HIND_LEG = [
-    (0.23, -0.76, 0.76, 0.13, 0.16, BROWN),  # thigh
-    (0.21, -0.70, 0.48, 0.08, 0.10, BROWN),  # knee
-    (0.19, -0.76, 0.18, 0.06, 0.07, DARK),  # hock
-    (0.19, -0.72, 0.07, 0.065, 0.08, HOOF),  # hoof
-    (0.19, -0.71, 0.00, 0.065, 0.085, HOOF),  # sole
+HIND_LEG = [  # short, and well back under the haunches
+    (0.23, -0.86, 0.62, 0.13, 0.16, BROWN),  # thigh
+    (0.21, -0.81, 0.40, 0.08, 0.10, BROWN),  # knee
+    (0.19, -0.86, 0.16, 0.06, 0.07, DARK),  # hock
+    (0.19, -0.82, 0.07, 0.065, 0.08, HOOF),  # hoof
+    (0.19, -0.81, 0.00, 0.065, 0.085, HOOF),  # sole
 ]
 EAR = [  # upright and pointed
     (0.22, 0.74, 1.76, 0.11, 0.06, DARK),
