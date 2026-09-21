@@ -26,7 +26,9 @@ Don't assume goals beyond what `Experiments/manifest.md` and each experiment's s
 ```
 Murabito/
 ├─ AGENTS.md, CLAUDE.md, LICENSE, LICENSE-ASSETS, LICENSING.md, .gitignore, .gitattributes
-├─ (the main project)      nothing yet: see "Main project" below
+├─ Cargo.toml, Cargo.lock, rust-toolchain.toml   the main project: a Cargo workspace
+├─ crates/                 its members, one directory each (see "Main project" below)
+│  └─ murabito/            the app: the one binary
 ├─ Docs/                   project docs (no specs or plans; see below)
 ├─ _Archives/
 │  ├─ UE-Try/              the Unreal Engine 5 attempt, kept for reference, not built
@@ -54,7 +56,10 @@ Murabito/
 
 ## Main project
 
-The repo root is where the Murabito game lives, in Rust on Bevy. It is empty for now: the first Bevy attempt grew tangled and was archived to `_Archives/Bevy-Try-1/`, and the project is being rebuilt from nothing. The user drives it; AI assists.
+The repo root is where the Murabito game lives, in Rust on Bevy: a Cargo workspace whose members sit under `crates/`. It is nearly empty: the first Bevy attempt grew tangled and was archived to `_Archives/Bevy-Try-1/`, and the project is being rebuilt from nothing. The user drives it; AI assists.
+
+- **Build, run and test from the repo root:** `cargo run -p murabito`, `cargo test --workspace`, `cargo clippy --workspace --all-targets`, `cargo fmt --all`. The toolchain is pinned in `rust-toolchain.toml`; changing it is a deliberate edit, since a new compiler rebuilds the whole engine.
+- **Each module is its own library crate under `crates/`.** Its `pub` items are its whole API and its `[dependencies]` are its whole wiring: a crate can't reach what another doesn't export, and Cargo refuses dependency cycles. `murabito` is the app and the only binary. Members are picked up by the `crates/*` glob, inherit `version`, `edition` and `publish = false` from `[workspace.package]` in the root manifest, and are never published.
 
 - **One module at a time, at a pace the user can learn from.** The user is learning Rust and Bevy through this rebuild. Explain what a piece does and why before writing it, do one small piece, let the user look at it, then agree the next. Show the API and the reasoning, not only the finished diff.
 - **Modules are self-contained, with a clear job and a clear API.** Nothing reaches into another module's internals. Code follows Clean Code: small functions, names that say what things do, one level of abstraction at a time.
@@ -71,7 +76,7 @@ The repo root is where the Murabito game lives, in Rust on Bevy. It is empty for
 
 Each Rust + Bevy experiment is its own Cargo workspace, separate from the main project at the repo root.
 
-- **Build and test from the experiment's directory**, e.g. `cd Experiments/exp-05 && cargo test`. Run from the repo root, `cargo` finds the main project instead, or nothing while the root is empty. Workspace members also work from there (`cargo run -p viewer --release`, `cargo test -p hexworld`).
+- **Build and test from the experiment's directory**, e.g. `cd Experiments/exp-05 && cargo test`. Run from the repo root, `cargo` builds the main project's workspace instead. An experiment's workspace members also work from there (`cargo run -p viewer --release`, `cargo test -p hexworld`).
 - **Keep an experiment's core crate engine-free.** exp-05's `hexworld` has no dependencies at all, not even dev-dependencies: it is the part meant to outlive whatever engine or graphics stack sits on top. Engine types and rendering code belong in the plugin crate or the app.
 - **No Rust build directory under `/tmp`.** It is a RAM-backed tmpfs on this machine, and a Bevy `target/` there fills it. Keep `cargo`'s default `target/` inside the experiment, and don't point `CARGO_TARGET_DIR` under `/tmp`.
 - **Windowed runs need the desktop display**, as for the main project.
