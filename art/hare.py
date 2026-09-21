@@ -33,7 +33,7 @@ SPINE = [
     (-0.88, 0.60, 0.17, 0.16, BROWN, BROWN),  # rump, rounding off
     (-0.81, 0.58, 0.27, 0.25, BROWN, BROWN),
     (-0.72, 0.55, 0.33, 0.33, BROWN, BROWN),
-    (-0.62, 0.52, 0.36, 0.38, BROWN, BROWN),  # haunches, the widest point
+    (-0.62, 0.53, 0.35, 0.36, BROWN, BROWN),  # haunches: in line with their neighbours, or it shows as a ridge
     (-0.35, 0.52, 0.35, 0.35, BROWN, CREAM),
     (-0.08, 0.50, 0.30, 0.30, BROWN, CREAM),  # chest
     (0.10, 0.55, 0.26, 0.26, BROWN, CREAM),  # shoulder
