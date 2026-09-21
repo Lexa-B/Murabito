@@ -176,7 +176,9 @@ before showing it.
    half-depth, colour)` for the right side; the left is mirrored).
 4. Patches that don't follow rings (calico, masks): paint them after building with
    `b.paint(...)` on spine or limb faces (see `cat.py`). Limb faces come back from
-   `b.limb(...)`.
+   `b.limb(...)`. Markings smaller than a face (spots) are small closed studs set on
+   a face (`deer.py`'s `spot`): painting whole faces for them reads as a checkerboard.
+   Rigid parts that branch (antlers) can be `flora.branch` tubes rooted in the body.
 5. Finish with `b.finish(name, shaded=True)`, so the coat varies a little face by face.
    A new coat colour needs `_light` and `_deep` swatches beside it and an entry in
    `SHADES`; small details (a crown, a bill, legs) can stay a single swatch.
@@ -246,7 +248,7 @@ way.
   whose counts only come in steps of four, so they run a little finer (about 1.3–1.4).
 - **Shrubs** scale the edge down (`FACET = 0.6` in `azalea.py`), or a small plant gets only
   a few dozen chunky facets.
-- **Current costs:** animals 370–450 triangles; shrubs about 900; broadleaf trees
+- **Current costs:** animals 370–450 triangles (the deer, with spots and antlers, about 1,000); shrubs about 900; broadleaf trees
   1,500–6,600; conifers 4,500–10,000; bamboo up to 17,600. That's accepted for now: the
   plan is to come back and make **low-LoD versions** of everything to fade to at distance.
 
@@ -291,6 +293,7 @@ And by eye:
 | rat | – | – | – | black rat (クマネズミ) |
 | crane | – | – | – | red-crowned crane (丹頂), standing; the tallest animal, about 4.5 shaku |
 | boar | – | – | – | Japanese wild boar (ニホンイノシシ), a tusked male, standing; front-heavy, dark crest, pale jaw fringe |
+| deer | – | – | – | sika stag (ニホンジカ) in summer coat, standing; kanoko spots as studs, antlers as `flora.branch` tubes |
 | maple (イロハモミジ) | `00`, `pruned-00` | a–e | summer | wild mushroom crown; `pruned-00` is cloud-pruned, kept to shrink into a garden prop |
 | redpine (アカマツ) | `00`–`04` | a | summer | crooked, flat pads, bark blending grey to red |
 | sugi (スギ) | `00`–`04` | a | summer | straight spire of knobbly tufts |
