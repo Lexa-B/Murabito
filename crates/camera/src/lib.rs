@@ -8,9 +8,18 @@ use bevy::prelude::*;
 /// How far the camera starts from its focus: 7 間 (42 shaku, about 12.7 m).
 const START_ZOOM: f32 = 42.0;
 
-/// How fast the focus moves across the ground while a pan key is held: 45 shaku per
-/// second, about 7.5 間.
+/// How fast the focus moves across the ground while a pan key is held, at
+/// `PAN_REF_ZOOM`: 45 shaku per second, about 7.5 間.
 const PAN_SPEED: f32 = 45.0;
+
+/// The zoom distance at which the pan runs at exactly `PAN_SPEED`: the starting zoom.
+const PAN_REF_ZOOM: f32 = START_ZOOM;
+
+/// How strongly pan speed follows zoom distance. 0.0 pans at a fixed speed in shaku
+/// (fine zoomed out, sluggish up close); 1.0 pans at a fixed speed in screen-widths
+/// (fine up close, frantic zoomed out). 0.75 sits three-quarters of the way toward
+/// proportional: zooming out 4x speeds the pan up about 2.8x rather than 4x.
+const PAN_ZOOM_EXPONENT: f32 = 0.75;
 
 /// Closest and furthest the camera may sit from its focus, in shaku: about 4 m to 60 m.
 const ZOOM_MIN: f32 = 13.0;
@@ -68,10 +77,16 @@ fn spawn_camera(mut commands: Commands) {
 }
 
 fn pan_camera(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut rigs: Query<&mut CameraRig>) {
-    let step = pan_direction(&keys) * PAN_SPEED * time.delta_secs();
+    let direction = pan_direction(&keys);
     for mut rig in &mut rigs {
+        let step = direction * pan_speed(rig.zoom) * time.delta_secs();
         rig.focus += step;
     }
+}
+
+/// Top pan speed at a zoom distance, in shaku per second.
+fn pan_speed(zoom: f32) -> f32 {
+    PAN_SPEED * (zoom / PAN_REF_ZOOM).powf(PAN_ZOOM_EXPONENT)
 }
 
 /// Which way the held keys ask to go across the ground, as a unit vector, or zero when
@@ -392,5 +407,26 @@ mod tests {
             (zoom - START_ZOOM / ZOOM_STEP).abs() < 1e-4,
             "zoom is {zoom}"
         );
+    }
+
+    #[test]
+    fn at_the_reference_zoom_the_pan_runs_at_pan_speed() {
+        assert_eq!(pan_speed(PAN_REF_ZOOM), PAN_SPEED);
+    }
+
+    #[test]
+    fn zooming_out_four_times_pans_about_2_8_times_faster() {
+        let ratio = pan_speed(PAN_REF_ZOOM * 4.0) / pan_speed(PAN_REF_ZOOM);
+
+        assert!(
+            (ratio - 2.828).abs() < 0.01,
+            "the pan is {ratio} times faster"
+        );
+    }
+
+    #[test]
+    fn the_further_out_the_faster_the_pan() {
+        assert!(pan_speed(ZOOM_MIN) < pan_speed(PAN_REF_ZOOM));
+        assert!(pan_speed(PAN_REF_ZOOM) < pan_speed(ZOOM_MAX));
     }
 }
