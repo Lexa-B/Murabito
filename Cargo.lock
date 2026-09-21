@@ -3448,6 +3448,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "murabito_keybinds"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "murabito_scene"
 version = "0.1.0"
 dependencies = [
