@@ -23,14 +23,14 @@ WHITE, ORANGE, BLACK = "cream", "fox_orange", "soot"
 
 # The spine, tail tip to nose: (y, z, half-width, half-height, colour, underside
 # colour). See loft.Builder.spine.
-TAIL_TIP = Vector((0, -1.52, 1.46))
+TAIL_TIP = Vector((0, -1.51, 1.45))
 SPINE = [
     # tail: long, curving up behind, with a rounded end
-    (-1.48, 1.38, 0.08, 0.08, BLACK, BLACK),
-    (-1.38, 1.20, 0.085, 0.085, BLACK, BLACK),
-    (-1.24, 1.00, 0.09, 0.09, ORANGE, ORANGE),
-    (-1.06, 0.86, 0.095, 0.095, ORANGE, ORANGE),
-    (-0.90, 0.80, 0.11, 0.11, WHITE, WHITE),  # tail root
+    (-1.48, 1.38, 0.07, 0.07, BLACK, BLACK),
+    (-1.38, 1.20, 0.075, 0.075, BLACK, BLACK),
+    (-1.24, 1.00, 0.08, 0.08, ORANGE, ORANGE),
+    (-1.06, 0.86, 0.085, 0.085, ORANGE, ORANGE),
+    (-0.90, 0.80, 0.10, 0.10, WHITE, WHITE),  # tail root
     # body: full and even
     (-0.80, 0.76, 0.22, 0.24, WHITE, WHITE),  # rump
     (-0.58, 0.75, 0.28, 0.29, WHITE, WHITE),  # hip
@@ -42,10 +42,10 @@ SPINE = [
     # head: round, about 1.3x natural, short flat muzzle
     (0.38, 1.14, 0.28, 0.25, WHITE, WHITE),  # back of the skull
     (0.53, 1.20, 0.33, 0.27, WHITE, WHITE),  # cheeks, the widest point
-    (0.68, 1.16, 0.25, 0.20, WHITE, WHITE),
-    (0.78, 1.10, 0.13, 0.11, WHITE, WHITE),  # muzzle
+    (0.70, 1.16, 0.25, 0.20, WHITE, WHITE),
+    (0.82, 1.10, 0.13, 0.11, WHITE, WHITE),  # muzzle
 ]
-NOSE_TIP = Vector((0, 0.82, 1.09))
+NOSE_TIP = Vector((0, 0.87, 1.09))
 
 # Which spine segment (index of its tail-side ring) and face each limb grows from.
 HIND_SEGMENT = 5  # rump -> hip
