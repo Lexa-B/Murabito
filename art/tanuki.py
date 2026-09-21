@@ -26,20 +26,21 @@ GREY, DARK, PALE, SOOT = "tanuki_grey", "tanuki_dark", "tanuki_pale", "soot"
 
 # The spine, tail tip to nose: (y, z, half-width, half-height, colour, underside
 # colour). See loft.Builder.spine.
-TAIL_TIP = Vector((0, -1.00, 0.40))
+TAIL_TIP = Vector((0, -1.10, 0.44))  # close behind the last ring: a blunt, bushy end
 SPINE = [
-    # tail: bushy and drooping, dark at the tip
-    (-0.94, 0.46, 0.10, 0.10, DARK, DARK),
-    (-0.84, 0.56, 0.14, 0.14, GREY, GREY),
-    (-0.72, 0.66, 0.15, 0.15, GREY, GREY),
-    (-0.62, 0.72, 0.11, 0.11, GREY, GREY),  # tail root
-    # body: short, round and low, a rounded rump, a deep chest
-    (-0.56, 0.66, 0.25, 0.24, GREY, GREY),
-    (-0.46, 0.63, 0.34, 0.31, GREY, GREY),  # the rump; the hind legs grow from the segment in front
-    (-0.14, 0.62, 0.38, 0.34, GREY, GREY),  # a round belly
-    (0.12, 0.63, 0.37, 0.33, GREY, DARK),  # a dark chest; the front legs grow from the segment in front
-    (0.34, 0.68, 0.30, 0.30, GREY, DARK),  # shoulders
-    (0.46, 0.80, 0.22, 0.23, GREY, DARK),  # a short neck
+    # tail: long, bushy and drooping, dark at the end
+    (-1.06, 0.47, 0.13, 0.13, DARK, DARK),
+    (-0.98, 0.54, 0.17, 0.17, GREY, GREY),
+    (-0.86, 0.64, 0.18, 0.18, GREY, GREY),
+    (-0.73, 0.74, 0.16, 0.16, GREY, GREY),
+    (-0.62, 0.80, 0.11, 0.11, GREY, GREY),  # tail root
+    # body: a fat ball on stubby legs, a rounded rump, a deep chest
+    (-0.56, 0.74, 0.30, 0.28, GREY, GREY),
+    (-0.46, 0.71, 0.40, 0.36, GREY, GREY),  # the rump, raised on taller hind legs; the hind legs grow from the segment in front
+    (-0.14, 0.68, 0.46, 0.42, GREY, GREY),  # a round belly, the widest point
+    (0.12, 0.65, 0.44, 0.40, GREY, DARK),  # a dark chest; the front legs grow from the segment in front
+    (0.34, 0.70, 0.36, 0.34, GREY, DARK),  # shoulders
+    (0.46, 0.80, 0.30, 0.28, GREY, DARK),  # a short, thick neck
     # head: round and fluffy-cheeked, about 1.3x natural, with a short muzzle
     (0.52, 0.94, 0.28, 0.26, GREY, GREY),  # back of the head
     (0.66, 0.97, 0.31, 0.25, GREY, PALE),  # fluffy cheeks, the widest point
@@ -48,24 +49,24 @@ SPINE = [
     (0.96, 0.83, 0.06, 0.055, SOOT, SOOT),  # nose
 ]
 NOSE_TIP = Vector((0, 1.00, 0.82))
-RUMP_RINGS = (4, 5)  # stand upright, so the rump rounds off under the tail instead of pointing out
+RUMP_RINGS = (5, 6)  # stand upright, so the rump rounds off under the tail instead of pointing out
 
 # Which spine segment (index of its tail-side ring) and face each limb grows from.
 # Each leg's first ring fits inside its base face, front, back and sides.
-HIND_SEGMENT = 5  # rump -> belly
-FRONT_SEGMENT = 7  # chest -> shoulders
-EAR_SEGMENT = 10  # back of the head -> cheeks
+HIND_SEGMENT = 6  # rump -> belly
+FRONT_SEGMENT = 8  # chest -> shoulders
+EAR_SEGMENT = 11  # back of the head -> cheeks
 
 # Limbs, for the right side: rings of (x, y, z, half-width, half-depth, colour).
 # See loft.Builder.limb. Short and dark.
 FRONT_LEG = [
-    (0.14, 0.23, 0.27, 0.09, 0.10, DARK),  # shoulder
-    (0.13, 0.24, 0.15, 0.065, 0.075, DARK),  # elbow
+    (0.15, 0.23, 0.20, 0.10, 0.10, DARK),  # shoulder
+    (0.14, 0.24, 0.12, 0.07, 0.075, DARK),  # elbow
     (0.13, 0.27, 0.04, 0.075, 0.10, DARK),  # paw
     (0.13, 0.27, 0.00, 0.075, 0.10, DARK),  # sole
 ]
 HIND_LEG = [
-    (0.16, -0.29, 0.27, 0.10, 0.14, GREY),  # thigh
+    (0.17, -0.30, 0.27, 0.11, 0.14, GREY),  # thigh
     (0.15, -0.29, 0.16, 0.07, 0.08, DARK),  # knee
     (0.15, -0.25, 0.04, 0.075, 0.10, DARK),  # paw
     (0.15, -0.25, 0.00, 0.075, 0.10, DARK),  # sole
@@ -79,10 +80,10 @@ EAR_TIP = Vector((0.21, 0.55, 1.34))
 # (spine segment, faces, colour); faces are numbered as in loft: 0 upper right,
 # 1 top, 2 upper left, 3 left, 4 lower left, 6 lower right, 7 right.
 MARKINGS = [
-    (8, (0, 1, 2, 3, 7), DARK),  # the dark band over the shoulders, down into the legs
-    (11, (0, 2, 3, 7), DARK),  # the bandit mask across the eyes and cheeks
-    (11, (1,), PALE),  # a pale forehead above it
-    (10, (3, 7), DARK),
+    (9, (0, 1, 2, 3, 7), DARK),  # the dark band over the shoulders, down into the legs
+    (12, (0, 2, 3, 7), DARK),  # the bandit mask across the eyes and cheeks
+    (12, (1,), PALE),  # a pale forehead above it
+    (11, (3, 7), DARK),
 ]
 
 
@@ -104,4 +105,4 @@ def build_tanuki():
 
 
 if __name__ == "__main__":
-    loft.run(build_tanuki, "tanuki", target=(0, 0.0, 0.62), extent=2.1)
+    loft.run(build_tanuki, "tanuki", target=(0, -0.05, 0.62), extent=2.2)
