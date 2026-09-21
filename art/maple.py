@@ -33,6 +33,30 @@ COLOURS = {
             ["leaf_green_shade", "leaf_green_shade", "leaf_green_shade_deep", "leaf_green_deep"],
         ),
     },
+    "b": {  # orange
+        "summer": (
+            ["leaf_orange", "leaf_orange", "leaf_orange_light", "leaf_orange_deep", "leaf_orange_green"],
+            ["leaf_orange_shade", "leaf_orange_shade", "leaf_orange_shade_deep", "leaf_orange_deep"],
+        ),
+    },
+    "c": {  # purple
+        "summer": (
+            ["leaf_plum", "leaf_plum", "leaf_plum_light", "leaf_plum_deep", "leaf_plum_bronze"],
+            ["leaf_plum_shade", "leaf_plum_shade", "leaf_plum_shade_deep", "leaf_plum_deep"],
+        ),
+    },
+    "d": {  # red
+        "summer": (
+            ["leaf_red", "leaf_red", "leaf_red_light", "leaf_red_deep", "leaf_red_scarlet"],
+            ["leaf_red_shade", "leaf_red_shade", "leaf_red_shade_deep", "leaf_red_deep"],
+        ),
+    },
+    "e": {  # a dark black-red, with dark green through it
+        "summer": (
+            ["leaf_blackred", "leaf_blackred", "leaf_blackred_dark", "leaf_blackred_red", "leaf_blackred_green"],
+            ["leaf_blackred_shade", "leaf_blackred_shade", "leaf_blackred_shade_green", "leaf_blackred_dark"],
+        ),
+    },
 }
 
 LEADER = [0.7, 0.45, 0.25]
