@@ -232,16 +232,34 @@ WASD/arrows or screen edges pan · middle-drag pans · wheel zooms · mouse hove
 
 ---
 
-## exp-05 — Unified hex coordinate system (C++)
+## exp-05 — Hex coordinates, addresses and chunks (Rust + Bevy)
 
-- **Started:** 2026-09-19 (handoff only)
-- **Stack:** Unreal Engine 5.8, C++
-- **Design:** not written yet. Start from the handoff: [`exp-05/docs/HANDOFF.md`](exp-05/docs/HANDOFF.md)
+- **Started:** 2026-09-19 (handoff), designed 2026-09-20
+- **Stack:** Rust 1.95, Bevy 0.19, bevy_egui; a Cargo workspace
+- **Run:** `cd Experiments/exp-05 && cargo run -p viewer --release`
+- **Test:** `cd Experiments/exp-05 && cargo test`
+- **Design:** [`exp-05/docs/specs/2026-09-20-exp-05-hex-voxel-chunks-design.md`](exp-05/docs/specs/2026-09-20-exp-05-hex-voxel-chunks-design.md). The earlier [`exp-05/docs/HANDOFF.md`](exp-05/docs/HANDOFF.md) has the background.
 
 ### Why
 
-The user wants one uniform hex coordinate system instead of terrain, hex grids and everything else being separate elements: ri, cho and ken as nested scales of chunks that can be hot-loaded, with the shaku as the primary unit. Terrain lives in that system, and the drawn hexes reflect it.
+The user wants one uniform hex coordinate system instead of terrain, hex grids and everything else being separate elements: ri, cho and ken as nested scales of chunks that can be hot-loaded, with the shaku as the primary unit. Terrain lives in that system, and the drawn hexes reflect it. The coordinates are meant for more than terrain: later, world objects, and buildings made of parts that snap to shaku.
+
+First planned in Unreal Engine C++; the user chose a fresh start outside UE, and then Rust and Bevy for this experiment.
 
 ### What
 
-Not decided yet. The handoff lists what to read and the questions to ask.
+Coordinates, the address system and chunks, with placeholder terrain.
+
+- **Coordinates.** exp-03's system unchanged (the ratios, packing B, one owner per split cell), plus a vertical **layer**, 5 sun thick by default and tunable. Addresses are `ri / cho / ken / shaku / layer`. The world is 1 ri for now; the radius is a setting.
+- **Voxels.** Terrain is hex prisms ("pancakes") one shaku across. A chunk is one parent cell's children and holds a column per child: a list of runs of material over the full height. Coarser chunks hold wider columns measured in the same layers.
+- **Loading.** Anything can be a loader: a focus and a number of rings per level (default 3). Ancestors are always loaded, and unloading is delayed (default 5 s), so sitting on a border reloads nothing.
+- **Structure.** `hexworld` (engine-free core: addresses, chunks, the store, the mesher), `hexworld_bevy` (a `Loader` component, background generation, chunk meshes, the hex-line material), and `viewer` (a RimWorld-style overhead camera and a tuning panel).
+- **Hex lines.** The borders of loaded shaku by default, or every level nested as in exp-03; toggleable.
+
+### Controls
+
+WASD/arrows or middle-drag pan · wheel zooms · the panel's Display section picks the line mode (off / shaku only / nested) and toggles tint by level · the panel's Loaders section adds or removes a loader at the hovered cell. No keyboard shortcuts for line mode, tint or loaders — only the panel.
+
+### Headless
+
+`cd Experiments/exp-05 && cargo run -p viewer --release -- --frames N --screenshot-dir DIR --screenshot-every M --seed N --start-east M --start-north M --rings-shaku N`, plus `--auto-pan` (sweep the focus for a sustained-panning measurement), `--zoom M`, `--line-mode off|shaku|nested` and `--tint` (start in a chosen camera/display state — there is no keyboard or CLI-free way to reach nested lines or tint headlessly, since those are panel-only). `screenshots/` is gitignored.

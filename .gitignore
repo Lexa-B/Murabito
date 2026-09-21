@@ -37,3 +37,6 @@ screenshots/
 /_Archives/UE-Try/.kdev4/
 /_Archives/UE-Try/compile_commands.json
 /_Archives/UE-Try/.clangd
+
+# SDD scratch (subagent-driven development workspaces)
+.superpowers/

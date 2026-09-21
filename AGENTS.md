@@ -102,6 +102,15 @@ The repo root is the Murabito game: a single Rust crate, `murabito`, built on Be
 - **Never kill, signal or otherwise touch a process you didn't start.**
 
 
+## Rust + Bevy experiments
+
+Each Rust + Bevy experiment is its own Cargo workspace, separate from the main project's crate at the repo root.
+
+- **Build and test from the experiment's directory**, e.g. `cd Experiments/exp-05 && cargo test`. Run from the repo root, `cargo` builds the main project instead. Workspace members also work from there (`cargo run -p viewer --release`, `cargo test -p hexworld`).
+- **Keep an experiment's core crate engine-free.** exp-05's `hexworld` has no dependencies at all, not even dev-dependencies: it is the part meant to outlive whatever engine or graphics stack sits on top. Engine types and rendering code belong in the plugin crate or the app.
+- **No Rust build directory under `/tmp`.** It is a RAM-backed tmpfs on this machine, and a Bevy `target/` there fills it. Keep `cargo`'s default `target/` inside the experiment, and don't point `CARGO_TARGET_DIR` under `/tmp`.
+- **Windowed runs need the desktop display**, as for the main project.
+
 ## Git workflow
 
 `main` is protected on GitHub by the ruleset "Protect main": no direct pushes (for anyone, admins included), no force-pushes, and no deleting it. Every change reaches `main` through a pull request that the user reviews and merges.

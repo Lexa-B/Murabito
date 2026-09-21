@@ -1,5 +1,7 @@
 # exp-05 handoff
 
+> **Update 2026-09-20:** the design is written: [`specs/2026-09-20-exp-05-hex-voxel-chunks-design.md`](specs/2026-09-20-exp-05-hex-voxel-chunks-design.md). In brainstorming the user moved exp-05 out of Unreal Engine and C++, to Rust and Bevy. Where this handoff and the spec differ, the spec is right. The Unreal notes below still apply to the root project and exp-04.
+
 Written 2026-09-19, at the end of the session that set up the root Murabito project (camera and terrain). This file holds the context a fresh session needs that **isn't** already in `AGENTS.md`, `Experiments/manifest.md`, or the experiment specs. Read those first.
 
 ## What exp-05 is
