@@ -11,8 +11,17 @@ table in `hex_units.md`).
 
 **A corner move is allowed only when both flanking faces are unobstructed**, i.e. both edge
 neighbours it passes between are open. Otherwise an entity could slip diagonally between two
-blocked hexes. Each corner direction is the sum of its two flanking edge directions,
-`corner = a + b`, so the check is on `from + a` and `from + b`.
+blocked hexes. A corner direction `k` (odd) is the sum of its flanking edge directions,
+`dir[k] = dir[k − 1] + dir[k + 1]`, so the check is on `from + dir[k − 1]` and `from + dir[k + 1]`.
+
+## Stepping up
+
+How many layers an entity can step up in one move depends on its size:
+
+| Size | Step up | Height (layers are 5 sun) |
+|---|---|---|
+| Normal | 2 layers | 1 shaku |
+| Small  | 1 layer  | 5 sun |
 
 ## Cost
 
@@ -41,7 +50,10 @@ That makes it admissible, and tight enough that A* doesn't waste time exploring 
 
 ## Open questions
 
-- **Movement between layers:** 12-direction movement is defined within one layer. Can entities
-  step up or down layers, how far, and can a move change layer and go diagonally at once?
+- **Stepping down:** is there a limit on how far an entity can step or drop down, and is it by
+  size too?
+- **Stepping on corner moves:** can a corner move also step up? If so, which layers must the two
+  flanking hexes have open?
+- **Sizes:** are normal and small the only sizes, and what decides which one an entity is?
 - **Obstruction and entity height:** a corner move needs both flanking faces open, but on which
   layers? Only the entity's own layer, or every layer it occupies if it's taller than one voxel?

@@ -100,23 +100,34 @@ permutations of `(+1, −1, 0)`.
 the permutations of `(+2, −1, −1)`. Each one is the sum of the two edge directions on either side
 of it, so the line to a corner neighbour passes between the two edge neighbours that flank it.
 
-Together they give 12 directions, evenly spaced every 30°, alternating edge and corner. Looking
-straight down, with angles running clockwise on screen from +X:
+Together they give 12 directions, evenly spaced every 30°, alternating edge and corner.
 
-| Angle | On screen | Kind | Axial `(q, r)` | Cube `(q, r, s)` | Distance (shaku) | Flanked by |
-|---|---|---|---|---|---|---|
-| 0°   | right                | edge   | `( 1,  0)` | `( 1,  0, −1)` | 1  | |
-| 30°  | right, a little down | corner | `( 1,  1)` | `( 1,  1, −2)` | √3 | 0° and 60° |
-| 60°  | down-right           | edge   | `( 0,  1)` | `( 0,  1, −1)` | 1  | |
-| 90°  | straight down        | corner | `(−1,  2)` | `(−1,  2, −1)` | √3 | 60° and 120° |
-| 120° | down-left            | edge   | `(−1,  1)` | `(−1,  1,  0)` | 1  | |
-| 150° | left, a little down  | corner | `(−2,  1)` | `(−2,  1,  1)` | √3 | 120° and 180° |
-| 180° | left                 | edge   | `(−1,  0)` | `(−1,  0,  1)` | 1  | |
-| 210° | left, a little up    | corner | `(−1, −1)` | `(−1, −1,  2)` | √3 | 180° and 240° |
-| 240° | up-left              | edge   | `( 0, −1)` | `( 0, −1,  1)` | 1  | |
-| 270° | straight up          | corner | `( 1, −2)` | `( 1, −2,  1)` | √3 | 240° and 300° |
-| 300° | up-right             | edge   | `( 1, −1)` | `( 1, −1,  0)` | 1  | |
-| 330° | right, a little up   | corner | `( 2, −1)` | `( 2, −1, −1)` | √3 | 300° and 0° |
+**Indexing follows Bevy's rotation convention.** Direction `k` points along
+`Quat::from_rotation_y(k · 30°)` applied to +X. A positive rotation about Y turns +X toward −Z,
+which is anticlockwise when looking straight down with +X to the right and −Z up the screen. So
+index 0 is +X, the indices run anticlockwise on screen, edges are the even indices and corners the
+odd ones, and facing an entity along direction `k` needs no conversion.
+
+| k | Angle | On screen | Kind | Axial `(q, r)` | Cube `(q, r, s)` | Distance (shaku) | Flanked by |
+|---|---|---|---|---|---|---|---|
+| 0  | 0°   | right                | edge   | `( 1,  0)` | `( 1,  0, −1)` | 1  | |
+| 1  | 30°  | right, a little up   | corner | `( 2, −1)` | `( 2, −1, −1)` | √3 | 0 and 2 |
+| 2  | 60°  | up-right             | edge   | `( 1, −1)` | `( 1, −1,  0)` | 1  | |
+| 3  | 90°  | straight up          | corner | `( 1, −2)` | `( 1, −2,  1)` | √3 | 2 and 4 |
+| 4  | 120° | up-left              | edge   | `( 0, −1)` | `( 0, −1,  1)` | 1  | |
+| 5  | 150° | left, a little up    | corner | `(−1, −1)` | `(−1, −1,  2)` | √3 | 4 and 6 |
+| 6  | 180° | left                 | edge   | `(−1,  0)` | `(−1,  0,  1)` | 1  | |
+| 7  | 210° | left, a little down  | corner | `(−2,  1)` | `(−2,  1,  1)` | √3 | 6 and 8 |
+| 8  | 240° | down-left            | edge   | `(−1,  1)` | `(−1,  1,  0)` | 1  | |
+| 9  | 270° | straight down        | corner | `(−1,  2)` | `(−1,  2, −1)` | √3 | 8 and 10 |
+| 10 | 300° | down-right           | edge   | `( 0,  1)` | `( 0,  1, −1)` | 1  | |
+| 11 | 330° | right, a little down | corner | `( 1,  1)` | `( 1,  1, −2)` | √3 | 10 and 0 |
+
+A corner direction `k` is the sum of its flanking edges: `dir[k] = dir[k − 1] + dir[k + 1]`
+(indices mod 12).
+
+Bevy's forward, −Z, is direction 3: a corner. An entity walking an edge direction is never facing
+Bevy's default forward, which is fine as long as models are rotated to face their heading.
 
 Which of these an entity may actually move to is a movement rule, covered in `movement.md`.
 
@@ -128,8 +139,6 @@ Which of these an entity may actually move to is a movement rule, covered in `mo
 
 ## Open questions
 
-- **Direction indexing:** is there a numbered direction table, and if so where does index 0
-  start and which way does it go? The table above is only a listing, not an agreed order.
 - **World-space type:** plain `(f32, f32, f32)`, a small struct of our own, or Bevy's `Vec3`? The
   first two keep the module free of Bevy.
 - **`units` API:** plain `f32` conversion functions, or `Shaku` / `Metres` types that the compiler
