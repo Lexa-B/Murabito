@@ -14,6 +14,10 @@ use crate::諸法::種;
 /// that arrangement rather than leaving it to a screenshot.
 pub(crate) const TREES: [(f32, f32); 3] = [(3.0, -2.6), (4.6, -3.8), (6.2, -1.8)];
 
+/// Where the thickets are: between the grass and the trees, so the fox meets all three
+/// kinds of cover in turn along the line toward the rabbit.
+pub(crate) const BUSHES: [(f32, f32); 3] = [(-2.4, 0.4), (-1.0, -0.8), (-3.2, -1.4)];
+
 /// Where the grass grows. Nearer the fox than the trees are, so that costing sight a
 /// band and stopping it outright are separable in one picture.
 pub(crate) const GRASS: [(f32, f32); 4] = [(-8.0, 4.6), (-7.0, 3.8), (-6.4, 5.2), (-8.8, 3.6)];
@@ -59,6 +63,18 @@ fn spawn_scene(
             Mesh3d(trunk.clone()),
             MeshMaterial3d(bark.clone()),
             Transform::from_xyz(x, 4.0, z),
+        ));
+    }
+
+    // Waist-high: it costs a fox its sight where the grass does not cost a person any.
+    let bush = meshes.add(Cuboid::new(1.2, 3.2, 1.2));
+    let foliage = materials.add(Color::srgb(0.30, 0.42, 0.22));
+    for (x, z) in BUSHES {
+        commands.spawn((
+            種::new("茂み"),
+            Mesh3d(bush.clone()),
+            MeshMaterial3d(foliage.clone()),
+            Transform::from_xyz(x, 1.6, z),
         ));
     }
 

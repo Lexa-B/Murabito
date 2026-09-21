@@ -171,9 +171,9 @@ mod tableau {
 
     use super::*;
     use crate::hex::Hex;
-    use crate::scene::{GRASS, TREES};
+    use crate::scene::{BUSHES, GRASS, TREES};
     use crate::senses::facing;
-    use crate::senses::occlusion::{Occluders, gather_occluders};
+    use crate::senses::occlusion::{Height, Occluders, gather_occluders};
     use crate::senses::vision::cast;
     use crate::諸法::実相;
 
@@ -188,7 +188,11 @@ mod tableau {
         app.insert_resource(実相::load())
             .init_resource::<Occluders>()
             .add_systems(Update, gather_occluders);
-        for (kind, places) in [("木", &TREES[..]), ("草", &GRASS[..])] {
+        for (kind, places) in [
+            ("木", &TREES[..]),
+            ("茂み", &BUSHES[..]),
+            ("草", &GRASS[..]),
+        ] {
             for (x, z) in places {
                 app.world_mut().spawn((
                     種::new(kind),
@@ -212,7 +216,9 @@ mod tableau {
     #[test]
     fn with_the_ground_bare_the_fox_would_see_the_rabbit() {
         let seen = fox_sees(&Occluders::default());
-        assert!(seen.contains(Hex::from_world(ground(RABBIT_AT))));
+        // At the rabbit's height, which is the question actually being asked: could the
+        // fox make out something rabbit-sized standing there.
+        assert!(seen.contains(Hex::from_world(ground(RABBIT_AT)), Height::Knee));
     }
 
     /// The half that is about the world: something stands in the way.
@@ -220,7 +226,7 @@ mod tableau {
     fn the_trees_hide_the_rabbit_from_the_fox() {
         let seen = fox_sees(&plants());
         assert!(
-            !seen.contains(Hex::from_world(ground(RABBIT_AT))),
+            !seen.contains(Hex::from_world(ground(RABBIT_AT)), Height::Knee),
             "the rabbit should be behind a tree"
         );
     }
@@ -231,7 +237,41 @@ mod tableau {
     fn the_rabbit_does_not_see_the_fox() {
         let eye = GlobalTransform::from(rabbit_transform());
         let seen = cast(ground(RABBIT_AT), facing(&eye), &rabbit_vision(), &plants());
-        assert!(!seen.contains(Hex::from_world(ground(FOX_AT))));
+        assert!(!seen.contains(Hex::from_world(ground(FOX_AT)), Height::Knee));
+    }
+
+    /// Grass is knee-high, so it is the rabbit's problem and not a person's. The same
+    /// cells, the same fox, two answers.
+    #[test]
+    fn the_grass_troubles_the_rabbit_and_not_a_person() {
+        let bare = fox_sees(&Occluders::default());
+        let grown = fox_sees(&plants());
+
+        let dimmed_for_a_rabbit = bare
+            .iter(Height::Knee)
+            .filter(|(hex, band)| {
+                grown
+                    .band(*hex, Height::Knee)
+                    .is_some_and(|now| now > *band)
+            })
+            .count();
+        let dimmed_for_a_person = bare
+            .iter(Height::Full)
+            .filter(|(hex, band)| {
+                grown
+                    .band(*hex, Height::Full)
+                    .is_some_and(|now| now > *band)
+            })
+            .count();
+
+        assert!(
+            dimmed_for_a_rabbit > 0,
+            "grass should cost sight of a rabbit"
+        );
+        assert_eq!(
+            dimmed_for_a_person, 0,
+            "and none at all of someone standing"
+        );
     }
 
     /// The two kinds of occluder do different things, and both do something.
@@ -247,12 +287,19 @@ mod tableau {
         let grown = fox_sees(&plants());
 
         let dimmed = bare
-            .iter()
-            .filter(|(hex, band)| grown.band(*hex).is_some_and(|now| now > *band))
+            .iter(Height::Knee)
+            .filter(|(hex, band)| {
+                grown
+                    .band(*hex, Height::Knee)
+                    .is_some_and(|now| now > *band)
+            })
             .count();
         assert!(dimmed > 0, "the grass should cost a band somewhere");
 
-        let lost = bare.iter().filter(|(hex, _)| !grown.contains(*hex)).count();
+        let lost = bare
+            .iter(Height::Knee)
+            .filter(|(hex, _)| !grown.contains(*hex, Height::Knee))
+            .count();
         assert!(lost > 0, "the trees should take sight outright somewhere");
     }
 }

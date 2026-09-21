@@ -13,6 +13,7 @@ use bevy::prelude::*;
 
 use super::{FaintStroke, HideSenses, MidStroke, SenseOverlay, facing, ground_point};
 use crate::hex::{Hex, steps_covering};
+use crate::senses::occlusion::Height;
 use crate::senses::vision::SeenCells;
 
 /// Half an arm of the X, in shaku, at the faintest and the loudest a cell can be.
@@ -92,12 +93,15 @@ pub(super) fn draw_hearing(
             &GlobalTransform,
             &Hearing,
             Option<&SeenCells>,
+            Option<&Height>,
             &SenseOverlay,
         ),
         Without<HideSenses>,
     >,
 ) {
-    for (transform, hearing, seen, overlay) in &beings {
+    for (transform, hearing, seen, height, overlay) in &beings {
+        // Its own height, matching what its vision overlay is drawn for.
+        let height = height.copied().unwrap_or_default();
         let origin = transform.translation();
         let ground = Vec2::new(origin.x, origin.z);
         let forward = facing(transform);
@@ -114,7 +118,7 @@ pub(super) fn draw_hearing(
 
             // Against what is actually seen, not the bare cone: inside a shadow sight
             // reaches nothing, so hearing has something to add there.
-            let sighted = seen.is_some_and(|cells| cells.contains(hex));
+            let sighted = seen.is_some_and(|cells| cells.contains(hex, height));
             if !sighted {
                 // Hairline and fully opaque, rather than heavy and translucent. Two
                 // strokes crossing in a small mark put a lot of ink in one place, so

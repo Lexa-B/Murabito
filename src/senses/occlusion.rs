@@ -23,6 +23,71 @@ const 視界: &str = "視界";
 const 不透明: &str = "不透明";
 const 半透明: &str = "半透明";
 
+/// The other axis an occluder is read on, and its values tallest first.
+const 高さ: &str = "高さ";
+const 背丈: &str = "背丈";
+const 腰丈: &str = "腰丈";
+
+/// How many height classes there are. Named so the arrays that carry one entry per
+/// class say what they are counting.
+pub const HEIGHTS: usize = 3;
+
+/// How tall a thing is — and so, when it stands in the way, how much of the world it
+/// stands in the way of.
+///
+/// The same number on both sides: what a thing hides and what can hide it are one
+/// property. An occluder affects whatever is no taller than itself, which is the whole
+/// rule, and `Ord` is what states it.
+///
+/// Defaults to `Full`, which is the cautious reading in both directions: an occluder
+/// that declares no height stands in everything's way, and a target that declares none
+/// is the hardest to hide.
+#[derive(Component, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+pub enum Height {
+    /// 膝丈 — knee-high. Grass, and most of what walks on four legs.
+    Knee,
+    /// 腰丈 — waist-high. A thicket, a hedge, a wolf.
+    Waist,
+    /// 背丈 — a standing person.
+    #[default]
+    Full,
+}
+
+impl Height {
+    /// Index into a per-class array. Shortest first, so `..=index()` is "everything this
+    /// tall and under" — the set a thing of this height stands in the way of.
+    pub fn index(self) -> usize {
+        match self {
+            Self::Knee => 0,
+            Self::Waist => 1,
+            Self::Full => 2,
+        }
+    }
+
+    fn of(kind: &str, taxonomy: &実相) -> Self {
+        match taxonomy.facet_in_group(kind, 高さ) {
+            Some(値) if 値 == 背丈 => Self::Full,
+            Some(値) if 値 == 腰丈 => Self::Waist,
+            Some(_) => Self::Knee,
+            None => Self::default(),
+        }
+    }
+}
+
+/// Stamped onto anything carrying a 種, so the senses can ask how tall something is
+/// without learning that a taxonomy exists — the same seam `Occluders` is.
+pub(crate) fn read_heights(
+    taxonomy: Res<実相>,
+    mut commands: Commands,
+    things: Query<(Entity, &種), Changed<種>>,
+) {
+    for (entity, kind) in &things {
+        commands
+            .entity(entity)
+            .insert(Height::of(kind.key(), &taxonomy));
+    }
+}
+
 /// How a cell treats sight.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub enum Opacity {
@@ -51,20 +116,31 @@ impl Opacity {
 /// Which cells impede sight. Rebuilt from the world, so nothing has to remember to
 /// register or unregister.
 #[derive(Resource, Default)]
-pub struct Occluders(HashMap<Hex, Opacity>);
+pub struct Occluders(HashMap<Hex, (Opacity, Height)>);
 
 impl Occluders {
     /// A fixed map, for tests and for anything that needs one that is not the world's.
-    pub fn from_cells(cells: impl IntoIterator<Item = (Hex, Opacity)>) -> Self {
-        Self(cells.into_iter().collect())
+    pub fn from_cells(cells: impl IntoIterator<Item = (Hex, Opacity, Height)>) -> Self {
+        Self(
+            cells
+                .into_iter()
+                .map(|(hex, opacity, height)| (hex, (opacity, height)))
+                .collect(),
+        )
     }
 
-    pub fn at(&self, hex: Hex) -> Opacity {
-        self.0.get(&hex).copied().unwrap_or_default()
+    /// What stands in this cell: what it does to sight, and how tall it is.
+    pub fn at(&self, hex: Hex) -> (Opacity, Height) {
+        self.0
+            .get(&hex)
+            .copied()
+            .unwrap_or((Opacity::Clear, Height::default()))
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (Hex, Opacity)> + '_ {
-        self.0.iter().map(|(hex, opacity)| (*hex, *opacity))
+    pub fn iter(&self) -> impl Iterator<Item = (Hex, Opacity, Height)> + '_ {
+        self.0
+            .iter()
+            .map(|(hex, (opacity, height))| (*hex, *opacity, *height))
     }
 
     pub fn len(&self) -> usize {
@@ -93,8 +169,15 @@ pub(crate) fn gather_occluders(
         let position = transform.translation();
         let cell = Hex::from_world(Vec2::new(position.x, position.z));
         // Two things in one cell: the stronger wins, which `Ord` on the enum gives.
-        let held = occluders.0.entry(cell).or_default();
-        *held = (*held).max(opacity);
+        let height = Height::of(kind.key(), &taxonomy);
+        // Two things in one cell: the stronger and the taller of them, which `Ord` on
+        // each gives. A tree beside a tuft of grass is a tree.
+        let held = occluders
+            .0
+            .entry(cell)
+            .or_insert((Opacity::Clear, Height::Knee));
+        held.0 = held.0.max(opacity);
+        held.1 = held.1.max(height);
     }
 }
 
@@ -110,7 +193,7 @@ pub(super) fn draw_occluders(
     mut faint: Gizmos<super::FaintStroke>,
     occluders: Res<Occluders>,
 ) {
-    for (cell, opacity) in occluders.iter() {
+    for (cell, opacity, _) in occluders.iter() {
         let corners = cell.corners();
         let outline = corners
             .iter()
@@ -171,8 +254,11 @@ mod tests {
     fn an_occluder_takes_the_cell_it_stands_in() {
         let cell = Hex::new(4, -2);
         let occluders = gathered(&[("木", cell.center())]);
-        assert_eq!(occluders.at(cell), Opacity::Blocking);
-        assert_eq!(occluders.at(cell.neighbour(0)), Opacity::Clear);
+        assert_eq!(occluders.at(cell), (Opacity::Blocking, Height::Full));
+        assert_eq!(
+            occluders.at(cell.neighbour(0)),
+            (Opacity::Clear, Height::Full)
+        );
     }
 
     #[test]
@@ -181,19 +267,33 @@ mod tests {
         assert!(occluders.is_empty(), "{} cells", occluders.len());
     }
 
-    /// A thicket growing where a tree stands does not make the tree see-through.
+    /// Grass growing where a tree stands does not make the tree see-through, nor cut it
+    /// down to knee height.
     #[test]
-    fn the_stronger_of_two_in_one_cell_wins() {
+    fn the_stronger_and_taller_of_two_in_one_cell_wins() {
         let cell = Hex::new(-1, 5);
         let here = cell.center();
-        assert_eq!(
-            gathered(&[("草", here), ("木", here)]).at(cell),
-            Opacity::Blocking
-        );
-        assert_eq!(
-            gathered(&[("木", here), ("草", here)]).at(cell),
-            Opacity::Blocking,
-            "order should not matter"
-        );
+        for order in [["草", "木"], ["木", "草"]] {
+            let gathered = gathered(&[(order[0], here), (order[1], here)]);
+            assert_eq!(
+                gathered.at(cell),
+                (Opacity::Blocking, Height::Full),
+                "order should not matter: {order:?}"
+            );
+        }
+    }
+
+    /// Height is read off the same axis for anything that carries one, occluder or not.
+    #[test]
+    fn a_kind_is_as_tall_as_its_facet_says() {
+        let tree = 実相::load();
+        assert_eq!(Height::of("木", &tree), Height::Full);
+        assert_eq!(Height::of("茂み", &tree), Height::Waist);
+        assert_eq!(Height::of("草", &tree), Height::Knee);
+        assert_eq!(Height::of("兎", &tree), Height::Knee);
+        assert_eq!(Height::of("人間", &tree), Height::Full);
+        // Nothing declared: treated as standing in everything's way, and as the hardest
+        // thing to hide.
+        assert_eq!(Height::of("道具", &tree), Height::Full);
     }
 }

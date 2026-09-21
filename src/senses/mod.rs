@@ -50,6 +50,9 @@ impl Plugin for SensesPlugin {
         // heaviness as well as count — at a cell ten to thirty pixels across, stroke
         // count alone does not carry it.
         app.init_resource::<occlusion::Occluders>()
+            // In `PreUpdate` so the commands that add the component are applied before
+            // anything in `Update` reads it.
+            .add_systems(PreUpdate, occlusion::read_heights)
             .insert_gizmo_config(BoldStroke, stroke_config(2.6))
             .insert_gizmo_config(MidStroke, stroke_config(1.7))
             .insert_gizmo_config(FaintStroke, stroke_config(1.0))
