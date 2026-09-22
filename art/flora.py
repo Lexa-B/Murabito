@@ -219,6 +219,28 @@ def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03
     return faces
 
 
+def blanket(b, half_x, half_y, height, lumps, leaves, shades, rng, facet, lump_radius=(1.4, 2.6)):
+    """A low, lumpy skin over the ground, a little sunk into it, half_x by half_y
+    shaku from its middle to its edges and about height tall: the body of a patch
+    of something smothering the ground (kudzu, sasa). Its triangle edge is facet.
+    Returns its faces and its vertices (for draping, see rig.drape_skin)."""
+    first = len(b.bm.verts)
+    middle = Vector((0, 0, 0.2))
+    parts = [(middle, min(half_x, half_y), height * 0.6, 0.6)]
+    for i in range(lumps):
+        angle = i * GOLDEN_ANGLE + rng.uniform(-0.3, 0.3)
+        out = rng.uniform(0.2, 0.85)
+        centre = middle + Vector((math.cos(angle) * half_x * out, math.sin(angle) * half_y * out, rng.uniform(-0.2, 0.5)))
+        parts.append((centre, rng.uniform(*lump_radius), height * rng.uniform(0.35, 1.0), 0.7))
+    shape = (max(half_x, half_y) * 1.1, height * 1.2, 0.7)  # reaching down into the ground
+    faces = canopy(
+        b, middle, parts, leaves, shades, rng, lumpiness=0.05, shape=shape,
+        triangles=even_triangles(middle, parts, shape, edge=facet),
+    )
+    b.bm.verts.ensure_lookup_table()
+    return faces, [b.bm.verts[i] for i in range(first, len(b.bm.verts))]
+
+
 def _pad_parts(centre, radius, up, down, lumps, rng):
     """A pad's lumps: a low dome with a few smaller lumps rising from its top."""
     parts = [(centre, radius, up, down)]
@@ -369,15 +391,20 @@ def wrap_sprays(b, group, leaves, shades, rng, lumps=2):
     )
 
 
-def blade(b, origin, direction, length, width, leaf, shade, droop=0.25):
+def blade(b, origin, direction, length, width, leaf, shade, droop=0.25, rounded=False):
     """One long, pointed leaf: a thin closed shape, ridged along its midrib so it
     catches the light in two facets, lying flat-ish along direction with its tip
-    drooping by droop of its length. Upper faces take leaf, lower take shade."""
+    drooping by droop of its length. Upper faces take leaf, lower take shade.
+    rounded makes it a broad oval with two points down each edge (an aucuba's
+    leaf) instead of a narrow diamond (bamboo's)."""
     d = Vector(direction).normalized()
     side = d.cross(Vector((0, 0, 1)))
     side = side.normalized() if side.length > 1e-6 else Vector((1, 0, 0))
     normal = side.cross(d)
     o = Vector(origin)
+    if rounded:
+        _oval_blade(b, o, d, side, normal, length, width, leaf, shade, droop)
+        return
     verts = [b.bm.verts.new(p) for p in (
         o,  # base
         o + d * length * 0.35 + side * width / 2,  # left
@@ -393,7 +420,25 @@ def blade(b, origin, direction, length, width, leaf, shade, droop=0.25):
         b.face(f, shade)
 
 
-def blade_cluster(b, origin, direction, count, length, width, leaves, shades, rng, spread=0.6, droop=(0.3, 0.8)):
+def _oval_blade(b, o, d, side, normal, length, width, leaf, shade, droop):
+    sag = Vector((0, 0, droop * length))
+    half = width / 2
+    left1, right1 = (o + d * length * 0.25 + side * s * half * 0.85 for s in (1, -1))
+    left2, right2 = (o + d * length * 0.62 + side * s * half * 0.9 - sag * 0.35 for s in (1, -1))
+    points = (o, left1, left2, right1, right2, o + d * length - sag,
+              o + d * length * 0.45 + normal * width * 0.14 - sag * 0.15,
+              o + d * length * 0.45 - normal * width * 0.06 - sag * 0.15)
+    base, l1, l2, r1, r2, tip, above, below = (b.bm.verts.new(p) for p in points)
+    for f in ((base, l1, above), (l1, l2, above), (l2, tip, above),
+              (base, above, r1), (r1, above, r2), (r2, above, tip)):
+        b.face(f, leaf)
+    for f in ((base, below, l1), (l1, below, l2), (l2, below, tip),
+              (base, r1, below), (r1, r2, below), (r2, tip, below)):
+        b.face(f, shade)
+
+
+def blade_cluster(b, origin, direction, count, length, width, leaves, shades, rng, spread=0.6, droop=(0.3, 0.8),
+                  rounded=False):
     """A few blades fanning out from one point round direction, each dipping by
     a random angle in droop (radians) and turned within spread either side."""
     d = Vector(direction)
@@ -404,8 +449,99 @@ def blade_cluster(b, origin, direction, count, length, width, leaves, shades, rn
         way = Vector((math.cos(turn) * math.cos(dip), math.sin(turn) * math.cos(dip), -math.sin(dip)))
         blade(
             b, origin, way, length * rng.uniform(0.8, 1.15), width * rng.uniform(0.85, 1.1),
-            rng.choice(leaves), rng.choice(shades),
+            rng.choice(leaves), rng.choice(shades), rounded=rounded,
         )
+
+
+def trifoliate(b, origin, heading, size, leaves, shades, rng, tilt=0.15):
+    """A leaf of three broad oval leaflets (kudzu, clover, beans): one straight out
+    along heading (radians round the vertical), two smaller at either side,
+    lying nearly flat, tipped down by about tilt radians."""
+    for turn, scale in ((0.0, 1.0), (1.2, 0.85), (-1.2, 0.85)):
+        angle = heading + turn + rng.uniform(-0.15, 0.15)
+        dip = tilt + rng.uniform(-0.1, 0.1)
+        way = Vector((math.cos(angle) * math.cos(dip), math.sin(angle) * math.cos(dip), -math.sin(dip)))
+        blade(b, origin, way, size * scale, size * scale * 0.75, rng.choice(leaves), rng.choice(shades),
+              droop=0.08, rounded=True)
+
+
+def frond(b, base, heading, length, width, rise, fall, leaves, shades, rng, segments=10, bend=2.0, notch=0.7,
+          leaflets=True, profile="leaf"):
+    """A fern frond: a long leaf arching up from base and over, its edges
+    zig-zagging to suggest rows of leaflets.
+
+    It sets off at rise radians above level towards heading (radians round the
+    vertical) and bends steadily until it points fall radians below level at the
+    tip, the bend gathering towards the tip as the bend power rises (1 bends it
+    evenly; 2 keeps it rising, then arches it over). width is its full width at
+    the widest, a little below the middle; it
+    narrows to a stalk at the base and a point at the tip. Built as a thin closed
+    shape, ridged along its midrib like blade, so it shows from above and below:
+    upper faces pick from leaves, lower from shades. notch is how far out the
+    notches between leaflets sit, as a fraction of the width there: nearer 1,
+    shallower teeth. Without leaflets the edges run straight, for a blade of
+    grass, and at notch=1 the blade has its full width. profile "grass" makes
+    it widest at the base, tapering steadily to the tip, instead of a leaf's
+    stalk and belly.
+    """
+    along_each = length / segments
+    point = Vector(base)
+    stations = []  # (centre, direction) at the start of each segment, then the tip
+    for i in range(segments + 1):
+        angle = rise - (rise + fall) * (i / segments) ** bend
+        way = Vector((math.cos(heading) * math.cos(angle), math.sin(heading) * math.cos(angle), math.sin(angle)))
+        stations.append((point.copy(), way))
+        point += way * along_each
+    side = Vector((-math.sin(heading), math.cos(heading), 0))
+
+    def half_width(t):
+        if profile == "grass":  # widest at the base, tapering to the tip
+            return width / 2 * (1 - t) ** 0.8
+        # a stalk for the first tenth, widest at 0.4, closing to the tip
+        return 0 if t < 0.1 else width / 2 * math.sin(math.pi * min(1, (t - 0.1) / 0.9) ** 0.8)
+
+    def verts_at(i):
+        centre, way = stations[i]
+        normal = side.cross(way).normalized()
+        w = max(half_width(i / segments), 0.015) * notch  # the notches between leaflets
+        ridge = max(half_width(i / segments), 0.02) * 0.12
+        return [b.bm.verts.new(p) for p in (
+            centre + normal * ridge, centre - side * w, centre - normal * ridge * 0.5, centre + side * w,
+        )]  # above the midrib, left notch, below the midrib, right notch
+
+    rings = [verts_at(i) for i in range(segments)]
+    tip = b.bm.verts.new(stations[-1][0])
+    start = rings[0]
+    b.face([start[0], start[1], start[2], start[3]], rng.choice(shades))  # the cut stalk end
+    for i in range(segments):
+        above, left, below, right = rings[i]
+        last = i == segments - 1
+        nxt = [tip] * 4 if last else rings[i + 1]
+        n_above, n_left, n_below, n_right = nxt
+        centre = stations[i][0].lerp(stations[i + 1][0], 0.5)
+        w = half_width((i + 0.5) / segments)
+        if last or w < 0.02 or not leaflets:
+            # no leaflet here: close the segment straight across
+            for f in ((above, left, n_left, n_above), (above, n_above, n_right, right)):
+                b.face([v for k, v in enumerate(f) if v not in f[:k]], rng.choice(leaves))
+            for f in ((below, n_below, n_left, left), (below, right, n_right, n_below)):
+                b.face([v for k, v in enumerate(f) if v not in f[:k]], rng.choice(shades))
+            continue
+        # a leaflet's point sticking out to each side between the notches
+        out_left = b.bm.verts.new(centre - side * w)
+        out_right = b.bm.verts.new(centre + side * w)
+        b.face((above, left, out_left), rng.choice(leaves))
+        b.face((above, out_left, n_above), rng.choice(leaves))
+        b.face((n_above, out_left, n_left), rng.choice(leaves))
+        b.face((above, out_right, right), rng.choice(leaves))
+        b.face((above, n_above, out_right), rng.choice(leaves))
+        b.face((n_above, n_right, out_right), rng.choice(leaves))
+        b.face((below, out_left, left), rng.choice(shades))
+        b.face((below, n_below, out_left), rng.choice(shades))
+        b.face((n_below, n_left, out_left), rng.choice(shades))
+        b.face((below, right, out_right), rng.choice(shades))
+        b.face((below, out_right, n_below), rng.choice(shades))
+        b.face((n_below, out_right, n_right), rng.choice(shades))
 
 
 def rng_for(seed):

@@ -236,6 +236,42 @@ PALETTE = [
     ("heron_grey_deep", "#7F858D"),
     ("heron_bill", "#D9A53A"),
     ("heron_leg", "#B89A6A"),
+    # ferns
+    ("fern_green", "#4F7E3A"),
+    ("fern_green_light", "#5E8F44"),
+    ("fern_green_deep", "#3F6A31"),
+    ("fern_green_yellow", "#6E8E40"),
+    ("fern_shade", "#34562B"),
+    ("fern_shade_deep", "#2B4824"),
+    # aucuba
+    ("aoki_green", "#3E7A3A"),
+    ("aoki_green_shine", "#5E9A4C"),
+    ("aoki_green_deep", "#2F6330"),
+    ("aoki_shade", "#2C4E2A"),
+    ("aoki_shade_light", "#37583A"),
+    ("aoki_stem", "#6E9A4A"),
+    # kudzu
+    ("kuzu_green", "#5C8A3A"),
+    ("kuzu_green_light", "#6E9C46"),
+    ("kuzu_green_deep", "#4A7631"),
+    ("kuzu_green_yellow", "#7E9A48"),
+    ("kuzu_shade", "#3A5C2C"),
+    ("kuzu_shade_deep", "#304E26"),
+    ("kuzu_vine", "#6B6A3E"),
+    # sasa
+    ("sasa_green", "#4F7F36"),
+    ("sasa_green_light", "#63934A"),
+    ("sasa_green_deep", "#3F6A2D"),
+    ("sasa_green_yellow", "#76913F"),
+    ("sasa_shade", "#35572A"),
+    ("sasa_shade_deep", "#2C4A24"),
+    # grass
+    ("grass_green", "#6E9A45"),
+    ("grass_green_light", "#84AD52"),
+    ("grass_green_deep", "#5A8638"),
+    ("grass_green_yellow", "#9AAA55"),
+    ("grass_shade", "#48703A"),
+    ("grass_shade_deep", "#3D6232"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -335,8 +371,11 @@ def apply_swatches(obj, face_swatches):
 
 
 def export_glb(obj, path):
+    """Export obj as .glb, with its rig (see rig.py) as a skin if it has one."""
     bpy.ops.object.select_all(action="DESELECT")
     obj.select_set(True)
+    if obj.parent is not None:
+        obj.parent.select_set(True)
     bpy.context.view_layer.objects.active = obj
     bpy.ops.export_scene.gltf(
         filepath=str(path),
