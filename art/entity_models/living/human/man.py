@@ -15,6 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents if (p / "loft.py").exists())))
 import body  # noqa: E402
+import garment  # noqa: E402
 import hair  # noqa: E402
 import loft  # noqa: E402
 
@@ -114,6 +115,7 @@ MAN = body.Shape(
         tuft=[(0, 28, 0.18, 0.1), (50, 32, 0.16, 0.095), (-50, 32, 0.16, 0.095), (100, 40, 0.14, 0.09),
               (-100, 40, 0.14, 0.09), (0, 5, 0.17, 0.09), (150, 30, 0.13, 0.08), (-150, 30, 0.13, 0.08)],
     ),
+    garments=[garment.Fundoshi(belt=2.76, crotch=2.44, apron=2.1, back=0.5, under=0.2, front=0.28, flap=0.36)],
 )
 
 

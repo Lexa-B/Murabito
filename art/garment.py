@@ -78,13 +78,20 @@ class Hadagi:
 
 @dataclass
 class Fundoshi:
-    """belt: the height of the cloth belt round the hips; apron: where its front
-    flap hangs to; width: the width of the cloth between the legs."""
+    """An etchu-fundoshi. belt: the height of the cloth belt round the hips;
+    crotch: the height of the lowest point between the legs; apron: where the
+    front flap hangs to; back, under, front, flap: the cloth's width over the
+    seat, between the legs, up the front and hanging as the apron."""
 
     belt: float
+    crotch: float
     apron: float
-    width: float = 0.24
+    back: float = 0.42
+    under: float = 0.12
+    front: float = 0.22
+    flap: float = 0.3
     ease: float = 0.012
+    columns: int = 7
 
 
 def tree_of(faces):
@@ -202,12 +209,13 @@ def _around_one(tree, z, ease, j, layer=None):
     return _around(tree, z, ease, layer)[j]
 
 
-def solidify(b, faces, colour, axis=None):
+def solidify(b, faces, colour, axis=None, trust=False):
     """Give an open surface of cloth its thickness, inward: every vertex gets a
     twin THICKNESS in from it, every face a reversed twin, and every open edge a
     rim joining the two, so the shell is closed. Faces' outward sides are the
     ones facing away from the axis they wrap (a vertical line through the body,
-    or an arm's line, given as (point, direction)). Built in the faces' own
+    or an arm's line, given as (point, direction)), or with trust, the sides
+    the faces already face. Built in the faces' own
     order, so a rebuild comes out the same. Returns the shell's vertices."""
     faces = list(faces)
     origin, direction = axis or (Vector((0, 0, 0)), Z)
@@ -220,7 +228,7 @@ def solidify(b, faces, colour, axis=None):
     for f in faces:
         f.normal_update()
         n = f.normal.copy()
-        if n.dot(away(f.calc_center_median())) < 0:
+        if not trust and n.dot(away(f.calc_center_median())) < 0:
             n = -n
         for v in f.verts:
             normals.setdefault(v, Vector())
@@ -351,3 +359,80 @@ def sleeve(b, joint, along, arm, spec):
                                  front + spec.ease * 1.5, back + spec.ease * 1.5))
     rows = figure.tube(b, rings, CLOTH)
     return solidify(b, [f for row in rows for f in row], CLOTH, (joint, along))
+
+
+def fundoshi(b, trees, spec):
+    """An etchu-fundoshi: a narrow cloth belt low round the hips, and a cloth
+    from the belt at the back down over the seat, narrowing between the legs,
+    up the front and over the belt, hanging down in front as an apron. The
+    cloth lies on the body (pulled taut across the cleft of the seat); the
+    apron hangs straight down, clear of it."""
+    tree = trees["hips"]
+    belt_rows, belt_faces = _wrap(b, tree, [lambda j: spec.belt + 0.025, lambda j: spec.belt - 0.025], spec.ease)
+    verts = solidify(b, belt_faces, CLOTH)
+
+    back, down, ahead = -Y, -Z, Y
+    seat = [(spec.belt + 0.03, spec.back * 0.8), (spec.belt - 0.1, spec.back),
+            ((spec.belt + spec.crotch) / 2 - 0.05, spec.back), (spec.crotch + 0.04, spec.back * 0.95),
+            (spec.crotch - 0.05, spec.back * 0.8), (spec.crotch - 0.1, spec.back * 0.55)]  # down the seat, which hangs below the crotch
+    rows = [_lying(tree, z, back, w, spec) for z, w in seat]
+    up = [(spec.crotch + 0.04, spec.under * 1.4), ((spec.belt + spec.crotch) / 2, spec.front * 0.9),
+          (spec.belt - 0.06, spec.front), (spec.belt + 0.05, spec.front)]
+    front_rows = [_lying(tree, z, ahead, w, spec, extra=0.015 if k == len(up) - 1 else 0.0) for k, (z, w) in enumerate(up)]
+    behind, ahead_y = rows[-1][len(rows[-1]) // 2].y, front_rows[0][len(front_rows[0]) // 2].y
+    rows += [_under(spec.crotch, behind + (ahead_y - behind) * t, spec) for t in (0.3, 0.7)]
+    rows += front_rows
+    hang_y = rows[-1][len(rows[-1]) // 2].y + 0.012
+    for z in (spec.belt + 0.03, (spec.belt + spec.apron) / 2, spec.apron):
+        rows.append([Vector((-spec.flap / 2 + spec.flap * c / (spec.columns - 1), hang_y, z)) for c in range(spec.columns)])
+
+    grid = [[b.bm.verts.new(p) for p in row] for row in rows]
+    faces = []
+    for upper, lower in zip(grid, grid[1:]):
+        for c in range(spec.columns - 1):
+            faces.append(b.face((upper[c], upper[c + 1], lower[c + 1], lower[c]), CLOTH))
+    first = faces[0]
+    first.normal_update()
+    if first.normal.dot(back) < 0:  # the cloth's outer side faces away from the body
+        for f in faces:
+            f.normal_flip()
+    return verts + solidify(b, faces, CLOTH, trust=True)
+
+
+def _lying(tree, z, outward, width, spec, extra=0.0):
+    """A row of columns across the cloth at height z, lying on the body's front
+    or back (outward), pulled taut across any hollow between them."""
+    xs = [-width / 2 + width * c / (spec.columns - 1) for c in range(spec.columns)]
+    depth = []
+    for x in xs:
+        hit, *_ = tree.ray_cast(Vector((x, 0, z)) + outward * 3, -outward)
+        depth.append(hit.dot(outward) if hit is not None else None)
+    known = [d for d in depth if d is not None]
+    depth = [d if d is not None else min(known) for d in depth]
+    taut = _upper_hull(xs, depth)
+    return [Vector((x, 0, z)) + outward * (d + spec.ease + extra) for x, d in zip(xs, taut)]
+
+
+def _under(crotch, y, spec):
+    """A row of columns across the cloth passing flat under the crotch, at y."""
+    xs = [-spec.under / 2 + spec.under * c / (spec.columns - 1) for c in range(spec.columns)]
+    return [Vector((x, y, crotch - spec.ease - 0.01 * (1 - (2 * x / spec.under) ** 2))) for x in xs]
+
+
+def _upper_hull(xs, heights):
+    """Heights raised onto the upper convex outline of the points (x, height):
+    cloth stretched across a hollow."""
+    hull = []
+    for p in zip(xs, heights):
+        while len(hull) >= 2 and (hull[-1][0] - hull[-2][0]) * (p[1] - hull[-2][1]) - (hull[-1][1] - hull[-2][1]) * (p[0] - hull[-2][0]) >= 0:
+            hull.pop()
+        hull.append(p)
+    out = []
+    for x, h in zip(xs, heights):
+        for (x0, h0), (x1, h1) in zip(hull, hull[1:]):
+            if x0 <= x <= x1:
+                out.append(max(h, h0 + (h1 - h0) * (x - x0) / (x1 - x0) if x1 > x0 else h0))
+                break
+        else:
+            out.append(h)
+    return out
