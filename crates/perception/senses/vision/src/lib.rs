@@ -12,14 +12,20 @@
 //! something vaguer are facet debt, taken up in `murabito_perception` when facets return.
 //! `Docs/perception_readme.md` is the design.
 
-// The cast has no caller until `look`, the next commit, runs it each tick.
-#![allow(dead_code)]
-
 use std::f32::consts::{PI, TAU};
 
 use bevy::prelude::*;
-use murabito_hexcoords::{Direction, VoxelCoord, rings_covering};
-use murabito_perception::Occupancy;
+use murabito_hexcoords::{Direction, Offset, VoxelCoord, rings_covering};
+use murabito_perception::{Occupancy, PerceptionSet};
+use murabito_placement::{Facing, VoxelPosition};
+
+pub struct VisionPlugin;
+
+impl Plugin for VisionPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(FixedUpdate, look.in_set(PerceptionSet::Sense));
+    }
+}
 
 /// Angular slack, in radians, at a shadow's edge. A cell centre sitting exactly on the
 /// edge then resolves the same way every time rather than on the last bit of a float,
@@ -127,7 +133,7 @@ pub struct Seen(Vec<Sighting>);
 pub struct Sighting {
     pub entity: Entity,
     /// Where it is relative to the looker: `its voxel - mine`.
-    pub offset: murabito_hexcoords::Offset,
+    pub offset: Offset,
     pub acuity: Acuity,
 }
 
@@ -151,6 +157,42 @@ impl Seen {
             .find(|sighting| sighting.entity == entity)
             .map(|sighting| sighting.acuity)
     }
+}
+
+/// Every sighted body looks, once, after the map of what stands where is gathered:
+/// its `Seen` is replaced with what is in view this tick. A blind body's list is empty.
+fn look(
+    occupancy: Res<Occupancy>,
+    mut lookers: Query<(Entity, &VoxelPosition, &Facing, &Vision, &mut Seen)>,
+) {
+    for (looker, position, facing, vision, mut seen) in &mut lookers {
+        let in_view = cast(position.0, facing.0, vision, &occupancy);
+        seen.0 = sightings(looker, position.0, &in_view, &occupancy);
+    }
+}
+
+/// What stands in the cells in view, as sightings relative to the looker. Two things in
+/// one cell are two sightings; the looker never sees itself.
+fn sightings(
+    looker: Entity,
+    eye: VoxelCoord,
+    in_view: &[(VoxelCoord, Acuity)],
+    occupancy: &Occupancy,
+) -> Vec<Sighting> {
+    in_view
+        .iter()
+        .flat_map(|(cell, acuity)| {
+            occupancy
+                .at(*cell)
+                .iter()
+                .filter(move |thing| **thing != looker)
+                .map(move |thing| Sighting {
+                    entity: *thing,
+                    offset: *cell - eye,
+                    acuity: *acuity,
+                })
+        })
+        .collect()
 }
 
 /// A point of world space in the ground plane: XZ, with north −Z.
@@ -515,5 +557,176 @@ mod tests {
         );
 
         assert_eq!(seen, view(eye, Direction::E, &short_eyes(), &nothing()));
+    }
+
+    use murabito_movement::{Locomotion, MovementPlugin, Step};
+    use murabito_perception::PerceptionPlugin;
+    use murabito_progress::ProgressPlugin;
+
+    /// A headless app whose every `update` is exactly one 64 Hz tick, with the
+    /// mechanisms and perception running. An app's first update only starts its clock,
+    /// so it is spent here.
+    fn ticking_app() -> App {
+        use bevy::time::TimeUpdateStrategy;
+
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            ProgressPlugin,
+            MovementPlugin,
+            PerceptionPlugin,
+            VisionPlugin,
+        ));
+        app.insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
+        app.update();
+        app
+    }
+
+    fn looker_at(app: &mut App, cell: VoxelCoord, facing: Direction, vision: Vision) -> Entity {
+        app.world_mut()
+            .spawn((VoxelPosition(cell), Facing(facing), vision))
+            .id()
+    }
+
+    fn thing_at(app: &mut App, cell: VoxelCoord) -> Entity {
+        app.world_mut().spawn(VoxelPosition(cell)).id()
+    }
+
+    fn seen_by(app: &App, looker: Entity) -> &Seen {
+        app.world()
+            .get::<Seen>(looker)
+            .expect("a sighted body has a Seen")
+    }
+
+    #[test]
+    fn a_sighted_body_has_a_list_without_asking_and_it_starts_empty() {
+        let mut app = ticking_app();
+        let fox = looker_at(&mut app, voxel(0, 0), Direction::E, short_eyes());
+
+        assert!(seen_by(&app, fox).is_empty());
+    }
+
+    #[test]
+    fn a_hare_in_front_of_a_fox_is_seen_on_the_first_tick_near_and_where_it_is() {
+        let mut app = ticking_app();
+        let fox = looker_at(&mut app, voxel(0, 0), Direction::E, short_eyes());
+        let hare = thing_at(&mut app, voxel(2, 0));
+
+        app.update();
+
+        let seen = seen_by(&app, fox);
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen.sees(hare), Some(Acuity::Near));
+        let sighting = seen.iter().next().expect("one sighting");
+        assert_eq!(sighting.offset, voxel(2, 0) - voxel(0, 0));
+        assert_eq!((sighting.offset.dq(), sighting.offset.dr()), (2, 0));
+    }
+
+    #[test]
+    fn a_tree_between_them_hides_the_hare_and_the_fox_sees_the_tree() {
+        let mut app = ticking_app();
+        let fox = looker_at(&mut app, voxel(0, 0), Direction::E, short_eyes());
+        let tree = thing_at(&mut app, voxel(2, 0));
+        let hare = thing_at(&mut app, voxel(4, 0));
+
+        app.update();
+
+        let seen = seen_by(&app, fox);
+        assert_eq!(seen.sees(tree), Some(Acuity::Near));
+        assert_eq!(seen.sees(hare), None);
+    }
+
+    #[test]
+    fn the_looker_never_sees_itself() {
+        let mut app = ticking_app();
+        let fox = looker_at(&mut app, voxel(0, 0), Direction::E, short_eyes());
+
+        app.update();
+
+        assert_eq!(seen_by(&app, fox).sees(fox), None);
+        assert!(seen_by(&app, fox).is_empty());
+    }
+
+    #[test]
+    fn a_thing_sharing_the_lookers_cell_is_seen_near_at_no_offset() {
+        let mut app = ticking_app();
+        let fox = looker_at(&mut app, voxel(0, 0), Direction::E, short_eyes());
+        let flea = thing_at(&mut app, voxel(0, 0));
+
+        app.update();
+
+        let seen = seen_by(&app, fox);
+        assert_eq!(seen.sees(flea), Some(Acuity::Near));
+        assert_eq!(seen.iter().next().map(|s| s.offset), Some(Offset::ZERO));
+    }
+
+    #[test]
+    fn a_blind_body_sees_nothing_however_close() {
+        let mut app = ticking_app();
+        let mole = looker_at(&mut app, voxel(0, 0), Direction::E, Vision::BLIND);
+        thing_at(&mut app, voxel(1, 0));
+
+        app.update();
+
+        assert!(seen_by(&app, mole).is_empty());
+    }
+
+    #[test]
+    fn two_lookers_each_see_the_other_and_each_has_its_own_list() {
+        let mut app = ticking_app();
+        let fox = looker_at(&mut app, voxel(0, 0), Direction::E, short_eyes());
+        let hare = looker_at(&mut app, voxel(3, 0), Direction::W, short_eyes());
+
+        app.update();
+
+        assert_eq!(seen_by(&app, fox).sees(hare), Some(Acuity::Mid));
+        assert_eq!(seen_by(&app, hare).sees(fox), Some(Acuity::Mid));
+        assert_eq!(
+            seen_by(&app, hare)
+                .iter()
+                .next()
+                .map(|s| (s.offset.dq(), s.offset.dr())),
+            Some((-3, 0))
+        );
+    }
+
+    #[test]
+    fn a_hare_stepping_out_of_the_cone_is_gone_on_the_tick_its_step_lands() {
+        let mut app = ticking_app();
+        let fox = looker_at(&mut app, voxel(0, 0), Direction::E, short_eyes());
+        // Two cells east and facing north: its first step north takes it to (3, -2),
+        // which is 30° above the fox's eastward line and still inside the 120° cone. So
+        // the hare starts on the cone's edge instead, at NNE twice, and steps NNW out.
+        let edge = voxel(0, 0)
+            .neighbour(Direction::NNE)
+            .neighbour(Direction::NNE);
+        let hare = app
+            .world_mut()
+            .spawn((
+                VoxelPosition(edge),
+                Facing(Direction::NNW),
+                Locomotion {
+                    speed: 4.0,
+                    turn_speed: 180.0,
+                },
+                Step(Direction::NNW),
+            ))
+            .id();
+
+        // An edge step at 4 shaku/s lands on tick 16.
+        (0..15).for_each(|_| app.update());
+        assert_eq!(
+            seen_by(&app, fox).sees(hare),
+            Some(Acuity::Near),
+            "still on the edge"
+        );
+
+        app.update();
+
+        assert_eq!(
+            seen_by(&app, fox).sees(hare),
+            None,
+            "stepped out on tick 16"
+        );
     }
 }

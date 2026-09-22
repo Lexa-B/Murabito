@@ -3685,8 +3685,10 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "murabito_hexcoords",
+ "murabito_movement",
  "murabito_perception",
  "murabito_placement",
+ "murabito_progress",
 ]
 
 [[package]]
