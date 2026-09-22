@@ -5,6 +5,7 @@
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use murabito_keybinds::{Binds, Held, Inputs};
+use serde::{Deserialize, Serialize};
 
 /// How far the camera starts from its focus: 7 間 (42 shaku, about 12.7 m).
 const START_ZOOM: f32 = 42.0;
@@ -56,7 +57,10 @@ const PAN_SPEED_SCALE_MAX: f32 = 10.0;
 
 /// How the player has asked the camera to feel. Owned here, and edited by whoever
 /// depends on this crate: a settings screen, a saved file. The camera only reads it.
-#[derive(Resource, Clone, Debug, PartialEq)]
+/// `serde(default)`: a field the file lacks (one added since the file was written, or
+/// one the player deleted) takes its default rather than failing the whole section.
+#[derive(Resource, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CameraSettings {
     /// Multiplies pan speed. 1.0 is the designed speed.
     pub pan_speed_scale: f32,
@@ -790,5 +794,28 @@ mod tests {
         app.update();
 
         assert_eq!(*app.world().resource::<CameraSettings>(), loaded);
+    }
+
+    #[test]
+    fn settings_survive_a_trip_through_the_file_format() {
+        let written = CameraSettings {
+            pan_speed_scale: 2.5,
+            pan_forward: Binds::new([SIDE_BUTTON]),
+            ..default()
+        };
+
+        let text = serde_yaml_ng::to_string(&written).expect("serialises");
+        let read: CameraSettings = serde_yaml_ng::from_str(&text).expect("parses back");
+
+        assert_eq!(read, written);
+    }
+
+    #[test]
+    fn a_file_that_names_only_the_speed_leaves_the_binds_at_their_defaults() {
+        let read: CameraSettings =
+            serde_yaml_ng::from_str("pan_speed_scale: 0.5\n").expect("parses");
+
+        assert_eq!(read.pan_speed_scale, 0.5);
+        assert_eq!(read.pan_forward, CameraSettings::default().pan_forward);
     }
 }

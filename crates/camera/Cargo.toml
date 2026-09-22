@@ -7,3 +7,7 @@ publish.workspace = true
 [dependencies]
 bevy.workspace = true
 murabito_keybinds.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_yaml_ng.workspace = true

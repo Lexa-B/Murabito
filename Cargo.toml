@@ -22,7 +22,8 @@ edition = "2024"
 publish = false
 
 [workspace.dependencies]
-bevy = "0.19.1"
+# `serialize` so that KeyCode and MouseButton can be written to the settings file.
+bevy = { version = "0.19.1", features = ["serialize"] }
 murabito_scene = { path = "crates/scene" }
 murabito_camera = { path = "crates/camera" }
 murabito_keybinds = { path = "crates/keybinds" }
