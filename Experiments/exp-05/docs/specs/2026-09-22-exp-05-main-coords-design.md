@@ -82,7 +82,7 @@ The core's metre functions become shaku `Vec3` or `f32` functions. `(east, north
 | `placeholder_terrain::height_m(cfg, e, n, level)` | `height(cfg, x, z, level) -> f32` |
 
 - **The layer height.** Main keeps its 0.5 private. `hexworld` names its own `LAYER_HEIGHT: f32 = 0.5`, with a test pinning it to `VoxelCoord::to_world` of layer 1. If main ever changes it, the test fails, rather than the two silently disagreeing.
-- **`VoxelCoord` at the shaku level.** Where `hexworld` means "a shaku voxel", in addresses and in `address_of` / `shaku_of`, it uses `murabito_hexcoords::VoxelCoord` instead of a `(Hex, layer)` pair.
+- **`VoxelCoord` at the shaku level.** Where `hexworld` means "a shaku voxel", in addresses and in `address_of` / `voxel_of`, it uses `murabito_hexcoords::VoxelCoord` instead of a `(Hex, layer)` pair.
 - **The placeholder terrain** keeps its shape exactly. Its constants are converted by ×3.3:
   - the base wavelength is 8,192 m = 27,033.6 shaku;
   - the base amplitude is 10 m = 33 shaku.
@@ -107,7 +107,7 @@ The core's metre functions become shaku `Vec3` or `f32` functions. `(east, north
   - `hex.rs`: `directions_run_anticlockwise_from_east` checks the six edges against `Direction`'s even indices;
   - `plane.rs`: `corners_are_a_pointy_top_hexagon`;
   - `mesh.rs`: `top_faces_point_up_and_wind_anticlockwise`;
-  - the two `axes` tests in `hexworld_bevy/tests/plugin.rs` (`north_maps_to_negative_z`, `the_mapping_keeps_its_handedness`) go with `axes`. They are replaced by one test that a `+r` step lands at `+z` and a `+q` step at `+x`, matching main's `one_step_along_r_is_half_a_cell_right_and_a_row_down_the_screen`.
+  - the four `axes` tests in `hexworld_bevy/tests/plugin.rs` go with `axes.rs`. Orientation is pinned instead by `plane.rs`'s `a_step_east_is_one_width_along_x` and `a_plus_r_step_is_half_a_cell_east_and_a_row_down_the_screen`, plus `mesh.rs`'s winding tests.
 - **Conversion tests:**
   - at the shaku level, `plane::cell_centre` agrees with `VoxelCoord::to_world`;
   - `round_at` inverts `cell_centre` at every level;
