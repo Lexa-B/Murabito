@@ -3483,6 +3483,7 @@ dependencies = [
  "bevy",
  "murabito_actions",
  "murabito_camera",
+ "murabito_i18n",
  "murabito_movement",
  "murabito_progress",
  "murabito_scene",
@@ -3515,6 +3516,15 @@ name = "murabito_hexcoords"
 version = "0.1.0"
 dependencies = [
  "bevy",
+]
+
+[[package]]
+name = "murabito_i18n"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "serde",
+ "serde_yaml_ng",
 ]
 
 [[package]]

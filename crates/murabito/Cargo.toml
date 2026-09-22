@@ -13,3 +13,4 @@ murabito_progress.workspace = true
 murabito_actions.workspace = true
 murabito_user_data.workspace = true
 murabito_settings.workspace = true
+murabito_i18n.workspace = true

@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use murabito_actions::ActionsPlugin;
 use murabito_camera::{CameraPlugin, CameraSettings};
+use murabito_i18n::{I18nPlugin, Language};
 use murabito_movement::MovementPlugin;
 use murabito_progress::ProgressPlugin;
 use murabito_scene::ScenePlugin;
@@ -17,6 +18,7 @@ fn main() {
             // Second: it reads the settings file as it is built, and everything
             // persisted below is looked up in it.
             SettingsPlugin,
+            I18nPlugin,
             ScenePlugin,
             CameraPlugin,
             MovementPlugin,
@@ -26,5 +28,6 @@ fn main() {
         // Each module owns its settings; the app says which are kept between runs, and
         // under which key in settings.yaml.
         .persist::<CameraSettings>("camera")
+        .persist::<Language>("language")
         .run();
 }
