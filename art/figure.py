@@ -120,15 +120,15 @@ def bridge_split(b, root, ring, colour):
 
 def hole(b, faces):
     """Delete these faces (one connected patch) and return the loop of
-    vertices round the hole, for a limb to grow from."""
-    faces = set(faces)
-    edges = [e for f in faces for e in f.edges if sum(g in faces for g in e.link_faces) == 1]
-    nexts = {}
+    vertices round the hole, for a limb to grow from. The loop starts at the
+    first face's first boundary corner, so a rebuild comes out the same."""
+    patch = set(faces)
+    nexts, start = {}, None
     for f in faces:
         for loop in f.loops:
-            if loop.edge in edges:
+            if sum(g in patch for g in loop.edge.link_faces) == 1:
                 nexts[loop.vert] = loop.link_loop_next.vert
-    start = next(iter(nexts))
+                start = start or loop.vert
     loop = [start]
     while nexts[loop[-1]] is not start:
         loop.append(nexts[loop[-1]])
