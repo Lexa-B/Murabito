@@ -58,7 +58,9 @@
 //! as much as beasts do. The tiers below it add nothing yet.
 //!
 //! A kind that is drawn names its file with `Model`, and `KindsPlugin`'s one observer
-//! loads it as the thing is spawned.
+//! loads it as the thing is spawned. A plant names its first version in summer; a
+//! spawner that wants another version, colour or season gives its own `Model` beside
+//! the kind, and what is given at spawn wins.
 //!
 //! This crate depends on the mechanism crates whose components the tiers require, and
 //! nothing but what spawns things depends on it. A cycle in the requirements panics at
@@ -249,10 +251,18 @@ mod tests {
         world.spawn(Yokai);
         world.spawn(Akuma);
         world.spawn(Rei);
-        world.spawn(Tree);
-        world.spawn(Bamboo);
-        world.spawn(Shrub);
-        world.spawn(Undergrowth);
+        world.spawn(Maple);
+        world.spawn(Sakura);
+        world.spawn(Hinoki);
+        world.spawn(Redpine);
+        world.spawn(Sugi);
+        world.spawn(Madake);
+        world.spawn(Sasa);
+        world.spawn(Azalea);
+        world.spawn(Aoki);
+        world.spawn(Kusa);
+        world.spawn(Kuzu);
+        world.spawn(Shida);
         world.spawn(Tool);
         world.spawn(Furniture);
         world.spawn(Rock);
@@ -269,7 +279,7 @@ mod tests {
             .query_filtered::<(), With<AllThings>>()
             .iter(&world)
             .count();
-        assert_eq!(things, 32, "one entity per spawn, each of them a thing");
+        assert_eq!(things, 40, "one entity per spawn, each of them a thing");
     }
 
     #[test]
@@ -294,6 +304,40 @@ mod tests {
         assert_eq!(animals, 13 + 4 + 2, "plus a bare critter and a bare fish");
     }
 
+    fn how_many<Tier: Component>(world: &mut World) -> usize {
+        world.query_filtered::<(), With<Tier>>().iter(world).count()
+    }
+
+    #[test]
+    fn every_plant_is_one_and_none_of_them_walks() {
+        let mut world = World::new();
+        spawn_every_kind(&mut world);
+
+        let tiers = (
+            how_many::<Tree>(&mut world),
+            how_many::<Bamboo>(&mut world),
+            how_many::<Shrub>(&mut world),
+            how_many::<Undergrowth>(&mut world),
+        );
+        let walking_plants = world
+            .query_filtered::<(), (With<Plant>, With<Locomotion>)>()
+            .iter(&world)
+            .count();
+
+        assert_eq!(tiers, (5, 2, 2, 3));
+        assert_eq!(walking_plants, 0);
+    }
+
+    #[test]
+    fn what_spawns_a_plant_may_say_which_model() {
+        let mut world = World::new();
+
+        let bare = Model("entity_models/flora/trees/sakura-02-a-winter.glb");
+        let sakura = world.spawn((Sakura, bare)).id();
+
+        assert_eq!(world.entity(sakura).get::<Model>(), Some(&bare));
+    }
+
     /// The models are made by the art pipeline, not here. A rename there would
     /// otherwise show up only as a thing quietly missing from the screen.
     #[test]
@@ -308,6 +352,6 @@ mod tests {
             assert!(file.is_file(), "no model at {}", file.display());
             named += 1;
         }
-        assert_eq!(named, 17, "every animal names its model");
+        assert_eq!(named, 29, "every animal and every plant names its model");
     }
 }
