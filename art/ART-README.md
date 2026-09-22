@@ -160,6 +160,7 @@ Foliage:
 | `canopy(b, centre, lumps, leaves, shades, rng, …)` | **shrink-wrap**: one skin over a set of lumps `(centre, radius, up, down)`, made by casting rays out from `centre`; `shape=` squashes the base sphere for flat skins; `triangles=` sets the triangle count; returns the faces |
 | `even_triangles(centre, lumps, shape, edge)` | how many triangles a skin needs for a given edge length, from a trial wrap that measures its real surface |
 | `pad(...)` | a flat lumpy pad of needles (the red pine's) |
+| `blanket(b, half_x, half_y, height, lumps, …, facet)` | a low, lumpy skin over the ground, a little sunk into it: the body of a patch that smothers the ground (the kudzu's, the sasa's); returns its faces and vertices |
 | `wrap_sprays(b, group, …)` | wrap a group of sprays as one skin with even triangles |
 | `clustered_crown(b, sprays, …, tier, sectors)` | cut a crown into tiers and sectors, one skin each (the hinoki's) |
 | `clump(...)` | an old-style separate blob (only the cloud-pruned maple uses it) |
@@ -180,6 +181,7 @@ face points down. Repeat a colour in a list to make it more likely.
 | `DrapeGrid(rig, name, x0, x1, y0, y1, spacing)` | drape points on a grid under something wide and low; `weights(x, y)` blends a spot between the four points around it |
 | `weigh(indices, bone)`, `weigh_blend(indices, pairs)` | bind vertices to a bone, or blend them between several, while building: vertex indices are the order the `Builder` made them, so note `len(b.bm.verts)` before and after building a part |
 | `bind(mesh_obj, default)` | build the bones, turn the weights into vertex groups (any vertex not weighed rides on `default`), and parent the mesh to the rig |
+| `drape_skin(rig, verts, pieces, spacing)` | drape a wide, low skin in one call: a `DrapeGrid` under its footprint, each vertex blended, and each piece (leaves and the like, as `(first, end, spot)`) riding rigidly |
 
 Weigh a leaf with the weights of the spot it grows from, all its vertices alike, so it
 moves as one piece instead of warping. glTF carries at most four bones per vertex, which
@@ -228,7 +230,7 @@ Start from whichever existing plant is closest:
 | a low shrub | `azalea.py` | one `canopy` mound on the ground, with its triangle size scaled down |
 | a leafy shrub on visible stems | `aoki.py` | green stems forking twice, pairs of oval leaves along each shoot and a rosette at its tip |
 | a fern, or any rosette of arching leaves | `shida.py` | `frond`s spiralling up from a crown |
-| something lying over the ground (vines, mats, moss) | `kuzu.py` | a low skin with leaves on it and runners off it, rigged with drape points |
+| something lying over the ground (vines, mats, moss) | `kuzu.py`, `sasa.py` | a low body (`flora.blanket`) with leaves on it (and runners off it, for the kudzu), rigged with drape points (`rig.drape_skin`) |
 
 Then:
 
@@ -346,6 +348,7 @@ And by eye:
 | shida (シダ) | `00` | a | summer | a woodland fern after the Japanese shield fern (ベニシダ); a loose shuttlecock of sixteen scalloped fronds |
 | aoki (アオキ) | `00` | a | summer | the aucuba; a compact bush of green stems and big glossy oval leaves |
 | kuzu (葛) | `00` | a | summer | a kudzu patch smothering the undergrowth, with runners; **rigged with drape points** to settle onto terrain |
+| sasa (笹) | `00` | a | summer | a small patch of dwarf bamboo, knee high, bristling with leaf blades; **rigged with drape points** |
 
 ## Lessons from what didn't work
 
@@ -392,7 +395,9 @@ And by eye:
   the tips spread over a dome, and put leaves along the shoots as well as at their tips.
 - **Diamond leaves in rosettes read as stars.** Broad leaves need the oval blade.
 - **Leaves on a skin must be big to read.** The kudzu's first leaves were specks on a
-  smooth blob; at almost twice the size, and more of them, they cover it.
+  smooth blob; at almost twice the size, and more of them, they cover it. Where the
+  leaves *are* the plant (sasa), keep the body low and let long, steep leaves be the mass,
+  or it reads as a rock with stubble.
 - **Drape points hug the ground only as closely as they're spaced.** Between points a
   draped skin runs straight, so on ground steeper than the spacing allows it hangs or cuts
   in, and a runner whose next point is far below drops straight down. 2 shaku suits gentle

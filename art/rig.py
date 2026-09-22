@@ -106,3 +106,17 @@ class DrapeGrid:
         pairs = [(self.names[i][j], (1 - u) * (1 - v)), (self.names[i + 1][j], u * (1 - v)),
                  (self.names[i][j + 1], (1 - u) * v), (self.names[i + 1][j + 1], u * v)]
         return [(bone, w) for bone, w in pairs if w > 1e-6]
+
+
+def drape_skin(skeleton, verts, pieces, spacing, name="blanket"):
+    """Drape a wide, low skin: a DrapeGrid under its vertices' footprint, each
+    vertex blended between the four points around it, and each piece riding on
+    it rigidly, pieces being (first vertex, end vertex, the spot it grows from)
+    for leaves and the like, so they move without warping. Returns the grid."""
+    xs, ys = [v.co.x for v in verts], [v.co.y for v in verts]
+    grid = DrapeGrid(skeleton, name, min(xs), max(xs), min(ys), max(ys), spacing)
+    for v in verts:
+        skeleton.weigh_blend([v.index], grid.weights(v.co.x, v.co.y))
+    for first, end, spot in pieces:
+        skeleton.weigh_blend(range(first, end), grid.weights(spot.x, spot.y))
+    return grid

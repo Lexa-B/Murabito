@@ -258,6 +258,13 @@ PALETTE = [
     ("kuzu_shade", "#3A5C2C"),
     ("kuzu_shade_deep", "#304E26"),
     ("kuzu_vine", "#6B6A3E"),
+    # sasa
+    ("sasa_green", "#4F7F36"),
+    ("sasa_green_light", "#63934A"),
+    ("sasa_green_deep", "#3F6A2D"),
+    ("sasa_green_yellow", "#76913F"),
+    ("sasa_shade", "#35572A"),
+    ("sasa_shade_deep", "#2C4A24"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 

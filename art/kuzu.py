@@ -64,24 +64,6 @@ VERSIONS = {
 }
 
 
-def _blanket(b, spec, leaves, shades, rng):
-    """The smothered mound: a low, lumpy skin, a little sunk into the ground."""
-    rx, ry = spec["size"]
-    height = spec["height"]
-    middle = Vector((0, 0, 0.2))
-    lumps = [(middle, min(rx, ry), height * 0.6, 0.6)]
-    for i in range(spec["lumps"]):
-        angle = i * flora.GOLDEN_ANGLE + rng.uniform(-0.3, 0.3)
-        out = rng.uniform(0.2, 0.85)
-        centre = middle + Vector((math.cos(angle) * rx * out, math.sin(angle) * ry * out, rng.uniform(-0.2, 0.5)))
-        lumps.append((centre, rng.uniform(1.4, 2.6), height * rng.uniform(0.35, 1.0), 0.7))
-    shape = (max(rx, ry) * 1.1, height * 1.2, 0.7)  # reaching down into the ground
-    return flora.canopy(
-        b, middle, lumps, leaves, shades, rng, lumpiness=0.05, shape=shape,
-        triangles=flora.even_triangles(middle, lumps, shape, edge=FACET),
-    )
-
-
 DRAPE_SPACING = 2.0  # shaku between the drape points under the blanket
 
 
@@ -115,8 +97,8 @@ def build_kuzu(version="00", colour="a", season="summer"):
     b = loft.Builder()
     skeleton = rig.Rig(f"Kuzu-{version}-{colour}-{season}-rig")
     skeleton.bone("root", (0, 0, 0), (0, 0, 1))
-    skin = _blanket(b, spec, leaves, shades, rng)
-    skin_verts = list(b.bm.verts)
+    rx, ry = spec["size"]
+    skin, skin_verts = flora.blanket(b, rx, ry, spec["height"], spec["lumps"], leaves, shades, rng, FACET)
 
     # big three-part leaves lying all over the blanket's upper side
     upper = [f for f in skin if f.normal.z > 0.25]
@@ -129,16 +111,9 @@ def build_kuzu(version="00", colour="a", season="summer"):
                          leaves, shades, rng)
         blanket_leaves.append((first, len(b.bm.verts), spot))
 
-    # drape points under the blanket: each skin vertex blends between the four
-    # around it; each leaf rides rigidly with the ground where it grows
-    xs, ys = [v.co.x for v in skin_verts], [v.co.y for v in skin_verts]
-    grid = rig.DrapeGrid(skeleton, "blanket", min(xs), max(xs), min(ys), max(ys), DRAPE_SPACING)
-    for v in skin_verts:
-        skeleton.weigh_blend([v.index], grid.weights(v.co.x, v.co.y))
-    for first, last, spot in blanket_leaves:
-        skeleton.weigh_blend(range(first, last), grid.weights(spot.x, spot.y))
+    # drape points under the blanket; each leaf rides rigidly with the ground where it grows
+    rig.drape_skin(skeleton, skin_verts, blanket_leaves, DRAPE_SPACING)
 
-    rx, ry = spec["size"]
     for i in range(spec["runners"]):
         angle = i * flora.GOLDEN_ANGLE + rng.uniform(-0.3, 0.3)
         start = Vector((math.cos(angle) * rx * 0.9, math.sin(angle) * ry * 0.9, 0.1))

@@ -219,6 +219,28 @@ def canopy(b, centre, lumps, leaves, shades, rng, subdivisions=4, lumpiness=0.03
     return faces
 
 
+def blanket(b, half_x, half_y, height, lumps, leaves, shades, rng, facet, lump_radius=(1.4, 2.6)):
+    """A low, lumpy skin over the ground, a little sunk into it, half_x by half_y
+    shaku from its middle to its edges and about height tall: the body of a patch
+    of something smothering the ground (kudzu, sasa). Its triangle edge is facet.
+    Returns its faces and its vertices (for draping, see rig.drape_skin)."""
+    first = len(b.bm.verts)
+    middle = Vector((0, 0, 0.2))
+    parts = [(middle, min(half_x, half_y), height * 0.6, 0.6)]
+    for i in range(lumps):
+        angle = i * GOLDEN_ANGLE + rng.uniform(-0.3, 0.3)
+        out = rng.uniform(0.2, 0.85)
+        centre = middle + Vector((math.cos(angle) * half_x * out, math.sin(angle) * half_y * out, rng.uniform(-0.2, 0.5)))
+        parts.append((centre, rng.uniform(*lump_radius), height * rng.uniform(0.35, 1.0), 0.7))
+    shape = (max(half_x, half_y) * 1.1, height * 1.2, 0.7)  # reaching down into the ground
+    faces = canopy(
+        b, middle, parts, leaves, shades, rng, lumpiness=0.05, shape=shape,
+        triangles=even_triangles(middle, parts, shape, edge=facet),
+    )
+    b.bm.verts.ensure_lookup_table()
+    return faces, [b.bm.verts[i] for i in range(first, len(b.bm.verts))]
+
+
 def _pad_parts(centre, radius, up, down, lumps, rng):
     """A pad's lumps: a low dome with a few smaller lumps rising from its top."""
     parts = [(centre, radius, up, down)]
