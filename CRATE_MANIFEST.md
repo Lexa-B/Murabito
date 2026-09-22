@@ -16,6 +16,8 @@ crates/
 ├─ settings/              murabito_settings
 ├─ i18n/                  murabito_i18n
 ├─ app_state/             murabito_app_state
+├─ ui/                    the overlays: a group directory, not a crate
+│  └─ kit/                murabito_ui
 └─ action/                the actions layer: a group directory, not a crate
    ├─ actions/            murabito_actions
    ├─ progress/           murabito_progress
@@ -37,6 +39,12 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   Not which screen is up: that is the UI's own state, so a new screen never touches this
   crate. Pausing is one call on `Time<Virtual>`, which freezes the whole `FixedUpdate`
   simulation while `Time<Real>` keeps running underneath.
+
+## Overlays
+
+- **`murabito_ui`** — the look and the parts every overlay is built from: the dimmed
+  frame over the world, a button whose label is a `Localized` key, the UI font, and the
+  tinting that answers the pointer. Knows no screen and no action.
 
 ## The world and how it is seen
 

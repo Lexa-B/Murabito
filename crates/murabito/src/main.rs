@@ -7,6 +7,7 @@ use murabito_movement::MovementPlugin;
 use murabito_progress::ProgressPlugin;
 use murabito_scene::ScenePlugin;
 use murabito_settings::{Persist, SettingsPlugin};
+use murabito_ui::UiPlugin;
 use murabito_user_data::UserDataPlugin;
 
 fn main() {
@@ -21,6 +22,7 @@ fn main() {
             SettingsPlugin,
             I18nPlugin,
             AppStatePlugin,
+            UiPlugin,
             ScenePlugin,
             CameraPlugin,
             MovementPlugin,

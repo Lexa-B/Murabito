@@ -3489,6 +3489,7 @@ dependencies = [
  "murabito_progress",
  "murabito_scene",
  "murabito_settings",
+ "murabito_ui",
  "murabito_user_data",
 ]
 
@@ -3585,6 +3586,14 @@ dependencies = [
  "serde_yaml_ng",
  "tempfile",
  "time",
+]
+
+[[package]]
+name = "murabito_ui"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_i18n",
 ]
 
 [[package]]
