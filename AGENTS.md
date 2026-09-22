@@ -33,7 +33,8 @@ Murabito/
 │  ├─ camera/              `murabito_camera`: the overhead camera
 │  ├─ keybinds/            `murabito_keybinds`: `Binds`, up to three keys or mouse buttons for one action
 │  ├─ hexcoords/           `murabito_hexcoords`: hex voxel coordinates (`VoxelCoord`), per `Docs/hex_units.md`
-│  └─ movement/            `murabito_movement`: where a body is and which way it faces, and the mechanics of stepping and turning, per `Docs/movement.md`
+│  ├─ movement/            `murabito_movement`: where a body is and which way it faces, and the mechanics of stepping and turning, per `Docs/movement.md`
+│  └─ progress/            `murabito_progress`: the one accumulation bar every sustained action fills, per `Docs/actions_readme.md`
 ├─ scripts/run.sh          launches the app; what a desktop entry points at. Finds the display itself, logs to ~/.cache/murabito/run.log
 ├─ Docs/                   project docs (no specs or plans; see below)
 ├─ _Archives/

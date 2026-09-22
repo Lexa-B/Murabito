@@ -9,3 +9,4 @@ bevy.workspace = true
 murabito_scene.workspace = true
 murabito_camera.workspace = true
 murabito_movement.workspace = true
+murabito_progress.workspace = true

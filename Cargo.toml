@@ -14,6 +14,7 @@ murabito_camera = { path = "crates/camera" }
 murabito_keybinds = { path = "crates/keybinds" }
 murabito_hexcoords = { path = "crates/hexcoords" }
 murabito_movement = { path = "crates/movement" }
+murabito_progress = { path = "crates/progress" }
 
 # Bevy is slow in a plain debug build. Our own code is lightly optimised and
 # every dependency (the engine) fully: the engine is rebuilt rarely, our code often.
