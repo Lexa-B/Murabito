@@ -12,6 +12,9 @@ members = [
     "crates/action/progress",
     "crates/action/mechanisms/*",
     "crates/action/actions",
+    "crates/user_data",
+    "crates/settings",
+    "crates/i18n",
 ]
 
 [workspace.package]
@@ -20,7 +23,8 @@ edition = "2024"
 publish = false
 
 [workspace.dependencies]
-bevy = "0.19.1"
+# `serialize` so that KeyCode and MouseButton can be written to the settings file.
+bevy = { version = "0.19.1", features = ["serialize"] }
 murabito_scene = { path = "crates/scene" }
 murabito_camera = { path = "crates/camera" }
 murabito_keybinds = { path = "crates/keybinds" }
@@ -28,6 +32,18 @@ murabito_hexcoords = { path = "crates/hexcoords" }
 murabito_progress = { path = "crates/action/progress" }
 murabito_movement = { path = "crates/action/mechanisms/movement" }
 murabito_actions = { path = "crates/action/actions" }
+murabito_user_data = { path = "crates/user_data" }
+murabito_settings = { path = "crates/settings" }
+murabito_i18n = { path = "crates/i18n" }
+
+# Where the player's files go: the platform's config directory.
+dirs = "7"
+serde = { version = "1", features = ["derive"] }
+# YAML for everything hand-written. serde_yaml is unmaintained; this is the fork in use.
+serde_yaml_ng = "0.10"
+# Only for naming a backup after the moment it was taken.
+time = { version = "0.3", features = ["formatting", "macros"] }
+tempfile = "3"
 
 # Bevy is slow in a plain debug build. Our own code is lightly optimised and
 # every dependency (the engine) fully: the engine is rebuilt rarely, our code often.

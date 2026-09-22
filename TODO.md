@@ -17,10 +17,9 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   Replaces `draw_progress_bars` in `murabito_scene`, which draws one under every busy body.
 - **App state and pausing.** Playing / menu / settings; the archive paused `Time<Virtual>`, to
   be re-decided.
-- **Settings persistence.** The first thing to save `CameraSettings`; generic over any settings
-  resource, since the module that uses a setting owns it.
-- **i18n, the UI kit, the menus and the settings screen.** Including a rebind screen, the
-  first thing to edit `Binds`.
+- **The UI kit, the menus and the settings screen.** Including a language picker (the first
+  thing to write `Language`, which persists already) and a rebind screen, the first thing to
+  edit `Binds`. The catalogues in `assets/locales/` gain their first keys with the first screen.
 - **The screenshot tool and the debug screen.** From the archive.
 - **Hex: distance and the `units` module.** `Docs/hex_units_readme.md`'s build order, item 4.
 
@@ -35,10 +34,14 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   inconsistent rig unbuildable, once more code constructs rigs.
 - Pan speed is constant per zoom; nothing stops the camera panning off the edge of the ground.
 - The fox's `FOX_LOCOMOTION` (4 shaku/s, 180°/s) is a placeholder until species decide it.
+- `Language::ALL` and `Localized` have no consumer until the UI kit; the i18n systems have
+  work only in their tests.
+- The real `~/.config/murabito/settings.yaml` still carries a `ui: {language: en}` section from
+  the first attempt, which nothing registers; it rides along harmlessly and can be deleted.
 
 ## Housekeeping
 
-- The desktop shortcut and the warm `target/` (~34 GB) live in the `cleanup-refactor` worktree;
+- The desktop shortcut and the warm `target/` (~89 GB) live in the `cleanup-refactor` worktree;
   when the rebuild gets a permanent home, repoint `scripts/run.sh`'s two paths in the `.desktop`
   entries and move `target/`.
 - Stale worktree: `.claude/worktrees/murabito` on `layer-skeleton`, whose one commit merged in

@@ -1,13 +1,10 @@
 [package]
-name = "murabito_camera"
+name = "murabito_i18n"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [dependencies]
 bevy.workspace = true
-murabito_keybinds.workspace = true
 serde.workspace = true
-
-[dev-dependencies]
 serde_yaml_ng.workspace = true

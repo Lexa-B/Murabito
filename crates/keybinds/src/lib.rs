@@ -17,17 +17,88 @@
 //! }
 //! ```
 
+use std::fmt;
+use std::str::FromStr;
+
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use serde::de::IntoDeserializer;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// How many inputs one action can be bound to.
 pub const MAX_BINDS: usize = 3;
 
 /// One thing a player can press: a keyboard key or a mouse button.
+///
+/// In a settings file, and on screen, it is one word: a key by Bevy's name for it
+/// (`KeyW`, `ArrowUp`, `Space`), a mouse button as `MouseLeft`, `MouseRight`,
+/// `MouseMiddle`, `MouseBack`, `MouseForward`, or `Mouse7` for an extra button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Bind {
     Key(KeyCode),
     Mouse(MouseButton),
+}
+
+const MOUSE_PREFIX: &str = "Mouse";
+
+impl fmt::Display for Bind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            // KeyCode's Debug is its variant name, which is also its serde name.
+            Self::Key(key) => write!(f, "{key:?}"),
+            Self::Mouse(MouseButton::Other(n)) => write!(f, "{MOUSE_PREFIX}{n}"),
+            Self::Mouse(button) => write!(f, "{MOUSE_PREFIX}{button:?}"),
+        }
+    }
+}
+
+/// What a bind's word could not be read as.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownBind(pub String);
+
+impl fmt::Display for UnknownBind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "`{}` is not a key or mouse button", self.0)
+    }
+}
+
+impl std::error::Error for UnknownBind {}
+
+impl FromStr for Bind {
+    type Err = UnknownBind;
+
+    fn from_str(word: &str) -> Result<Self, Self::Err> {
+        let unknown = || UnknownBind(word.to_string());
+        if let Some(button) = word.strip_prefix(MOUSE_PREFIX) {
+            let button = match button {
+                "Left" => MouseButton::Left,
+                "Right" => MouseButton::Right,
+                "Middle" => MouseButton::Middle,
+                "Back" => MouseButton::Back,
+                "Forward" => MouseButton::Forward,
+                number => MouseButton::Other(number.parse().map_err(|_| unknown())?),
+            };
+            return Ok(Self::Mouse(button));
+        }
+        // Bevy's own serde knows every key's name; hand it the word as if it were a
+        // string in a file.
+        let key = KeyCode::deserialize(word.into_deserializer())
+            .map_err(|_: serde::de::value::Error| unknown())?;
+        Ok(Self::Key(key))
+    }
+}
+
+impl Serialize for Bind {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(self)
+    }
+}
+
+impl<'de> Deserialize<'de> for Bind {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let word = String::deserialize(deserializer)?;
+        word.parse().map_err(serde::de::Error::custom)
+    }
 }
 
 impl From<KeyCode> for Bind {
@@ -44,8 +115,34 @@ impl From<MouseButton> for Bind {
 
 /// Up to three binds, any of which triggers the same action. Each slot holds a bind or
 /// is empty, so there is no way to hold a fourth.
+///
+/// In a settings file it is the list of the set slots, `[KeyW, ArrowUp]`; a fourth
+/// entry there is an error, not a silent drop.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Binds([Option<Bind>; MAX_BINDS]);
+
+impl Serialize for Binds {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.iter())
+    }
+}
+
+impl<'de> Deserialize<'de> for Binds {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let listed = Vec::<Bind>::deserialize(deserializer)?;
+        if listed.len() > MAX_BINDS {
+            return Err(serde::de::Error::custom(format!(
+                "an action takes at most {MAX_BINDS} binds, and {} are listed",
+                listed.len()
+            )));
+        }
+        let mut slots = [None; MAX_BINDS];
+        for (slot, bind) in slots.iter_mut().zip(listed) {
+            *slot = Some(bind);
+        }
+        Ok(Self(slots))
+    }
+}
 
 impl Binds {
     /// Binds filled from the first slot. More than three fails the build rather than
@@ -261,5 +358,62 @@ mod tests {
             .expect("the system runs");
 
         assert!(triggered);
+    }
+
+    #[test]
+    fn a_bind_is_one_word() {
+        assert_eq!(Bind::Key(KeyCode::KeyW).to_string(), "KeyW");
+        assert_eq!(Bind::Key(KeyCode::ArrowUp).to_string(), "ArrowUp");
+        assert_eq!(Bind::Mouse(MouseButton::Left).to_string(), "MouseLeft");
+        assert_eq!(Bind::Mouse(SIDE_BUTTON).to_string(), "Mouse7");
+    }
+
+    #[test]
+    fn every_kind_of_bind_reads_back_from_its_word() {
+        for bind in [
+            Bind::Key(KeyCode::Space),
+            Bind::Mouse(MouseButton::Forward),
+            Bind::Mouse(SIDE_BUTTON),
+        ] {
+            assert_eq!(bind.to_string().parse::<Bind>(), Ok(bind));
+        }
+    }
+
+    #[test]
+    fn a_word_that_names_nothing_is_an_error_that_says_so() {
+        assert_eq!(
+            "KeyQwerty".parse::<Bind>(),
+            Err(UnknownBind("KeyQwerty".to_string()))
+        );
+        assert!("MouseSeven".parse::<Bind>().is_err());
+    }
+
+    #[test]
+    fn binds_are_a_list_of_the_set_slots_in_a_file() {
+        let forward = Binds::new([Bind::Key(KeyCode::KeyW), Bind::Mouse(SIDE_BUTTON)]);
+
+        let text = serde_yaml_ng::to_string(&forward).expect("serialises");
+
+        assert_eq!(text, "- KeyW\n- Mouse7\n");
+        assert_eq!(
+            serde_yaml_ng::from_str::<Binds>(&text).expect("parses"),
+            forward
+        );
+    }
+
+    #[test]
+    fn an_empty_list_is_an_action_nothing_triggers() {
+        assert_eq!(
+            serde_yaml_ng::from_str::<Binds>("[]").expect("parses"),
+            Binds::default()
+        );
+    }
+
+    #[test]
+    fn a_fourth_bind_in_a_file_is_refused() {
+        let error =
+            serde_yaml_ng::from_str::<Binds>("[KeyA, KeyB, KeyC, KeyD]").expect_err("four binds");
+
+        assert!(error.to_string().contains("at most 3"), "{error}");
     }
 }

@@ -1,13 +1,15 @@
 [package]
-name = "murabito_camera"
+name = "murabito_settings"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [dependencies]
 bevy.workspace = true
-murabito_keybinds.workspace = true
+murabito_user_data.workspace = true
 serde.workspace = true
+serde_yaml_ng.workspace = true
+time.workspace = true
 
 [dev-dependencies]
-serde_yaml_ng.workspace = true
+tempfile.workspace = true

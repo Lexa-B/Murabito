@@ -1,12 +1,9 @@
 [package]
-name = "murabito_keybinds"
+name = "murabito_user_data"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
 [dependencies]
 bevy.workspace = true
-serde.workspace = true
-
-[dev-dependencies]
-serde_yaml_ng.workspace = true
+dirs.workspace = true
