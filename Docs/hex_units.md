@@ -40,6 +40,12 @@ pub struct VoxelCoord { q: i32, r: i32, layer: i32 }   // fields private
     lands on it.
   - The fields are private, so `new` is the only way to build a `VoxelCoord`. Rust's visibility
     rules enforce the invariant. Nobody has to remember it.
+  - **Cube is the only way in.** There is no axial constructor. Decided 2026-09-22: `VoxelCoord`
+    is the runtime type and cube is its one face everywhere. The one place that drops `s` is level
+    data on disk, which is a separate format: it writes `(q, r, layer)`, and on reading rebuilds
+    `s` (summing in `i64`) and goes through `new`, so a corrupt or hand-edited file that doesn't
+    sum to zero is refused as `NotOnHexPlane` rather than becoming a bad voxel. Inside the crate,
+    `from_world` builds the struct directly from a rounded triple, which the module can do.
 - **Gives cube output, reconstructed:** `q()`, `r()`, `s()` (as `-q - r`), `layer()`.
   The getters take `self` by value because the type is `Copy` and only 12 bytes.
 - `NotOnHexPlane { q, r, s }` carries the rejected values, so an error message can show them.
