@@ -1,5 +1,6 @@
-//! The placeholder world: a ground, a sun and sky to see it by, and a fox walking a
-//! twelve-sided loop about the origin so that there is something to look at.
+//! The placeholder world: a ground, a sun and sky to see it by, a fox walking a
+//! twelve-sided loop about the origin, and a hare walking a triangle beside it, so that
+//! there is something to look at.
 //!
 //! Lengths are in shaku: one world unit is one 尺, about 30.3 cm. Metres appear only in
 //! comments, to give a familiar sense of scale.
@@ -7,11 +8,12 @@
 //! This crate spawns no camera: seeing the world is another module's job.
 
 use bevy::prelude::*;
-use murabito_actions::{Action, ActionQueue};
+use murabito_actions::{Action, ActionQueue, AskingSet};
 use murabito_hexcoords::{Direction, VoxelCoord};
-use murabito_kinds::Fox;
+use murabito_kinds::{Fox, Hare};
 use murabito_movement::{Facing, VoxelPosition};
 use murabito_progress::Progress;
+use std::time::Duration;
 
 /// One 町 (cho): 360 shaku, about 109 m.
 const GROUND_SIDE: f32 = 360.0;
@@ -31,6 +33,17 @@ const SKY_GLOW: f32 = 200.0;
 /// Which way the fox starts off facing: toward the camera and to its right, which shows
 /// its face and its flank at once.
 const FOX_FACES: Direction = Direction::ESE;
+
+/// Where the hare starts: six shaku east of the fox, clear of its loop, facing east.
+const HARE_STARTS_AT: (i32, i32, i32) = (6, 0, -6);
+const HARE_FACES: Direction = Direction::E;
+
+/// The hare walks a triangle: three edge steps a side, then a rest, then the next side,
+/// which is a third of a turn on. The three directions sum to nothing, so the triangle
+/// closes on the voxel it started from.
+const HARE_TRIANGLE: [Direction; 3] = [Direction::E, Direction::NNW, Direction::SSW];
+const HARE_SIDE_STEPS: usize = 3;
+const HARE_REST: Duration = Duration::from_secs(1);
 
 /// The progress bar drawn under a body with something in flight: on the ground just in
 /// front of it, toward the camera, a shaku wide. Placeholder until a UI module owns it.
@@ -53,8 +66,11 @@ impl Plugin for ScenePlugin {
                 brightness: SKY_GLOW,
                 ..default()
             })
-            .add_systems(Startup, (spawn_ground, spawn_sun, spawn_fox, thicken_bars))
-            .add_systems(FixedUpdate, walk_the_fox)
+            .add_systems(
+                Startup,
+                (spawn_ground, spawn_sun, spawn_fox, spawn_hare, thicken_bars),
+            )
+            .add_systems(FixedUpdate, (walk_the_fox, walk_the_hare).in_set(AskingSet))
             .add_systems(Update, draw_progress_bars);
     }
 }
@@ -98,6 +114,34 @@ fn spawn_fox(mut commands: Commands) {
     commands.spawn((Fox, VoxelPosition(origin), Facing(FOX_FACES)));
 }
 
+/// Which corner of its triangle the hare heads for next, and how long it has rested at
+/// the last one. The scene's own bookkeeping for its placeholder walk.
+#[derive(Component)]
+struct TriangleWalk {
+    corner: usize,
+    rest: Timer,
+}
+
+impl Default for TriangleWalk {
+    fn default() -> Self {
+        Self {
+            corner: 0,
+            rest: Timer::new(HARE_REST, TimerMode::Once),
+        }
+    }
+}
+
+fn spawn_hare(mut commands: Commands) {
+    let (q, r, s) = HARE_STARTS_AT;
+    let start = VoxelCoord::new(q, r, s, 0).expect("the hare's start is on the plane");
+    commands.spawn((
+        Hare,
+        VoxelPosition(start),
+        Facing(HARE_FACES),
+        TriangleWalk::default(),
+    ));
+}
+
 /// Until something decides for it, the fox walks a loop: whenever its queue runs dry it
 /// is asked to go each of the twelve directions in turn. Each is one notch on from the
 /// last, so no step needs a turn first, and the twelve sum to nothing, so the loop
@@ -110,6 +154,28 @@ fn walk_the_fox(mut foxes: Query<&mut ActionQueue, With<Fox>>) {
                 .into_iter()
                 .for_each(|direction| queue.push(Action::Go(direction)));
         }
+    }
+}
+
+/// The hare walks a side, rests once the last step has landed, and is then asked to
+/// walk the next side; the third of a turn between sides is `Go`'s own turn-then-step.
+/// A rest is not yet an action the queue knows, so it is kept here, in the scene.
+fn walk_the_hare(
+    time: Res<Time>,
+    mut hares: Query<(&mut ActionQueue, &Progress, &mut TriangleWalk), With<Hare>>,
+) {
+    for (mut queue, progress, mut walk) in &mut hares {
+        if !queue.is_empty() || progress.in_flight() {
+            continue;
+        }
+        walk.rest.tick(time.delta());
+        if !walk.rest.is_finished() {
+            continue;
+        }
+        let side = HARE_TRIANGLE[walk.corner];
+        (0..HARE_SIDE_STEPS).for_each(|_| queue.push(Action::Go(side)));
+        walk.corner = (walk.corner + 1) % HARE_TRIANGLE.len();
+        walk.rest.reset();
     }
 }
 
@@ -191,6 +257,20 @@ mod tests {
     }
 
     #[test]
+    fn a_hare_starts_six_shaku_east_of_the_fox_facing_east() {
+        let mut app = app_after_startup();
+        let world = app.world_mut();
+
+        let (position, facing) = world
+            .query_filtered::<(&VoxelPosition, &Facing), With<Hare>>()
+            .single(world)
+            .expect("exactly one hare");
+
+        assert_eq!(position.0.to_world(), Vec3::new(6.0, 0.0, 0.0));
+        assert_eq!(facing.0, Direction::E);
+    }
+
+    #[test]
     fn the_sky_is_what_the_screen_is_cleared_to() {
         let app = app_after_startup();
 
@@ -269,5 +349,64 @@ mod tests {
 
         assert_eq!(came_home_on, Some(263));
         assert_eq!(visited.len(), 12, "the fox visited only {visited:?}");
+    }
+
+    #[test]
+    fn the_hare_walks_a_triangle_resting_at_each_corner_and_comes_home() {
+        use bevy::gizmos::AppGizmoBuilder;
+        use bevy::time::TimeUpdateStrategy;
+        use murabito_actions::ActionsPlugin;
+        use murabito_movement::MovementPlugin;
+        use murabito_progress::ProgressPlugin;
+
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Mesh>()
+            .init_asset::<StandardMaterial>()
+            .init_asset::<WorldAsset>()
+            .init_asset::<bevy::gizmos::GizmoAsset>()
+            .init_gizmo_group::<DefaultGizmoConfigGroup>()
+            .add_plugins((ProgressPlugin, MovementPlugin, ActionsPlugin, ScenePlugin))
+            .insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
+        app.update();
+        let hare = |app: &mut App| {
+            let world = app.world_mut();
+            let (position, facing) = world
+                .query_filtered::<(&VoxelPosition, &Facing), With<Hare>>()
+                .single(world)
+                .expect("exactly one hare");
+            (position.0, facing.0)
+        };
+        let (home, _) = hare(&mut app);
+        let mut visited = std::collections::HashSet::from([home]);
+        let mut ticks_at_rest_at_home = 0;
+        let mut left_home = false;
+        let mut triangle = std::collections::HashSet::new();
+        let mut corner = home;
+        for side in HARE_TRIANGLE {
+            for _ in 0..HARE_SIDE_STEPS {
+                corner = corner.neighbour(side);
+                triangle.insert(corner);
+            }
+        }
+
+        // A side is 3 shaku at 5 shaku/s, 38.4 ticks; a corner is a third of a turn at
+        // 240°/s, 32 ticks; a rest is 64 ticks. A lap is well under 500 ticks, so by 600
+        // the hare has been home, rested, and set off again.
+        for _ in 1..=600 {
+            app.update();
+            let (here, _) = hare(&mut app);
+            visited.insert(here);
+            left_home |= here != home;
+            if left_home && here == home {
+                ticks_at_rest_at_home += 1;
+            }
+        }
+
+        assert_eq!(visited, triangle, "three sides of three, and nowhere else");
+        assert!(
+            ticks_at_rest_at_home >= 64,
+            "it came home and rested there a whole second, not {ticks_at_rest_at_home} ticks"
+        );
     }
 }

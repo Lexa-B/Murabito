@@ -94,7 +94,9 @@ lives:
   turn-then-step rule, in one place.
 - Nothing is issued while something is in flight, whatever kind it is.
 
-Running before the mechanisms means an intent issued on a tick starts on that tick, so a `Go` that
+Whatever pushes onto a queue runs in `AskingSet`, which `issue` follows, so an action asked
+for on a tick is looked at on that tick rather than the next depending on which system the
+scheduler happened to run first. Running before the mechanisms means an intent issued on a tick starts on that tick, so a `Go` that
 needs no turn lands exactly when a bare `Step` would. The state machine is implicit: the state is
 the action at the head plus what is in flight, read from the components rather than kept in an
 enum. When a new kind of action arrives it is a new `Action` variant here and a new mechanism crate
