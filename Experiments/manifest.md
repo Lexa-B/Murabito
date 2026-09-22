@@ -252,7 +252,7 @@ Since 2026-09-22 it uses the main project's coordinate conventions, through a ve
 
 Coordinates, the address system and chunks, with placeholder terrain.
 
-- **Coordinates.** exp-03's system unchanged (the ratios, packing B, one owner per split cell), plus a vertical **layer**, 5 sun thick by default and tunable. Addresses are `ri / cho / ken / shaku / layer`. The world is 1 ri for now; the radius is a setting.
+- **Coordinates.** exp-03's system unchanged (the ratios, packing B, one owner per split cell), plus a vertical **layer**, fixed at 5 sun (0.5 shaku), as in the main project. Addresses are `ri / cho / ken / shaku / layer`. The world is 1 ri for now; the radius is a setting.
 - **Voxels.** Terrain is hex prisms ("pancakes") one shaku across. A chunk is one parent cell's children and holds a column per child: a list of runs of material over the full height. Coarser chunks hold wider columns measured in the same layers.
 - **Loading.** Anything can be a loader: a focus and a number of rings per level (default 3). Ancestors are always loaded, and unloading is delayed (default 5 s), so sitting on a border reloads nothing.
 - **Structure.** `hexworld` (engine-free core: addresses, chunks, the store, the mesher), `hexworld_bevy` (a `Loader` component, background generation, chunk meshes, the hex-line material), and `viewer` (an overhead camera and a tuning panel).
