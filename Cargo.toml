@@ -19,6 +19,7 @@ members = [
     "crates/ui/kit",
     "crates/ui/navigation",
     "crates/ui/menu",
+    "crates/ui/settings_page",
 ]
 
 [workspace.package]
@@ -43,6 +44,7 @@ murabito_app_state = { path = "crates/app_state" }
 murabito_ui = { path = "crates/ui/kit" }
 murabito_navigation = { path = "crates/ui/navigation" }
 murabito_menu = { path = "crates/ui/menu" }
+murabito_settings_page = { path = "crates/ui/settings_page" }
 
 # Where the player's files go: the platform's config directory.
 dirs = "7"

@@ -4,3 +4,7 @@
 menu.settings: Settings
 menu.resume: Resume
 menu.quit: Quit
+settings.title: Settings
+settings.pan_speed: Pan speed
+settings.language: Language
+settings.back: Back

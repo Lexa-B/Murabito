@@ -3491,6 +3491,7 @@ dependencies = [
  "murabito_progress",
  "murabito_scene",
  "murabito_settings",
+ "murabito_settings_page",
  "murabito_ui",
  "murabito_user_data",
 ]
@@ -3611,6 +3612,18 @@ dependencies = [
  "serde_yaml_ng",
  "tempfile",
  "time",
+]
+
+[[package]]
+name = "murabito_settings_page"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_app_state",
+ "murabito_camera",
+ "murabito_i18n",
+ "murabito_navigation",
+ "murabito_ui",
 ]
 
 [[package]]

@@ -9,6 +9,7 @@ use murabito_navigation::{NavigationPlugin, NavigationSettings};
 use murabito_progress::ProgressPlugin;
 use murabito_scene::ScenePlugin;
 use murabito_settings::{Persist, SettingsPlugin};
+use murabito_settings_page::SettingsPagePlugin;
 use murabito_ui::UiPlugin;
 use murabito_user_data::UserDataPlugin;
 
@@ -27,6 +28,7 @@ fn main() {
             UiPlugin,
             NavigationPlugin,
             MenuPlugin,
+            SettingsPagePlugin,
             ScenePlugin,
             CameraPlugin,
             MovementPlugin,

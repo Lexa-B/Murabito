@@ -1,0 +1,15 @@
+[package]
+name = "murabito_settings_page"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+bevy.workspace = true
+murabito_camera.workspace = true
+murabito_i18n.workspace = true
+murabito_navigation.workspace = true
+murabito_ui.workspace = true
+
+[dev-dependencies]
+murabito_app_state.workspace = true

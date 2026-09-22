@@ -18,3 +18,4 @@ murabito_app_state.workspace = true
 murabito_ui.workspace = true
 murabito_navigation.workspace = true
 murabito_menu.workspace = true
+murabito_settings_page.workspace = true
