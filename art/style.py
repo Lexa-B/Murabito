@@ -272,6 +272,10 @@ PALETTE = [
     ("grass_green_yellow", "#9AAA55"),
     ("grass_shade", "#48703A"),
     ("grass_shade_deep", "#3D6232"),
+    # people: sun-tanned villager skin
+    ("skin_tan", "#C9926A"),
+    ("skin_tan_light", "#D6A47D"),
+    ("skin_tan_deep", "#B47E58"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
