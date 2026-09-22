@@ -1,7 +1,7 @@
 # Handoff — the main project
 
 Written 2026-09-22, after PR #25 (movement) merged; brought up to date the same day with the
-settings and i18n crates. Everything here is on `main`, or on the `settings-i18n` branch's PR. `AGENTS.md` is the
+settings and i18n crates, then with app state. Everything here is on `main`, or on the `app-state` branch's PR. `AGENTS.md` is the
 authority on how to work; this is where things stand, for a session starting cold.
 
 ## What runs
@@ -11,8 +11,9 @@ ground one cho square under a pale sky, lit by a sun, and a fox at the origin wa
 twelve-sided loop, facing the way it goes, corner steps visibly slower than edge steps, with a
 progress bar filling on the ground in front of it once per step. WASD/arrows pan, the wheel
 zooms, both eased; the camera's feel numbers are the ones settled by feel-testing in the first
-attempt. The camera's settings (speed multiplier, pan binds) and the UI language persist to
-`~/.config/murabito/settings.yaml`, which is hand-editable.
+attempt. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
+resumes. The camera's settings (speed multiplier, pan binds), the pause key and the UI language
+persist to `~/.config/murabito/settings.yaml`, which is hand-editable.
 
 ## The crates
 
@@ -23,10 +24,11 @@ crate, and reads the same way.
 |---|---|---|---|
 | `murabito` | `crates/murabito` | the app: a plugin list | |
 | `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns the fox with its position, facing, locomotion and action queue; refills its queue with the twelve-direction loop; draws the progress bar (placeholder until a UI module owns it) | `ScenePlugin` |
-| `murabito_camera` | `crates/camera` | the overhead rig: focus, direction, zoom; eased pan and zoom; settings | `CameraPlugin`, `CameraSettings` |
+| `murabito_camera` | `crates/camera` | the overhead rig: focus, direction, zoom; eased pan and zoom, taking input only in `AppState::Playing`; settings | `CameraPlugin`, `CameraSettings` |
 | `murabito_keybinds` | `crates/keybinds` | `Binds`, up to three keys or mouse buttons for one action; `Inputs`, the system parameter; a `Bind` is one word in a file (`KeyW`, `Mouse7`) | `Bind`, `Binds`, `Held`, `Inputs`, `MAX_BINDS`, `UnknownBind` |
 | `murabito_user_data` | `crates/user_data` | the player's directory, `~/.config/murabito`; the only place that decides where it is | `UserData`, `UserDataPlugin` |
 | `murabito_settings` | `crates/settings` | `settings.yaml` in that directory: the app registers each module's settings resource with `persist::<T>("key")`; loaded as the app is built, written on the frame anything changes; a file or section that can't be read is backed up to `settings-<moment>.bak` then replaced | `SettingsPlugin`, `Persist` |
+| `murabito_app_state` | `crates/app_state` | `AppState`: `Playing` or `Paused`, whether the world runs and nothing about screens; pauses `Time<Virtual>` on the frame a transition lands, which freezes the whole `FixedUpdate` simulation; `AppStateSettings`, the pause key (Space) | `AppState`, `AppStateSettings`, `AppStatePlugin` |
 | `murabito_i18n` | `crates/i18n` | `Language` (a setting, persisted as `language: en`), `Localized` (the key a text entity carries), the compiled-in catalogues `assets/locales/{en,ja}.yaml`, live re-localising | `Language`, `Localized`, `I18nPlugin` |
 | `murabito_hexcoords` | `crates/hexcoords` | `VoxelCoord` (cube in, axial stored, layer), `VoxelspacePos`, `Direction` (twelve, by compass point) with `neighbour`, `rotated`, `notches_to`, `heading` | those |
 | `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
@@ -56,6 +58,13 @@ is still design. `TODO.md` is what's queued.
   if `en.yaml` and `ja.yaml` disagree. A language's own name is `Language::own_name()`, on
   the enum, never translated.
 - **Simulation on `FixedUpdate` at 64 Hz**, presentation on `Update`.
+- **`AppState` is `Playing` or `Paused`, and knows no screens.** Chosen over the archive's
+  Playing/Menu/Settings so a new screen never edits this crate, and moving between screens can't
+  unpause on the way through. Pausing is one call on `Time<Virtual>`, made by a system that reads
+  the state rather than the transition's edge; `Time<Real>` runs on underneath. The camera gates
+  its input on `Playing` and depends on `murabito_app_state`; nothing depends on the camera.
+- **Escape is the menu's; Space pauses.** The pause bind lives in `AppStateSettings`, owned by
+  the crate that flips the state, and is persisted like every other setting.
 - **Progress is measured in the mechanism's units, not ticks**, and the overshoot carries between
   actions of one kind. A run of steps lands when the total distance says (80 ticks, not 81, in
   the test); a tick at rest forgets the leftover.
@@ -76,6 +85,8 @@ is still design. `TODO.md` is what's queued.
 
 - `SceneRoot` is `WorldAssetRoot`; a glTF scene is `GltfAssetLabel::Scene(0).from_asset(path)`.
 - Events are messages: `MessageReader`, `add_message`, `world.write_message`.
+- `InputPlugin` clears `just_pressed` in `PreUpdate`, so a test can't fake a tap by writing to
+  `ButtonInput`; it sends the `KeyboardInput` / `MouseButtonInput` message the window would.
 - A system asking for a missing resource panics; the message names the fix (`init_resource`,
   or `Option<Res<T>>`). With `MinimalPlugins`, add `InputPlugin` for `ButtonInput`,
   `AssetPlugin` + `init_asset::<T>()` per asset type, `init_asset::<GizmoAsset>()` +
@@ -109,7 +120,7 @@ is still design. `TODO.md` is what's queued.
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `settings-i18n`; holds the warm `target/` (~89 GB, mostly `target/debug`) and is what the desktop shortcut runs |
-| `main` at handoff | `28bad3b`, the merge of PR #27 (TODO and this file) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs); then the `settings-i18n` PR (user_data, settings, i18n) |
+| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `app-state`; holds the warm `target/` (~89 GB, mostly `target/debug`) and is what the desktop shortcut runs |
+| `main` at handoff | `264a051`, the merge of PR #29 (the crate manifest) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest); then the `app-state` PR |
 | Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |

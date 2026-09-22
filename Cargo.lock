@@ -3482,6 +3482,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "murabito_actions",
+ "murabito_app_state",
  "murabito_camera",
  "murabito_i18n",
  "murabito_movement",
@@ -3502,10 +3503,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "murabito_app_state"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_keybinds",
+ "serde",
+ "serde_yaml_ng",
+]
+
+[[package]]
 name = "murabito_camera"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "murabito_app_state",
  "murabito_keybinds",
  "serde",
  "serde_yaml_ng",

@@ -1,5 +1,5 @@
 [package]
-name = "murabito_camera"
+name = "murabito_app_state"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
@@ -7,7 +7,6 @@ publish.workspace = true
 [dependencies]
 bevy.workspace = true
 murabito_keybinds.workspace = true
-murabito_app_state.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
