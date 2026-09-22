@@ -10,9 +10,11 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   the humans, and the objects arrive as models and needs do. Facets (what a thing is *like*:
   age, trophic role, height, what it does to each sense) are the archive's second axis and are
   not designed yet; they'd be members on tiers, or their own components, when senses come back.
-- **A rest as an action.** The hare's pause between sides is the scene's own timer. If waiting
-  is something a body can be asked to do, it is an `Action::Wait` and a mechanism crate, per
-  `Docs/actions_readme.md`.
+- **The scene's walks are placeholder AI.** The fox's loop and the hare's triangle, with the
+  hare's rest between sides, are what an AI layer will do: decide, and push onto the queue, or
+  not. A rest is not an action (Lexa, 2026-09-22): an idle body is an empty queue by the AI's
+  choice, so there is no `Action::Wait`; the walks and the `TriangleWalk` timer go when the AI
+  layer arrives.
 - **Picking a plant's version, colour and season.** A plant kind names its first version in
   summer; a spawner gives its own `Model` to say otherwise. Nothing yet picks at random, or
   reads a calendar.
@@ -59,13 +61,14 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 
 ## Housekeeping
 
-- The desktop shortcut and the warm `target/` (~89 GB) live in the `cleanup-refactor` worktree;
+- The desktop shortcut and the warm `target/` (~170 GB) live in the `cleanup-refactor` worktree;
   when the rebuild gets a permanent home, repoint `scripts/run.sh`'s two paths in the `.desktop`
   entries and move `target/`.
 - Stale worktree: `.claude/worktrees/murabito` on `layer-skeleton`, whose one commit merged in
   PR #16; it holds a rebuilt `target/` of the old game.
-- Merged branches to prune: local `cleanup-refactor`, `rebuild-workspace`, `scene-crate`,
-  `hex-coords`, `movement`; remote `origin/movement`, `origin/cleanup-refactor` if still there.
+- Merged branches to prune: local `app-state`, `cleanup-refactor`, `crate-manifest`,
+  `docs-overlay-rule`, `hex-coords`, `kinds-skeleton`, `movement`, `rebuild-workspace`,
+  `scene-crate`, `settings-i18n`, `settings-page`, `todo`, `ui-kit`; remote `origin/settings-i18n`.
 - `art/__pycache__/` in the main checkout is gitignored clutter from the art scripts.
 - `/tmp` scratchpads from older sessions (`/tmp/claude-1000/-home-lexa`, ~16 GB) are on a
   RAM-backed tmpfs.

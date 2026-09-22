@@ -1,7 +1,8 @@
 # Hex coordinates and units
 
-A brief on the voxel coordinate system for the main project, as agreed in design.
-Nothing here is implemented yet. The open questions are listed at the end.
+A brief on the voxel coordinate system for the main project, as agreed in design. Items 1–3 of
+the build order at the end are implemented, in `murabito_hexcoords`; distance and the `units`
+module are still design. The open questions are listed after the build order.
 
 ## Voxels
 
