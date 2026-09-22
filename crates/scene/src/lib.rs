@@ -11,7 +11,7 @@ use bevy::prelude::*;
 use murabito_actions::{Action, ActionQueue, AskingSet};
 use murabito_hexcoords::{Direction, VoxelCoord};
 use murabito_kinds::{Fox, Hare};
-use murabito_movement::{Facing, VoxelPosition};
+use murabito_placement::{Facing, VoxelPosition};
 use murabito_progress::Progress;
 use std::time::Duration;
 

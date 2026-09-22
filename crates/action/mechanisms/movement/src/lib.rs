@@ -1,17 +1,19 @@
-//! How a body moves across the hex voxel grid: where it is, which way it faces, and the
-//! mechanics of stepping and turning. Nothing here decides *what* to do; that is the
-//! actions layer above, which puts a `Step` or a `Turn` on an entity and this crate
-//! carries it out. `Docs/movement_readme.md` is the design this implements.
+//! How a body moves across the hex voxel grid: the mechanics of stepping and turning.
+//! Nothing here decides *what* to do; that is the actions layer above, which puts a
+//! `Step` or a `Turn` on an entity and this crate carries it out. Where the body is and
+//! which way it faces are `murabito_placement`'s `VoxelPosition` and `Facing`, which
+//! this is the one mechanism that writes to. `Docs/movement_readme.md` is the design
+//! this implements.
 //!
 //! Compass: **east is +X, north is −Z, up is +Y.** Facing is one of the twelve compass
 //! directions, never up or down.
 //!
 //! Movement is by whole voxels: an entity is in exactly one cell, and a step moves it to
-//! a neighbour in one go, once the body has walked the distance. `place` keeps the model
-//! where the cell is.
+//! a neighbour in one go, once the body has walked the distance.
 
 use bevy::prelude::*;
-use murabito_hexcoords::{Direction, VoxelCoord};
+use murabito_hexcoords::Direction;
+use murabito_placement::{Facing, VoxelPosition};
 use murabito_progress::{MechanismSet, Progress};
 
 /// The distance to a corner neighbour, in shaku, and so the cost of stepping to one.
@@ -24,8 +26,7 @@ pub struct MovementPlugin;
 
 impl Plugin for MovementPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(FixedUpdate, (step, turn).in_set(MechanismSet))
-            .add_systems(Update, place);
+        app.add_systems(FixedUpdate, (step, turn).in_set(MechanismSet));
     }
 }
 
@@ -99,30 +100,6 @@ fn step(
     }
 }
 
-/// The voxel an entity is in. Integer: it changes only when a step lands.
-///
-/// Requires a `Transform`, so `place` has somewhere to put the model.
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
-#[require(Transform)]
-pub struct VoxelPosition(pub VoxelCoord);
-
-/// Which of the twelve compass directions an entity faces.
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Facing(pub Direction);
-
-/// An entity whose position or facing changed since `place` last ran.
-type Moved = Or<(Changed<VoxelPosition>, Changed<Facing>)>;
-
-/// Keeps a model where its cell is: at the centre of the voxel's bottom face, turned to
-/// its heading. The only thing here that writes a `Transform`, and only when the
-/// position or facing changed, so a standing entity is left alone.
-fn place(mut placed: Query<(&VoxelPosition, &Facing, &mut Transform), Moved>) {
-    for (position, facing, mut transform) in &mut placed {
-        *transform =
-            Transform::from_translation(position.0.to_world()).with_rotation(facing.0.heading());
-    }
-}
-
 /// Carries out every `Turn` in flight, one tick's turning at a time: each notch is its
 /// own action on the bar, so a wide swing is a run of them and the leftover degrees carry
 /// from one to the next. At most one notch is taken per tick.
@@ -152,6 +129,7 @@ fn turn(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use murabito_hexcoords::VoxelCoord;
     use murabito_progress::ProgressPlugin;
 
     fn voxel(q: i32, r: i32, layer: i32) -> VoxelCoord {
@@ -325,86 +303,6 @@ mod tests {
 
         assert!(is_stepping(&app, body));
         assert_eq!(position_of(&app, body), voxel(0, 0, 0));
-    }
-
-    /// A headless app: no window, no GPU. `MinimalPlugins` brings the schedules, and
-    /// placing a model needs nothing else.
-    fn app_with(position: VoxelCoord, facing: Direction) -> (App, Entity) {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, MovementPlugin));
-        let entity = app
-            .world_mut()
-            .spawn((VoxelPosition(position), Facing(facing)))
-            .id();
-        (app, entity)
-    }
-
-    fn transform_of(app: &App, entity: Entity) -> Transform {
-        *app.world().get::<Transform>(entity).expect("a transform")
-    }
-
-    #[test]
-    fn a_placed_entity_gets_a_transform_without_asking() {
-        let (app, entity) = app_with(voxel(0, 0, 0), Direction::N);
-
-        assert!(app.world().get::<Transform>(entity).is_some());
-    }
-
-    #[test]
-    fn a_placed_entity_stands_at_its_voxels_centre_facing_its_heading() {
-        let (mut app, entity) = app_with(voxel(1, -2, 1), Direction::N);
-
-        app.update();
-
-        let transform = transform_of(&app, entity);
-        assert_eq!(transform.translation, voxel(1, -2, 1).to_world());
-        assert!(transform.rotation.abs_diff_eq(Quat::IDENTITY, 1e-6));
-    }
-
-    #[test]
-    fn turning_to_face_east_turns_the_model_to_face_east() {
-        let (mut app, entity) = app_with(voxel(0, 0, 0), Direction::N);
-        app.update();
-
-        app.world_mut()
-            .get_mut::<Facing>(entity)
-            .expect("a facing")
-            .0 = Direction::E;
-        app.update();
-
-        let faces = transform_of(&app, entity).forward();
-        assert!(faces.abs_diff_eq(Vec3::X, 1e-5), "faces {faces}");
-    }
-
-    #[test]
-    fn moving_to_another_voxel_moves_the_model_there() {
-        let (mut app, entity) = app_with(voxel(0, 0, 0), Direction::N);
-        app.update();
-
-        app.world_mut()
-            .get_mut::<VoxelPosition>(entity)
-            .expect("a position")
-            .0 = voxel(3, 0, 2);
-        app.update();
-
-        assert_eq!(
-            transform_of(&app, entity).translation,
-            voxel(3, 0, 2).to_world()
-        );
-    }
-
-    #[test]
-    fn a_standing_entity_is_left_alone() {
-        let (mut app, entity) = app_with(voxel(0, 0, 0), Direction::N);
-        app.update();
-        let nudged = Transform::from_xyz(9.0, 9.0, 9.0);
-        *app.world_mut()
-            .get_mut::<Transform>(entity)
-            .expect("a transform") = nudged;
-
-        app.update();
-
-        assert_eq!(transform_of(&app, entity), nudged);
     }
 
     fn turner_facing(facing: Direction, turn_speed: f32) -> (App, Entity) {

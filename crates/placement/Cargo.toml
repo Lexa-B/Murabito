@@ -1,5 +1,5 @@
 [package]
-name = "murabito_movement"
+name = "murabito_placement"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
@@ -7,5 +7,3 @@ publish.workspace = true
 [dependencies]
 bevy.workspace = true
 murabito_hexcoords.workspace = true
-murabito_placement.workspace = true
-murabito_progress.workspace = true

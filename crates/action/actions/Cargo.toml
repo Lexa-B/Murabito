@@ -8,4 +8,5 @@ publish.workspace = true
 bevy.workspace = true
 murabito_hexcoords.workspace = true
 murabito_movement.workspace = true
+murabito_placement.workspace = true
 murabito_progress.workspace = true

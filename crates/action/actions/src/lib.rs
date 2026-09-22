@@ -11,7 +11,8 @@ use std::collections::VecDeque;
 
 use bevy::prelude::*;
 use murabito_hexcoords::Direction;
-use murabito_movement::{Facing, Step, Turn, can_step};
+use murabito_movement::{Step, Turn, can_step};
+use murabito_placement::Facing;
 use murabito_progress::{MechanismSet, Progress};
 
 pub struct ActionsPlugin;
@@ -129,7 +130,8 @@ fn issue(
 mod tests {
     use super::*;
     use murabito_hexcoords::VoxelCoord;
-    use murabito_movement::{Locomotion, MovementPlugin, VoxelPosition};
+    use murabito_movement::{Locomotion, MovementPlugin};
+    use murabito_placement::VoxelPosition;
     use murabito_progress::ProgressPlugin;
 
     fn voxel(q: i32, r: i32, layer: i32) -> VoxelCoord {

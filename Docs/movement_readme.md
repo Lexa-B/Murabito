@@ -10,13 +10,14 @@ statement is in `hex_units_readme.md` and `AGENTS.md`.
 
 ## Where a body is, and which way it faces
 
-Implemented, in `murabito_movement`.
+Implemented, in `murabito_placement`: these are a property of being a thing in the world, not of
+moving, so they live below the mechanism that changes them, where the senses can read them too.
 
 - `VoxelPosition(VoxelCoord)`: the voxel an entity is in. Integer, and it changes only when a
   step lands: movement is by whole voxels, and an entity is in exactly one cell.
 - `Facing(Direction)`: one of the twelve compass directions.
 - `place` writes the entity's `Transform` from the two: the centre of the voxel's bottom face,
-  turned to `Direction::heading()`. It is the only thing that writes a moving entity's
+  turned to `Direction::heading()`. It is the only thing that writes a placed entity's
   `Transform`, and it runs only when the position or facing changed. `VoxelPosition` requires a
   `Transform`, so an entity gets one without asking.
 

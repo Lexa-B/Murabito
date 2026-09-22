@@ -3489,6 +3489,7 @@ dependencies = [
  "murabito_menu",
  "murabito_movement",
  "murabito_navigation",
+ "murabito_placement",
  "murabito_progress",
  "murabito_scene",
  "murabito_settings",
@@ -3504,6 +3505,7 @@ dependencies = [
  "bevy",
  "murabito_hexcoords",
  "murabito_movement",
+ "murabito_placement",
  "murabito_progress",
 ]
 
@@ -3561,6 +3563,7 @@ dependencies = [
  "murabito_actions",
  "murabito_hexcoords",
  "murabito_movement",
+ "murabito_placement",
  "murabito_progress",
 ]
 
@@ -3582,6 +3585,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "murabito_hexcoords",
+ "murabito_placement",
  "murabito_progress",
 ]
 
@@ -3594,6 +3598,14 @@ dependencies = [
  "murabito_keybinds",
  "serde",
  "serde_yaml_ng",
+]
+
+[[package]]
+name = "murabito_placement"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_hexcoords",
 ]
 
 [[package]]
@@ -3612,6 +3624,7 @@ dependencies = [
  "murabito_hexcoords",
  "murabito_kinds",
  "murabito_movement",
+ "murabito_placement",
  "murabito_progress",
 ]
 

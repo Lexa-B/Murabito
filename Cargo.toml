@@ -9,6 +9,7 @@ members = [
     "crates/camera",
     "crates/keybinds",
     "crates/hexcoords",
+    "crates/placement",
     "crates/action/progress",
     "crates/action/mechanisms/*",
     "crates/action/actions",
@@ -35,6 +36,7 @@ murabito_scene = { path = "crates/scene" }
 murabito_camera = { path = "crates/camera" }
 murabito_keybinds = { path = "crates/keybinds" }
 murabito_hexcoords = { path = "crates/hexcoords" }
+murabito_placement = { path = "crates/placement" }
 murabito_progress = { path = "crates/action/progress" }
 murabito_movement = { path = "crates/action/mechanisms/movement" }
 murabito_actions = { path = "crates/action/actions" }
