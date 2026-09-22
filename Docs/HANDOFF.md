@@ -1,7 +1,8 @@
 # Handoff — the main project
 
 Written 2026-09-22, after PR #25 (movement) merged; brought up to date the same day with the
-settings and i18n crates, then with app state, then with the overlays and the settings page. Everything here is on `main`, or on the `settings-page` branch's PR. `AGENTS.md` is the
+settings and i18n crates, then with app state, then with the overlays and the settings page,
+then with the kinds. Everything here is on `main`, or on the `kinds-skeleton` branch's PR. `AGENTS.md` is the
 authority on how to work; this is where things stand, for a session starting cold.
 
 ## What runs
@@ -11,7 +12,8 @@ ground one cho square under a pale sky, lit by a sun, and a fox at the origin wa
 twelve-sided loop, facing the way it goes, corner steps visibly slower than edge steps, with a
 progress bar filling on the ground in front of it once per step. WASD/arrows pan, the wheel
 zooms, both eased; the camera's feel numbers are the ones settled by feel-testing in the first
-attempt. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
+attempt. Six shaku east, a hare walks a triangle: three steps, a second's rest, a third of a
+turn, and again. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
 resumes. Escape opens the menu over the paused world (Settings / Resume / Quit, in the UI's
 font, in English or Japanese); Escape again, or Resume, resumes. Settings is a page with a
 pan-speed slider (a quarter speed to six times, in octaves, with a readout) and a language picker
@@ -27,7 +29,8 @@ crate, and reads the same way.
 | Crate | Directory | Job | Public |
 |---|---|---|---|
 | `murabito` | `crates/murabito` | the app: a plugin list | |
-| `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns the fox with its position, facing, locomotion and action queue; refills its queue with the twelve-direction loop; draws the progress bar (placeholder until a UI module owns it) | `ScenePlugin` |
+| `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns a `Fox` and a `Hare` from the kinds with a position and a facing; refills the fox's queue with the twelve-direction loop and walks the hare's triangle with a rest at each corner (its own timer); draws the progress bar (placeholder until a UI module owns it) | `ScenePlugin` |
+| `murabito_kinds` | `crates/kinds` | the tree of kinds: every tier and kind a unit component whose `#[require]` is its parent and members; one file per node in folders that mirror the tree; `Model`, the glTF path a kind names, loaded by the plugin's one observer; the tiers, seventeen animals and twelve plants | every kind, `Model`, `KindsPlugin` |
 | `murabito_camera` | `crates/camera` | the overhead rig: focus, direction, zoom; eased pan and zoom, taking input only in `AppState::Playing`; settings | `CameraPlugin`, `CameraSettings` |
 | `murabito_keybinds` | `crates/keybinds` | `Binds`, up to three keys or mouse buttons for one action; `Inputs`, the system parameter; a `Bind` is one word in a file (`KeyW`, `Mouse7`) | `Bind`, `Binds`, `Held`, `Inputs`, `MAX_BINDS`, `UnknownBind` |
 | `murabito_user_data` | `crates/user_data` | the player's directory, `~/.config/murabito`; the only place that decides where it is | `UserData`, `UserDataPlugin` |
@@ -41,7 +44,7 @@ crate, and reads the same way.
 | `murabito_hexcoords` | `crates/hexcoords` | `VoxelCoord` (cube in, axial stored, layer), `VoxelspacePos`, `Direction` (twelve, by compass point) with `neighbour`, `rotated`, `notches_to`, `heading` | those |
 | `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
 | `murabito_movement` | `crates/action/mechanisms/movement` | `VoxelPosition`, `Facing`, `Locomotion`; the `Step` and `Turn` intents and their tick systems; `place` | those, plus `cost`, `can_step`, `MovementPlugin` |
-| `murabito_actions` | `crates/action/actions` | `ActionQueue` of `Action::{Go, Face}`; `issue`, where turn-then-step lives | `Action`, `ActionQueue`, `ActionsPlugin` |
+| `murabito_actions` | `crates/action/actions` | `ActionQueue` of `Action::{Go, Face}`; `issue`, where turn-then-step lives, after `AskingSet` | `Action`, `ActionQueue`, `AskingSet`, `ActionsPlugin` |
 
 The design briefs in `Docs/*_readme.md` mark, section by section, what is implemented and what
 is still design. `TODO.md` is what's queued.
@@ -100,8 +103,20 @@ is still design. `TODO.md` is what's queued.
 - **Members are listed in the root manifest**, since a glob can't cover a group directory.
 - **Assets live in `assets/` at the repo root**; `.cargo/config.toml` sets `BEVY_ASSET_ROOT`.
 - **Shaku is the base unit**, one world unit; north is −Z, east +X, up +Y.
-- **World objects and the ontology (諸法) are deferred** until something needs to ask "what is
-  this"; the fox is placeholder content in `scene` until then.
+- **Kinds are Bevy required components, not data.** Lexa's design: every tier and kind is a
+  unit component, `#[require]` is *extends* plus the members, so "open `Animal` and read what
+  every animal has" holds and the compiler enforces it; at 2,000 kinds a registry plus audit
+  would not. Verified in `bevy_ecs` 0.19.1: a direct `require` wins over an inherited one,
+  otherwise depth-first in list order; a cycle panics at registration naming the loop (not a
+  stack overflow, whatever the doc comment says). One node, one file, folders mirroring the
+  tree: Lexa's call over one file for all. English keys, kanji beside them. `Sentient` carries
+  `Facing`, `Locomotion` and `ActionQueue`, Lexa's call ("yokai move too"). The AI's own reading
+  of the world is a separate, non-authoritative system and was kept out of every decision here.
+- **A require constructor has no world in reach**, so a kind names its model as a path
+  (`Model`) and one observer loads it. What is given at spawn wins over a kind's `require`,
+  which is how a scene says which way a fox faces and which sakura it wants.
+- **`AskingSet`**: pushes onto a queue run before `issue`. Found when a second walker made the
+  fox land a tick late: the order had held by the scheduler's whim.
 
 ## Bevy 0.19 things that cost time
 
@@ -129,6 +144,8 @@ is still design. `TODO.md` is what's queued.
 - `AmbientLight` on a camera is a per-view override; the world's is the `GlobalAmbientLight`
   resource.
 - `const { assert!(N <= 3) }` in a const-generic fn fails `cargo build`, not `cargo check`.
+- `World::entities().len()` counts more than what you spawned; count a marker instead.
+- Sampling `Facing` every tick during a `Turn` sees every direction between, by design.
 - A query filter that clippy calls too complex reads better as a `type` alias anyway.
 - `serde_yaml_ng` refuses nested enums (`serializing nested enums in YAML is not supported
   yet`). A YAML file of only comments parses as `null`, so read it as `Option<Map>`.
@@ -149,7 +166,7 @@ is still design. `TODO.md` is what's queued.
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `settings-page`; holds the warm `target/` (~89 GB, mostly `target/debug`) and is what the desktop shortcut runs |
-| `main` at handoff | `ececdaf`, the merge of PR #32 (the overlays) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays); then the `settings-page` PR |
+| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `kinds-skeleton`; holds the warm `target/` (~89 GB, mostly `target/debug`) and is what the desktop shortcut runs |
+| `main` at handoff | `eb78b6a`, the merge of PR #33 (the settings page) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page); then the `kinds-skeleton` PR |
 | Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |
