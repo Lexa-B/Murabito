@@ -236,6 +236,13 @@ PALETTE = [
     ("heron_grey_deep", "#7F858D"),
     ("heron_bill", "#D9A53A"),
     ("heron_leg", "#B89A6A"),
+    # ferns
+    ("fern_green", "#4F7E3A"),
+    ("fern_green_light", "#5E8F44"),
+    ("fern_green_deep", "#3F6A31"),
+    ("fern_green_yellow", "#6E8E40"),
+    ("fern_shade", "#34562B"),
+    ("fern_shade_deep", "#2B4824"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 

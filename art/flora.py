@@ -408,5 +408,78 @@ def blade_cluster(b, origin, direction, count, length, width, leaves, shades, rn
         )
 
 
+def frond(b, base, heading, length, width, rise, fall, leaves, shades, rng, segments=10, bend=2.0, notch=0.7):
+    """A fern frond: a long leaf arching up from base and over, its edges
+    zig-zagging to suggest rows of leaflets.
+
+    It sets off at rise radians above level towards heading (radians round the
+    vertical) and bends steadily until it points fall radians below level at the
+    tip, the bend gathering towards the tip as the bend power rises (1 bends it
+    evenly; 2 keeps it rising, then arches it over). width is its full width at
+    the widest, a little below the middle; it
+    narrows to a stalk at the base and a point at the tip. Built as a thin closed
+    shape, ridged along its midrib like blade, so it shows from above and below:
+    upper faces pick from leaves, lower from shades. notch is how far out the
+    notches between leaflets sit, as a fraction of the width there: nearer 1,
+    shallower teeth.
+    """
+    along_each = length / segments
+    point = Vector(base)
+    stations = []  # (centre, direction) at the start of each segment, then the tip
+    for i in range(segments + 1):
+        angle = rise - (rise + fall) * (i / segments) ** bend
+        way = Vector((math.cos(heading) * math.cos(angle), math.sin(heading) * math.cos(angle), math.sin(angle)))
+        stations.append((point.copy(), way))
+        point += way * along_each
+    side = Vector((-math.sin(heading), math.cos(heading), 0))
+
+    def half_width(t):
+        # a stalk for the first tenth, widest at 0.4, closing to the tip
+        return 0 if t < 0.1 else width / 2 * math.sin(math.pi * min(1, (t - 0.1) / 0.9) ** 0.8)
+
+    def verts_at(i):
+        centre, way = stations[i]
+        normal = side.cross(way).normalized()
+        w = max(half_width(i / segments), 0.015) * notch  # the notches between leaflets
+        ridge = max(half_width(i / segments), 0.02) * 0.12
+        return [b.bm.verts.new(p) for p in (
+            centre + normal * ridge, centre - side * w, centre - normal * ridge * 0.5, centre + side * w,
+        )]  # above the midrib, left notch, below the midrib, right notch
+
+    rings = [verts_at(i) for i in range(segments)]
+    tip = b.bm.verts.new(stations[-1][0])
+    start = rings[0]
+    b.face([start[0], start[1], start[2], start[3]], rng.choice(shades))  # the cut stalk end
+    for i in range(segments):
+        above, left, below, right = rings[i]
+        last = i == segments - 1
+        nxt = [tip] * 4 if last else rings[i + 1]
+        n_above, n_left, n_below, n_right = nxt
+        centre = stations[i][0].lerp(stations[i + 1][0], 0.5)
+        w = half_width((i + 0.5) / segments)
+        if last or w < 0.02:
+            # no leaflet here: close the segment straight across
+            for f in ((above, left, n_left, n_above), (above, n_above, n_right, right)):
+                b.face([v for k, v in enumerate(f) if v not in f[:k]], rng.choice(leaves))
+            for f in ((below, n_below, n_left, left), (below, right, n_right, n_below)):
+                b.face([v for k, v in enumerate(f) if v not in f[:k]], rng.choice(shades))
+            continue
+        # a leaflet's point sticking out to each side between the notches
+        out_left = b.bm.verts.new(centre - side * w)
+        out_right = b.bm.verts.new(centre + side * w)
+        b.face((above, left, out_left), rng.choice(leaves))
+        b.face((above, out_left, n_above), rng.choice(leaves))
+        b.face((n_above, out_left, n_left), rng.choice(leaves))
+        b.face((above, out_right, right), rng.choice(leaves))
+        b.face((above, n_above, out_right), rng.choice(leaves))
+        b.face((n_above, n_right, out_right), rng.choice(leaves))
+        b.face((below, out_left, left), rng.choice(shades))
+        b.face((below, n_below, out_left), rng.choice(shades))
+        b.face((n_below, n_left, out_left), rng.choice(shades))
+        b.face((below, right, out_right), rng.choice(shades))
+        b.face((below, out_right, n_below), rng.choice(shades))
+        b.face((n_below, out_right, n_right), rng.choice(shades))
+
+
 def rng_for(seed):
     return random.Random(seed)
