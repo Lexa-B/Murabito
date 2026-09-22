@@ -24,7 +24,10 @@ half and half by the bones either side of it.
 import math
 from dataclasses import dataclass
 
+import bmesh
+
 from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 
 import figure
 import loft
@@ -45,8 +48,50 @@ FINGER_SIDES = 6  # a finger's share of the knuckles: two gaps across the back, 
 STEPS = 2  # each gap between key rings is cut in two, on a smooth curve through them
 JOINT_ZONE = 1.0  # a joint's bend fades across this many key gaps each way
 
+# An eye's outline, round from the inner corner, in half-widths across (out from
+# the nose) and up: a flat top, a sharp outer corner lifted a little, a slanting
+# lower edge, the '90s anime eye.
+EYE_OUTLINE = [
+    (-1.0, -0.05), (-0.75, 0.5), (-0.3, 0.8), (0.25, 0.85), (0.7, 0.62), (1.05, 0.2),
+    (0.85, -0.2), (0.45, -0.55), (-0.1, -0.7), (-0.6, -0.5),
+]
+EYE_CORNER = 5  # the outer corner, where the upper and lower lash lines meet
+
 TORSO_BONES = ("hips", "spine", "chest", "upperChest", "neck", "head")
 FINGER_NAMES = ("Index", "Middle", "Ring", "Little")
+
+
+@dataclass
+class Face:
+    """Where a face's features sit on the head and how big they are. Positions
+    are (x, z) as seen from straight ahead, x out from the middle on the right
+    side (the left is its mirror); each feature is placed where a ray from in
+    front meets the head there.
+
+    eye: an eye's centre; sclera: (half-width, height over width), the white
+        drawn round outline; iris: (half-width, height over width, lift), lift
+        moving it up the eye.
+    lash: the width of the dark line along the top of each eye, thickest at
+        the outer corner.
+    outline: the eye's shape (see EYE_OUTLINE).
+    brow: points inner to outer, (x, z, width).
+    nose: (top, tip, bottom, out): the nose is shaped out of the head itself,
+        the middle of each ring pulled forward, from nothing at top to out at
+        tip and back to nothing at bottom, its neighbours a little.
+    mouth: (z, half-length, width): a short crease.
+    ear: rings bottom to top, (z, y, half-depth, out): out is how far it stands
+        from the side of the head.
+    """
+
+    eye: tuple
+    sclera: tuple
+    iris: tuple
+    lash: float
+    brow: list
+    nose: tuple
+    mouth: tuple
+    ear: list
+    outline: list = None
 
 
 @dataclass
@@ -111,6 +156,7 @@ class Shape:
     spine_joints: tuple = (3, 5, 7, 10, 12)
     knee: int = 2
     elbow: int = 1
+    face: Face = None
 
 
 def build(shape, name):
@@ -118,6 +164,8 @@ def build(shape, name):
     b = loft.Builder()
     body = _Body(b, shape, rig.Rig(f"{name}-rig"))
     torso = body.torso()
+    if shape.face:
+        body.face()
     for mirror in (1, -1):
         body.leg(torso[0], mirror)
         body.arm(torso, mirror)
@@ -179,6 +227,7 @@ class _Body:
     def __init__(self, b, shape, skeleton):
         self.b, self.s, self.rig = b, shape, skeleton
         self.weights = []  # (vertices, [(bone, weight)]), turned into indices once built
+        self.torso_faces = {}  # (row, k): the torso's face k between ring row and the ring above
 
     def weigh(self, verts, *pairs):
         self.weights.append((list(verts), list(pairs)))
@@ -203,11 +252,37 @@ class _Body:
             for k in range(n):
                 if self.hole_rows[0] <= i < self.hole_rows[1] and k in holes:
                     continue
-                b.face((lower[k], lower[(k + 1) % n], upper[(k + 1) % n], upper[k]), s.skin)
+                self.torso_faces[i, k] = b.face((lower[k], lower[(k + 1) % n], upper[(k + 1) % n], upper[k]), s.skin)
+        self.rings = rings
         crown = figure.cap(b, rings[-1], s.crown, s.skin)
         self.spine_bones(rings, where)
         self.weigh(crown[0].verts[2:], ("head", 1))
         return rings
+
+    def nose(self, rings):
+        """A small nose out of the face: the two faces either side of the middle,
+        over the rows from under the eyes to the tip, get a ring of vertices inset
+        just inside their edge, and the patch within is pushed forward (most at
+        the tip, least at the bridge) and squeezed narrow at the top, so the band
+        between the ring and the patch makes the nose's sides and underside."""
+        top, tip, bottom, out = self.s.face.nose
+        rows = [i for i, ring in enumerate(rings[:-1]) if bottom - 0.01 <= ring[FRONT].co.z and rings[i + 1][FRONT].co.z <= top + 0.01]
+        patch = [self.torso_faces[i, k] for i in rows for k in (FRONT - 1, FRONT)]
+        base = {v for f in patch for v in f.verts}  # stays behind as the ring round the nose's foot
+        bmesh.ops.inset_region(self.b.bm, faces=patch, thickness=0.006, depth=0.0, use_even_offset=True)
+        for vert in base:
+            vert.co.x *= 0.8  # a smaller foot
+        rise = (tip - bottom) / (top - bottom)  # where the tip sits, 0 at the bottom, 1 at the top
+        for vert in {v for f in patch for v in f.verts}:
+            t = min(max((vert.co.z - bottom) / (top - bottom), 0.0), 1.0)
+            if t >= rise:
+                pull = (1 - t) / (1 - rise)  # the bridge, flush at the top, rising to the tip
+            else:
+                pull = 0.35 + 0.65 * t / rise  # the underside, tucked back
+                vert.co.z += 0.012 * (1 - t / rise)
+            vert.co.y += out * pull
+            fullness = max(1 - abs(t - rise) / 0.5, 0.0)  # widest round the tip
+            vert.co.x *= 0.35 - 0.15 * t + 0.15 * fullness  # drawn in to the middle: a narrow bridge, a button tip
 
     def spine_bones(self, rings, where):
         """hips to head up the middle, each ring riding on the bones round it."""
@@ -218,6 +293,105 @@ class _Body:
             self.rig.bone(name, points[k], points[k + 1], TORSO_BONES[k - 1] if k else None, k > 1, roll_to=Y)
         for ring, at in zip(rings, where):
             self.weigh(ring, *_chain_weights(at, s.spine_joints, TORSO_BONES))
+
+    def face(self):
+        """Eyes, brows, nose, mouth and ears, each its own small closed piece set on
+        the head where a ray from in front (or beside, for the ears) meets it,
+        all riding on the head bone."""
+        b, f = self.b, self.s.face
+        before = set(b.bm.verts)
+        self.nose(self.rings)
+        b.bm.normal_update()  # the rays read the faces' normals
+        tree = BVHTree.FromBMesh(b.bm)
+
+        def surface(origin, direction):
+            hit, normal, *_ = tree.ray_cast(Vector(origin), Vector(direction))
+            return hit, normal if normal.dot(direction) < 0 else -normal
+
+        def front(x, z):
+            return surface((x, 3, z), (0, -1, 0))
+
+        for mirror in (1, -1):
+            self.eye(front, mirror)
+            points, normals = zip(*(front(x * mirror, z) for x, z, _ in f.brow))
+            figure.strip(b, list(points), list(normals), [w for *_, w in f.brow], 0.008, "hair_black")
+            self.ear(surface, mirror)
+        z, half, width = f.mouth
+        points, normals = zip(*(front(half * (2 * k / 4 - 1), z) for k in range(5)))
+        figure.strip(b, list(points), list(normals), [width * w for w in (0.5, 1, 1, 1, 0.5)], 0.005, "mouth_line")
+        self.weigh([v for v in b.bm.verts if v not in before], ("head", 1))
+
+    def eye(self, front, mirror):
+        """A white in the eye's outline, a dark iris with a glint on it (the same
+        side on both eyes, as from one light) and a lash line along the top, each
+        draped over the head so none of it sinks in."""
+        f = self.s.face
+        x, z = f.eye
+        width, tall = f.sclera
+        iris, iris_tall, iris_lift = f.iris
+        outline = [(x * mirror + u * width * mirror, z + v * width * tall) for u, v in (f.outline or EYE_OUTLINE)]
+        self.decal(front, outline, 0.003, 0.002, "sclera")
+        middle = (x * mirror, z + iris_lift)
+        oval = [(middle[0] + math.cos(t) * iris, middle[1] + math.sin(t) * iris * iris_tall)
+                for t in (2 * math.pi * k / 12 for k in range(12))]
+        self.decal(front, oval, 0.0055, 0.001, "iris_brown")
+        glint = (middle[0] + iris * 0.35, middle[1] + iris * iris_tall * 0.4)
+        spot = [(glint[0] + math.cos(t) * iris * 0.3, glint[1] + math.sin(t) * iris * 0.3)
+                for t in (2 * math.pi * k / 6 for k in range(6))]
+        self.decal(front, spot, 0.0075, 0.001, "sclera")
+
+        # The lash lines meet in a sideways V at a point just past the outer corner:
+        # the upper one thick along the top, the lower just a hint, a short taper
+        # back under the corner of the white.
+        corner = outline[EYE_CORNER]
+        tip = (corner[0] + mirror * width * 0.15, corner[1] + width * tall * 0.02)
+        upper = outline[:EYE_CORNER] + [tip]
+        lower = [tip, outline[EYE_CORNER + 1]]
+        self.lash_line(front, upper, [f.lash * (0.45 + 0.75 * k / (len(upper) - 1)) for k in range(len(upper) - 1)]
+                       + [f.lash * 0.35], 0.008)
+        self.lash_line(front, lower, [f.lash * 0.35, f.lash * 0.2], 0.006)
+
+    def lash_line(self, front, outline, widths, thickness):
+        points, normals = [], []
+        for u, v in outline:
+            point, normal = front(u, v)
+            points.append(point + normal * 0.003)
+            normals.append(normal)
+        figure.strip(self.b, points, normals, widths, thickness, "hair_black")
+
+    def decal(self, front, outline, lift, height, colour):
+        """A thin patch draped over the head: each corner of outline (x, z as seen
+        from ahead) set lift above the head there, rising to height more at its
+        middle, and closed underneath by a point sunk into the head, so it has an
+        inside and its faces turn the right way out (a flat patch can come out
+        inside out)."""
+        b = self.b
+        corners = []
+        for x, z in outline:
+            point, normal = front(x, z)
+            corners.append(b.bm.verts.new(point + normal * lift))
+        mx = sum(x for x, _ in outline) / len(outline)
+        mz = sum(z for _, z in outline) / len(outline)
+        point, normal = front(mx, mz)
+        apex = b.bm.verts.new(point + normal * (lift + height))
+        root = b.bm.verts.new(point - normal * 0.01)
+        n = len(corners)
+        for k in range(n):
+            b.face((apex, corners[k], corners[(k + 1) % n]), colour)
+            b.face((root, corners[(k + 1) % n], corners[k]), colour)
+
+    def ear(self, surface, mirror):
+        """A shell of rings up the side of the head, standing a little out from it."""
+        b, s = self.b, self.s
+        rings, centres = [], []
+        for z, y, depth, out in s.face.ear:
+            hit, _ = surface((3 * mirror, y, z), (-mirror, 0, 0))
+            centre = hit + X * mirror * out
+            centres.append(centre)
+            rings.append(figure.ring(b, centre, Z, X * mirror, 8, 0.03, depth * 0.8, depth))
+        figure.tube(b, rings, s.skin)
+        figure.cap(b, rings[0], centres[0] - Z * 0.015, s.skin)
+        figure.cap(b, rings[-1], centres[-1] + Z * 0.01 - Y * 0.01, s.skin)
 
     def arm_hole(self, rings, mirror):
         """The loop of vertices round one arm's hole, from the armpit ring up. The

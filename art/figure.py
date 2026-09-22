@@ -168,6 +168,20 @@ def densify(keys, steps):
     return rings, where
 
 
+def strip(b, points, normals, widths, thickness, colour):
+    """A thin raised line along a surface, for brows, lash lines and mouths: a
+    closed ridge of diamond-shaped rings through points (a little below the
+    surface there), standing thickness out along each point's normal, widths
+    across it at each point, pointed at both ends."""
+    rings = []
+    for k, (p, n, w) in enumerate(zip(points, normals, widths)):
+        ahead = points[min(k + 1, len(points) - 1)] - points[max(k - 1, 0)]
+        rings.append(ring(b, p, ahead, n, 4, thickness, w / 2, w / 2))
+    tube(b, rings, colour)
+    cap(b, rings[-1], points[-1] + (points[-1] - points[-2]).normalized() * widths[-1] * 0.5, colour)
+    cap(b, rings[0], points[0] + (points[0] - points[1]).normalized() * widths[0] * 0.5, colour)
+
+
 def tube(b, rings, colour):
     """Bridge each ring to the next; returns rows of faces."""
     return [bridge(b, a, c, colour) for a, c in zip(rings, rings[1:])]
