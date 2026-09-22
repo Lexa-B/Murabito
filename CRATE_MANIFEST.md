@@ -21,6 +21,7 @@ crates/
 │  ├─ navigation/         murabito_navigation
 │  ├─ menu/               murabito_menu
 │  └─ settings_page/      murabito_settings_page
+├─ kinds/                 murabito_kinds
 └─ action/                the actions layer: a group directory, not a crate
    ├─ actions/            murabito_actions
    ├─ progress/           murabito_progress
@@ -71,6 +72,14 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 - **`murabito_hexcoords`** — hex voxel coordinates: cube `(q, r, s)` plus a layer,
   `VoxelspacePos`, and the twelve compass `Direction`s with their neighbour and rotation
   maths. Where a cell is, not what is in it. Design: `Docs/hex_units_readme.md`.
+
+## What things are
+
+- **`murabito_kinds`** — the tree of kinds: what a thing *is*. Every tier and every kind
+  is a unit component whose `#[require]` is its parent and its members, so spawning a
+  kind inserts the whole chain and the node itself says what it has. A species' numbers
+  sit in its own `require` and win over its tiers'. Depends on the mechanism crates
+  whose components the tiers require; only what spawns things depends on it.
 
 ## Doing things
 
