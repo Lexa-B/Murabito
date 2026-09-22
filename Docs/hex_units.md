@@ -34,7 +34,10 @@ pub struct VoxelCoord { q: i32, r: i32, layer: i32 }   // fields private
   - `Result` makes the caller deal with bad input. They can't quietly ignore it.
   - The sum is taken in `i64`. Adding three large `i32`s can overflow, which panics in a debug
     build, so this way extreme values come back as an `Err` instead of a crash. If the sum is
-    valid, `s` fits in an `i32`, so `s()` can't overflow either.
+    valid, `s` fits in an `i32`; but the way there needn't: `-q - r` overflows at `q == i32::MIN`
+    and `-(q + r)` when `q + r` passes `i32::MAX`, both of which are valid voxels. `s()` uses
+    wrapping arithmetic, which passes through the overflow and, since the true value is in range,
+    lands on it.
   - The fields are private, so `new` is the only way to build a `VoxelCoord`. Rust's visibility
     rules enforce the invariant. Nobody has to remember it.
 - **Gives cube output, reconstructed:** `q()`, `r()`, `s()` (as `-q - r`), `layer()`.
@@ -139,8 +142,9 @@ Which of these an entity may actually move to is a movement rule, covered in `mo
 
 ## Open questions
 
-- **World-space type:** plain `(f32, f32, f32)`, a small struct of our own, or Bevy's `Vec3`? The
-  first two keep the module free of Bevy.
-- **`units` API:** plain `f32` conversion functions, or `Shaku` / `Metres` types that the compiler
-  won't let you mix up?
-- **Where the module lives:** this waits on the crate setup.
+- **World-space type:** Bevy's `Vec3`. Decided 2026-09-22: it is what every caller has in hand.
+- **`units` API:** a library of conversions between shaku, ken, cho, ri, metres and centimetres,
+  in any direction, so they are written once. Written when something first needs it. Whether it
+  is plain `f32` functions or `Shaku` / `Metres` types the compiler won't let you mix up is
+  decided then.
+- **Where the module lives:** `crates/hexcoords/`, the crate `murabito_hexcoords`.
