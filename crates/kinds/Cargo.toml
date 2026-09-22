@@ -10,6 +10,7 @@ murabito_actions.workspace = true
 murabito_hexcoords.workspace = true
 murabito_movement.workspace = true
 murabito_placement.workspace = true
+murabito_vision.workspace = true
 
 [dev-dependencies]
 murabito_progress.workspace = true
