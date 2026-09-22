@@ -1,12 +1,26 @@
 # Movement
 
-A brief on how entities move across the hex voxel grid, as agreed in design.
-Nothing here is implemented yet. The coordinates, directions and neighbours it builds on are in
-`hex_units.md`.
+A brief on how entities move across the hex voxel grid, as agreed in design. The coordinates,
+directions and neighbours it builds on are in `hex_units.md`. What is implemented is marked;
+the rest is design.
 
 **Compass invariant: east is +X, north is −Z, up is +Y.** Directions across the plane are compass
 points; up and down are for gravity, so stepping up is a change of layer, never a heading. The same
 statement is in `hex_units.md` and `AGENTS.md`.
+
+## Where a body is, and which way it faces
+
+Implemented, in `murabito_movement`.
+
+- `VoxelPosition(VoxelCoord)`: the voxel an entity is in. Integer, and it changes only when a
+  step lands: movement is by whole voxels, and an entity is in exactly one cell.
+- `Facing(Direction)`: one of the twelve compass directions.
+- `place` writes the entity's `Transform` from the two: the centre of the voxel's bottom face,
+  turned to `Direction::heading()`. It is the only thing that writes a moving entity's
+  `Transform`, and it runs only when the position or facing changed. `VoxelPosition` requires a
+  `Transform`, so an entity gets one without asking.
+
+These are plain components any entity can carry: nothing in them says what the entity is.
 
 ## 12-direction movement
 

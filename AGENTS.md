@@ -32,7 +32,8 @@ Murabito/
 │  ├─ scene/               `murabito_scene`: the placeholder world (ground, sun, sky colour)
 │  ├─ camera/              `murabito_camera`: the overhead camera
 │  ├─ keybinds/            `murabito_keybinds`: `Binds`, up to three keys or mouse buttons for one action
-│  └─ hexcoords/           `murabito_hexcoords`: hex voxel coordinates (`VoxelCoord`), per `Docs/hex_units.md`
+│  ├─ hexcoords/           `murabito_hexcoords`: hex voxel coordinates (`VoxelCoord`), per `Docs/hex_units.md`
+│  └─ movement/            `murabito_movement`: where a body is and which way it faces, and the mechanics of stepping and turning, per `Docs/movement.md`
 ├─ scripts/run.sh          launches the app; what a desktop entry points at. Finds the display itself, logs to ~/.cache/murabito/run.log
 ├─ Docs/                   project docs (no specs or plans; see below)
 ├─ _Archives/

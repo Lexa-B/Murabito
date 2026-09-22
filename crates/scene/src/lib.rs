@@ -7,6 +7,8 @@
 //! This crate spawns no camera: seeing the world is another module's job.
 
 use bevy::prelude::*;
+use murabito_hexcoords::{Direction, VoxelCoord};
+use murabito_movement::{Facing, VoxelPosition};
 
 /// One 町 (cho): 360 shaku, about 109 m.
 const GROUND_SIDE: f32 = 360.0;
@@ -27,10 +29,9 @@ const SKY_GLOW: f32 = 200.0;
 /// its soles at y = 0, so it needs no scaling or righting: see `art/ART-README.md`.
 const FOX_MODEL: &str = "models/fox.glb";
 
-/// How far the fox is turned from facing away from the camera, clockwise seen from
-/// above. 135 degrees is half past four on a clock face whose twelve is straight ahead:
-/// toward the camera and to its right, which shows the fox's face and its flank at once.
-const FOX_TURNED_CLOCKWISE: f32 = 135.0;
+/// Which way the fox starts off facing: toward the camera and to its right, which shows
+/// its face and its flank at once.
+const FOX_FACES: Direction = Direction::ESE;
 
 pub struct ScenePlugin;
 
@@ -83,9 +84,13 @@ fn spawn_sun(mut commands: Commands) {
 
 fn spawn_fox(mut commands: Commands, assets: Res<AssetServer>) {
     let model = assets.load(GltfAssetLabel::Scene(0).from_asset(FOX_MODEL));
-    // A positive turn about Y runs counter-clockwise seen from above, hence the minus.
-    let facing = Quat::from_rotation_y(-FOX_TURNED_CLOCKWISE.to_radians());
-    commands.spawn((Fox, WorldAssetRoot(model), Transform::from_rotation(facing)));
+    let origin = VoxelCoord::new(0, 0, 0, 0).expect("the origin is on the plane");
+    commands.spawn((
+        Fox,
+        WorldAssetRoot(model),
+        VoxelPosition(origin),
+        Facing(FOX_FACES),
+    ));
 }
 
 #[cfg(test)]
@@ -124,34 +129,17 @@ mod tests {
     }
 
     #[test]
-    fn a_fox_stands_at_the_origin() {
+    fn a_fox_stands_at_the_origin_facing_toward_the_camera_and_to_its_right() {
         let mut app = app_after_startup();
         let world = app.world_mut();
 
-        let fox = world
-            .query_filtered::<&Transform, With<Fox>>()
+        let (position, facing) = world
+            .query_filtered::<(&VoxelPosition, &Facing), With<Fox>>()
             .single(world)
             .expect("exactly one fox");
 
-        assert_eq!(fox.translation, Vec3::ZERO);
-    }
-
-    #[test]
-    fn the_fox_faces_half_past_four_toward_the_camera_and_to_its_right() {
-        let mut app = app_after_startup();
-        let world = app.world_mut();
-
-        let fox = world
-            .query_filtered::<&Transform, With<Fox>>()
-            .single(world)
-            .expect("exactly one fox");
-
-        let right_and_toward_the_camera = Vec3::new(1.0, 0.0, 1.0).normalize();
-        assert!(
-            fox.forward().abs_diff_eq(right_and_toward_the_camera, 1e-5),
-            "the fox faces {:?}",
-            fox.forward()
-        );
+        assert_eq!(position.0.to_world(), Vec3::ZERO);
+        assert_eq!(facing.0, Direction::ESE);
     }
 
     /// The model is made by the art pipeline, not by this crate. A rename there would
