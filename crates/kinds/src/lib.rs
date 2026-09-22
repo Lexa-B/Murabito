@@ -49,7 +49,8 @@
 //! first found depth-first through the parents in list order. So a species' numbers sit
 //! in the species' own `require`, and a tier's are the placeholder its children override.
 //!
-//! What a kind requires is what it *has*; what it is *at* (its `VoxelPosition`) is given
+//! What a kind requires is what it *has*; what it is *at* (`murabito_placement`'s
+//! `VoxelPosition`) is given
 //! when it is spawned, beside the kind. That line also decides what survives
 //! reclassifying a thing later with `remove_with_requires`, which takes the whole chain.
 //!
@@ -88,7 +89,8 @@ mod tests {
     use bevy::prelude::*;
     use murabito_actions::ActionQueue;
     use murabito_hexcoords::Direction;
-    use murabito_movement::{Facing, Locomotion};
+    use murabito_movement::Locomotion;
+    use murabito_placement::Facing;
     use murabito_progress::Progress;
 
     fn has<C: Component>(world: &World, entity: Entity) -> bool {

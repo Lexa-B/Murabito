@@ -5,7 +5,8 @@
 use bevy::prelude::*;
 use murabito_actions::ActionQueue;
 use murabito_hexcoords::Direction;
-use murabito_movement::{Facing, Locomotion};
+use murabito_movement::Locomotion;
+use murabito_placement::Facing;
 
 use crate::Tangible;
 

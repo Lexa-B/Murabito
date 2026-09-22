@@ -42,8 +42,9 @@ crate, and reads the same way.
 | `murabito_settings_page` | `crates/ui/settings_page` | one row per setting and Back: the language picker (each language named in its own script, the one in force marked) and the pan-speed slider; edits go straight into `Language` and `CameraSettings`, and the file follows | `SettingsPagePlugin` |
 | `murabito_i18n` | `crates/i18n` | `Language` (a setting, persisted as `language: en`), `Localized` (the key a text entity carries), the compiled-in catalogues `assets/locales/{en,ja}.yaml`, live re-localising | `Language`, `Localized`, `I18nPlugin` |
 | `murabito_hexcoords` | `crates/hexcoords` | `VoxelCoord` (cube in, axial stored, layer), `VoxelspacePos`, `Direction` (twelve, by compass point) with `neighbour`, `rotated`, `notches_to`, `heading` | those, plus the errors `NotOnHexPlane`, `NotNearHexPlane` and `ON_PLANE_TOLERANCE` |
+| `murabito_placement` | `crates/placement` | `VoxelPosition` and `Facing`, the plain components any thing in the world carries, and `place`, the one system that writes a `Transform` from them | those, plus `PlacementPlugin` |
 | `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
-| `murabito_movement` | `crates/action/mechanisms/movement` | `VoxelPosition`, `Facing`, `Locomotion`; the `Step` and `Turn` intents and their tick systems; `place` | those, plus `cost`, `can_step`, `MovementPlugin` |
+| `murabito_movement` | `crates/action/mechanisms/movement` | `Locomotion`; the `Step` and `Turn` intents and their tick systems, which write `murabito_placement`'s position and facing | those, plus `cost`, `can_step`, `MovementPlugin` |
 | `murabito_actions` | `crates/action/actions` | `ActionQueue` of `Action::{Go, Face}`; `issue`, where turn-then-step lives, after `AskingSet` | `Action`, `ActionQueue`, `AskingSet`, `ActionsPlugin` |
 
 The design briefs in `Docs/*_readme.md` mark, section by section, what is implemented and what

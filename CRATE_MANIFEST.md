@@ -12,6 +12,7 @@ crates/
 ├─ camera/                murabito_camera
 ├─ keybinds/              murabito_keybinds
 ├─ hexcoords/             murabito_hexcoords
+├─ placement/             murabito_placement
 ├─ user_data/             murabito_user_data
 ├─ settings/              murabito_settings
 ├─ i18n/                  murabito_i18n
@@ -75,6 +76,10 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 - **`murabito_hexcoords`** — hex voxel coordinates: cube `(q, r, s)` plus a layer,
   `VoxelspacePos`, and the twelve compass `Direction`s with their neighbour and rotation
   maths. Where a cell is, not what is in it. Design: `Docs/hex_units_readme.md`.
+- **`murabito_placement`** — where a thing stands (`VoxelPosition`) and which way it
+  faces (`Facing`), and `place`, the one system that keeps a model where they say. Plain
+  components any entity in the world carries: a tree has a position and never moves.
+  The movement mechanism writes them; the senses read them; neither knows the other.
 
 ## What things are
 
@@ -95,9 +100,9 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 - **`murabito_progress`** — the one accumulation bar per entity that every sustained
   action fills, in the mechanism's own units (shaku, degrees), and the `MechanismSet`
   the mechanisms tick in. Knows no mechanism.
-- **`murabito_movement`** — the movement mechanism: where a body is (`VoxelPosition`),
-  which way it faces (`Facing`), how fast it goes (`Locomotion`), and the `Step` and
-  `Turn` intents it carries out on `FixedUpdate`. Design: `Docs/movement_readme.md`.
+- **`murabito_movement`** — the movement mechanism: how fast a body goes
+  (`Locomotion`), and the `Step` and `Turn` intents it carries out on `FixedUpdate`,
+  writing `murabito_placement`'s position and facing. Design: `Docs/movement_readme.md`.
 
 ## Input, settings and text
 
