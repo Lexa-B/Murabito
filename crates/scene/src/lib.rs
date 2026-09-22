@@ -9,7 +9,7 @@
 use bevy::prelude::*;
 use murabito_hexcoords::{Direction, VoxelCoord};
 use murabito_movement::{Facing, Locomotion, Turn, VoxelPosition};
-use murabito_progress::MechanismSet;
+use murabito_progress::{MechanismSet, Progress};
 
 /// One 町 (cho): 360 shaku, about 109 m.
 const GROUND_SIDE: f32 = 360.0;
@@ -41,6 +41,17 @@ const FOX_LOCOMOTION: Locomotion = Locomotion {
     turn_speed: 180.0,
 };
 
+/// The progress bar drawn under a body with something in flight: on the ground just in
+/// front of it, toward the camera, a shaku wide. Placeholder until a UI module owns it.
+const BAR_WIDTH: f32 = 1.0;
+const BAR_TOWARD_CAMERA: f32 = 0.8;
+/// A hair above the ground, so it isn't lost in it.
+const BAR_LIFT: f32 = 0.02;
+/// In pixels: gizmo lines are drawn in screen space.
+const BAR_THICKNESS: f32 = 6.0;
+const BAR_EMPTY: Color = Color::srgb(0.15, 0.15, 0.15);
+const BAR_FULL: Color = Color::srgb(0.95, 0.85, 0.2);
+
 pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
@@ -50,8 +61,9 @@ impl Plugin for ScenePlugin {
                 brightness: SKY_GLOW,
                 ..default()
             })
-            .add_systems(Startup, (spawn_ground, spawn_sun, spawn_fox))
-            .add_systems(FixedUpdate, spin_the_fox.before(MechanismSet));
+            .add_systems(Startup, (spawn_ground, spawn_sun, spawn_fox, thicken_bars))
+            .add_systems(FixedUpdate, spin_the_fox.before(MechanismSet))
+            .add_systems(Update, draw_progress_bars);
     }
 }
 
@@ -116,6 +128,27 @@ fn spin_the_fox(mut commands: Commands, foxes: Query<(Entity, &Facing), IdleFox>
     }
 }
 
+fn thicken_bars(mut config: ResMut<GizmoConfigStore>) {
+    config.config_mut::<DefaultGizmoConfigGroup>().0.line.width = BAR_THICKNESS;
+}
+
+/// Until a UI module owns it: a bar under every body with something in flight, drawn
+/// with gizmos, which are lines redrawn each frame and need no mesh. Two lines, the empty
+/// bar and the filled part over it. It reads only `Progress`, so it shows a step, a notch
+/// of a turn, or anything a later mechanism does, without knowing which.
+fn draw_progress_bars(mut gizmos: Gizmos, bodies: Query<(&Transform, &Progress)>) {
+    for (transform, progress) in &bodies {
+        if !progress.in_flight() {
+            continue;
+        }
+        let left = transform.translation + Vec3::new(-BAR_WIDTH / 2.0, BAR_LIFT, BAR_TOWARD_CAMERA);
+        let right = left + Vec3::X * BAR_WIDTH;
+        let filled_to = left + Vec3::X * BAR_WIDTH * progress.fraction();
+        gizmos.line(left, right, BAR_EMPTY);
+        gizmos.line(left, filled_to, BAR_FULL);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,13 +156,18 @@ mod tests {
     /// A headless app, run for one frame: no window, no GPU. `MinimalPlugins` brings the
     /// schedules; the asset stores are what the spawn systems ask for, and in the real
     /// app they arrive with `DefaultPlugins`. No glTF loader is registered, so the fox's
-    /// handle never resolves to a model, which no test here needs.
+    /// handle never resolves to a model, which no test here needs. Gizmos want their
+    /// asset store and a config group registered, which `GizmoPlugin` would do.
     fn app_after_startup() -> App {
+        use bevy::gizmos::AppGizmoBuilder;
+
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, AssetPlugin::default()))
             .init_asset::<Mesh>()
             .init_asset::<StandardMaterial>()
             .init_asset::<WorldAsset>()
+            .init_asset::<bevy::gizmos::GizmoAsset>()
+            .init_gizmo_group::<DefaultGizmoConfigGroup>()
             .add_plugins(ScenePlugin);
         app.update();
         app
@@ -215,6 +253,7 @@ mod tests {
 
     #[test]
     fn the_fox_keeps_turning() {
+        use bevy::gizmos::AppGizmoBuilder;
         use bevy::time::TimeUpdateStrategy;
         use murabito_movement::MovementPlugin;
         use murabito_progress::ProgressPlugin;
@@ -224,6 +263,8 @@ mod tests {
             .init_asset::<Mesh>()
             .init_asset::<StandardMaterial>()
             .init_asset::<WorldAsset>()
+            .init_asset::<bevy::gizmos::GizmoAsset>()
+            .init_gizmo_group::<DefaultGizmoConfigGroup>()
             .add_plugins((ProgressPlugin, MovementPlugin, ScenePlugin))
             .insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
         app.update();
