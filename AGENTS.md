@@ -33,8 +33,10 @@ Murabito/
 │  ├─ camera/              `murabito_camera`: the overhead camera
 │  ├─ keybinds/            `murabito_keybinds`: `Binds`, up to three keys or mouse buttons for one action
 │  ├─ hexcoords/           `murabito_hexcoords`: hex voxel coordinates (`VoxelCoord`), per `Docs/hex_units_readme.md`
-│  ├─ movement/            `murabito_movement`: where a body is and which way it faces, and the mechanics of stepping and turning, per `Docs/movement_readme.md`
-│  └─ progress/            `murabito_progress`: the one accumulation bar every sustained action fills, per `Docs/actions_readme.md`
+│  └─ action/              the actions layer, per `Docs/actions_readme.md`: a group of crates, not one
+│     ├─ progress/         `murabito_progress`: the one accumulation bar every sustained action fills
+│     └─ mechanisms/       one crate per kind of thing a body can do
+│        └─ movement/      `murabito_movement`: where a body is and which way it faces, and the mechanics of stepping and turning, per `Docs/movement_readme.md`
 ├─ scripts/run.sh          launches the app; what a desktop entry points at. Finds the display itself, logs to ~/.cache/murabito/run.log
 ├─ Docs/                   project docs (no specs or plans; see below)
 ├─ _Archives/
@@ -66,7 +68,7 @@ Murabito/
 The repo root is where the Murabito game lives, in Rust on Bevy: a Cargo workspace whose members sit under `crates/`. It is nearly empty: the first Bevy attempt grew tangled and was archived to `_Archives/Bevy-Try-1/`, and the project is being rebuilt from nothing. The user drives it; AI assists.
 
 - **Build, run and test from the repo root:** `cargo run -p murabito`, `cargo test --workspace`, `cargo clippy --workspace --all-targets`, `cargo fmt --all`. The toolchain is pinned in `rust-toolchain.toml`; changing it is a deliberate edit, since a new compiler rebuilds the whole engine.
-- **Each module is its own library crate under `crates/`.** Its `pub` items are its whole API and its `[dependencies]` are its whole wiring: a crate can't reach what another doesn't export, and Cargo refuses dependency cycles. `murabito` is the app and the only binary. Members are picked up by the `crates/*` glob, inherit `version`, `edition` and `publish = false` from `[workspace.package]` in the root manifest, and are never published.
+- **Each module is its own library crate under `crates/`.** Its `pub` items are its whole API and its `[dependencies]` are its whole wiring: a crate can't reach what another doesn't export, and Cargo refuses dependency cycles. `murabito` is the app and the only binary. Members are listed in the root manifest (`cargo new` adds a new one itself; a glob can't cover a group directory such as `crates/action/`), inherit `version`, `edition` and `publish = false` from `[workspace.package]` in the root manifest, and are never published.
 - **A module exports its `Plugin`, and as little else as it can.** Components, systems and helpers stay private; unit tests sit in the same file, where they can see them. Widening a crate's `pub` surface is a decision, agreed with the user, not a convenience.
 - **The module that uses a setting owns it.** A module's tunables are a `pub` `Resource` with `pub` fields in that module's crate (`murabito_camera::CameraSettings`), inserted by its plugin with `init_resource`, so a value already there when the plugin is added is kept. Whoever edits or saves it depends on that crate; the module depends on none of them. It makes a bad value safe at the one place it uses it, since a setter can't guard what arrives from a file.
 - **Actions are bound through `murabito_keybinds::Binds`**: up to three keys or mouse buttons. The crate owns the type and knows no actions; each module keeps its own `Binds` in its settings, and its systems ask for the `Inputs` parameter rather than naming a device. There is no central list of actions.

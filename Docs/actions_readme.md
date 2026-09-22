@@ -11,9 +11,11 @@ Four layers, each a crate, each depending only downward:
 | Layer | Crate | Knows |
 |---|---|---|
 | AI | later | what an entity wants: decides, and issues actions |
-| Actions | `murabito_actions` | what it has been asked to do, in what order, and whether something is in flight |
-| Mechanisms | `murabito_movement`, later block-breaking, archery, … | how one kind of thing is physically done: the intent, the effect, the cost |
-| Progress | `murabito_progress` | how far along a sustained action is, whatever it is |
+| Actions | `murabito_actions`, `crates/action/actions/` | what it has been asked to do, in what order, and whether something is in flight |
+| Mechanisms | `crates/action/mechanisms/*`: `murabito_movement`, later block-breaking, archery, … | how one kind of thing is physically done: the intent, the effect, the cost |
+| Progress | `murabito_progress`, `crates/action/progress/` | how far along a sustained action is, whatever it is |
+
+The three below AI live together under `crates/action/`, a group directory rather than a crate.
 
 A mechanism never sequences: it carries out one intent put on an entity (`Step`, `Turn`) and
 removes it when done. The actions layer never accumulates: it reads whether something is in
