@@ -2,8 +2,9 @@
 //! with the same orientation, so one `Hex` type serves them all.
 
 use std::fmt;
+use std::sync::LazyLock;
 
-use murabito_hexcoords::NotOnHexPlane;
+use murabito_hexcoords::{Direction, NotOnHexPlane, VoxelCoord};
 
 /// A cell at any level of the hierarchy. The API speaks cube, `(q, r, s)` with
 /// `q + r + s = 0`, and stores axial `(q, r)`, as `murabito_hexcoords::VoxelCoord` does.
@@ -65,17 +66,28 @@ impl std::ops::Sub for Hex {
     }
 }
 
-/// The six unit steps, anticlockwise from east: direction `k` points at 60°·k.
-/// The order matters — the mesher pairs direction `k` with the cell edge between
-/// corners `k-1` and `k`, so do not reorder these without changing `corners_m`.
-pub const DIRECTIONS: [Hex; 6] = [
-    Hex::axial(1, 0),  //   0°, east
-    Hex::axial(0, 1),  //  60°
-    Hex::axial(-1, 1), // 120°
-    Hex::axial(-1, 0), // 180°, west
-    Hex::axial(0, -1), // 240°
-    Hex::axial(1, -1), // 300°
+/// The six edge directions, in `Direction`'s index order: anticlockwise from east, 60°
+/// apart. The mesher pairs edge `k` with the cell edge between corners `k-1` and `k`, so
+/// this order and `plane::corners_m` go together.
+pub const EDGES: [Direction; 6] = [
+    Direction::E,
+    Direction::NNE,
+    Direction::NNW,
+    Direction::W,
+    Direction::SSW,
+    Direction::SSE,
 ];
+
+/// The axial step one cell in a direction, read from `murabito_hexcoords` so that the
+/// main project's direction table stays the only one.
+pub fn step(direction: Direction) -> Hex {
+    let origin = VoxelCoord::new(0, 0, 0, 0).expect("the origin is on the plane");
+    let next = origin.neighbour(direction);
+    Hex::axial(next.q(), next.r())
+}
+
+/// The six unit steps, `EDGES` as cells: direction `k` points at 60°·k.
+pub static DIRECTIONS: LazyLock<[Hex; 6]> = LazyLock::new(|| EDGES.map(step));
 
 /// Squared hex-plane distance of an offset, in units of the cell width squared, exactly.
 /// `i64` because at ri scale the squares approach the `i32` limit.
@@ -112,7 +124,7 @@ mod tests {
 
     #[test]
     fn unit_steps_have_d2_of_one() {
-        for d in DIRECTIONS {
+        for d in *DIRECTIONS {
             assert_eq!(d2(d), 1, "{d:?}");
         }
     }
@@ -176,21 +188,37 @@ mod tests {
 
     #[test]
     fn directions_run_anticlockwise_from_east() {
-        // Direction k must point at 60 degrees times k: the mesher relies on it to pair
-        // each neighbour with a cell edge.
+        // Direction k must point at 60 degrees times k, anticlockwise with north up: the
+        // mesher pairs each neighbour with a cell edge by that order. +r is SSE, so a
+        // cell's north coordinate is -r·√3/2.
         let angle = |h: Hex| {
             let (e, n) = (
-                (h.q() as f64) + (h.r() as f64) / 2.0,
-                h.r() as f64 * 3f64.sqrt() / 2.0,
+                h.q() as f64 + h.r() as f64 / 2.0,
+                -(h.r() as f64) * 3f64.sqrt() / 2.0,
             );
             n.atan2(e).to_degrees().rem_euclid(360.0)
         };
         for (k, d) in DIRECTIONS.iter().enumerate() {
             assert!(
                 (angle(*d) - 60.0 * k as f64).abs() < 1e-9,
-                "direction {k} is {:?}",
-                d
+                "direction {k} is {d:?}"
             );
         }
+    }
+
+    #[test]
+    fn the_edges_are_directions_even_indices_in_order() {
+        for (k, d) in EDGES.iter().enumerate() {
+            assert_eq!(usize::from(d.index()), 2 * k, "{d:?}");
+            assert!(d.is_edge());
+        }
+    }
+
+    #[test]
+    fn the_edge_steps_match_main_table() {
+        // Docs/hex_units.md in the main project: E, NNE, NNW, W, SSW, SSE.
+        let expected = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)];
+        let got: Vec<(i32, i32)> = DIRECTIONS.iter().map(|h| (h.q(), h.r())).collect();
+        assert_eq!(got, expected);
     }
 }

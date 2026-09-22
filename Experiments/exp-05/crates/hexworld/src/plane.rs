@@ -1,24 +1,25 @@
 //! The hex plane in metres. Positions are `(east, north)`; height is separate.
 //! Pointy-top cells: the position of axial (q, r), in units of the cell's flat-to-flat
-//! width, is (q + r/2, r·√3/2).
+//! width, is (q + r/2, −r·√3/2).
 
 use crate::hex::Hex;
 use crate::level::Level;
 
 const SQRT3: f64 = 1.732_050_807_568_877_2;
 
-/// The centre of a cell, in metres east and north of the world centre.
+/// The centre of a cell, in metres east and north of the world centre. `+r` is SSE,
+/// as in `murabito_hexcoords`: half a cell east and one row south.
 pub fn cell_centre_m(cell: Hex, level: Level) -> (f64, f64) {
     let w = level.width_m();
     let q = cell.q() as f64;
     let r = cell.r() as f64;
-    ((q + r / 2.0) * w, r * SQRT3 / 2.0 * w)
+    ((q + r / 2.0) * w, -r * SQRT3 / 2.0 * w)
 }
 
 /// Fractional axial coordinates of a point at a level.
 pub fn metres_to_axial(east: f64, north: f64, level: Level) -> (f64, f64) {
     let w = level.width_m();
-    let r = north / (SQRT3 / 2.0 * w);
+    let r = -north / (SQRT3 / 2.0 * w);
     (east / w - r / 2.0, r)
 }
 
@@ -89,6 +90,15 @@ mod tests {
         let (e, n) = cell_centre_m(Hex::axial(3, 2), Level::Ken);
         let nudged = (e + 0.1 * Level::Ken.width_m(), n);
         assert_eq!(round_at(nudged.0, nudged.1, Level::Ken), Hex::axial(3, 2));
+    }
+
+    #[test]
+    fn a_plus_r_step_is_half_a_cell_east_and_a_row_south() {
+        // As murabito_hexcoords' `one_step_along_r_is_half_a_cell_right_and_a_row_down_the_screen`.
+        let w = Level::Shaku.width_m();
+        let (e, n) = cell_centre_m(Hex::axial(0, 1), Level::Shaku);
+        assert!((e - w / 2.0).abs() < 1e-12, "{e}");
+        assert!((n + w * 3f64.sqrt() / 2.0).abs() < 1e-12, "{n}");
     }
 
     #[test]

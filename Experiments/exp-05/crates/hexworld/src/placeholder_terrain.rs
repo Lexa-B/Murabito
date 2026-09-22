@@ -176,7 +176,10 @@ mod tests {
     fn columns_are_seeded() {
         let a = WorldConfig::default();
         let b = WorldConfig { seed: 99, ..a };
-        let cell = Hex::axial(4, 4);
+        // Cell (4, 4) is where this test sampled before +r pointed SSE; at the new
+        // physical position it samples, seeds 0 and 99 land on the same layer by
+        // coincidence. (6, 8) keeps a comfortable margin (3 layers) between the two.
+        let cell = Hex::axial(6, 8);
         assert_ne!(
             column_at(&a, cell, Level::Shaku),
             column_at(&b, cell, Level::Shaku)

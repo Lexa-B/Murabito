@@ -24,7 +24,7 @@ pub use address::{address_of, shaku_of, Address};
 pub use chunk::{generate, Chunk, ChunkKey};
 pub use column::{Column, Material, Run};
 pub use config::WorldConfig;
-pub use hex::{d2, distance, neighbours, range, Hex, DIRECTIONS};
+pub use hex::{d2, distance, neighbours, range, step, Hex, DIRECTIONS, EDGES};
 pub use level::{Level, CELL_LEVELS, SHAKU_M, SUN_M};
 pub use mesh::{drawn_cells, mesh_chunk, MeshData};
 pub use owner::{
