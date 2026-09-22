@@ -6,8 +6,8 @@ The black rat is long established in Japan and the classic pest of rice stores
 and farmhouses. Dark grey-brown with a cream belly, and pink ears, feet and tail.
 
 Built with loft.py: one connected, rig-ready mesh, with a ring of vertices at
-every joint and five rings along the tail. About 0.9 shaku (~27 cm) nose to
-rump, a tail nearly as long again, and 0.33 shaku to the top of the back, feet
+every joint and five rings along the tail. About 0.63 shaku (~19 cm) nose
+to rump once scaled, a tail nearly as long again, and 0.23 shaku to the top of the back, feet
 on z = 0.
 """
 
@@ -73,6 +73,8 @@ EAR = [  # big and round: wide in the middle, thin front to back
 EAR_TIP = Vector((0.135, 0.21, 0.55))
 
 
+SCALE = 0.7  # built in its own numbers, then sized to a real black rat's ~19 cm, nose to rump
+
 def build_rat():
     b = loft.Builder()
     segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP)
@@ -90,8 +92,8 @@ def build_rat():
             # faces forward and stays pink all the way down.
             front = max(rows[0], key=lambda f: f.calc_center_median().y)
             b.paint([front], PINK)
-    return b.finish("Rat", shaded=True)
+    return b.finish("Rat", shaded=True, scale=SCALE)
 
 
 if __name__ == "__main__":
-    loft.run(build_rat, "rat", target=(0, -0.3, 0.22), extent=1.5)
+    loft.run(build_rat, "rat", target=(0.00, -0.21, 0.15), extent=1.05)

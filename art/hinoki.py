@@ -1,4 +1,4 @@
-"""The hinoki cypress (ヒノキ): a mature tree, about 60 shaku (~18 m) tall.
+"""The hinoki cypress (ヒノキ): a village tree about 52 shaku (~16 m) tall and 8 m across.
 
     blender -b --python art/hinoki.py -- --out assets/models/hinoki-00-a-summer.glb \
         [--version 00] [--colour a] [--season summer] [--renders <dir>]
@@ -47,9 +47,9 @@ VERSIONS = {
             "count": 34,
             "from": 7,  # the crown reaches low
             "to": 47,
-            "length": (13, 5),  # broad, and still wide near the top
+            "length": (8, 3.5),  # still egg-shaped, but a village tree's width
             "taper": 2.5,  # staying wide, then pulling in quickly: an egg, not a spire
-            "pad": (5.5, 4.0),
+            "pad": (4.5, 3.5),
             "fork_chance": 0.35,
             "rise": (0.0, 0.08),
             "droop": 0.22,  # branches sag, so the fans hang in tiers
@@ -58,7 +58,7 @@ VERSIONS = {
             "lift": (0, 0),  # fans centred on the branch tips, which end inside them
         },
         "tuft": {"up": 1.4, "down": 0.7},  # wide, flat fans
-        "tip": {"radius": 6, "up": 3, "down": 1.5},  # a rounded dome on top
+        "tip": {"radius": 5, "up": 3, "down": 1.5},  # a rounded dome on top
         "clusters": {"tier": 7, "sectors": 3},  # each tier and third wrapped as one skin
     },
 }

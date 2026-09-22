@@ -8,8 +8,8 @@ breed, with a big head and a thick neck. Bay (鹿毛): a brown body with a black
 mane, tail and lower legs.
 
 Built with loft.py: one connected, rig-ready mesh, with a ring of vertices at
-every joint. About 3.4 shaku to the withers here (short, sturdy legs, for the
-chibi hint) and 5.4 shaku from nose to tail, feet on z = 0.
+every joint. About 4.4 shaku (~134 cm) to the withers once scaled, and 7.0
+shaku from nose to tail, feet on z = 0.
 """
 
 import sys
@@ -94,6 +94,8 @@ MARKINGS = [
 ]
 
 
+SCALE = 1.3  # built in its own numbers, then sized to a Kiso horse's ~134 cm at the withers
+
 def build_horse():
     b = loft.Builder()
     segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP)
@@ -108,8 +110,8 @@ def build_horse():
         limbs.append((segments[EAR_SEGMENT][upper], EAR, mirror, EAR_TIP))
     for face, rings, mirror, tip in limbs:
         b.limb(face, rings, mirror, tip)
-    return b.finish("Horse", shaded=True)
+    return b.finish("Horse", shaded=True, scale=SCALE)
 
 
 if __name__ == "__main__":
-    loft.run(build_horse, "horse", target=(0, -0.35, 2.3), extent=5.6)
+    loft.run(build_horse, "horse", target=(0.00, -0.45, 2.99), extent=7.28)

@@ -77,6 +77,8 @@ MARKINGS = [
 ]
 
 
+SCALE = 0.85  # built in its own numbers, then sized to about 1.17 m standing: a real 1.4 m crane read large beside the others
+
 def build_crane():
     b = loft.Builder()
     segments = b.spine(BUSTLE_TIP, SPINE, BILL_TIP)
@@ -87,8 +89,8 @@ def build_crane():
     legs = [(segments[LEG_SEGMENT][LOWER_RIGHT], 1), (segments[LEG_SEGMENT][LOWER_LEFT], -1)]
     for face, mirror in legs:
         b.limb(face, LEG, mirror)
-    return b.finish("Crane", shaded=True)
+    return b.finish("Crane", shaded=True, scale=SCALE)
 
 
 if __name__ == "__main__":
-    loft.run(build_crane, "crane", target=(0, 0.15, 2.3), extent=4.8)
+    loft.run(build_crane, "crane", target=(0.00, 0.13, 1.95), extent=4.08)

@@ -9,7 +9,7 @@ middle tine and a fork at the top.
 
 Built with loft.py: one connected, rig-ready body, with a ring of vertices at
 every joint; the antlers are rigid, so they are separate tubes (flora.branch)
-rooted in the head, and each spot is a small flat stud on the coat. About 2.2 shaku (~67 cm) to the shoulder and 4.2 shaku to the
+rooted in the head, and each spot is a small flat stud on the coat. About 2.75 shaku (~84 cm) to the shoulder once scaled and 5.2 shaku to the
 antler tips, feet on z = 0.
 """
 
@@ -124,6 +124,8 @@ SPOTS = [
 ]
 
 
+SCALE = 1.25  # built in its own numbers, then sized to a Honshu stag's ~84 cm at the shoulder
+
 def spot(b, face, along, around):
     """A small, flat, closed stud of cream on a body face."""
     face.normal_update()
@@ -165,8 +167,8 @@ def build_deer():
     for mirror in (1, -1):
         for points, radii in ANTLER_TUBES:
             flora.branch(b, [(x * mirror, y, z) for x, y, z in points], radii, ANTLER)
-    return b.finish("Deer", shaded=True)
+    return b.finish("Deer", shaded=True, scale=SCALE)
 
 
 if __name__ == "__main__":
-    loft.run(build_deer, "deer", target=(0, -0.1, 2.0), extent=4.3)
+    loft.run(build_deer, "deer", target=(0.00, -0.12, 2.50), extent=5.38)

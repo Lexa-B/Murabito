@@ -11,7 +11,7 @@ relaxed S and a short tail instead of the crane's bustle.
 Built with loft.py: one connected, rig-ready body, with plenty of rings up the
 neck; the plume is a rigid tube (flora.branch), and each eye is a low yellow stud
 with a low black pupil on it, on a poked face, sitting nearly flush (like the
-pheasant's). About 3.5 shaku (~1.05 m) to the top of the head, feet on z = 0.
+pheasant's). About 3.3 shaku (~1.0 m) to the top of the head, once scaled, feet on z = 0.
 """
 
 import sys
@@ -85,6 +85,8 @@ MARKINGS = [
 ]
 
 
+SCALE = 0.93  # built in its own numbers, then sized to a grey heron's ~100 cm standing
+
 def build_heron():
     b = loft.Builder()
     segments = b.spine(TAIL_TIP, SPINE, BILL_TIP)
@@ -104,8 +106,8 @@ def build_heron():
     for face, mirror in legs:
         b.limb(face, LEG, mirror)
     flora.branch(b, *PLUME, BLACK)
-    return b.finish("Heron", shaded=True)
+    return b.finish("Heron", shaded=True, scale=SCALE)
 
 
 if __name__ == "__main__":
-    loft.run(build_heron, "heron", target=(0, 0.3, 1.8), extent=4.0)
+    loft.run(build_heron, "heron", target=(0.00, 0.28, 1.67), extent=3.72)

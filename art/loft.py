@@ -161,12 +161,16 @@ class Builder:
             rows.append([self.face((point, prev[j], prev[(j + 1) % 4]), colour) for j in range(4)])
         return rows
 
-    def finish(self, name, shaded=False):
+    def finish(self, name, shaded=False, scale=1.0):
         """Turn the bmesh into a palette-coloured object linked into the scene.
 
         shaded varies fur and feathers face by face (see style.SHADES), from a
-        random stream seeded by name, so a rebuild comes out the same.
+        random stream seeded by name, so a rebuild comes out the same. scale
+        sizes the whole model about the origin, so its feet stay on the ground:
+        a script builds in its own numbers and states its real size once.
         """
+        if scale != 1.0:
+            bmesh.ops.scale(self.bm, vec=(scale, scale, scale), verts=self.bm.verts)
         bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)
         swatches = [style.PALETTE[f[self._swatch]][0] for f in self.bm.faces]
         if shaded:

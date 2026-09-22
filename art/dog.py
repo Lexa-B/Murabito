@@ -93,6 +93,8 @@ URAJIRO = [
 ]
 
 
+SCALE = 1.1  # built in its own numbers, then sized to about 39 cm at the shoulder, the top of the Shiba range
+
 def build_dog():
     b = loft.Builder()
     segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP, upright=RUMP_RINGS)
@@ -107,8 +109,8 @@ def build_dog():
         limbs.append((segments[EAR_SEGMENT][upper], EAR, mirror, EAR_TIP))
     for face, rings, mirror, tip in limbs:
         b.limb(face, rings, mirror, tip)
-    return b.finish("Dog", shaded=True)
+    return b.finish("Dog", shaded=True, scale=SCALE)
 
 
 if __name__ == "__main__":
-    loft.run(build_dog, "dog", target=(0, -0.15, 0.85), extent=2.1)
+    loft.run(build_dog, "dog", target=(0.00, -0.17, 0.94), extent=2.31)

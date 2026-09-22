@@ -1,4 +1,4 @@
-"""The mountain cherry (山桜, yamazakura): a broad, spreading tree about 30 shaku tall.
+"""The mountain cherry (山桜, yamazakura): a village tree about 25 shaku (~7.5 m) tall and 8-9 m across.
 
     blender -b --python art/sakura.py -- --out assets/models/sakura-00-a-spring.glb \
         [--version 00] [--colour a] [--season spring] [--renders <dir>]
@@ -63,17 +63,17 @@ VERSIONS = {
         "trunk": ([(0, 0, -0.5), (0.2, 0, 2.5), (0.7, 0.3, 5), (0.3, 0.2, 7.5)], [2.8, 2.05, 1.8, 1.6]),
         "gnarl": (0.3, 0.8),  # how far the trunk and the limbs are pushed off line
         "limbs": [  # rising briefly from the fork, then running out nearly level
-            ([(0.3, 0.2, 6.5), (4, 1, 9), (11, 2.5, 10), (18, 2, 10.5)], LIMB),
-            ([(0.3, 0.2, 6.5), (-3, 3, 9), (-9, 9, 10.5), (-14, 13, 10.5)], LIMB),
-            ([(0.3, 0.2, 7), (-3, -4, 9.5), (-8, -11, 11), (-12, -14, 11)], LIMB),
-            ([(0.3, 0.2, 7), (4, -4, 10), (9, -11, 11.5), (13, -14, 12)], LIMB),
-            ([(0.3, 0.2, 7.5), (1, 5, 10.5), (3, 12, 12), (4, 16, 12.5)], LIMB),
-            ([(0.3, 0.2, 7.5), (1, 1, 12), (2, 1, 16), (1, 2, 19)], LIMB),  # the one that climbs
+            ([(0.15, 0.1, 6.5), (2, 0.5, 9), (5.5, 1.25, 10), (9, 1, 10.5)], LIMB),
+            ([(0.15, 0.1, 6.5), (-1.5, 1.5, 9), (-4.5, 4.5, 10.5), (-7, 6.5, 10.5)], LIMB),
+            ([(0.15, 0.1, 7), (-1.5, -2, 9.5), (-4, -5.5, 11), (-6, -7, 11)], LIMB),
+            ([(0.15, 0.1, 7), (2, -2, 10), (4.5, -5.5, 11.5), (6.5, -7, 12)], LIMB),
+            ([(0.15, 0.1, 7.5), (0.5, 2.5, 10.5), (1.5, 6, 12), (2, 8, 12.5)], LIMB),
+            ([(0.15, 0.1, 7.5), (0.5, 0.5, 12), (1, 0.5, 16), (0.5, 1, 19)], LIMB),  # the one that climbs
         ],
-        "end": (8.0, 5.0, 2.2),  # full above, shallow beneath, so the level limbs show
-        "side": (6.0, 4.0, 1.8),
-        "mid": (5.5, 4.0, 1.6),
-        "fill": [((4, -4, 18), 8, 5, 3.0), ((-4, 4, 18), 8, 5, 3.0), ((0, 0, 21), 7, 4, 3.0)],
+        "end": (5.5, 4.2, 1.9),  # full above, shallow beneath, so the level limbs show
+        "side": (4.2, 3.4, 1.5),
+        "mid": (4.0, 3.4, 1.4),
+        "fill": [((2.5, -2.5, 18), 6, 5, 3.0), ((-2.5, 2.5, 18), 6, 5, 3.0), ((0, 0, 21), 6, 4, 3.0)],
     },
 }
 
@@ -113,18 +113,18 @@ def _grown(seed, fork=7.0, limbs=6, reach=(13, 19), rise=1.0, girth=1.0, gnarl=(
         "gnarl": gnarl,
         "limbs": out,
         "fill": [
-            (tuple(top + Vector((4, -4, 10.5))), 8, 5, 3.0),
-            (tuple(top + Vector((-4, 4, 10.5))), 8, 5, 3.0),
-            (tuple(top + Vector((0, 0, 13.5))), 7, 4, 3.0),
+            (tuple(top + Vector((2.5, -2.5, 10.5))), 6, 5, 3.0),
+            (tuple(top + Vector((-2.5, 2.5, 10.5))), 6, 5, 3.0),
+            (tuple(top + Vector((0, 0, 13.5))), 6, 4, 3.0),
         ],
     }
 
 
 VERSIONS.update({
-    "01": _grown(1, fork=6, limbs=5, reach=(11, 15), girth=0.85),  # a younger, compact tree
-    "02": _grown(2, fork=7, limbs=7, reach=(16, 22), girth=1.25, gnarl=(0.45, 1.1)),  # a vast old tree
-    "03": _grown(3, fork=5.5, limbs=6, reach=(14, 19), rise=0.55),  # low and sprawling, limbs almost flat
-    "04": _grown(4, fork=8.5, limbs=6, reach=(12, 17), rise=1.4, girth=0.95),  # a taller trunk, limbs lifting
+    "01": _grown(1, fork=6, limbs=5, reach=(5.5, 7.5), girth=0.85),  # a younger, compact tree
+    "02": _grown(2, fork=7, limbs=7, reach=(8, 11), girth=1.25, gnarl=(0.45, 1.1)),  # the broadest, and gnarled
+    "03": _grown(3, fork=5.5, limbs=6, reach=(7, 9.5), rise=0.55),  # low and sprawling, limbs almost flat
+    "04": _grown(4, fork=8.5, limbs=6, reach=(6, 8.5), rise=1.4, girth=0.95),  # a taller trunk, limbs lifting
 })
 
 
@@ -140,7 +140,7 @@ def _masses(points, spec, rng):
 
     masses = [(end + Vector((0, 0, 1)) + jitter(), *spec["end"])]
     for side in (1, -1):
-        masses.append((end - ahead * 2.5 + across * side * 4.5 + Vector((0, 0, -0.5)) + jitter(), *spec["side"]))
+        masses.append((end - ahead * 1.8 + across * side * 3.0 + Vector((0, 0, -0.5)) + jitter(), *spec["side"]))
     masses.append((before + Vector((0, 0, 1.5)) + jitter(), *spec["mid"]))
     return masses
 
@@ -169,7 +169,7 @@ def _bare_branches(b, points, radii, rng):
         # mostly outward, only a little up, as a cherry's branches spread
         way = outward.normalized() + Vector((0, 0, rng.uniform(0.2, 0.45)))
         way += Vector((rng.uniform(-0.3, 0.3), rng.uniform(-0.3, 0.3), 0))
-        _twigs(b, points[i], way, rng.uniform(5, 7), max(radii[i] * 0.6, 0.15), 2, rng)
+        _twigs(b, points[i], way, rng.uniform(3, 4.2), max(radii[i] * 0.6, 0.15), 2, rng)  # sized to the limbs' reach
 
 
 def build_sakura(version="00", colour="a", season="spring"):

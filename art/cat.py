@@ -6,8 +6,8 @@ White with orange and black patches. The patches are whole faces, painted over
 the white after the mesh is built, and deliberately lopsided, as calico is.
 
 Built with loft.py: one connected, rig-ready mesh, with a ring of vertices at
-every joint and five rings along the tail. About 1.0 shaku (~30 cm) to the
-shoulder and 1.6 shaku long without the tail, feet on z = 0.
+every joint and five rings along the tail. About 0.8 shaku (~24 cm) to the
+shoulder once scaled and 1.3 shaku long without the tail, feet on z = 0.
 """
 
 import sys
@@ -91,6 +91,8 @@ PATCHES = [
 EAR_COLOURS = {1: BLACK, -1: ORANGE}  # right ear black, left ear orange
 
 
+SCALE = 0.8  # built in its own numbers, then sized to a real cat's ~24 cm at the shoulder
+
 def build_cat():
     b = loft.Builder()
     segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP)
@@ -107,8 +109,8 @@ def build_cat():
         rows = b.limb(face, rings, mirror, tip)
         if rings is EAR:
             b.paint([f for row in rows for f in row], EAR_COLOURS[mirror])
-    return b.finish("Cat", shaded=True)
+    return b.finish("Cat", shaded=True, scale=SCALE)
 
 
 if __name__ == "__main__":
-    loft.run(build_cat, "cat", target=(0, -0.35, 0.8), extent=2.6)
+    loft.run(build_cat, "cat", target=(0.00, -0.28, 0.64), extent=2.08)

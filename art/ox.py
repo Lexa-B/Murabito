@@ -10,7 +10,7 @@ tassel.
 
 Built with loft.py: one connected, rig-ready body, with a ring of vertices at
 every joint; the horns and ears are rigid tubes (flora.branch) rooted in the
-head. About 3.1 shaku to the withers (short legs, for the chibi hint) and 4.4
+head. About 4.0 shaku (~120 cm) to the withers once scaled and 5.6
 shaku from nose to rump, feet on z = 0.
 """
 
@@ -96,6 +96,8 @@ HEAD_TUBES = [
 ]
 
 
+SCALE = 1.28  # built in its own numbers, then sized to a Mishima ox's ~120 cm at the withers (cows 113, bulls 130)
+
 def build_ox():
     b = loft.Builder()
     segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP)
@@ -111,8 +113,8 @@ def build_ox():
     for mirror in (1, -1):
         for points, radii, colours in HEAD_TUBES:
             flora.branch(b, [(x * mirror, y, z) for x, y, z in points], radii, colours)
-    return b.finish("Ox", shaded=True)
+    return b.finish("Ox", shaded=True, scale=SCALE)
 
 
 if __name__ == "__main__":
-    loft.run(build_ox, "ox", target=(0, -0.4, 1.7), extent=4.6)
+    loft.run(build_ox, "ox", target=(0.00, -0.51, 2.18), extent=5.89)
