@@ -1,6 +1,6 @@
 //! `HexWorld::set_config` and the `despawn_stale_chunks` system it needs: changing the
-//! seed or the layer thickness must drop the old world's chunks — both the store's data
-//! and every entity drawing it — rather than leaving them to mix with the new one.
+//! seed must drop the old world's chunks — both the store's data and every entity
+//! drawing it — rather than leaving them to mix with the new one.
 
 use std::collections::HashSet;
 

@@ -2,7 +2,8 @@
 //! handful of frames. This is the only place a WGSL compile error in `ground.wgsl` would
 //! actually surface, since Bevy only compiles shaders when something asks to render them.
 //!
-//! Run from the workspace root, so Bevy's asset folder (`assets/`) resolves correctly:
+//! Bevy's asset folder (`assets/`) resolves via `BEVY_ASSET_ROOT`, set by this
+//! experiment's own `.cargo/config.toml`, not by the working directory:
 //! `cargo run -p hexworld_bevy --example shader_check`
 
 use bevy::asset::AssetPlugin;

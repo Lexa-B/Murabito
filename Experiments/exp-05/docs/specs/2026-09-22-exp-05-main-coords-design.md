@@ -6,7 +6,7 @@ Amends `2026-09-20-exp-05-hex-voxel-chunks-design.md`. Where the two disagree, t
 
 The main project settled its coordinate conventions after exp-05 was specced. They are written up in `Docs/hex_units.md` and implemented in `crates/hexcoords/` (`murabito_hexcoords`). This change moves exp-05 onto the same conventions, so that its systems (packing, chunks, the store, the mesher, the handover) can later be lifted into the main project without translating coordinates on the way.
 
-This change is about coordinates only. Ownership, chunking, meshing and the handover keep their design. The world they produce looks the same, apart from one cosmetic mirror, described under "Labels".
+This change is about coordinates only. Ownership, chunking, meshing and the handover keep their design. The relabelling reflects label positions north↔south, but each chunk's drawn set (its owned cells plus its guest ties) is symmetric under that reflection, so the world they produce looks the same; only which parent owns a tied cell changes, described under "Labels".
 
 ## Decisions (2026-09-22)
 
@@ -56,7 +56,7 @@ North is −Z in both, so **the rendered world is not mirrored and the triangle 
 
 **The integer maths does not change.** `d2`, packing B, `owner`, the drawn set, windows and the exp-03 fixtures all work on labels and never on positions, so they carry over as they are. The relabelling from exp-05's labels to main's, `(q, r) → (q + r, −r)`, leaves `d2 = dq² + dq·dr + dr²` unchanged.
 
-The ownership tie-break, **greatest `(a, b)`**, is also a rule about labels. Under the new mapping it picks the mirror-image cell. So **the battlement pattern appears mirrored left to right compared with exp-03 and the current exp-05.** It is still a correct partition, every parent still owns N² children, and the fixtures still pass. Only its look on screen differs.
+The ownership tie-break, **greatest `(a, b)`**, is also a rule about labels. Under the new mapping it picks the cell reflected north↔south. Each chunk's drawn set (its owned cells plus its guest ties) is symmetric under that reflection, so **the battlement pattern looks the same on screen as in exp-03 and the current exp-05.** It is still a correct partition, every parent still owns N² children, and the fixtures still pass. Only which parent owns a tied cell changes, visible only in the fine detail of the border lines.
 
 The fixture file stays as it is: axial pairs, which is storage. Its parser builds labels with `Hex::new(q, r, -q - r)`.
 
@@ -113,7 +113,7 @@ The core's metre functions become shaku `Vec3` or `f32` functions. `(east, north
   - `round_at` inverts `cell_centre` at every level;
   - the layer height matches the vendored crate.
 - **Everything else must pass unchanged in meaning:** the exp-03 fixtures, the handover suite, the store's tests and the mesher's tests. Test literals in metres get converted, and none of their assertions change what they check.
-- The success check is the same as the original spec's, plus: the viewer shows the same terrain as before, with only the battlement pattern mirrored.
+- The success check is the same as the original spec's, plus: the viewer shows the same terrain and the same battlement pattern as before; only which parent owns a tied cell changes, visible only in the border lines' fine detail.
 
 ## Out of scope
 

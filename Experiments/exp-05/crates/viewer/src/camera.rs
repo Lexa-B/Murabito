@@ -58,10 +58,10 @@ impl CameraRig {
 
     /// The ground height to use this frame: the store's real height where the focus has
     /// loaded ground, or the last height we had otherwise. At `MAX_ZOOM`, pan speed is
-    /// about 11,900 shaku/s (3.6 km/s) — fast enough to genuinely outrun the load frontier — so falling
-    /// back to 0.0 would make the focus visibly drop and then pop back up once the real
-    /// height arrives. Holding the last value avoids that pop; it is not a smoothing
-    /// system, just "don't snap to a height that was never true."
+    /// about 11,900 shaku/s (3.6 km/s) — fast enough to genuinely outrun the load
+    /// frontier — so falling back to 0.0 would make the focus visibly drop and then pop
+    /// back up once the real height arrives. Holding the last value avoids that pop; it
+    /// is not a smoothing system, just "don't snap to a height that was never true."
     pub fn resolve_height(&mut self, loaded_height: Option<f32>) -> f32 {
         if let Some(h) = loaded_height {
             self.last_height = h;

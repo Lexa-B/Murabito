@@ -4,6 +4,10 @@ A uniform hex coordinate system for Murabito: ri, cho and ken are nested scales 
 hot-loadable chunks, the shaku is the primary unit, and placeholder voxel terrain lives
 in that system. Built in Rust and Bevy, as a fresh start outside Unreal Engine.
 
+Coordinates follow the main project's conventions, through a vendored copy of
+`murabito_hexcoords`: world space is Bevy's `Vec3` in shaku, `f32`, with east +X, north
+−Z, and +r SSE (down the screen).
+
 See the design spec ([`docs/specs/2026-09-20-exp-05-hex-voxel-chunks-design.md`](docs/specs/2026-09-20-exp-05-hex-voxel-chunks-design.md))
 and the implementation plan ([`docs/plans/2026-09-20-exp-05-hex-voxel-chunks-plan.md`](docs/plans/2026-09-20-exp-05-hex-voxel-chunks-plan.md))
 for the full picture; [`docs/HANDOFF.md`](docs/HANDOFF.md) has the background this was
@@ -11,12 +15,15 @@ designed from.
 
 ## Crates
 
-A Cargo workspace with three members:
+A Cargo workspace with four members:
 
-- **`hexworld`** — the engine-free core. No Bevy, no graphics, **no dependencies at all**.
-  Addresses (ri/cho/ken/shaku + a vertical layer), packing-B ownership, run-list voxel
-  columns, chunks, a `ChunkStore` with delayed unloading, and a pure mesher. This is the
-  part meant to outlive the engine choice.
+- **`hexcoords`** (`murabito_hexcoords`) — a vendored copy of the main project's
+  coordinate crate. See [`crates/hexcoords/README.md`](crates/hexcoords/README.md).
+- **`hexworld`** — the engine-free core. No graphics or ECS code; its only dependencies
+  are the vendored `murabito_hexcoords` and `bevy` with `default-features = false`, for
+  `bevy::math::Vec3`. Addresses (ri/cho/ken/shaku + a vertical layer), packing-B
+  ownership, run-list voxel columns, chunks, a `ChunkStore` with delayed unloading, and a
+  pure mesher. This is the part meant to outlive the engine choice.
 - **`hexworld_bevy`** — the Bevy plugin: a `Loader` component, background chunk
   generation and meshing, one entity per shown chunk, a same-frame handover between
   detail levels, and the ground material (hex lines, tint by level).
@@ -33,6 +40,8 @@ cargo run -p viewer --release
 cargo test
 ```
 
+`cargo test` currently runs 186 tests (1 ignored).
+
 `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings` should
 stay clean. Windowed runs need the desktop display; if the shell has none (`echo
 $DISPLAY` empty), take it from the systemd user session:
@@ -43,6 +52,10 @@ export $(systemctl --user show-environment | rg '^(DISPLAY|XAUTHORITY)=' | xargs
 
 Don't point `CARGO_TARGET_DIR` or a temp working directory at `/tmp` — it's a
 RAM-backed tmpfs on this machine.
+
+This experiment sets its own `BEVY_ASSET_ROOT` in `.cargo/config.toml`, pointing back at
+`Experiments/exp-05` itself, so its `assets/` resolve correctly regardless of the main
+project's root `.cargo/config.toml`.
 
 ## Controls
 
@@ -62,10 +75,10 @@ For screenshots and measurements without a person at the screen, parsed by hand 
 | `--screenshot-dir DIR` | Save a PNG under `DIR` every `--screenshot-every` frames. |
 | `--screenshot-every M` | How often to save, in frames (default 30; never 0). |
 | `--seed N` | Overrides the world's seed. |
-| `--start-east M --start-north M` | The focus's starting position, in metres (both required together). |
+| `--start-x X --start-z Z` | The focus's starting position, in shaku (both required together). |
 | `--rings-shaku N` | Overrides the focus loader's shaku ring count. |
 | `--auto-pan` | Sweep the focus east at a steady pace, for a sustained-panning frame-time measurement. |
-| `--zoom N` | The camera's starting distance from the focus, in metres. |
+| `--zoom N` | The camera's starting distance from the focus, in shaku (default 396; clamped to 9.9–13,200). |
 | `--line-mode off\|shaku\|nested` | The starting line mode. |
 | `--tint` | Start with tint-by-level on. |
 
