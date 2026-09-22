@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 # Rebuild every committed model into <dir>, each from its own script with the flags
-# its file name implies:
-#   animals   <animal>.glb                          art/<animal>.py
-#   plants    <plant>-<version>-<colour>-<season>.glb   art/<plant>.py --version --colour --season
+# its file name implies. A model's folder under assets/entity_models/ is its script's
+# folder under art/entity_models/, and the rebuilt file keeps it:
+#   <folder>/<name>.glb                                art/entity_models/<folder>/<name>.py
+#   <folder>/<plant>-<version>-<colour>-<season>.glb   art/entity_models/<folder>/<plant>.py
+#                                                      --version --colour --season
 #
 #   art/tools/rebuild.sh <dir>
 set -euo pipefail
 out=${1:?usage: rebuild.sh <dir>}
 root=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
-mkdir -p "$out"
 cd "$root"
-for file in $(git ls-files 'assets/models/*.glb'); do
+for file in $(git ls-files 'assets/entity_models/*.glb'); do
+  folder=$(dirname "${file#assets/entity_models/}")
   name=$(basename "$file" .glb)
   if [[ $name != *-* ]]; then
-    args=(art/"$name".py --)
+    args=(art/entity_models/"$folder/$name".py --)
   else
     plant=${name%%-*}
     season=${name##*-}
@@ -21,10 +23,11 @@ for file in $(git ls-files 'assets/models/*.glb'); do
     colour=${rest##*-}
     version=${rest%-*}
     version=${version#"$plant"-}  # a version can hold a hyphen, e.g. pruned-00
-    args=(art/"$plant".py -- --version "$version" --colour "$colour" --season "$season")
+    args=(art/entity_models/"$folder/$plant".py -- --version "$version" --colour "$colour" --season "$season")
   fi
-  if ! log=$(blender -b --python "${args[@]}" --out "$out/$name.glb" 2>&1) || [[ $log == *Traceback* ]]; then
-    echo "FAILED $name"; echo "$log" | tail -20; exit 1
+  mkdir -p "$out/$folder"
+  if ! log=$(blender -b --python "${args[@]}" --out "$out/$folder/$name.glb" 2>&1) || [[ $log == *Traceback* ]]; then
+    echo "FAILED $folder/$name"; echo "$log" | tail -20; exit 1
   fi
-  echo "built $name"
+  echo "built $folder/$name"
 done

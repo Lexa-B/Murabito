@@ -5,11 +5,12 @@
 #
 #   art/tools/check.sh <dir> [--above Z]
 #
-# Rebuilt models go to <dir>/rebuild. With --above, only faces wholly above height Z
-# are compared (for a change meant to touch only what's below, like burying trunks).
+# Rebuilt models go to <dir>/rebuild, in the same folders as under assets/entity_models/.
+# With --above, only faces wholly above height Z are compared (for a change meant to
+# touch only what's below, like burying trunks).
 # If everything matches and you want the rebuilt files (say, after a palette change,
 # so each carries the current palette), copy them in:
-#   cp <dir>/rebuild/*.glb assets/models/
+#   cp -r <dir>/rebuild/. assets/entity_models/
 set -euo pipefail
 work=${1:?usage: check.sh <dir> [--above Z]}
 shift
@@ -20,8 +21,8 @@ root=$(git -C "$tools" rev-parse --show-toplevel)
 fingerprint() {
   blender -b --python "$tools/fingerprint.py" -- "$@" 2>/dev/null | awk '/^FINGERPRINT/ {print $2, $3, $4}' | sort
 }
-fingerprint "$@" $(git -C "$root" ls-files 'assets/models/*.glb' | sed "s|^|$root/|") > "$work/committed.txt"
-fingerprint "$@" "$work"/rebuild/*.glb > "$work/rebuilt.txt"
+fingerprint "$@" $(git -C "$root" ls-files 'assets/entity_models/*.glb' | sed "s|^|$root/|") > "$work/committed.txt"
+fingerprint "$@" $(find "$work/rebuild" -name "*.glb") > "$work/rebuilt.txt"
 echo "$(wc -l < "$work/committed.txt") committed, $(wc -l < "$work/rebuilt.txt") rebuilt"
 if diff "$work/committed.txt" "$work/rebuilt.txt"; then
   echo "ALL MATCH"
