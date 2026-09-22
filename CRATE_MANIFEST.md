@@ -15,6 +15,7 @@ crates/
 ├─ user_data/             murabito_user_data
 ├─ settings/              murabito_settings
 ├─ i18n/                  murabito_i18n
+├─ app_state/             murabito_app_state
 └─ action/                the actions layer: a group directory, not a crate
    ├─ actions/            murabito_actions
    ├─ progress/           murabito_progress
@@ -29,6 +30,13 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 
 - **`murabito`** — the one binary. A plugin list, the `.persist::<T>("key")` line per
   settings resource, and nothing else.
+
+## The app's state
+
+- **`murabito_app_state`** — `AppState`: `Playing` or `Paused`, whether the world runs.
+  Not which screen is up: that is the UI's own state, so a new screen never touches this
+  crate. Pausing is one call on `Time<Virtual>`, which freezes the whole `FixedUpdate`
+  simulation while `Time<Real>` keeps running underneath.
 
 ## The world and how it is seen
 

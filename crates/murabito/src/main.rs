@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use murabito_actions::ActionsPlugin;
+use murabito_app_state::AppStatePlugin;
 use murabito_camera::{CameraPlugin, CameraSettings};
 use murabito_i18n::{I18nPlugin, Language};
 use murabito_movement::MovementPlugin;
@@ -19,6 +20,7 @@ fn main() {
             // persisted below is looked up in it.
             SettingsPlugin,
             I18nPlugin,
+            AppStatePlugin,
             ScenePlugin,
             CameraPlugin,
             MovementPlugin,

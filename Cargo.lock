@@ -3482,6 +3482,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "murabito_actions",
+ "murabito_app_state",
  "murabito_camera",
  "murabito_i18n",
  "murabito_movement",
@@ -3499,6 +3500,13 @@ dependencies = [
  "murabito_hexcoords",
  "murabito_movement",
  "murabito_progress",
+]
+
+[[package]]
+name = "murabito_app_state"
+version = "0.1.0"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]
