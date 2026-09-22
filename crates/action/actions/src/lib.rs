@@ -18,10 +18,19 @@ pub struct ActionsPlugin;
 
 impl Plugin for ActionsPlugin {
     fn build(&self, app: &mut App) {
-        // Before the mechanisms, so an intent issued this tick starts this tick.
-        app.add_systems(FixedUpdate, issue.before(MechanismSet));
+        // Asking comes before issuing, so an action pushed this tick is looked at this
+        // tick; issuing before the mechanisms, so an intent issued this tick starts this
+        // tick. Without the first, when a push and the issue land on the same tick
+        // which runs first is the scheduler's whim, and a walk is a tick late or not.
+        app.add_systems(FixedUpdate, issue.after(AskingSet).before(MechanismSet));
     }
 }
+
+/// Where whatever pushes onto an `ActionQueue` runs: a scene's placeholder walk, later
+/// the AI. In `FixedUpdate`, before the head of the queue is issued, so what is asked
+/// on a tick is taken up on that tick.
+#[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct AskingSet;
 
 /// One thing a body can be asked to do. A variant per kind; the mechanism that does it
 /// is below this crate, and the queue never changes when one is added.

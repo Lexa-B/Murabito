@@ -21,6 +21,7 @@ crates/
 │  ├─ navigation/         murabito_navigation
 │  ├─ menu/               murabito_menu
 │  └─ settings_page/      murabito_settings_page
+├─ kinds/                 murabito_kinds
 └─ action/                the actions layer: a group directory, not a crate
    ├─ actions/            murabito_actions
    ├─ progress/           murabito_progress
@@ -62,9 +63,11 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 ## The world and how it is seen
 
 - **`murabito_scene`** — the placeholder world: a ground one cho square, a sun, the sky
-  colour and ambient light, and a fox walking a twelve-sided loop with a progress bar
-  drawn in front of it. Content that belongs to world objects and a UI module once those
-  exist.
+  colour and ambient light, a `Fox` from `murabito_kinds` at the origin walking a
+  twelve-sided loop, and a `Hare` six shaku east walking a triangle with a rest at each
+  corner, with a progress bar drawn in front of whatever is busy (the bar belongs to a UI
+  module once one exists). Where a thing stands and which way it starts off facing is the
+  scene's business; what it is, is the kind's.
 - **`murabito_camera`** — the overhead camera as a rig (focus, direction, zoom) from
   which one system derives the transform; eased pan and zoom, pan speed following zoom.
   Owns `CameraSettings`: the speed multiplier and the four pan binds.
@@ -72,11 +75,22 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   `VoxelspacePos`, and the twelve compass `Direction`s with their neighbour and rotation
   maths. Where a cell is, not what is in it. Design: `Docs/hex_units_readme.md`.
 
+## What things are
+
+- **`murabito_kinds`** — the tree of kinds: what a thing *is*. Every tier and every kind
+  is a unit component whose `#[require]` is its parent and its members, so spawning a
+  kind inserts the whole chain and the node itself says what it has. A species' numbers
+  sit in its own `require` and win over its tiers'. One file per node, in folders that
+  mirror the tree. A kind that is drawn names its file with `Model`, and `KindsPlugin`'s
+  one observer loads it as the thing is spawned. Depends on the mechanism crates whose
+  components the tiers require; only what spawns things depends on it.
+
 ## Doing things
 
 - **`murabito_actions`** — the `ActionQueue`: what a body has been asked to do, in
   order, with nothing in it saying who asked. The one system that takes the head of the
-  queue and issues a mechanism's intent for it. Design: `Docs/actions_readme.md`.
+  queue and issues a mechanism's intent for it, after `AskingSet`, where whatever pushes
+  runs. Design: `Docs/actions_readme.md`.
 - **`murabito_progress`** — the one accumulation bar per entity that every sustained
   action fills, in the mechanism's own units (shaku, degrees), and the `MechanismSet`
   the mechanisms tick in. Knows no mechanism.

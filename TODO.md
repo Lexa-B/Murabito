@@ -5,10 +5,17 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 
 ## Modules still to come back
 
-- **World objects and the ontology (諸法).** What a thing *is*: the 諸法 tree, with the
-  ontology split from the facets, as a crate of its own. The first consumer decides its API;
-  spawning the fox and the flora then moves out of `murabito_scene`. Deferred 2026-09-22 until
-  something needs to ask "what is this".
+- **The rest of the kinds.** `murabito_kinds` has the tiers, the seventeen animals and the
+  twelve plants; the spiritual leaves (tsukumogami, yoko, bakedanuki, ningyo, kaika, hitodama),
+  the humans, and the objects arrive as models and needs do. Facets (what a thing is *like*:
+  age, trophic role, height, what it does to each sense) are the archive's second axis and are
+  not designed yet; they'd be members on tiers, or their own components, when senses come back.
+- **A rest as an action.** The hare's pause between sides is the scene's own timer. If waiting
+  is something a body can be asked to do, it is an `Action::Wait` and a mechanism crate, per
+  `Docs/actions_readme.md`.
+- **Picking a plant's version, colour and season.** A plant kind names its first version in
+  summer; a spawner gives its own `Model` to say otherwise. Nothing yet picks at random, or
+  reads a calendar.
 - **Obstruction and stepping up.** The design-only parts of `Docs/movement_readme.md`: a corner
   move only when both flanking faces are open, step-up by size, cost of climbing, and the A\*
   heuristic. Needs something in the world to be an obstacle, so it follows world objects.
@@ -32,13 +39,15 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 
 - `Action::Face` is in the enum and tested, but nothing uses it since the spin placeholder
   went. The first thing that wants to look somewhere without moving takes it up.
+- `Sentient` carries `Facing`, `Locomotion` (a placeholder pace) and `ActionQueue`; the
+  animals' paces are guesses at a walk, marked as such in each file, until someone who
+  knows says otherwise. The fox's are the ones settled by eye in the first attempt.
 - `Progress` could record the intent's type name alongside its `TypeId`, exposed as
   `doing() -> Option<&'static str>`, when a UI wants to label the bar.
 - `CameraRig` has pairs of fields that must agree at rest (`zoom` with `zoom_target`,
   `velocity` with zero); a `CameraRig::at_rest(focus, zoom)` constructor would make an
   inconsistent rig unbuildable, once more code constructs rigs.
 - Pan speed is constant per zoom; nothing stops the camera panning off the edge of the ground.
-- The fox's `FOX_LOCOMOTION` (4 shaku/s, 180°/s) is a placeholder until species decide it.
 - Space with an overlay up resumes the world and closes the overlay, which also closes the
   settings page mid-drag on a slider. Accepted for now; the keyboard gate above is the fix.
 - The Japanese for "Pan speed" is `視点移動速度`, the common phrasing on Japanese settings screens,
