@@ -319,7 +319,7 @@ fn generation_bumps_exactly_once_per_set_config() {
     app.world_mut()
         .resource_mut::<HexWorld>()
         .set_config(WorldConfig {
-            layer_thickness_sun: 10.0,
+            seed: WorldConfig::default().seed + 1,
             ..WorldConfig::default()
         });
     assert_eq!(app.world().resource::<HexWorld>().generation(), 1);

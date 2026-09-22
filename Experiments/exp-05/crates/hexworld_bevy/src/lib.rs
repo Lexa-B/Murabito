@@ -2,7 +2,6 @@
 //! into requests, runs generation and meshing on background tasks, and keeps one entity
 //! per chunk on screen.
 
-pub mod axes;
 pub mod entities;
 pub mod loader;
 pub mod material;

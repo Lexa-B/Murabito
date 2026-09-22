@@ -15,9 +15,8 @@ use std::sync::OnceLock;
 use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
-use hexworld::{mesh::MeshData, plane::cell_centre_m, ChunkKey, Hex, Level, WorldConfig};
+use hexworld::{mesh::MeshData, plane::cell_centre, ChunkKey, Hex, Level, WorldConfig};
 
-use crate::axes::{mesh_position, to_bevy};
 use crate::material::GroundMaterial;
 
 #[derive(Component, Clone, Copy, Debug)]
@@ -110,26 +109,14 @@ pub fn setup_material(mut commands: Commands, mut materials: ResMut<Assets<Groun
     commands.insert_resource(crate::GroundMaterialHandle(handle));
 }
 
-/// Build a Bevy mesh from the core's data, mapping the axes once.
+/// Build a Bevy mesh from the core's data, which is already in Bevy's axes.
 pub fn to_bevy_mesh(data: &MeshData) -> Mesh {
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD,
     );
-    mesh.insert_attribute(
-        Mesh::ATTRIBUTE_POSITION,
-        data.positions
-            .iter()
-            .map(|p| mesh_position(*p))
-            .collect::<Vec<[f32; 3]>>(),
-    );
-    mesh.insert_attribute(
-        Mesh::ATTRIBUTE_NORMAL,
-        data.normals
-            .iter()
-            .map(|n| mesh_position(*n))
-            .collect::<Vec<[f32; 3]>>(),
-    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, data.positions.clone());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, data.normals.clone());
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, data.colours.clone());
     // Line data rides in the UVs, so no custom vertex shader is needed:
     // UV0 = (edge_w, border_level), UV1 = (cell_level, 0).
@@ -156,8 +143,7 @@ pub fn chunk_origin(key: ChunkKey) -> Vec3 {
     if key.level == Level::World {
         Vec3::ZERO
     } else {
-        let (east, north) = cell_centre_m(key.cell, key.level);
-        to_bevy(east, north, 0.0)
+        cell_centre(key.cell, key.level)
     }
 }
 

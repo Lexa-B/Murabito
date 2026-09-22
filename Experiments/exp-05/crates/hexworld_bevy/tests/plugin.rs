@@ -1,38 +1,4 @@
 use bevy::prelude::*;
-use hexworld_bevy::axes::{from_bevy, mesh_position, to_bevy};
-
-#[test]
-fn north_maps_to_negative_z() {
-    // Bevy is right-handed with +Y up, so north must be -Z or the world comes out mirrored.
-    let v = to_bevy(3.0, 5.0, 7.0);
-    assert_eq!(v, Vec3::new(3.0, 7.0, -5.0));
-}
-
-#[test]
-fn the_mapping_round_trips() {
-    let (e, n, h) = (12.5, -4.25, 100.0);
-    let (e2, n2, h2) = from_bevy(to_bevy(e, n, h));
-    assert!((e - e2).abs() < 1e-9 && (n - n2).abs() < 1e-9 && (h - h2).abs() < 1e-9);
-}
-
-#[test]
-fn the_mapping_keeps_its_handedness() {
-    // east cross north must point up, in both frames: otherwise triangles wind backwards
-    // and every hexagon is a mirror image of the core's.
-    let east = to_bevy(1.0, 0.0, 0.0);
-    let north = to_bevy(0.0, 1.0, 0.0);
-    let up = to_bevy(0.0, 0.0, 1.0);
-    assert!(
-        east.cross(north).dot(up) > 0.0,
-        "the axis mapping mirrors the world"
-    );
-}
-
-#[test]
-fn mesh_positions_use_the_same_mapping() {
-    assert_eq!(mesh_position([3.0, 5.0, 7.0]), [3.0, 7.0, -5.0]);
-}
-
 use hexworld::{ChunkKey, Hex, Level, Rings, StoreSettings, WorldConfig};
 use hexworld_bevy::{HexWorld, Loader};
 
@@ -112,9 +78,8 @@ fn a_second_loader_adds_its_windows_with_no_other_changes() {
         "the second loader's focus must be inside the default (single-ri) world, or its \
          window is hollow and this test proves nothing"
     );
-    let far = hexworld::plane::cell_centre_m(far_cell, Level::Shaku);
     app.world_mut().spawn((
-        Transform::from_translation(hexworld_bevy::axes::to_bevy(far.0, far.1, 0.0)),
+        Transform::from_translation(hexworld::cell_centre(far_cell, Level::Shaku)),
         Loader {
             rings: Rings::default(),
         },

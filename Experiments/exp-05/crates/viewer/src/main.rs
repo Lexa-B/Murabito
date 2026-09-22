@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use bevy::asset::AssetPlugin;
 use bevy::diagnostic::{FrameCount, FrameTimeDiagnosticsPlugin};
+use bevy::light::CascadeShadowConfigBuilder;
 use bevy::prelude::*;
 use bevy::window::{WindowPlugin, WindowResolution};
 use hexworld::WorldConfig;
@@ -141,7 +142,7 @@ fn auto_pan_system(time: Res<Time>, world: Res<HexWorld>, mut rigs: Query<&mut C
     let dt = time.delta_secs().min(0.1);
     for mut rig in &mut rigs {
         let speed = camera::pan_speed_for_zoom(rig.zoom);
-        rig.pan((speed * dt) as f64, 0.0, &cfg);
+        rig.pan(Vec3::X * speed * dt, &cfg);
     }
 }
 
@@ -191,15 +192,21 @@ fn report_frame_times(samples: &[Duration]) {
     );
 }
 
+// Bevy's defaults assume metres. The world is in shaku (1 m = 3.3 shaku), so each is 3.3
+// times Bevy 0.19's default, keeping what is visible and shadowed at a given real distance
+// as it was. `PerspectiveProjection::default()` has near 0.1 and far 1000.0; `far` only
+// culls, since the depth projection has an infinite far plane.
+const NEAR: f32 = 3.3 * 0.1;
+const FAR: f32 = 3.3 * 1000.0;
+
 fn setup(mut commands: Commands, headless: Res<Headless>) {
-    let (focus_east, focus_north) = headless.start.unwrap_or((0.0, 0.0));
+    let (x, z) = headless.start.unwrap_or((0.0, 0.0));
     let zoom = headless
         .zoom
-        .unwrap_or(120.0)
+        .unwrap_or(396.0) // 120 m
         .clamp(camera::MIN_ZOOM, camera::MAX_ZOOM);
     let rig = CameraRig {
-        focus_east,
-        focus_north,
+        focus: Vec3::new(x, 0.0, z),
         zoom,
         last_height: 0.0,
     };
@@ -217,6 +224,9 @@ fn setup(mut commands: Commands, headless: Res<Headless>) {
                 Camera3d::default(),
                 Projection::Perspective(PerspectiveProjection {
                     fov: 45.0_f32.to_radians(),
+                    near: NEAR,
+                    far: FAR,
+                    near_clip_plane: Vec4::new(0.0, 0.0, -1.0, -NEAR),
                     ..default()
                 }),
                 AmbientLight {
@@ -232,6 +242,13 @@ fn setup(mut commands: Commands, headless: Res<Headless>) {
             shadow_maps_enabled: true,
             ..default()
         },
+        CascadeShadowConfigBuilder {
+            minimum_distance: 3.3 * 0.1,
+            first_cascade_far_bound: 3.3 * 10.0,
+            maximum_distance: 3.3 * 150.0,
+            ..default()
+        }
+        .build(),
         Transform::from_xyz(300.0, 600.0, 200.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 }

@@ -26,17 +26,17 @@ pub struct Headless {
     pub screenshot_every: u32,
     /// `--seed N`: overrides `WorldConfig`'s default seed.
     pub seed: Option<u64>,
-    /// `--start-east M --start-north M`: the focus's starting position, in metres. Only
-    /// takes effect when both coordinates parse; one without the other is `None` (no
-    /// partial start).
-    pub start: Option<(f64, f64)>,
+    /// `--start-x X --start-z Z`: the focus's starting position on the ground, in shaku
+    /// (east is +X, north is −Z), as `(x, z)`. Only takes effect when both coordinates
+    /// parse; one without the other is `None` (no partial start).
+    pub start: Option<(f32, f32)>,
     /// `--rings-shaku N`: overrides the focus loader's shaku ring count.
     pub rings_shaku: Option<i32>,
     /// `--auto-pan`: sweep the focus east at a steady pace instead of waiting for input,
     /// so a `--frames N` run still exercises sustained panning.
     pub auto_pan: bool,
     /// `--zoom N`: overrides the camera rig's starting distance from the focus, in
-    /// metres. `None` keeps the interactive default. Not part of the brief's listed
+    /// shaku. `None` keeps the interactive default. Not part of the brief's listed
     /// flags — added because the spec's close-up "shaku borders" screenshot is
     /// otherwise unreachable headlessly (no keyboard input drives the wheel-zoom).
     pub zoom: Option<f32>,
@@ -59,8 +59,8 @@ impl Headless {
 
     fn from_args_iter(args: impl Iterator<Item = String>) -> Self {
         let args: Vec<String> = args.collect();
-        let start_east = flag(&args, "--start-east").and_then(|v| v.parse::<f64>().ok());
-        let start_north = flag(&args, "--start-north").and_then(|v| v.parse::<f64>().ok());
+        let start_x = flag(&args, "--start-x").and_then(|v| v.parse::<f32>().ok());
+        let start_z = flag(&args, "--start-z").and_then(|v| v.parse::<f32>().ok());
         Headless {
             frames: flag(&args, "--frames").and_then(|v| v.parse().ok()),
             screenshot_dir: flag(&args, "--screenshot-dir").map(PathBuf::from),
@@ -69,7 +69,7 @@ impl Headless {
                 .filter(|v| *v > 0)
                 .unwrap_or(30),
             seed: flag(&args, "--seed").and_then(|v| v.parse().ok()),
-            start: start_east.zip(start_north),
+            start: start_x.zip(start_z),
             rings_shaku: flag(&args, "--rings-shaku").and_then(|v| v.parse().ok()),
             auto_pan: args.iter().any(|a| a == "--auto-pan"),
             zoom: flag(&args, "--zoom").and_then(|v| v.parse::<f32>().ok()),
@@ -156,10 +156,10 @@ mod tests {
             "60",
             "--seed",
             "7",
-            "--start-east",
-            "12.5",
-            "--start-north",
-            "-3.0",
+            "--start-x",
+            "41.25",
+            "--start-z",
+            "9.9",
             "--rings-shaku",
             "6",
             "--auto-pan",
@@ -173,7 +173,7 @@ mod tests {
         assert_eq!(h.screenshot_dir, Some(PathBuf::from("out")));
         assert_eq!(h.screenshot_every, 60);
         assert_eq!(h.seed, Some(7));
-        assert_eq!(h.start, Some((12.5, -3.0)));
+        assert_eq!(h.start, Some((41.25, 9.9)));
         assert_eq!(h.rings_shaku, Some(6));
         assert!(h.auto_pan);
         assert_eq!(h.zoom, Some(15.5));
@@ -222,8 +222,8 @@ mod tests {
 
     #[test]
     fn start_needs_both_coordinates() {
-        assert_eq!(parse(&["--start-east", "5.0"]).start, None);
-        assert_eq!(parse(&["--start-north", "5.0"]).start, None);
+        assert_eq!(parse(&["--start-x", "16.5"]).start, None);
+        assert_eq!(parse(&["--start-z", "16.5"]).start, None);
     }
 
     #[test]

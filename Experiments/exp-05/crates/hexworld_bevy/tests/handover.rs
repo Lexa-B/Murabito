@@ -236,7 +236,7 @@ fn the_parents_mesh_drops_the_vertex_the_same_frame_the_childs_entity_appears() 
         },
     ));
     let cho_key = ChunkKey::new(Level::Cho, Hex::ZERO);
-    let origin = hexworld::plane::cell_centre_m(cho_key.cell, Level::Cho);
+    let origin = hexworld::plane::cell_centre(cho_key.cell, Level::Cho);
 
     let mut prev_children: HashSet<Hex> = HashSet::new();
     let mut prev_positions: Option<Vec<[f32; 3]>> = None;
@@ -266,16 +266,11 @@ fn the_parents_mesh_drops_the_vertex_the_same_frame_the_childs_entity_appears() 
 
         for new_cell in current_children.difference(&prev_children) {
             checked_at_least_one = true;
-            let (ce, cn) = hexworld::plane::cell_centre_m(*new_cell, Level::Ken);
-            let target = hexworld_bevy::axes::mesh_position([
-                (ce - origin.0) as f32,
-                (cn - origin.1) as f32,
-                0.0,
-            ]);
+            let target = hexworld::plane::cell_centre(*new_cell, Level::Ken) - origin;
             let has_vertex_at_target = |positions: &[[f32; 3]]| {
                 positions
                     .iter()
-                    .any(|v| (v[0] - target[0]).abs() < 1e-3 && (v[2] - target[2]).abs() < 1e-3)
+                    .any(|v| (v[0] - target.x).abs() < 1e-3 && (v[2] - target.z).abs() < 1e-3)
             };
 
             if let Some(prev) = &prev_positions {
@@ -353,19 +348,13 @@ fn the_guest_sides_mesh_drops_the_shared_vertex_the_frame_both_neighbours_are_sh
     let owner_cell = hexworld::owner::parent_of(cell, Level::Shaku);
     let (owner_key, guest_key) = if owner_cell == a.cell { (a, b) } else { (b, a) };
 
-    // Each chunk's mesh is relative to its own centre (`chunk_origin`/`cell_centre_m`), so
-    // the shared cell's local target position differs between the two meshes — converted
-    // through the same public `axes::mesh_position` helper the production code uses, not
-    // reimplemented.
+    // Each chunk's mesh is relative to its own centre (`chunk_origin`/`cell_centre`), so
+    // the shared cell's local target position differs between the two meshes. The core's
+    // positions are already in Bevy's axes, so the offset is used as it is.
     let local_target = |key: ChunkKey| -> [f32; 2] {
-        let origin = hexworld::plane::cell_centre_m(key.cell, Level::Ken);
-        let (ce, cn) = hexworld::plane::cell_centre_m(cell, Level::Shaku);
-        let p = hexworld_bevy::axes::mesh_position([
-            (ce - origin.0) as f32,
-            (cn - origin.1) as f32,
-            0.0,
-        ]);
-        [p[0], p[2]]
+        let p = hexworld::plane::cell_centre(cell, Level::Shaku)
+            - hexworld::plane::cell_centre(key.cell, Level::Ken);
+        [p.x, p.z]
     };
     let owner_target = local_target(owner_key);
     let guest_target = local_target(guest_key);
@@ -911,11 +900,7 @@ fn assert_chunk_mesh_matches(
         .cloned()
         .unwrap_or_else(|| hexworld::chunk::generate(&cfg, key));
     let want = hexworld::mesh::mesh_chunk(&cfg, &chunk, &omissions);
-    let want_positions: Vec<[f32; 3]> = want
-        .positions
-        .iter()
-        .map(|p| hexworld_bevy::axes::mesh_position(*p))
-        .collect();
+    let want_positions: Vec<[f32; 3]> = want.positions;
 
     let entity = shown
         .entity(key)

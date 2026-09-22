@@ -3,7 +3,6 @@
 use bevy::prelude::*;
 use hexworld::{plane::round_at, Level, Rings};
 
-use crate::axes::from_bevy;
 use crate::entities::Shown;
 use crate::tasks::{spawn_jobs, Handovers};
 use crate::HexWorld;
@@ -24,12 +23,9 @@ pub fn drive_store(
 ) {
     let core_loaders: Vec<hexworld::Loader> = loaders
         .iter()
-        .map(|(transform, loader)| {
-            let (east, north, _) = from_bevy(transform.translation());
-            hexworld::Loader {
-                focus: round_at(east, north, Level::Shaku),
-                rings: loader.rings,
-            }
+        .map(|(transform, loader)| hexworld::Loader {
+            focus: round_at(transform.translation(), Level::Shaku),
+            rings: loader.rings,
         })
         .collect();
 
