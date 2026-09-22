@@ -166,7 +166,7 @@ Foliage:
 | `clump(...)` | an old-style separate blob (only the cloud-pruned maple uses it) |
 | `blade(...)`, `blade_cluster(...)` | flat, pointed leaves, ridged down the middle, fanning in drooping clusters (the bamboo's); `rounded=True` makes a broad oval leaf with two points down each edge instead (the aucuba's) |
 | `trifoliate(...)` | a leaf of three broad oval leaflets lying nearly flat (the kudzu's; clover and beans too) |
-| `frond(...)` | a fern frond arching up from its base and over, its edges scalloped to suggest leaflets: how steeply it sets off (`rise`), how far its tip arches past level (`fall`), where the bend gathers (`bend`), how deep its teeth are (`notch`) |
+| `frond(...)` | a fern frond arching up from its base and over, its edges scalloped to suggest leaflets: how steeply it sets off (`rise`), how far its tip arches past level (`fall`), where the bend gathers (`bend`), how deep its teeth are (`notch`); with `leaflets=False, profile="grass", notch=1` and few `segments`, a light blade of grass, widest at the base |
 
 Colouring: skins pick a colour per face at random from `leaves`, or from `shades` if the
 face points down. Repeat a colour in a list to make it more likely.
@@ -230,6 +230,7 @@ Start from whichever existing plant is closest:
 | a low shrub | `azalea.py` | one `canopy` mound on the ground, with its triangle size scaled down |
 | a leafy shrub on visible stems | `aoki.py` | green stems forking twice, pairs of oval leaves along each shoot and a rosette at its tip |
 | a fern, or any rosette of arching leaves | `shida.py` | `frond`s spiralling up from a crown |
+| a grass tuft, or anything of narrow arching blades from one point | `kusa.py` | grass-profile `frond`s of four segments, light enough to scatter |
 | something lying over the ground (vines, mats, moss) | `kuzu.py`, `sasa.py` | a low body (`flora.blanket`) with leaves on it (and runners off it, for the kudzu), rigged with drape points (`rig.drape_skin`) |
 
 Then:
@@ -349,6 +350,7 @@ And by eye:
 | aoki (アオキ) | `00` | a | summer | the aucuba; a compact bush of green stems and big glossy oval leaves |
 | kuzu (葛) | `00` | a | summer | a kudzu patch smothering the undergrowth, with runners; **rigged with drape points** to settle onto terrain |
 | sasa (笹) | `00` | a | summer | a small patch of dwarf bamboo, knee high, bristling with leaf blades; **rigged with drape points** |
+| kusa (草) | `00` | a | summer | a wild grass tuft of 36 arching blades, about 1.2 shaku tall |
 
 ## Lessons from what didn't work
 

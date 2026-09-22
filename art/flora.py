@@ -465,7 +465,8 @@ def trifoliate(b, origin, heading, size, leaves, shades, rng, tilt=0.15):
               droop=0.08, rounded=True)
 
 
-def frond(b, base, heading, length, width, rise, fall, leaves, shades, rng, segments=10, bend=2.0, notch=0.7):
+def frond(b, base, heading, length, width, rise, fall, leaves, shades, rng, segments=10, bend=2.0, notch=0.7,
+          leaflets=True, profile="leaf"):
     """A fern frond: a long leaf arching up from base and over, its edges
     zig-zagging to suggest rows of leaflets.
 
@@ -478,7 +479,10 @@ def frond(b, base, heading, length, width, rise, fall, leaves, shades, rng, segm
     shape, ridged along its midrib like blade, so it shows from above and below:
     upper faces pick from leaves, lower from shades. notch is how far out the
     notches between leaflets sit, as a fraction of the width there: nearer 1,
-    shallower teeth.
+    shallower teeth. Without leaflets the edges run straight, for a blade of
+    grass, and at notch=1 the blade has its full width. profile "grass" makes
+    it widest at the base, tapering steadily to the tip, instead of a leaf's
+    stalk and belly.
     """
     along_each = length / segments
     point = Vector(base)
@@ -491,6 +495,8 @@ def frond(b, base, heading, length, width, rise, fall, leaves, shades, rng, segm
     side = Vector((-math.sin(heading), math.cos(heading), 0))
 
     def half_width(t):
+        if profile == "grass":  # widest at the base, tapering to the tip
+            return width / 2 * (1 - t) ** 0.8
         # a stalk for the first tenth, widest at 0.4, closing to the tip
         return 0 if t < 0.1 else width / 2 * math.sin(math.pi * min(1, (t - 0.1) / 0.9) ** 0.8)
 
@@ -514,7 +520,7 @@ def frond(b, base, heading, length, width, rise, fall, leaves, shades, rng, segm
         n_above, n_left, n_below, n_right = nxt
         centre = stations[i][0].lerp(stations[i + 1][0], 0.5)
         w = half_width((i + 0.5) / segments)
-        if last or w < 0.02:
+        if last or w < 0.02 or not leaflets:
             # no leaflet here: close the segment straight across
             for f in ((above, left, n_left, n_above), (above, n_above, n_right, right)):
                 b.face([v for k, v in enumerate(f) if v not in f[:k]], rng.choice(leaves))

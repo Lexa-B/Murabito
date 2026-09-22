@@ -265,6 +265,13 @@ PALETTE = [
     ("sasa_green_yellow", "#76913F"),
     ("sasa_shade", "#35572A"),
     ("sasa_shade_deep", "#2C4A24"),
+    # grass
+    ("grass_green", "#6E9A45"),
+    ("grass_green_light", "#84AD52"),
+    ("grass_green_deep", "#5A8638"),
+    ("grass_green_yellow", "#9AAA55"),
+    ("grass_shade", "#48703A"),
+    ("grass_shade_deep", "#3D6232"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
