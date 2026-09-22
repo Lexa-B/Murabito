@@ -7,6 +7,9 @@
 //! World space is Bevy's: `f32` shaku, Y up. A voxel is one shaku flat to flat and half a
 //! shaku (5 sun) tall, and its world position is the centre of its bottom face.
 //!
+//! Compass: **east is +X, north is −Z, up is +Y.** Directions across the plane are named
+//! by compass point, never up or down, which are for gravity.
+//!
 //! Two types share the same axes. [`VoxelCoord`] is integer: the address of one voxel.
 //! [`VoxelspacePos`] is `f32`: any point, in voxel units, such as where a moving entity is
 //! between two cells. World space and `VoxelspacePos` convert exactly, both ways, through
@@ -205,6 +208,110 @@ impl VoxelCoord {
     /// than a `From`; see [`VoxelspacePos::round`] for what the rounding does.
     pub fn from_world(world: Vec3) -> Self {
         VoxelspacePos::from(world).round()
+    }
+
+    /// The voxel one step away in a direction, on the same layer.
+    ///
+    /// Plain addition: a world two billion shaku across would overflow it, and no world
+    /// here is within a thousandth of that.
+    pub fn neighbour(self, direction: Direction) -> Self {
+        let (dq, dr) = direction.axial_offset();
+        Self {
+            q: self.q + dq,
+            r: self.r + dr,
+            layer: self.layer,
+        }
+    }
+
+    /// All twelve neighbours on this layer, in [`Direction::ALL`]'s order.
+    pub fn neighbours(self) -> [Self; 12] {
+        Direction::ALL.map(|direction| self.neighbour(direction))
+    }
+}
+
+/// One of the twelve directions across the hex plane, every 30°, anticlockwise from
+/// east. Even indices are edge neighbours, one shaku away across a face; odd indices are
+/// corner neighbours, √3 shaku away through a corner. A corner direction is the sum of
+/// the two edge directions flanking it.
+///
+/// Direction `k` is `Quat::from_rotation_y(k · 30°)` applied to +X, so the index matches
+/// Bevy's rotation sense and a heading needs no conversion. Bevy's forward, −Z, is north.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum Direction {
+    E = 0,
+    ENE = 1,
+    NE = 2,
+    N = 3,
+    NW = 4,
+    WNW = 5,
+    W = 6,
+    WSW = 7,
+    SW = 8,
+    S = 9,
+    SE = 10,
+    ESE = 11,
+}
+
+impl Direction {
+    /// Every direction, in index order: anticlockwise from east.
+    pub const ALL: [Self; 12] = [
+        Self::E,
+        Self::ENE,
+        Self::NE,
+        Self::N,
+        Self::NW,
+        Self::WNW,
+        Self::W,
+        Self::WSW,
+        Self::SW,
+        Self::S,
+        Self::SE,
+        Self::ESE,
+    ];
+
+    /// 0 to 11, anticlockwise from east: the number of 30° turns from +X.
+    pub fn index(self) -> u8 {
+        self as u8
+    }
+
+    /// Whether the neighbour this way shares a face: one shaku away, and one step.
+    pub fn is_edge(self) -> bool {
+        self.index().is_multiple_of(2)
+    }
+
+    /// Whether the neighbour this way touches at a corner: √3 shaku away, between the
+    /// two edge neighbours that flank it.
+    pub fn is_corner(self) -> bool {
+        !self.is_edge()
+    }
+
+    /// For a corner direction, the two edge directions on either side of it, which are
+    /// the faces a move this way passes between. `None` for an edge direction.
+    pub fn flanks(self) -> Option<(Self, Self)> {
+        if self.is_edge() {
+            return None;
+        }
+        let k = usize::from(self.index());
+        Some((Self::ALL[(k + 11) % 12], Self::ALL[(k + 1) % 12]))
+    }
+
+    /// The axial step this direction is, `(dq, dr)`.
+    fn axial_offset(self) -> (i32, i32) {
+        match self {
+            Self::E => (1, 0),
+            Self::ENE => (2, -1),
+            Self::NE => (1, -1),
+            Self::N => (1, -2),
+            Self::NW => (0, -1),
+            Self::WNW => (-1, -1),
+            Self::W => (-1, 0),
+            Self::WSW => (-2, 1),
+            Self::SW => (-1, 1),
+            Self::S => (-1, 2),
+            Self::SE => (0, 1),
+            Self::ESE => (1, 1),
+        }
     }
 }
 
@@ -487,5 +594,102 @@ mod tests {
         let world: Vec3 = pos(1.0, 0.0, 0.0).into();
 
         assert_eq!(world, Vec3::new(1.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn the_twelve_directions_run_anticlockwise_from_east_every_thirty_degrees() {
+        use bevy::math::Quat;
+
+        for direction in Direction::ALL {
+            let turns = f32::from(direction.index());
+            let expected = Quat::from_rotation_y(turns.to_radians() * 30.0) * Vec3::X;
+            let step = voxel(0, 0, 0).neighbour(direction).to_world();
+
+            assert!(
+                step.normalize().abs_diff_eq(expected, 1e-5),
+                "{direction:?} steps {step}, expected along {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn edge_neighbours_are_one_shaku_away_and_corner_neighbours_root_three() {
+        for direction in Direction::ALL {
+            let distance = voxel(0, 0, 0).neighbour(direction).to_world().length();
+            let expected = if direction.is_edge() { 1.0 } else { SQRT_3 };
+
+            assert!(
+                (distance - expected).abs() < 1e-5,
+                "{direction:?} is {distance} away"
+            );
+        }
+    }
+
+    #[test]
+    fn north_is_minus_z_and_east_is_plus_x() {
+        let north = voxel(0, 0, 0).neighbour(Direction::N).to_world();
+        let east = voxel(0, 0, 0).neighbour(Direction::E).to_world();
+
+        assert!(north.z < 0.0 && north.x == 0.0, "north is {north}");
+        assert_eq!(east, Vec3::X);
+    }
+
+    #[test]
+    fn edges_are_the_even_directions_and_corners_the_odd() {
+        for direction in Direction::ALL {
+            assert_eq!(direction.is_edge(), direction.index() % 2 == 0);
+            assert_ne!(direction.is_edge(), direction.is_corner());
+        }
+    }
+
+    #[test]
+    fn a_corner_direction_is_the_sum_of_the_edges_that_flank_it() {
+        for direction in Direction::ALL.into_iter().filter(|d| d.is_corner()) {
+            let (before, after) = direction.flanks().expect("a corner has flanks");
+            let via_flanks = voxel(0, 0, 0).neighbour(before).neighbour(after);
+
+            assert_eq!(
+                voxel(0, 0, 0).neighbour(direction),
+                via_flanks,
+                "{direction:?}"
+            );
+            assert!(before.is_edge() && after.is_edge());
+        }
+    }
+
+    #[test]
+    fn an_edge_direction_has_no_flanks() {
+        assert_eq!(Direction::E.flanks(), None);
+    }
+
+    #[test]
+    fn north_is_flanked_by_north_east_and_north_west() {
+        assert_eq!(Direction::N.flanks(), Some((Direction::NE, Direction::NW)));
+    }
+
+    #[test]
+    fn stepping_out_and_back_returns_home() {
+        let home = voxel(5, -3, 2);
+        for direction in Direction::ALL {
+            let opposite = Direction::ALL[(usize::from(direction.index()) + 6) % 12];
+
+            assert_eq!(home.neighbour(direction).neighbour(opposite), home);
+        }
+    }
+
+    #[test]
+    fn neighbours_stay_on_the_plane_and_on_the_layer() {
+        for neighbour in voxel(7, 4, -1).neighbours() {
+            assert_eq!(neighbour.q() + neighbour.r() + neighbour.s(), 0);
+            assert_eq!(neighbour.layer(), -1);
+        }
+    }
+
+    #[test]
+    fn the_twelve_neighbours_are_all_different() {
+        let neighbours = voxel(0, 0, 0).neighbours();
+        let distinct: std::collections::HashSet<_> = neighbours.into_iter().collect();
+
+        assert_eq!(distinct.len(), 12);
     }
 }

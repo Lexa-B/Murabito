@@ -4,6 +4,10 @@ A brief on how entities move across the hex voxel grid, as agreed in design.
 Nothing here is implemented yet. The coordinates, directions and neighbours it builds on are in
 `hex_units.md`.
 
+**Compass invariant: east is +X, north is −Z, up is +Y.** Directions across the plane are compass
+points; up and down are for gravity, so stepping up is a change of layer, never a heading. The same
+statement is in `hex_units.md` and `AGENTS.md`.
+
 ## 12-direction movement
 
 Entities move in 12 directions: the 6 edge moves plus the 6 corner moves (see the direction

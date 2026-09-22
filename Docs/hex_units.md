@@ -57,6 +57,11 @@ rather than `y` or `z` so the integer layer index is never confused with the flo
 
 ## Orientation
 
+**Compass invariant: east is +X, north is −Z, up is +Y.** Directions across the plane are named
+by compass point. "Up" and "down" are for gravity, never for map reading, so a direction on the
+plane is never called either. With the overhead camera as it stands, north is up the screen. The
+same statement is in `movement.md` and `AGENTS.md`.
+
 - Pointy-top: rows run along X, corners point along ±Z.
 - `+q` points toward +X.
 - `+r` points toward +Z. For a camera looking straight down with +X to the right (Bevy is
@@ -131,37 +136,39 @@ Together they give 12 directions, evenly spaced every 30°, alternating edge and
 **Indexing follows Bevy's rotation convention.** Direction `k` points along
 `Quat::from_rotation_y(k · 30°)` applied to +X. A positive rotation about Y turns +X toward −Z,
 which is anticlockwise when looking straight down with +X to the right and −Z up the screen. So
-index 0 is +X, the indices run anticlockwise on screen, edges are the even indices and corners the
-odd ones, and facing an entity along direction `k` needs no conversion.
+index 0 is east, the indices run anticlockwise like a compass, edges are the even indices and
+corners the odd ones. The `Direction` enum names them by compass point (decided 2026-09-22).
 
-| k | Angle | On screen | Kind | Axial `(q, r)` | Cube `(q, r, s)` | Distance (shaku) | Flanked by |
+| k | Angle | `Direction` | Kind | Axial `(q, r)` | Cube `(q, r, s)` | Distance (shaku) | Flanked by |
 |---|---|---|---|---|---|---|---|
-| 0  | 0°   | right                | edge   | `( 1,  0)` | `( 1,  0, −1)` | 1  | |
-| 1  | 30°  | right, a little up   | corner | `( 2, −1)` | `( 2, −1, −1)` | √3 | 0 and 2 |
-| 2  | 60°  | up-right             | edge   | `( 1, −1)` | `( 1, −1,  0)` | 1  | |
-| 3  | 90°  | straight up          | corner | `( 1, −2)` | `( 1, −2,  1)` | √3 | 2 and 4 |
-| 4  | 120° | up-left              | edge   | `( 0, −1)` | `( 0, −1,  1)` | 1  | |
-| 5  | 150° | left, a little up    | corner | `(−1, −1)` | `(−1, −1,  2)` | √3 | 4 and 6 |
-| 6  | 180° | left                 | edge   | `(−1,  0)` | `(−1,  0,  1)` | 1  | |
-| 7  | 210° | left, a little down  | corner | `(−2,  1)` | `(−2,  1,  1)` | √3 | 6 and 8 |
-| 8  | 240° | down-left            | edge   | `(−1,  1)` | `(−1,  1,  0)` | 1  | |
-| 9  | 270° | straight down        | corner | `(−1,  2)` | `(−1,  2, −1)` | √3 | 8 and 10 |
-| 10 | 300° | down-right           | edge   | `( 0,  1)` | `( 0,  1, −1)` | 1  | |
-| 11 | 330° | right, a little down | corner | `( 1,  1)` | `( 1,  1, −2)` | √3 | 10 and 0 |
+| 0  | 0°   | `E`   | edge   | `( 1,  0)` | `( 1,  0, −1)` | 1  | |
+| 1  | 30°  | `ENE` | corner | `( 2, −1)` | `( 2, −1, −1)` | √3 | 0 and 2 |
+| 2  | 60°  | `NE`  | edge   | `( 1, −1)` | `( 1, −1,  0)` | 1  | |
+| 3  | 90°  | `N`   | corner | `( 1, −2)` | `( 1, −2,  1)` | √3 | 2 and 4 |
+| 4  | 120° | `NW`  | edge   | `( 0, −1)` | `( 0, −1,  1)` | 1  | |
+| 5  | 150° | `WNW` | corner | `(−1, −1)` | `(−1, −1,  2)` | √3 | 4 and 6 |
+| 6  | 180° | `W`   | edge   | `(−1,  0)` | `(−1,  0,  1)` | 1  | |
+| 7  | 210° | `WSW` | corner | `(−2,  1)` | `(−2,  1,  1)` | √3 | 6 and 8 |
+| 8  | 240° | `SW`  | edge   | `(−1,  1)` | `(−1,  1,  0)` | 1  | |
+| 9  | 270° | `S`   | corner | `(−1,  2)` | `(−1,  2, −1)` | √3 | 8 and 10 |
+| 10 | 300° | `SE`  | edge   | `( 0,  1)` | `( 0,  1, −1)` | 1  | |
+| 11 | 330° | `ESE` | corner | `( 1,  1)` | `( 1,  1, −2)` | √3 | 10 and 0 |
 
 A corner direction `k` is the sum of its flanking edges: `dir[k] = dir[k − 1] + dir[k + 1]`
 (indices mod 12).
 
-Bevy's forward, −Z, is direction 3: a corner. An entity walking an edge direction is never facing
-Bevy's default forward, which is fine as long as models are rotated to face their heading.
+Bevy's forward, −Z, is north, direction 3: a corner. An entity walking an edge direction is never
+facing Bevy's default forward, which is fine as long as models are rotated to face their heading:
+heading `k` is `from_rotation_y((k − 3) · 30°)`, a constant offset.
 
 Which of these an entity may actually move to is a movement rule, covered in `movement.md`.
 
 ## Build order
 
-1. `VoxelCoord`, `new`, the getters and their tests.
-2. Voxel ↔ world conversion and cube rounding.
-3. Later: the `units` module, the direction tables, neighbours, distance.
+1. `VoxelCoord`, `new`, the getters and their tests. Done.
+2. Voxel ↔ world conversion and cube rounding. Done, with `VoxelspacePos`.
+3. The direction table and neighbours. Done: `Direction`, `neighbour`, `neighbours`.
+4. Later: distance and the heuristic (see `movement.md`), and the `units` module when needed.
 
 ## Open questions
 
