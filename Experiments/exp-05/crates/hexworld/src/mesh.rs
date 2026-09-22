@@ -90,11 +90,6 @@ fn border_level(a: Hex, b: Hex, child: Level) -> Level {
 pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> MeshData {
     let key = chunk.key;
     let child = key.child_level();
-    let origin = if key.level == Level::World {
-        Vec3::ZERO
-    } else {
-        cell_centre(key.cell, key.level)
-    };
 
     // The chunk's own columns, plus any guest or neighbour column generated on demand.
     let mut columns: HashMap<Hex, Column> = HashMap::with_capacity(chunk.len() * 2);
@@ -136,7 +131,18 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
         if column.runs.is_empty() {
             continue;
         }
-        let c = cell_centre(cell, child) - origin;
+        // The offset from the chunk's centre, in shaku. Computed by first taking the
+        // difference in integer label space (`cell` and the chunk's own centre, both at
+        // the child level) and only then converting to float: subtracting two large `f32`
+        // world-space positions instead would lose precision at the edge of a big world
+        // (about 0.016 shaku at the edge of a 12-ri world). `centre_child` panics on
+        // `Level::World`, so that case keeps converting `cell` directly — its origin is
+        // the world origin anyway.
+        let c = if key.level == Level::World {
+            cell_centre(cell, child)
+        } else {
+            cell_centre(cell - centre_child(key.cell, key.level), child)
+        };
 
         // Neighbours, for face culling and for the border levels of the lines.
         let neighbour_cells: Vec<Hex> = DIRECTIONS.iter().map(|d| cell + *d).collect();
@@ -528,6 +534,37 @@ mod tests {
             let chunk = crate::chunk::generate(&cfg, ChunkKey::new(level, Hex::ZERO));
             let mesh = mesh_chunk(&cfg, &chunk, &HashSet::new());
             assert!(mesh.triangle_count() > 0, "{level:?} produced nothing");
+        }
+    }
+
+    #[test]
+    fn a_parents_centre_child_lands_on_the_parents_own_centre() {
+        // The identity the precision fix above depends on: packing B centres the parent
+        // (a, b) on the child (N·a, N·b), so converting a chunk key's own cell to the
+        // child lattice and taking its centre there must land on the same point in space
+        // as the parent cell's own centre at its own level. In real-number arithmetic
+        // this is exact (both sides compute the same linear function of (a, b), just
+        // through a different chain of level widths); in `f32` the two chains round
+        // differently by up to a handful of ULPs, which is not the cancellation error
+        // this identity exists to avoid (about 0.016 shaku at the edge of a 12-ri world,
+        // some five orders of magnitude bigger), so the check below allows a tight,
+        // scale-relative tolerance rather than bit-exact equality.
+        for level in [Level::Ken, Level::Cho, Level::Ri] {
+            for cell in [
+                Hex::ZERO,
+                Hex::axial(3, -7),
+                Hex::axial(-12, 5),
+                Hex::axial(41, 19),
+            ] {
+                let key = ChunkKey::new(level, cell);
+                let via_child = cell_centre(centre_child(key.cell, key.level), key.child_level());
+                let direct = cell_centre(key.cell, key.level);
+                let tolerance = 1e-4 * direct.length().max(1.0);
+                assert!(
+                    (via_child - direct).length() < tolerance,
+                    "{level:?} {cell:?}: {via_child} vs {direct}"
+                );
+            }
         }
     }
 }

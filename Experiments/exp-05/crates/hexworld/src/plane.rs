@@ -89,6 +89,18 @@ mod tests {
     }
 
     #[test]
+    fn rounding_inverts_the_centre_at_a_far_shaku() {
+        // A shaku near the edge of a 12-ri world (Ri.width() = 12_960, so 12 ri out is
+        // about 155_520 shaku): rounding must still recover the exact cell even where an
+        // f32 world position is coarse enough to matter.
+        let cell = Hex::axial(150_000, -75_000);
+        assert_eq!(
+            round_at(cell_centre(cell, Level::Shaku), Level::Shaku),
+            cell
+        );
+    }
+
+    #[test]
     fn rounding_picks_the_nearest_centre_and_ignores_height() {
         let c = cell_centre(Hex::axial(3, 2), Level::Ken);
         let nudged = c + Vec3::new(0.1 * Level::Ken.width(), 40.0, 0.0);
