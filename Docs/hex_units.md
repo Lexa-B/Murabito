@@ -34,9 +34,18 @@ pub struct VoxelCoord { q: i32, r: i32, layer: i32 }   // fields private
   - `Result` makes the caller deal with bad input. They can't quietly ignore it.
   - The sum is taken in `i64`. Adding three large `i32`s can overflow, which panics in a debug
     build, so this way extreme values come back as an `Err` instead of a crash. If the sum is
-    valid, `s` fits in an `i32`, so `s()` can't overflow either.
+    valid, `s` fits in an `i32`; but the way there needn't: `-q - r` overflows at `q == i32::MIN`
+    and `-(q + r)` when `q + r` passes `i32::MAX`, both of which are valid voxels. `s()` uses
+    wrapping arithmetic, which passes through the overflow and, since the true value is in range,
+    lands on it.
   - The fields are private, so `new` is the only way to build a `VoxelCoord`. Rust's visibility
     rules enforce the invariant. Nobody has to remember it.
+  - **Cube is the only way in.** There is no axial constructor. Decided 2026-09-22: `VoxelCoord`
+    is the runtime type and cube is its one face everywhere. The one place that drops `s` is level
+    data on disk, which is a separate format: it writes `(q, r, layer)`, and on reading rebuilds
+    `s` (summing in `i64`) and goes through `new`, so a corrupt or hand-edited file that doesn't
+    sum to zero is refused as `NotOnHexPlane` rather than becoming a bad voxel. Inside the crate,
+    `from_world` builds the struct directly from a rounded triple, which the module can do.
 - **Gives cube output, reconstructed:** `q()`, `r()`, `s()` (as `-q - r`), `layer()`.
   The getters take `self` by value because the type is `Copy` and only 12 bytes.
 - `NotOnHexPlane { q, r, s }` carries the rejected values, so an error message can show them.
@@ -48,6 +57,11 @@ rather than `y` or `z` so the integer layer index is never confused with the flo
 
 ## Orientation
 
+**Compass invariant: east is +X, north is −Z, up is +Y.** Directions across the plane are named
+by compass point. "Up" and "down" are for gravity, never for map reading, so a direction on the
+plane is never called either. With the overhead camera as it stands, north is up the screen. The
+same statement is in `movement.md` and `AGENTS.md`.
+
 - Pointy-top: rows run along X, corners point along ±Z.
 - `+q` points toward +X.
 - `+r` points toward +Z. For a camera looking straight down with +X to the right (Bevy is
@@ -55,6 +69,23 @@ rather than `y` or `z` so the integer layer index is never confused with the flo
   on screen.
 - Rows are √3/2 shaku apart. Two rows down (`q − 1, r + 2`) lands back in the same screen column,
   √3 shaku away.
+
+## `VoxelspacePos`
+
+The fractional twin of `VoxelCoord`: `q`, `r`, `s` and `layer` as `f32`, for a point in voxel
+space rather than a voxel's address, such as where a moving entity is between two cells. Decided
+2026-09-22. Same rules: stored axial, cube in through `new -> Result<_, NotNearHexPlane>`, cube out.
+The on-plane check has a tolerance, `ON_PLANE_TOLERANCE = 1e-4`, since real arithmetic lands near
+zero rather than on it.
+
+Conversions follow Rust's `From`/`Into` convention, so callers get `.into()` and `Vec3::from(pos)`
+the way they do everywhere in Bevy. `From` is only for the exact ones:
+
+- `Vec3` ↔ `VoxelspacePos`: `From` both ways, lossless.
+- `VoxelCoord` → `VoxelspacePos`: `From`; the voxel's centre at its bottom face.
+- `VoxelspacePos` → `VoxelCoord`: `pos.round()`, named because it rounds.
+- `VoxelCoord::to_world()` and `VoxelCoord::from_world(v)` are the two above composed, and stay
+  named methods for the same reason.
 
 ## Voxel ↔ world
 
@@ -105,42 +136,48 @@ Together they give 12 directions, evenly spaced every 30°, alternating edge and
 **Indexing follows Bevy's rotation convention.** Direction `k` points along
 `Quat::from_rotation_y(k · 30°)` applied to +X. A positive rotation about Y turns +X toward −Z,
 which is anticlockwise when looking straight down with +X to the right and −Z up the screen. So
-index 0 is +X, the indices run anticlockwise on screen, edges are the even indices and corners the
-odd ones, and facing an entity along direction `k` needs no conversion.
+index 0 is east, the indices run anticlockwise like a compass, edges are the even indices and
+corners the odd ones. The `Direction` enum names them by compass point (decided 2026-09-22),
+using the 16-point names nearest each 30° step: every name is 7.5° off its true bearing, so
+the 60° edge is `NNE` (67.5°), not `NE` (45°, which would be 15° off), and likewise in each
+quadrant. There is deliberately no `NE`, `NW`, `SW` or `SE`.
 
-| k | Angle | On screen | Kind | Axial `(q, r)` | Cube `(q, r, s)` | Distance (shaku) | Flanked by |
+| k | Angle | `Direction` | Kind | Axial `(q, r)` | Cube `(q, r, s)` | Distance (shaku) | Flanked by |
 |---|---|---|---|---|---|---|---|
-| 0  | 0°   | right                | edge   | `( 1,  0)` | `( 1,  0, −1)` | 1  | |
-| 1  | 30°  | right, a little up   | corner | `( 2, −1)` | `( 2, −1, −1)` | √3 | 0 and 2 |
-| 2  | 60°  | up-right             | edge   | `( 1, −1)` | `( 1, −1,  0)` | 1  | |
-| 3  | 90°  | straight up          | corner | `( 1, −2)` | `( 1, −2,  1)` | √3 | 2 and 4 |
-| 4  | 120° | up-left              | edge   | `( 0, −1)` | `( 0, −1,  1)` | 1  | |
-| 5  | 150° | left, a little up    | corner | `(−1, −1)` | `(−1, −1,  2)` | √3 | 4 and 6 |
-| 6  | 180° | left                 | edge   | `(−1,  0)` | `(−1,  0,  1)` | 1  | |
-| 7  | 210° | left, a little down  | corner | `(−2,  1)` | `(−2,  1,  1)` | √3 | 6 and 8 |
-| 8  | 240° | down-left            | edge   | `(−1,  1)` | `(−1,  1,  0)` | 1  | |
-| 9  | 270° | straight down        | corner | `(−1,  2)` | `(−1,  2, −1)` | √3 | 8 and 10 |
-| 10 | 300° | down-right           | edge   | `( 0,  1)` | `( 0,  1, −1)` | 1  | |
-| 11 | 330° | right, a little down | corner | `( 1,  1)` | `( 1,  1, −2)` | √3 | 10 and 0 |
+| 0  | 0°   | `E`   | edge   | `( 1,  0)` | `( 1,  0, −1)` | 1  | |
+| 1  | 30°  | `ENE` | corner | `( 2, −1)` | `( 2, −1, −1)` | √3 | 0 and 2 |
+| 2  | 60°  | `NNE` | edge   | `( 1, −1)` | `( 1, −1,  0)` | 1  | |
+| 3  | 90°  | `N`   | corner | `( 1, −2)` | `( 1, −2,  1)` | √3 | 2 and 4 |
+| 4  | 120° | `NNW` | edge   | `( 0, −1)` | `( 0, −1,  1)` | 1  | |
+| 5  | 150° | `WNW` | corner | `(−1, −1)` | `(−1, −1,  2)` | √3 | 4 and 6 |
+| 6  | 180° | `W`   | edge   | `(−1,  0)` | `(−1,  0,  1)` | 1  | |
+| 7  | 210° | `WSW` | corner | `(−2,  1)` | `(−2,  1,  1)` | √3 | 6 and 8 |
+| 8  | 240° | `SSW` | edge   | `(−1,  1)` | `(−1,  1,  0)` | 1  | |
+| 9  | 270° | `S`   | corner | `(−1,  2)` | `(−1,  2, −1)` | √3 | 8 and 10 |
+| 10 | 300° | `SSE` | edge   | `( 0,  1)` | `( 0,  1, −1)` | 1  | |
+| 11 | 330° | `ESE` | corner | `( 1,  1)` | `( 1,  1, −2)` | √3 | 10 and 0 |
 
 A corner direction `k` is the sum of its flanking edges: `dir[k] = dir[k − 1] + dir[k + 1]`
 (indices mod 12).
 
-Bevy's forward, −Z, is direction 3: a corner. An entity walking an edge direction is never facing
-Bevy's default forward, which is fine as long as models are rotated to face their heading.
+Bevy's forward, −Z, is north, direction 3: a corner. An entity walking an edge direction is never
+facing Bevy's default forward, which is fine as long as models are rotated to face their heading:
+heading `k` is `from_rotation_y((k − 3) · 30°)`, a constant offset.
 
 Which of these an entity may actually move to is a movement rule, covered in `movement.md`.
 
 ## Build order
 
-1. `VoxelCoord`, `new`, the getters and their tests.
-2. Voxel ↔ world conversion and cube rounding.
-3. Later: the `units` module, the direction tables, neighbours, distance.
+1. `VoxelCoord`, `new`, the getters and their tests. Done.
+2. Voxel ↔ world conversion and cube rounding. Done, with `VoxelspacePos`.
+3. The direction table and neighbours. Done: `Direction`, `neighbour`, `neighbours`.
+4. Later: distance and the heuristic (see `movement.md`), and the `units` module when needed.
 
 ## Open questions
 
-- **World-space type:** plain `(f32, f32, f32)`, a small struct of our own, or Bevy's `Vec3`? The
-  first two keep the module free of Bevy.
-- **`units` API:** plain `f32` conversion functions, or `Shaku` / `Metres` types that the compiler
-  won't let you mix up?
-- **Where the module lives:** this waits on the crate setup.
+- **World-space type:** Bevy's `Vec3`. Decided 2026-09-22: it is what every caller has in hand.
+- **`units` API:** a library of conversions between shaku, ken, cho, ri, metres and centimetres,
+  in any direction, so they are written once. Written when something first needs it. Whether it
+  is plain `f32` functions or `Shaku` / `Metres` types the compiler won't let you mix up is
+  decided then.
+- **Where the module lives:** `crates/hexcoords/`, the crate `murabito_hexcoords`.

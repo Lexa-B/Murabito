@@ -4,15 +4,27 @@ A brief on how entities move across the hex voxel grid, as agreed in design.
 Nothing here is implemented yet. The coordinates, directions and neighbours it builds on are in
 `hex_units.md`.
 
+**Compass invariant: east is +X, north is −Z, up is +Y.** Directions across the plane are compass
+points; up and down are for gravity, so stepping up is a change of layer, never a heading. The same
+statement is in `hex_units.md` and `AGENTS.md`.
+
 ## 12-direction movement
 
-Entities move in 12 directions: the 6 edge moves plus the 6 corner moves (see the direction
-table in `hex_units.md`).
+Entities move in 12 directions: the 6 edge moves plus the 6 corner moves. They are
+`murabito_hexcoords::Direction`, named by compass point, anticlockwise from east:
+
+| Edges (1 shaku, cost 1) | `E` | `NNE` | `NNW` | `W` | `SSW` | `SSE` |
+|---|---|---|---|---|---|---|
+| **Corners (√3 shaku, cost √3)** | `ENE` | `N` | `WNW` | `WSW` | `S` | `ESE` |
+
+Each corner sits between the two edges beside it in the table's order (`N` between `NNE` and
+`NNW`); `Direction::flanks()` gives those two, and `is_edge()` / `is_corner()` tell them apart. The
+full table, with angles and axial offsets, is in `hex_units.md`.
 
 **A corner move is allowed only when both flanking faces are unobstructed**, i.e. both edge
 neighbours it passes between are open. Otherwise an entity could slip diagonally between two
-blocked hexes. A corner direction `k` (odd) is the sum of its flanking edge directions,
-`dir[k] = dir[k − 1] + dir[k + 1]`, so the check is on `from + dir[k − 1]` and `from + dir[k + 1]`.
+blocked hexes. A corner direction is the sum of its two flanks, so the check is on
+`from.neighbour(before)` and `from.neighbour(after)` where `(before, after) = dir.flanks()`.
 
 ## Stepping up
 

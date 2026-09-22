@@ -31,7 +31,8 @@ Murabito/
 │  ├─ murabito/            the app: the one binary, a plugin list and nothing else
 │  ├─ scene/               `murabito_scene`: the placeholder world (ground, sun, sky colour)
 │  ├─ camera/              `murabito_camera`: the overhead camera
-│  └─ keybinds/            `murabito_keybinds`: `Binds`, up to three keys or mouse buttons for one action
+│  ├─ keybinds/            `murabito_keybinds`: `Binds`, up to three keys or mouse buttons for one action
+│  └─ hexcoords/           `murabito_hexcoords`: hex voxel coordinates (`VoxelCoord`), per `Docs/hex_units.md`
 ├─ scripts/run.sh          launches the app; what a desktop entry points at. Finds the display itself, logs to ~/.cache/murabito/run.log
 ├─ Docs/                   project docs (no specs or plans; see below)
 ├─ _Archives/
@@ -70,6 +71,7 @@ The repo root is where the Murabito game lives, in Rust on Bevy: a Cargo workspa
 - **Logic goes in pure functions, and systems stay thin.** A system gathers what Bevy hands it and calls a function that takes plain values (`pan_direction`, `pan_speed`, `zoomed`, `eased_velocity`), which tests exercise without an app.
 - **Tests run headless, and a test app has only what it is given.** `MinimalPlugins` plus exactly what the systems ask for: `InputPlugin` for input, `AssetPlugin` and an `init_asset` per asset type for assets. A system asking for a resource that isn't there is a panic, in a test and in the app alike. Drive frames with `app.update()`; fix the frame length with `TimeUpdateStrategy::ManualDuration` when a test is about time. No test opens a window or needs a GPU.
 - **Check an engine API in the source before writing against it.** Bevy 0.19 renamed things the archive and older examples still use (`SceneRoot` is now `WorldAssetRoot`; events are messages, read with `MessageReader`). The registry source is under `~/.cargo/registry/src/`.
+- **Compass invariant: east is +X, north is −Z, up is +Y.** Directions across the ground are compass points (`murabito_hexcoords::Direction`), never up or down, which are for gravity. With the overhead camera as it stands, north is up the screen. Stated in `Docs/hex_units.md` and `Docs/movement.md` too.
 - **Assets live in `assets/` at the repo root**, where the art pipeline writes. `.cargo/config.toml` sets `BEVY_ASSET_ROOT` there, since Bevy would otherwise look beside the app's crate.
 
 - **One module at a time, at a pace the user can learn from.** The user is learning Rust and Bevy through this rebuild. Explain what a piece does and why before writing it, do one small piece, let the user look at it, then agree the next. Show the API and the reasoning, not only the finished diff.

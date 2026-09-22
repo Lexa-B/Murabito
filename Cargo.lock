@@ -3449,6 +3449,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "murabito_hexcoords"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "murabito_keybinds"
 version = "0.1.0"
 dependencies = [
