@@ -29,7 +29,7 @@ const SKY_GLOW: f32 = 200.0;
 
 /// Relative to `assets/`. The model is in shaku, faces forward (-Z) and stands with
 /// its soles at y = 0, so it needs no scaling or righting: see `art/ART-README.md`.
-const FOX_MODEL: &str = "models/fox.glb";
+const FOX_MODEL: &str = "entity_models/living/animals/fox.glb";
 
 /// Which way the fox starts off facing: toward the camera and to its right, which shows
 /// its face and its flank at once.
