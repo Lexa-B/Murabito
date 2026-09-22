@@ -3,10 +3,13 @@ use murabito_actions::ActionsPlugin;
 use murabito_app_state::{AppStatePlugin, AppStateSettings};
 use murabito_camera::{CameraPlugin, CameraSettings};
 use murabito_i18n::{I18nPlugin, Language};
+use murabito_menu::MenuPlugin;
 use murabito_movement::MovementPlugin;
+use murabito_navigation::{NavigationPlugin, NavigationSettings};
 use murabito_progress::ProgressPlugin;
 use murabito_scene::ScenePlugin;
 use murabito_settings::{Persist, SettingsPlugin};
+use murabito_ui::UiPlugin;
 use murabito_user_data::UserDataPlugin;
 
 fn main() {
@@ -21,6 +24,9 @@ fn main() {
             SettingsPlugin,
             I18nPlugin,
             AppStatePlugin,
+            UiPlugin,
+            NavigationPlugin,
+            MenuPlugin,
             ScenePlugin,
             CameraPlugin,
             MovementPlugin,
@@ -32,5 +38,6 @@ fn main() {
         .persist::<CameraSettings>("camera")
         .persist::<Language>("language")
         .persist::<AppStateSettings>("app_state")
+        .persist::<NavigationSettings>("navigation")
         .run();
 }

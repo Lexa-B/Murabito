@@ -114,7 +114,7 @@ Each Rust + Bevy experiment is its own Cargo workspace, separate from the main p
 
 - **Public MIT repo: never copy engine code or assets in.** Reading engine headers and source to check an API is fine; pasting them, or Epic copyright headers, into the repo is not.
 - **Two licences: code is MIT, assets are CC BY-SA 4.0.** See `LICENSING.md` for what counts as an asset. Third-party files (fonts, Epic/Fab content, anything not made for this repo) keep their own licences: add their licence file next to them and list them in `LICENSING.md`, and never commit anything whose licence doesn't allow redistribution.
-- **Binary assets go through Git LFS.** `.gitattributes` at the repo root routes Unreal assets, source art, textures, audio, video, fonts, raw data, third-party binaries and PDFs to LFS (not lockable yet). Check a new binary type is covered before committing it; adding it afterwards means rewriting history. The main project has no binary assets yet; the archived Bevy attempt's one is its UI font.
+- **Binary assets go through Git LFS.** `.gitattributes` at the repo root routes Unreal assets, source art, textures, audio, video, fonts, raw data, third-party binaries and PDFs to LFS (not lockable yet). Check a new binary type is covered before committing it; adding it afterwards means rewriting history. The main project's binary assets are the models under `assets/entity_models/` and the UI font under `assets/fonts/`.
 - **Naming:** code and docs don't name games that inspired the project.
 
 

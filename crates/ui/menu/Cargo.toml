@@ -1,0 +1,15 @@
+[package]
+name = "murabito_menu"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+bevy.workspace = true
+murabito_app_state.workspace = true
+murabito_navigation.workspace = true
+murabito_ui.workspace = true
+
+[dev-dependencies]
+murabito_i18n.workspace = true
+murabito_keybinds.workspace = true
