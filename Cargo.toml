@@ -22,6 +22,7 @@ members = [
     "crates/ui/menu",
     "crates/ui/settings_page",
     "crates/kinds",
+    "crates/perception/perception",
 ]
 
 [workspace.package]
@@ -41,6 +42,7 @@ murabito_progress = { path = "crates/action/progress" }
 murabito_movement = { path = "crates/action/mechanisms/movement" }
 murabito_actions = { path = "crates/action/actions" }
 murabito_kinds = { path = "crates/kinds" }
+murabito_perception = { path = "crates/perception/perception" }
 murabito_user_data = { path = "crates/user_data" }
 murabito_settings = { path = "crates/settings" }
 murabito_i18n = { path = "crates/i18n" }

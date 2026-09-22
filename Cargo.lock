@@ -3601,6 +3601,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "murabito_perception"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_hexcoords",
+ "murabito_movement",
+ "murabito_placement",
+ "murabito_progress",
+]
+
+[[package]]
 name = "murabito_placement"
 version = "0.1.0"
 dependencies = [
