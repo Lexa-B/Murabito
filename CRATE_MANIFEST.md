@@ -74,8 +74,10 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   which one system derives the transform; eased pan and zoom, pan speed following zoom.
   Owns `CameraSettings`: the speed multiplier and the four pan binds.
 - **`murabito_hexcoords`** — hex voxel coordinates: cube `(q, r, s)` plus a layer,
-  `VoxelspacePos`, and the twelve compass `Direction`s with their neighbour and rotation
-  maths. Where a cell is, not what is in it. Design: `Docs/hex_units_readme.md`.
+  `VoxelspacePos`, the twelve compass `Direction`s with their neighbour and rotation
+  maths, and `Offset`, one voxel relative to another, with distance in steps, rings
+  outward and a cell's corners. Where a cell is, not what is in it. Design:
+  `Docs/hex_units_readme.md`.
 - **`murabito_placement`** — where a thing stands (`VoxelPosition`) and which way it
   faces (`Facing`), and `place`, the one system that keeps a model where they say. Plain
   components any entity in the world carries: a tree has a position and never moves.

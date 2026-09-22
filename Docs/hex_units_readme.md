@@ -171,12 +171,36 @@ is the one tie, and it goes anticlockwise, the index direction.
 
 Which of these an entity may actually move to is a movement rule, covered in `movement_readme.md`.
 
+## Offsets, distance, rings and corners
+
+Implemented, decided 2026-09-23 for the senses, which scan outward from an eye and report
+where a thing is *relative* to it.
+
+- **`Offset`** is one voxel relative to another: `b - a`, and `a + offset` takes it back.
+  Cube `(dq, dr, ds)` plus a layer difference, stored axial and held to the plane like a
+  `VoxelCoord` (`Offset::new` returns the same `NotOnHexPlane`). A separate type, so an
+  address is never mistaken for a displacement. `Offset::ZERO` is a voxel to itself.
+- **`distance`** is in **steps** across faces, `max(|dq|, |dr|, |ds|)`, and ignores the layer.
+  Steps are not shaku: a corner neighbour is two steps and √3 shaku, and off the six edge
+  directions the two disagree. Shaku distance is the world-space length between centres.
+- **`ring(radius)`** is every cell exactly `radius` steps out on the same layer, `6 × radius`
+  of them, anticlockwise from due east; radius 0 is the cell itself. Rings 0..=n together are
+  exactly the cells within `n` steps.
+- **`rings_covering(shaku)`** is how many rings out a scan must go to be sure of every cell
+  whose centre is within `shaku`: `⌈shaku / (√3/2)⌉`, since a step gains only √3/2 shaku
+  along a corner direction. Stopping at `shaku` rings misses cells on the diagonals only,
+  which reads as a drawing fault rather than the logic error it is.
+- **`corners()`** is the six corners of a cell's bottom face in world space, anticlockwise
+  from the one 30° round from east; corners 1 and 4 point due north and due south. They are
+  1/√3 shaku from the centre (a cell is one shaku flat to flat), and a side is half a shaku out.
+
 ## Build order
 
 1. `VoxelCoord`, `new`, the getters and their tests. Done.
 2. Voxel ↔ world conversion and cube rounding. Done, with `VoxelspacePos`.
 3. The direction table and neighbours. Done: `Direction`, `neighbour`, `neighbours`, and the turning helpers `rotated`, `notches_to`, `heading`.
-4. Later: distance and the heuristic (see `movement_readme.md`), and the `units` module when needed.
+4. `Offset`, `distance`, `ring`, `rings_covering`, `corners`. Done, for the senses.
+5. Later: the A\* heuristic (see `movement_readme.md`), and the `units` module when needed.
 
 ## Open questions
 
