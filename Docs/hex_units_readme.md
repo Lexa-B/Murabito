@@ -60,7 +60,7 @@ rather than `y` or `z` so the integer layer index is never confused with the flo
 **Compass invariant: east is +X, north is −Z, up is +Y.** Directions across the plane are named
 by compass point. "Up" and "down" are for gravity, never for map reading, so a direction on the
 plane is never called either. With the overhead camera as it stands, north is up the screen. The
-same statement is in `movement.md` and `AGENTS.md`.
+same statement is in `movement_readme.md` and `AGENTS.md`.
 
 - Pointy-top: rows run along X, corners point along ±Z.
 - `+q` points toward +X.
@@ -168,14 +168,14 @@ Turning is in notches of 30°: `rotated(n)` is `n` notches anticlockwise (negati
 and `notches_to(other)` is the shortest turn to another direction, in `−5..=6`. Exactly opposite
 is the one tie, and it goes anticlockwise, the index direction.
 
-Which of these an entity may actually move to is a movement rule, covered in `movement.md`.
+Which of these an entity may actually move to is a movement rule, covered in `movement_readme.md`.
 
 ## Build order
 
 1. `VoxelCoord`, `new`, the getters and their tests. Done.
 2. Voxel ↔ world conversion and cube rounding. Done, with `VoxelspacePos`.
 3. The direction table and neighbours. Done: `Direction`, `neighbour`, `neighbours`, and the turning helpers `rotated`, `notches_to`, `heading`.
-4. Later: distance and the heuristic (see `movement.md`), and the `units` module when needed.
+4. Later: distance and the heuristic (see `movement_readme.md`), and the `units` module when needed.
 
 ## Open questions
 

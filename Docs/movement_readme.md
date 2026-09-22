@@ -1,12 +1,12 @@
 # Movement
 
 A brief on how entities move across the hex voxel grid, as agreed in design. The coordinates,
-directions and neighbours it builds on are in `hex_units.md`. What is implemented is marked;
+directions and neighbours it builds on are in `hex_units_readme.md`. What is implemented is marked;
 the rest is design.
 
 **Compass invariant: east is +X, north is −Z, up is +Y.** Directions across the plane are compass
 points; up and down are for gravity, so stepping up is a change of layer, never a heading. The same
-statement is in `hex_units.md` and `AGENTS.md`.
+statement is in `hex_units_readme.md` and `AGENTS.md`.
 
 ## Where a body is, and which way it faces
 
@@ -33,7 +33,7 @@ Entities move in 12 directions: the 6 edge moves plus the 6 corner moves. They a
 
 Each corner sits between the two edges beside it in the table's order (`N` between `NNE` and
 `NNW`); `Direction::flanks()` gives those two, and `is_edge()` / `is_corner()` tell them apart. The
-full table, with angles and axial offsets, is in `hex_units.md`.
+full table, with angles and axial offsets, is in `hex_units_readme.md`.
 
 **A corner move is allowed only when both flanking faces are unobstructed**, i.e. both edge
 neighbours it passes between are open. Otherwise an entity could slip diagonally between two

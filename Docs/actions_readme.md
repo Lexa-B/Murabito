@@ -1,7 +1,7 @@
 # Actions
 
 A brief on how an entity does things that take time, as agreed in design. What is implemented is
-marked; the rest is design. Movement's own rules are in `movement.md`; this is the layer that
+marked; the rest is design. Movement's own rules are in `movement_readme.md`; this is the layer that
 sequences them, and the accumulation they all share.
 
 ## The stack
@@ -70,7 +70,7 @@ Design. A mechanism exposes its actions as **intent components**: put a `Step(Di
 through `Progress`, then removes it. One intent at a time; the mechanism enforces its own physical
 rules (a step must be within one notch of the facing; a turn goes a notch at a time, the short
 way round) and refuses what breaks them, removing the intent with a warning. `murabito_movement`
-is the first mechanism; its rules are in `movement.md`.
+is the first mechanism; its rules are in `movement_readme.md`.
 
 ## The queue
 

@@ -1,7 +1,7 @@
 //! How a body moves across the hex voxel grid: where it is, which way it faces, and the
 //! mechanics of stepping and turning. Nothing here decides *what* to do; that is the
 //! actions layer above, which puts a `Step` or a `Turn` on an entity and this crate
-//! carries it out. `Docs/movement.md` is the design this implements.
+//! carries it out. `Docs/movement_readme.md` is the design this implements.
 //!
 //! Compass: **east is +X, north is −Z, up is +Y.** Facing is one of the twelve compass
 //! directions, never up or down.
