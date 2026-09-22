@@ -16,11 +16,16 @@
 //! `From`; a `VoxelCoord` is what a `VoxelspacePos` rounds to.
 
 use std::fmt;
+use std::ops::{Add, Sub};
 
 use bevy::math::{Quat, Vec3};
 
 /// A voxel's height, in shaku: 5 sun.
 const LAYER_HEIGHT: f32 = 0.5;
+
+/// Centre to corner of a cell, in shaku. A cell is one shaku flat to flat, and a regular
+/// hexagon's corners sit 1/√3 of its width from the centre.
+const CORNER_RADIUS: f32 = 1.0 / SQRT_3;
 
 /// How far apart rows of pointy-top hexes are, in cell widths: √3 / 2.
 const ROW_SPACING: f32 = SQRT_3 / 2.0;
@@ -226,6 +231,142 @@ impl VoxelCoord {
     /// All twelve neighbours on this layer, in [`Direction::ALL`]'s order.
     pub fn neighbours(self) -> [Self; 12] {
         Direction::ALL.map(|direction| self.neighbour(direction))
+    }
+
+    /// How many steps across faces from this voxel to another, on the plane: the layer
+    /// is not counted. In steps, not shaku: a corner neighbour is two steps and √3
+    /// shaku away, and the two disagree everywhere off the six edge directions.
+    pub fn distance(self, other: Self) -> u32 {
+        (other - self).steps()
+    }
+
+    /// Every voxel exactly `radius` steps from this one, on its layer: `6 × radius` of
+    /// them, anticlockwise from due east, and radius 0 is this voxel alone. A scan that
+    /// walks rings outward sees every cell once, nearest first.
+    pub fn ring(self, radius: u32) -> std::vec::IntoIter<Self> {
+        if radius == 0 {
+            return vec![self].into_iter();
+        }
+        let mut cells = Vec::with_capacity(6 * radius as usize);
+        let mut here = (0..radius).fold(self, |cell, _| cell.neighbour(Direction::E));
+        // From due east, each side runs `radius` steps along the next edge direction
+        // round, starting two notches past north-north-east so the walk is anticlockwise.
+        for side in 0..6 {
+            let along = Direction::ALL[(4 + 2 * side) % 12];
+            for _ in 0..radius {
+                cells.push(here);
+                here = here.neighbour(along);
+            }
+        }
+        cells.into_iter()
+    }
+
+    /// The six corners of this voxel's bottom face, in world space, anticlockwise from
+    /// the corner 30° round from east. Pointy-top: corners 1 and 4 point due north and
+    /// due south.
+    pub fn corners(self) -> [Vec3; 6] {
+        let centre = self.to_world();
+        std::array::from_fn(|i| {
+            let angle = (30.0 + 60.0 * i as f32).to_radians();
+            // A positive angle about Y turns +X toward −Z, as `Direction`'s index does.
+            centre + Vec3::new(angle.cos(), 0.0, -angle.sin()) * CORNER_RADIUS
+        })
+    }
+}
+
+/// How many rings out a scan must go to be sure of every cell whose centre is within
+/// `shaku` of the eye. A step gains a whole shaku along an edge direction but only √3/2
+/// along a corner one, so a scan by ring has to go `shaku / (√3/2)` rings out, rounded
+/// up; stopping at `shaku` rings misses cells, and only on the diagonals, which reads
+/// as a rendering fault rather than the logic error it is.
+pub fn rings_covering(shaku: f32) -> u32 {
+    (shaku / ROW_SPACING).ceil() as u32
+}
+
+/// One voxel relative to another: what `b - a` is, and what `a + offset` takes.
+///
+/// Cube `(dq, dr, ds)` on the plane plus a layer difference, stored axial like a
+/// [`VoxelCoord`] and held to the plane the same way. A separate type from the
+/// coordinate so that an address is never mistaken for a displacement: "three cells
+/// that way" and "the cell three east of the origin" are different things.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Offset {
+    dq: i32,
+    dr: i32,
+    dlayer: i32,
+}
+
+impl Offset {
+    /// No displacement at all: the offset from a voxel to itself.
+    pub const ZERO: Self = Self {
+        dq: 0,
+        dr: 0,
+        dlayer: 0,
+    };
+
+    /// An offset from cube components and a layer difference, if the components are on
+    /// the plane. The same check and the same error as [`VoxelCoord::new`].
+    pub fn new(dq: i32, dr: i32, ds: i32, dlayer: i32) -> Result<Self, NotOnHexPlane> {
+        if i64::from(dq) + i64::from(dr) + i64::from(ds) == 0 {
+            Ok(Self { dq, dr, dlayer })
+        } else {
+            Err(NotOnHexPlane {
+                q: dq,
+                r: dr,
+                s: ds,
+            })
+        }
+    }
+
+    pub fn dq(self) -> i32 {
+        self.dq
+    }
+
+    pub fn dr(self) -> i32 {
+        self.dr
+    }
+
+    /// `-dq - dr`, reconstructed the way [`VoxelCoord::s`] is.
+    pub fn ds(self) -> i32 {
+        self.dq.wrapping_add(self.dr).wrapping_neg()
+    }
+
+    pub fn dlayer(self) -> i32 {
+        self.dlayer
+    }
+
+    /// How many steps across faces this offset spans on the plane: the largest of the
+    /// three cube components' magnitudes. The layer is not counted.
+    pub fn steps(self) -> u32 {
+        self.dq
+            .unsigned_abs()
+            .max(self.dr.unsigned_abs())
+            .max(self.ds().unsigned_abs())
+    }
+}
+
+impl Sub for VoxelCoord {
+    type Output = Offset;
+
+    /// The offset from `rhs` to `self`: `b - a` is what takes `a` to `b`.
+    fn sub(self, rhs: Self) -> Offset {
+        Offset {
+            dq: self.q - rhs.q,
+            dr: self.r - rhs.r,
+            dlayer: self.layer - rhs.layer,
+        }
+    }
+}
+
+impl Add<Offset> for VoxelCoord {
+    type Output = Self;
+
+    fn add(self, offset: Offset) -> Self {
+        Self {
+            q: self.q + offset.dq,
+            r: self.r + offset.dr,
+            layer: self.layer + offset.dlayer,
+        }
     }
 }
 
@@ -773,5 +914,159 @@ mod tests {
     #[test]
     fn facing_north_is_no_turn_at_all() {
         assert!(Direction::N.heading().abs_diff_eq(Quat::IDENTITY, 1e-6));
+    }
+
+    #[test]
+    fn an_offset_round_trips() {
+        let a = voxel(2, -5, 1);
+        let b = voxel(-3, 4, 0);
+
+        assert_eq!(a + (b - a), b);
+        assert_eq!(b - b, Offset::ZERO);
+    }
+
+    #[test]
+    fn an_offset_reads_back_in_cube_form() {
+        let offset = voxel(3, -1, 2) - voxel(1, 1, 0);
+
+        assert_eq!(
+            (offset.dq(), offset.dr(), offset.ds(), offset.dlayer()),
+            (2, -2, 0, 2)
+        );
+    }
+
+    #[test]
+    fn an_offset_off_the_plane_is_refused() {
+        assert_eq!(
+            Offset::new(1, 1, 1, 0),
+            Err(NotOnHexPlane { q: 1, r: 1, s: 1 })
+        );
+        assert!(Offset::new(1, -1, 0, 3).is_ok());
+    }
+
+    #[test]
+    fn an_edge_neighbour_is_one_step_and_a_corner_neighbour_two() {
+        let home = voxel(0, 0, 0);
+        for direction in Direction::ALL {
+            let steps = home.distance(home.neighbour(direction));
+            let expected = if direction.is_edge() { 1 } else { 2 };
+            assert_eq!(steps, expected, "{direction:?}");
+        }
+    }
+
+    #[test]
+    fn distance_ignores_the_layer() {
+        assert_eq!(voxel(0, 0, 0).distance(voxel(0, 0, 7)), 0);
+    }
+
+    /// Every voxel within `steps` of `home`, by brute force over a box, so the ring walk
+    /// has something independent to be checked against.
+    fn within(home: VoxelCoord, steps: u32) -> std::collections::HashSet<VoxelCoord> {
+        let reach = steps as i32;
+        let mut cells = std::collections::HashSet::new();
+        for dq in -reach..=reach {
+            for dr in -reach..=reach {
+                let cell = voxel(home.q() + dq, home.r() + dr, home.layer());
+                if home.distance(cell) <= steps {
+                    cells.insert(cell);
+                }
+            }
+        }
+        cells
+    }
+
+    #[test]
+    fn ring_zero_is_the_voxel_itself() {
+        assert_eq!(voxel(2, 3, 1).ring(0).collect::<Vec<_>>(), [voxel(2, 3, 1)]);
+    }
+
+    #[test]
+    fn a_ring_has_six_times_its_radius_cells_all_exactly_that_far_and_none_twice() {
+        let home = voxel(1, -4, 2);
+        for radius in 1..=5 {
+            let ring: Vec<_> = home.ring(radius).collect();
+            let distinct: std::collections::HashSet<_> = ring.iter().copied().collect();
+
+            assert_eq!(ring.len(), 6 * radius as usize);
+            assert_eq!(distinct.len(), ring.len());
+            assert!(ring.iter().all(|cell| home.distance(*cell) == radius));
+            assert!(ring.iter().all(|cell| cell.layer() == home.layer()));
+        }
+    }
+
+    #[test]
+    fn rings_out_to_a_radius_cover_exactly_the_cells_within_it() {
+        let home = voxel(-2, 1, 0);
+        let rings: std::collections::HashSet<_> = (0..=4).flat_map(|r| home.ring(r)).collect();
+
+        assert_eq!(rings, within(home, 4));
+    }
+
+    #[test]
+    fn a_ring_starts_due_east_and_runs_anticlockwise() {
+        let home = voxel(0, 0, 0);
+        let ring: Vec<_> = home.ring(1).collect();
+
+        let edge_neighbours: Vec<_> = Direction::ALL
+            .into_iter()
+            .filter(|d| d.is_edge())
+            .map(|d| home.neighbour(d))
+            .collect();
+        assert_eq!(ring, edge_neighbours);
+    }
+
+    #[test]
+    fn rings_covering_a_radius_in_shaku_reach_every_cell_within_it() {
+        let home = voxel(0, 0, 0);
+        for shaku in [0.5, 1.0, 1.75, 3.0, 4.6, 10.0, 48.0] {
+            let rings = rings_covering(shaku);
+            let reached = within(home, rings);
+            let generous = within(home, rings + 3);
+
+            let missed = generous
+                .iter()
+                .filter(|cell| (cell.to_world() - home.to_world()).length() <= shaku)
+                .find(|cell| !reached.contains(cell));
+            assert_eq!(missed, None, "at {shaku} shaku, {rings} rings");
+            assert!(
+                f64::from(rings) <= f64::from(shaku) / 0.866 + 1.0,
+                "{rings} rings for {shaku}"
+            );
+        }
+    }
+
+    #[test]
+    fn one_shaku_needs_two_rings_because_of_the_diagonals() {
+        assert_eq!(rings_covering(1.0), 2);
+    }
+
+    #[test]
+    fn corners_sit_one_over_root_three_from_the_centre_and_point_north_and_south() {
+        let cell = voxel(3, -1, 1);
+        let centre = cell.to_world();
+        let corners = cell.corners();
+
+        for corner in corners {
+            let radius = (corner - centre).length();
+            assert!((radius - 1.0 / SQRT_3).abs() < 1e-6, "radius {radius}");
+            assert_eq!(corner.y, centre.y);
+        }
+        assert!((corners[1] - centre).abs_diff_eq(Vec3::new(0.0, 0.0, -1.0 / SQRT_3), 1e-6));
+        assert!((corners[4] - centre).abs_diff_eq(Vec3::new(0.0, 0.0, 1.0 / SQRT_3), 1e-6));
+    }
+
+    #[test]
+    fn a_cells_sides_are_half_a_shaku_from_its_centre_and_shared_with_its_neighbour() {
+        let cell = voxel(0, 0, 0);
+        let corners = cell.corners();
+        let east_side = (corners[0] + corners[5]) / 2.0;
+
+        assert!(
+            east_side.abs_diff_eq(Vec3::new(0.5, 0.0, 0.0), 1e-6),
+            "{east_side}"
+        );
+        let east = cell.neighbour(Direction::E).corners();
+        assert!(east.iter().any(|c| c.abs_diff_eq(corners[0], 1e-6)));
+        assert!(east.iter().any(|c| c.abs_diff_eq(corners[5], 1e-6)));
     }
 }
