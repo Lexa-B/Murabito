@@ -3680,6 +3680,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "murabito_vision"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_hexcoords",
+ "murabito_perception",
+ "murabito_placement",
+]
+
+[[package]]
 name = "naga"
 version = "29.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
