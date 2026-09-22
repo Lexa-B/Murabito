@@ -47,8 +47,9 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 ## Overlays
 
 - **`murabito_ui`** — the look and the parts every overlay is built from: the dimmed
-  frame over the world, a button whose label is a `Localized` key, the UI font, and the
-  tinting that answers the pointer. Knows no screen and no action.
+  frame over the world, a button whose label is a `Localized` key, a heading, a settings
+  row, a slider with a readout, the UI font, and the tinting that answers the pointer.
+  Knows no screen and no action.
 - **`murabito_navigation`** — `Overlay`: what is laid over the paused world (`None`,
   `Menu`, `Settings`), a sub-state of `AppState::Paused` so it exists only while the
   world is held still and vanishes when it resumes. Owns the back key (Escape). The

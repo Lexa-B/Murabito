@@ -159,7 +159,8 @@ fn walk_the_fox(mut foxes: Query<&mut ActionQueue, With<Fox>>) {
 
 /// The hare walks a side, rests once the last step has landed, and is then asked to
 /// walk the next side; the third of a turn between sides is `Go`'s own turn-then-step.
-/// A rest is not yet an action the queue knows, so it is kept here, in the scene.
+/// A rest is not an action: it is an AI choosing not to ask for anything, and this timer
+/// stands in for that AI until there is one.
 fn walk_the_hare(
     time: Res<Time>,
     mut hares: Query<(&mut ActionQueue, &Progress, &mut TriangleWalk), With<Hare>>,

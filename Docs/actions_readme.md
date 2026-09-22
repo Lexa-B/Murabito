@@ -67,7 +67,7 @@ rounded to whole ticks up front, which is the corner-step error above with no wa
 
 ## Intents
 
-Design. A mechanism exposes its actions as **intent components**: put a `Step(Direction)` or a
+Implemented, in `murabito_movement`. A mechanism exposes its actions as **intent components**: put a `Step(Direction)` or a
 `Turn(Direction)` on an entity and the matching `FixedUpdate` system carries it out over ticks,
 through `Progress`, then removes it. One intent at a time; the mechanism enforces its own physical
 rules (a step must be within one notch of the facing; a turn goes a notch at a time, the short

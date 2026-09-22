@@ -56,6 +56,9 @@ Implemented, in `murabito_movement`, on the same bar.
 
 ## 12-direction movement
 
+The directions and their costs are implemented; the corner-obstruction rule at the end of this
+section is design, since nothing is yet an obstacle.
+
 Entities move in 12 directions: the 6 edge moves plus the 6 corner moves. They are
 `murabito_hexcoords::Direction`, named by compass point, anticlockwise from east:
 
@@ -74,7 +77,7 @@ blocked hexes. A corner direction is the sum of its two flanks, so the check is 
 
 ## Stepping up
 
-How many layers an entity can step up in one move depends on its size:
+Design. How many layers an entity can step up in one move depends on its size:
 
 | Size | Step up | Height (layers are 5 sun) |
 |---|---|---|
@@ -83,6 +86,8 @@ How many layers an entity can step up in one move depends on its size:
 
 ## Cost
 
+Implemented: `murabito_movement::cost`.
+
 | Move | Cost | Why |
 |---|---|---|
 | Edge   | 1  | 1 shaku to a face neighbour |
@@ -90,7 +95,7 @@ How many layers an entity can step up in one move depends on its size:
 
 ## A\* heuristic
 
-With corner moves, plain hex step count overestimates: two steps can cost √3 < 2. That breaks
+Design. With corner moves, plain hex step count overestimates: two steps can cost √3 < 2. That breaks
 A*'s guarantee of finding the shortest path. Square grids with diagonals have the same problem
 and solve it with octile distance. The hex equivalent is:
 
