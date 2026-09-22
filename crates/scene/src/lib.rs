@@ -31,11 +31,15 @@ const SKY_COLOUR: Color = Color::srgb(0.53, 0.81, 0.92);
 /// whatever faces away from the sun is pure black.
 const SKY_GLOW: f32 = 200.0;
 
-/// Which way the fox starts off facing: toward the camera and to its right, which shows
-/// its face and its flank at once.
+/// Where the fox starts: five cells west of the origin, so that its loop, which runs
+/// five cells east and six north of its start, stays west of the tree; and which way it
+/// starts off facing: toward the camera and to its right, which shows its face and its
+/// flank at once.
+const FOX_STARTS_AT: (i32, i32, i32) = (-5, 0, 5);
 const FOX_FACES: Direction = Direction::ESE;
 
-/// Where the hare starts: six shaku east of the fox, clear of its loop, facing east.
+/// Where the hare starts: six cells east of the origin, on the fox's line and clear of
+/// both walks, facing east.
 const HARE_STARTS_AT: (i32, i32, i32) = (6, 0, -6);
 const HARE_FACES: Direction = Direction::E;
 
@@ -46,8 +50,9 @@ const HARE_TRIANGLE: [Direction; 3] = [Direction::E, Direction::NNW, Direction::
 const HARE_SIDE_STEPS: usize = 3;
 const HARE_REST: Duration = Duration::from_secs(1);
 
-/// Where the tree stands: halfway between the fox's start and the hare's, so that from
-/// where it starts the fox sees the tree and not the hare behind it.
+/// Where the tree stands: on the line from the fox's start to the hare's, three cells
+/// short of the hare, so that from where it starts the fox sees the tree and not the
+/// hare behind it; and east of everywhere the fox's loop goes.
 const TREE_AT: (i32, i32, i32) = (3, 0, -3);
 
 /// Sightlines and cones are drawn per looker in its own colour: not the species' hue,
@@ -139,10 +144,11 @@ fn spawn_sun(mut commands: Commands) {
 /// What a fox is, has and looks like is the kind's business; where this one stands and
 /// which way it starts off facing is the scene's.
 fn spawn_fox(mut commands: Commands) {
-    let origin = VoxelCoord::new(0, 0, 0, 0).expect("the origin is on the plane");
+    let (q, r, s) = FOX_STARTS_AT;
+    let start = VoxelCoord::new(q, r, s, 0).expect("the fox's start is on the plane");
     commands.spawn((
         Fox,
-        VoxelPosition(origin),
+        VoxelPosition(start),
         Facing(FOX_FACES),
         SightColour(FOX_SIGHT),
     ));
@@ -349,11 +355,27 @@ mod tests {
         assert_eq!(tree, VoxelCoord::new(q, r, s, 0).expect("on the plane"));
         let (hq, hr, hs) = HARE_STARTS_AT;
         let hare = VoxelCoord::new(hq, hr, hs, 0).expect("on the plane");
-        let origin = VoxelCoord::new(0, 0, 0, 0).expect("on the plane");
-        assert_eq!(
-            origin.distance(tree) + tree.distance(hare),
-            origin.distance(hare)
-        );
+        let (fq, fr, fs) = FOX_STARTS_AT;
+        let fox = VoxelCoord::new(fq, fr, fs, 0).expect("on the plane");
+        assert_eq!(fox.distance(tree) + tree.distance(hare), fox.distance(hare));
+    }
+
+    /// The fox's loop never enters the tree's cell, nor the ring of cells around it,
+    /// which is about where the canopy ends.
+    #[test]
+    fn the_foxs_loop_keeps_clear_of_the_tree() {
+        let (q, r, s) = TREE_AT;
+        let tree = VoxelCoord::new(q, r, s, 0).expect("on the plane");
+        let (fq, fr, fs) = FOX_STARTS_AT;
+        let mut here = VoxelCoord::new(fq, fr, fs, 0).expect("on the plane");
+
+        for direction in Direction::ALL {
+            here = here.neighbour(direction);
+            assert!(
+                here.distance(tree) > 1,
+                "the loop passes {here:?}, next to the tree"
+            );
+        }
     }
 
     /// The starting tableau, as a claim rather than a screenshot: the fox faces the hare
@@ -395,7 +417,7 @@ mod tests {
         assert_eq!(
             fox_sees.sees(tree),
             Some(Acuity::Near),
-            "the tree is three cells off"
+            "the tree is eight cells off"
         );
         assert_eq!(fox_sees.sees(hare), None, "the hare is behind it");
         let hare_sees = world.get::<Seen>(hare).expect("the hare has eyes");
@@ -411,7 +433,7 @@ mod tests {
     }
 
     #[test]
-    fn a_fox_stands_at_the_origin_facing_toward_the_camera_and_to_its_right() {
+    fn a_fox_stands_five_cells_west_of_the_origin_facing_toward_the_camera_and_to_its_right() {
         let mut app = app_after_startup();
         let world = app.world_mut();
 
@@ -420,12 +442,12 @@ mod tests {
             .single(world)
             .expect("exactly one fox");
 
-        assert_eq!(position.0.to_world(), Vec3::ZERO);
+        assert_eq!(position.0.to_world(), Vec3::new(-5.0, 0.0, 0.0));
         assert_eq!(facing.0, Direction::ESE);
     }
 
     #[test]
-    fn a_hare_starts_six_shaku_east_of_the_fox_facing_east() {
+    fn a_hare_starts_six_cells_east_of_the_origin_facing_east() {
         let mut app = app_after_startup();
         let world = app.world_mut();
 
