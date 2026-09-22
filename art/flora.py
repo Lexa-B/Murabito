@@ -369,15 +369,20 @@ def wrap_sprays(b, group, leaves, shades, rng, lumps=2):
     )
 
 
-def blade(b, origin, direction, length, width, leaf, shade, droop=0.25):
+def blade(b, origin, direction, length, width, leaf, shade, droop=0.25, rounded=False):
     """One long, pointed leaf: a thin closed shape, ridged along its midrib so it
     catches the light in two facets, lying flat-ish along direction with its tip
-    drooping by droop of its length. Upper faces take leaf, lower take shade."""
+    drooping by droop of its length. Upper faces take leaf, lower take shade.
+    rounded makes it a broad oval with two points down each edge (an aucuba's
+    leaf) instead of a narrow diamond (bamboo's)."""
     d = Vector(direction).normalized()
     side = d.cross(Vector((0, 0, 1)))
     side = side.normalized() if side.length > 1e-6 else Vector((1, 0, 0))
     normal = side.cross(d)
     o = Vector(origin)
+    if rounded:
+        _oval_blade(b, o, d, side, normal, length, width, leaf, shade, droop)
+        return
     verts = [b.bm.verts.new(p) for p in (
         o,  # base
         o + d * length * 0.35 + side * width / 2,  # left
@@ -393,7 +398,25 @@ def blade(b, origin, direction, length, width, leaf, shade, droop=0.25):
         b.face(f, shade)
 
 
-def blade_cluster(b, origin, direction, count, length, width, leaves, shades, rng, spread=0.6, droop=(0.3, 0.8)):
+def _oval_blade(b, o, d, side, normal, length, width, leaf, shade, droop):
+    sag = Vector((0, 0, droop * length))
+    half = width / 2
+    left1, right1 = (o + d * length * 0.25 + side * s * half * 0.85 for s in (1, -1))
+    left2, right2 = (o + d * length * 0.62 + side * s * half * 0.9 - sag * 0.35 for s in (1, -1))
+    points = (o, left1, left2, right1, right2, o + d * length - sag,
+              o + d * length * 0.45 + normal * width * 0.14 - sag * 0.15,
+              o + d * length * 0.45 - normal * width * 0.06 - sag * 0.15)
+    base, l1, l2, r1, r2, tip, above, below = (b.bm.verts.new(p) for p in points)
+    for f in ((base, l1, above), (l1, l2, above), (l2, tip, above),
+              (base, above, r1), (r1, above, r2), (r2, above, tip)):
+        b.face(f, leaf)
+    for f in ((base, below, l1), (l1, below, l2), (l2, below, tip),
+              (base, r1, below), (r1, r2, below), (r2, tip, below)):
+        b.face(f, shade)
+
+
+def blade_cluster(b, origin, direction, count, length, width, leaves, shades, rng, spread=0.6, droop=(0.3, 0.8),
+                  rounded=False):
     """A few blades fanning out from one point round direction, each dipping by
     a random angle in droop (radians) and turned within spread either side."""
     d = Vector(direction)
@@ -404,7 +427,7 @@ def blade_cluster(b, origin, direction, count, length, width, leaves, shades, rn
         way = Vector((math.cos(turn) * math.cos(dip), math.sin(turn) * math.cos(dip), -math.sin(dip)))
         blade(
             b, origin, way, length * rng.uniform(0.8, 1.15), width * rng.uniform(0.85, 1.1),
-            rng.choice(leaves), rng.choice(shades),
+            rng.choice(leaves), rng.choice(shades), rounded=rounded,
         )
 
 

@@ -243,6 +243,13 @@ PALETTE = [
     ("fern_green_yellow", "#6E8E40"),
     ("fern_shade", "#34562B"),
     ("fern_shade_deep", "#2B4824"),
+    # aucuba
+    ("aoki_green", "#3E7A3A"),
+    ("aoki_green_shine", "#5E9A4C"),
+    ("aoki_green_deep", "#2F6330"),
+    ("aoki_shade", "#2C4E2A"),
+    ("aoki_shade_light", "#37583A"),
+    ("aoki_stem", "#6E9A4A"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
