@@ -30,6 +30,7 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 import figure
+import hair as hairdo
 import loft
 import rig
 from figure import X, Y, Z
@@ -157,6 +158,7 @@ class Shape:
     knee: int = 2
     elbow: int = 1
     face: Face = None
+    hair: hairdo.Hair = None
 
 
 def build(shape, name):
@@ -166,13 +168,19 @@ def build(shape, name):
     torso = body.torso()
     if shape.face:
         body.face()
+    if shape.hair:
+        scalp = hairdo.Scalp(body.tree or BVHTree.FromBMesh(b.bm), shape.hair.centre)
+        on_head, tail = hairdo.build(b, scalp, shape.hair)
+        body.weigh(on_head, ("head", 1))
+        if tail:
+            body.hair_tail(tail)
     for mirror in (1, -1):
         body.leg(torso[0], mirror)
         body.arm(torso, mirror)
     b.bm.verts.index_update()
     for verts, pairs in body.weights:
         body.rig.weigh_blend([v.index for v in verts if v.is_valid], pairs)
-    obj = b.finish(name)
+    obj = b.finish(name, shaded=True)  # the hair varies face by face (style.SHADES); skin doesn't
     body.rig.bind(obj, default="hips")
     return obj
 
@@ -227,6 +235,7 @@ class _Body:
     def __init__(self, b, shape, skeleton):
         self.b, self.s, self.rig = b, shape, skeleton
         self.weights = []  # (vertices, [(bone, weight)]), turned into indices once built
+        self.tree = None  # the head without its features, for placing things on it
         self.torso_faces = {}  # (row, k): the torso's face k between ring row and the ring above
 
     def weigh(self, verts, *pairs):
@@ -302,7 +311,7 @@ class _Body:
         before = set(b.bm.verts)
         self.nose(self.rings)
         b.bm.normal_update()  # the rays read the faces' normals
-        tree = BVHTree.FromBMesh(b.bm)
+        tree = self.tree = BVHTree.FromBMesh(b.bm)
 
         def surface(origin, direction):
             hit, normal, *_ = tree.ray_cast(Vector(origin), Vector(direction))
@@ -320,6 +329,18 @@ class _Body:
         points, normals = zip(*(front(half * (2 * k / 4 - 1), z) for k in range(5)))
         figure.strip(b, list(points), list(normals), [width * w for w in (0.5, 1, 1, 1, 0.5)], 0.005, "mouth_line")
         self.weigh([v for v in b.bm.verts if v not in before], ("head", 1))
+
+    def hair_tail(self, tail):
+        """A chain of bones down a tied tail of hair, from the tie, so it can sway:
+        its rings ride on them as a limb's do, the tie's on the head."""
+        points = [middle for _, middle in tail]
+        joints = [0, len(points) // 3, 2 * len(points) // 3, len(points) - 1]
+        names = [f"hair{k}" for k in range(len(joints) - 1)]
+        for k, name in enumerate(names):
+            self.rig.bone(name, points[joints[k]], points[joints[k + 1]], names[k - 1] if k else "head", k > 0, roll_to=Y)
+        bones = ["head"] + names
+        for k, (ring, _) in enumerate(tail):
+            self.weigh(ring, *_chain_weights(k, joints[:-1], bones))
 
     def eye(self, front, mirror):
         """A white in the eye's outline, a dark iris with a glint on it (the same

@@ -281,6 +281,10 @@ PALETTE = [
     ("iris_brown", "#2B1C16"),
     ("hair_black", "#221D1E"),
     ("mouth_line", "#8A4A3E"),
+    ("hair", "#3A3033"),
+    ("hair_light", "#443A3D"),
+    ("hair_deep", "#312A2C"),
+    ("hair_cord", "#EDE6D6"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -322,6 +326,7 @@ SHADES = {
         "pheasant_back",
         "pheasant_tail",
         "heron_grey",
+        "hair",
     )
 }
 
