@@ -3496,6 +3496,7 @@ name = "murabito_scene"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "murabito_actions",
  "murabito_hexcoords",
  "murabito_movement",
  "murabito_progress",

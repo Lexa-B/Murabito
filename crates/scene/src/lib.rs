@@ -1,5 +1,5 @@
-//! The placeholder world: a ground, a sun and sky to see it by, and a fox standing at
-//! the origin so that there is something to look at.
+//! The placeholder world: a ground, a sun and sky to see it by, and a fox walking a
+//! twelve-sided loop about the origin so that there is something to look at.
 //!
 //! Lengths are in shaku: one world unit is one 尺, about 30.3 cm. Metres appear only in
 //! comments, to give a familiar sense of scale.
@@ -7,9 +7,10 @@
 //! This crate spawns no camera: seeing the world is another module's job.
 
 use bevy::prelude::*;
+use murabito_actions::{Action, ActionQueue};
 use murabito_hexcoords::{Direction, VoxelCoord};
-use murabito_movement::{Facing, Locomotion, Turn, VoxelPosition};
-use murabito_progress::{MechanismSet, Progress};
+use murabito_movement::{Facing, Locomotion, VoxelPosition};
+use murabito_progress::Progress;
 
 /// One 町 (cho): 360 shaku, about 109 m.
 const GROUND_SIDE: f32 = 360.0;
@@ -63,7 +64,7 @@ impl Plugin for ScenePlugin {
                 ..default()
             })
             .add_systems(Startup, (spawn_ground, spawn_sun, spawn_fox, thicken_bars))
-            .add_systems(FixedUpdate, spin_the_fox.before(MechanismSet))
+            .add_systems(FixedUpdate, walk_the_fox)
             .add_systems(Update, draw_progress_bars);
     }
 }
@@ -113,19 +114,22 @@ fn spawn_fox(mut commands: Commands, assets: Res<AssetServer>) {
         VoxelPosition(origin),
         Facing(FOX_FACES),
         FOX_LOCOMOTION,
+        ActionQueue::default(),
     ));
 }
 
-/// Until the actions layer exists, the fox spins on the spot: whenever it has no turn in
-/// flight it is asked to face the opposite way, and a half turn always goes
-/// anticlockwise, so it keeps going round. Runs before the mechanisms so the new turn
-/// starts on the tick the last one ended, with no tick at rest between.
-/// A fox with no turn in flight.
-type IdleFox = (With<Fox>, Without<Turn>);
-
-fn spin_the_fox(mut commands: Commands, foxes: Query<(Entity, &Facing), IdleFox>) {
-    for (fox, facing) in &foxes {
-        commands.entity(fox).insert(Turn(facing.0.rotated(6)));
+/// Until something decides for it, the fox walks a loop: whenever its queue runs dry it
+/// is asked to go each of the twelve directions in turn. Each is one notch on from the
+/// last, so no step needs a turn first, and the twelve sum to nothing, so the loop
+/// closes on the voxel it started from. The queue empties as the last step is issued,
+/// while it is still in flight, so the refill never leaves a tick at rest.
+fn walk_the_fox(mut foxes: Query<&mut ActionQueue, With<Fox>>) {
+    for mut queue in &mut foxes {
+        if queue.is_empty() {
+            Direction::ALL
+                .into_iter()
+                .for_each(|direction| queue.push(Action::Go(direction)));
+        }
     }
 }
 
@@ -255,9 +259,10 @@ mod tests {
     }
 
     #[test]
-    fn the_fox_keeps_turning() {
+    fn the_fox_walks_a_twelve_sided_loop_and_comes_home() {
         use bevy::gizmos::AppGizmoBuilder;
         use bevy::time::TimeUpdateStrategy;
+        use murabito_actions::ActionsPlugin;
         use murabito_movement::MovementPlugin;
         use murabito_progress::ProgressPlugin;
 
@@ -268,23 +273,32 @@ mod tests {
             .init_asset::<WorldAsset>()
             .init_asset::<bevy::gizmos::GizmoAsset>()
             .init_gizmo_group::<DefaultGizmoConfigGroup>()
-            .add_plugins((ProgressPlugin, MovementPlugin, ScenePlugin))
+            .add_plugins((ProgressPlugin, MovementPlugin, ActionsPlugin, ScenePlugin))
             .insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
         app.update();
-        let mut seen = std::collections::HashSet::new();
-
-        // A full circle at the fox's turn speed, at 64 ticks a second, and a little over.
-        let a_full_circle = (360.0 / FOX_LOCOMOTION.turn_speed * 64.0 * 1.1) as u32;
-        for _ in 0..a_full_circle {
-            app.update();
+        let fox_at = |app: &mut App| {
             let world = app.world_mut();
-            let facing = world
-                .query_filtered::<&Facing, With<Fox>>()
+            world
+                .query_filtered::<&VoxelPosition, With<Fox>>()
                 .single(world)
-                .expect("exactly one fox");
-            seen.insert(facing.0);
-        }
+                .expect("exactly one fox")
+                .0
+        };
+        let home = fox_at(&mut app);
+        let mut visited = std::collections::HashSet::from([home]);
+        let mut left_home = false;
 
-        assert_eq!(seen.len(), 12, "the fox faced only {seen:?}");
+        // Six edges and six corners at 4 shaku/s: 6 + 6√3 = 16.39 shaku, 262.3 ticks of
+        // 1/16 shaku, so the last step lands on tick 263.
+        let came_home_on = (1..=400).find(|_| {
+            app.update();
+            let here = fox_at(&mut app);
+            visited.insert(here);
+            left_home |= here != home;
+            left_home && here == home
+        });
+
+        assert_eq!(came_home_on, Some(263));
+        assert_eq!(visited.len(), 12, "the fox visited only {visited:?}");
     }
 }

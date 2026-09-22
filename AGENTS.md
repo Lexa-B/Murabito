@@ -29,7 +29,7 @@ Murabito/
 ├─ Cargo.toml, Cargo.lock, rust-toolchain.toml   the main project: a Cargo workspace
 ├─ crates/                 its members, one directory each (see "Main project" below)
 │  ├─ murabito/            the app: the one binary, a plugin list and nothing else
-│  ├─ scene/               `murabito_scene`: the placeholder world (ground, sun, sky colour)
+│  ├─ scene/               `murabito_scene`: the placeholder world (ground, sun, sky colour, a fox walking a loop)
 │  ├─ camera/              `murabito_camera`: the overhead camera
 │  ├─ keybinds/            `murabito_keybinds`: `Binds`, up to three keys or mouse buttons for one action
 │  ├─ hexcoords/           `murabito_hexcoords`: hex voxel coordinates (`VoxelCoord`), per `Docs/hex_units_readme.md`
