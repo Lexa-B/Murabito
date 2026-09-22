@@ -2474,6 +2474,10 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 [[package]]
 name = "hexworld"
 version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_hexcoords",
+]
 
 [[package]]
 name = "hexworld_bevy"
@@ -2898,6 +2902,13 @@ checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
 dependencies = [
  "num-traits",
  "pxfm",
+]
+
+[[package]]
+name = "murabito_hexcoords"
+version = "0.1.0"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]

@@ -1,8 +1,9 @@
 //! Murabito's hex world: ri / cho / ken / shaku addresses with a vertical layer,
 //! voxel columns, and chunks that load at nested scales.
 //!
-//! This crate is engine-free on purpose: no rendering, no ECS, no dependencies.
-//! Positions are `(east, north, height)` in metres; mapping to an engine's axes is
+//! This crate holds no rendering, ECS or asset code. Its only dependencies are
+//! `murabito_hexcoords`, the main project's coordinate crate (vendored), and Bevy's math
+//! types. Positions are `(east, north, height)` in metres; mapping to an engine's axes is
 //! the caller's job.
 
 pub mod address;
@@ -36,3 +37,5 @@ pub use store::{
     StoreSettings, StoreUpdate,
 };
 pub use world::{cell_in_world, in_world, world_ri};
+
+pub use murabito_hexcoords::{Direction, NotOnHexPlane, VoxelCoord, VoxelspacePos};

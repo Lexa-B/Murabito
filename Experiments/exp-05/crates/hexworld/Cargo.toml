@@ -5,3 +5,5 @@ version.workspace = true
 license.workspace = true
 
 [dependencies]
+murabito_hexcoords = { path = "../hexcoords" }
+bevy = { version = "0.19", default-features = false }

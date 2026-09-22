@@ -90,7 +90,7 @@ The repo root is where the Murabito game lives, in Rust on Bevy: a Cargo workspa
 Each Rust + Bevy experiment is its own Cargo workspace, separate from the main project at the repo root.
 
 - **Build and test from the experiment's directory**, e.g. `cd Experiments/exp-05 && cargo test`. Run from the repo root, `cargo` builds the main project's workspace instead. An experiment's workspace members also work from there (`cargo run -p viewer --release`, `cargo test -p hexworld`).
-- **Keep an experiment's core crate engine-free.** exp-05's `hexworld` has no dependencies at all, not even dev-dependencies: it is the part meant to outlive whatever engine or graphics stack sits on top. Engine types and rendering code belong in the plugin crate or the app.
+- **Keep an experiment's core crate engine-free.** exp-05's `hexworld` holds no rendering, ECS or asset code, and depends only on `murabito_hexcoords` (the main project's coordinate crate, vendored into the experiment) and on `bevy` without default features, for its math types. Engine types and rendering code belong in the plugin crate or the app.
 - **No Rust build directory under `/tmp`.** It is a RAM-backed tmpfs on this machine, and a Bevy `target/` there fills it. Keep `cargo`'s default `target/` inside the experiment, and don't point `CARGO_TARGET_DIR` under `/tmp`.
 - **Windowed runs need the desktop display**, as for the main project.
 
