@@ -1,6 +1,18 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+# Listed rather than globbed: a glob must match only crates, and `crates/action/` is a
+# group of them, not one. `cargo new` adds a new top-level path here itself; a new
+# mechanism under `crates/action/mechanisms/` needs nothing.
+members = [
+    "crates/murabito",
+    "crates/scene",
+    "crates/camera",
+    "crates/keybinds",
+    "crates/hexcoords",
+    "crates/action/progress",
+    "crates/action/mechanisms/*",
+    "crates/action/actions",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,6 +25,9 @@ murabito_scene = { path = "crates/scene" }
 murabito_camera = { path = "crates/camera" }
 murabito_keybinds = { path = "crates/keybinds" }
 murabito_hexcoords = { path = "crates/hexcoords" }
+murabito_progress = { path = "crates/action/progress" }
+murabito_movement = { path = "crates/action/mechanisms/movement" }
+murabito_actions = { path = "crates/action/actions" }
 
 # Bevy is slow in a plain debug build. Our own code is lightly optimised and
 # every dependency (the engine) fully: the engine is rebuilt rarely, our code often.

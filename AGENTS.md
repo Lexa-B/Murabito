@@ -29,10 +29,15 @@ Murabito/
 ├─ Cargo.toml, Cargo.lock, rust-toolchain.toml   the main project: a Cargo workspace
 ├─ crates/                 its members, one directory each (see "Main project" below)
 │  ├─ murabito/            the app: the one binary, a plugin list and nothing else
-│  ├─ scene/               `murabito_scene`: the placeholder world (ground, sun, sky colour)
+│  ├─ scene/               `murabito_scene`: the placeholder world (ground, sun, sky colour, a fox walking a loop)
 │  ├─ camera/              `murabito_camera`: the overhead camera
 │  ├─ keybinds/            `murabito_keybinds`: `Binds`, up to three keys or mouse buttons for one action
-│  └─ hexcoords/           `murabito_hexcoords`: hex voxel coordinates (`VoxelCoord`), per `Docs/hex_units.md`
+│  ├─ hexcoords/           `murabito_hexcoords`: hex voxel coordinates (`VoxelCoord`), per `Docs/hex_units_readme.md`
+│  └─ action/              the actions layer, per `Docs/actions_readme.md`: a group of crates, not one
+│     ├─ actions/          `murabito_actions`: `ActionQueue`, what a body has been asked to do, and the one system that issues intents for it
+│     ├─ mechanisms/       one crate per kind of thing a body can do
+│     │  └─ movement/      `murabito_movement`: where a body is and which way it faces, and the mechanics of stepping and turning, per `Docs/movement_readme.md`
+│     └─ progress/         `murabito_progress`: the one accumulation bar every sustained action fills
 ├─ scripts/run.sh          launches the app; what a desktop entry points at. Finds the display itself, logs to ~/.cache/murabito/run.log
 ├─ Docs/                   project docs (no specs or plans; see below)
 ├─ _Archives/
@@ -64,14 +69,14 @@ Murabito/
 The repo root is where the Murabito game lives, in Rust on Bevy: a Cargo workspace whose members sit under `crates/`. It is nearly empty: the first Bevy attempt grew tangled and was archived to `_Archives/Bevy-Try-1/`, and the project is being rebuilt from nothing. The user drives it; AI assists.
 
 - **Build, run and test from the repo root:** `cargo run -p murabito`, `cargo test --workspace`, `cargo clippy --workspace --all-targets`, `cargo fmt --all`. The toolchain is pinned in `rust-toolchain.toml`; changing it is a deliberate edit, since a new compiler rebuilds the whole engine.
-- **Each module is its own library crate under `crates/`.** Its `pub` items are its whole API and its `[dependencies]` are its whole wiring: a crate can't reach what another doesn't export, and Cargo refuses dependency cycles. `murabito` is the app and the only binary. Members are picked up by the `crates/*` glob, inherit `version`, `edition` and `publish = false` from `[workspace.package]` in the root manifest, and are never published.
+- **Each module is its own library crate under `crates/`.** Its `pub` items are its whole API and its `[dependencies]` are its whole wiring: a crate can't reach what another doesn't export, and Cargo refuses dependency cycles. `murabito` is the app and the only binary. Members are listed in the root manifest (`cargo new` adds a new one itself; a glob can't cover a group directory such as `crates/action/`), inherit `version`, `edition` and `publish = false` from `[workspace.package]` in the root manifest, and are never published.
 - **A module exports its `Plugin`, and as little else as it can.** Components, systems and helpers stay private; unit tests sit in the same file, where they can see them. Widening a crate's `pub` surface is a decision, agreed with the user, not a convenience.
 - **The module that uses a setting owns it.** A module's tunables are a `pub` `Resource` with `pub` fields in that module's crate (`murabito_camera::CameraSettings`), inserted by its plugin with `init_resource`, so a value already there when the plugin is added is kept. Whoever edits or saves it depends on that crate; the module depends on none of them. It makes a bad value safe at the one place it uses it, since a setter can't guard what arrives from a file.
 - **Actions are bound through `murabito_keybinds::Binds`**: up to three keys or mouse buttons. The crate owns the type and knows no actions; each module keeps its own `Binds` in its settings, and its systems ask for the `Inputs` parameter rather than naming a device. There is no central list of actions.
 - **Logic goes in pure functions, and systems stay thin.** A system gathers what Bevy hands it and calls a function that takes plain values (`pan_direction`, `pan_speed`, `zoomed`, `eased_velocity`), which tests exercise without an app.
 - **Tests run headless, and a test app has only what it is given.** `MinimalPlugins` plus exactly what the systems ask for: `InputPlugin` for input, `AssetPlugin` and an `init_asset` per asset type for assets. A system asking for a resource that isn't there is a panic, in a test and in the app alike. Drive frames with `app.update()`; fix the frame length with `TimeUpdateStrategy::ManualDuration` when a test is about time. No test opens a window or needs a GPU.
 - **Check an engine API in the source before writing against it.** Bevy 0.19 renamed things the archive and older examples still use (`SceneRoot` is now `WorldAssetRoot`; events are messages, read with `MessageReader`). The registry source is under `~/.cargo/registry/src/`.
-- **Compass invariant: east is +X, north is −Z, up is +Y.** Directions across the ground are compass points (`murabito_hexcoords::Direction`), never up or down, which are for gravity. With the overhead camera as it stands, north is up the screen. Stated in `Docs/hex_units.md` and `Docs/movement.md` too.
+- **Compass invariant: east is +X, north is −Z, up is +Y.** Directions across the ground are compass points (`murabito_hexcoords::Direction`), never up or down, which are for gravity. With the overhead camera as it stands, north is up the screen. Stated in `Docs/hex_units_readme.md` and `Docs/movement_readme.md` too.
 - **Assets live in `assets/` at the repo root**, where the art pipeline writes. `.cargo/config.toml` sets `BEVY_ASSET_ROOT` there, since Bevy would otherwise look beside the app's crate.
 
 - **One module at a time, at a pace the user can learn from.** The user is learning Rust and Bevy through this rebuild. Explain what a piece does and why before writing it, do one small piece, let the user look at it, then agree the next. Show the API and the reasoning, not only the finished diff.

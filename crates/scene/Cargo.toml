@@ -6,3 +6,7 @@ publish.workspace = true
 
 [dependencies]
 bevy.workspace = true
+murabito_hexcoords.workspace = true
+murabito_movement.workspace = true
+murabito_progress.workspace = true
+murabito_actions.workspace = true

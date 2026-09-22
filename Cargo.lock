@@ -3436,8 +3436,21 @@ name = "murabito"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "murabito_actions",
  "murabito_camera",
+ "murabito_movement",
+ "murabito_progress",
  "murabito_scene",
+]
+
+[[package]]
+name = "murabito_actions"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_hexcoords",
+ "murabito_movement",
+ "murabito_progress",
 ]
 
 [[package]]
@@ -3463,10 +3476,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "murabito_movement"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_hexcoords",
+ "murabito_progress",
+]
+
+[[package]]
+name = "murabito_progress"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "murabito_scene"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "murabito_actions",
+ "murabito_hexcoords",
+ "murabito_movement",
+ "murabito_progress",
 ]
 
 [[package]]

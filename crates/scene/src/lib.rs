@@ -1,5 +1,5 @@
-//! The placeholder world: a ground, a sun and sky to see it by, and a fox standing at
-//! the origin so that there is something to look at.
+//! The placeholder world: a ground, a sun and sky to see it by, and a fox walking a
+//! twelve-sided loop about the origin so that there is something to look at.
 //!
 //! Lengths are in shaku: one world unit is one 尺, about 30.3 cm. Metres appear only in
 //! comments, to give a familiar sense of scale.
@@ -7,6 +7,10 @@
 //! This crate spawns no camera: seeing the world is another module's job.
 
 use bevy::prelude::*;
+use murabito_actions::{Action, ActionQueue};
+use murabito_hexcoords::{Direction, VoxelCoord};
+use murabito_movement::{Facing, Locomotion, VoxelPosition};
+use murabito_progress::Progress;
 
 /// One 町 (cho): 360 shaku, about 109 m.
 const GROUND_SIDE: f32 = 360.0;
@@ -27,10 +31,28 @@ const SKY_GLOW: f32 = 200.0;
 /// its soles at y = 0, so it needs no scaling or righting: see `art/ART-README.md`.
 const FOX_MODEL: &str = "models/fox.glb";
 
-/// How far the fox is turned from facing away from the camera, clockwise seen from
-/// above. 135 degrees is half past four on a clock face whose twelve is straight ahead:
-/// toward the camera and to its right, which shows the fox's face and its flank at once.
-const FOX_TURNED_CLOCKWISE: f32 = 135.0;
+/// Which way the fox starts off facing: toward the camera and to its right, which shows
+/// its face and its flank at once.
+const FOX_FACES: Direction = Direction::ESE;
+
+/// How the fox moves, until something more considered decides: a brisk walk of 4 shaku
+/// (about 1.2 m) a second, and half a turn a second.
+const FOX_LOCOMOTION: Locomotion = Locomotion {
+    speed: 4.0,
+    turn_speed: 180.0,
+};
+
+/// The progress bar drawn under a body with something in flight: on the ground just in
+/// front of it, toward the camera, a shaku wide. Placeholder until a UI module owns it.
+const BAR_WIDTH: f32 = 1.0;
+const BAR_TOWARD_CAMERA: f32 = 0.8;
+/// A hair above the ground, so it isn't lost in it.
+const BAR_LIFT: f32 = 0.02;
+/// In pixels: gizmo lines are drawn in screen space.
+const BAR_THICKNESS: f32 = 6.0;
+const BAR_EMPTY: Color = Color::srgb(0.15, 0.15, 0.15);
+/// A desaturated mint.
+const BAR_FULL: Color = Color::srgb(0.62, 0.85, 0.74);
 
 pub struct ScenePlugin;
 
@@ -41,7 +63,9 @@ impl Plugin for ScenePlugin {
                 brightness: SKY_GLOW,
                 ..default()
             })
-            .add_systems(Startup, (spawn_ground, spawn_sun, spawn_fox));
+            .add_systems(Startup, (spawn_ground, spawn_sun, spawn_fox, thicken_bars))
+            .add_systems(FixedUpdate, walk_the_fox)
+            .add_systems(Update, draw_progress_bars);
     }
 }
 
@@ -83,9 +107,53 @@ fn spawn_sun(mut commands: Commands) {
 
 fn spawn_fox(mut commands: Commands, assets: Res<AssetServer>) {
     let model = assets.load(GltfAssetLabel::Scene(0).from_asset(FOX_MODEL));
-    // A positive turn about Y runs counter-clockwise seen from above, hence the minus.
-    let facing = Quat::from_rotation_y(-FOX_TURNED_CLOCKWISE.to_radians());
-    commands.spawn((Fox, WorldAssetRoot(model), Transform::from_rotation(facing)));
+    let origin = VoxelCoord::new(0, 0, 0, 0).expect("the origin is on the plane");
+    commands.spawn((
+        Fox,
+        WorldAssetRoot(model),
+        VoxelPosition(origin),
+        Facing(FOX_FACES),
+        FOX_LOCOMOTION,
+        ActionQueue::default(),
+    ));
+}
+
+/// Until something decides for it, the fox walks a loop: whenever its queue runs dry it
+/// is asked to go each of the twelve directions in turn. Each is one notch on from the
+/// last, so no step needs a turn first, and the twelve sum to nothing, so the loop
+/// closes on the voxel it started from. The queue empties as the last step is issued,
+/// while it is still in flight, so the refill never leaves a tick at rest.
+fn walk_the_fox(mut foxes: Query<&mut ActionQueue, With<Fox>>) {
+    for mut queue in &mut foxes {
+        if queue.is_empty() {
+            Direction::ALL
+                .into_iter()
+                .for_each(|direction| queue.push(Action::Go(direction)));
+        }
+    }
+}
+
+fn thicken_bars(mut config: ResMut<GizmoConfigStore>) {
+    config.config_mut::<DefaultGizmoConfigGroup>().0.line.width = BAR_THICKNESS;
+}
+
+/// Until a UI module owns it: a bar under every body with something in flight, drawn
+/// with gizmos, which are lines redrawn each frame and need no mesh. Two lines end to
+/// end, the part done and the part still to do: they must not overlap, since gizmo
+/// lines are depth-tested and one drawn over another at the same depth loses to it. It
+/// reads only `Progress`, so it shows a step, a notch of a turn, or anything a later
+/// mechanism does, without knowing which.
+fn draw_progress_bars(mut gizmos: Gizmos, bodies: Query<(&Transform, &Progress)>) {
+    for (transform, progress) in &bodies {
+        if !progress.in_flight() {
+            continue;
+        }
+        let left = transform.translation + Vec3::new(-BAR_WIDTH / 2.0, BAR_LIFT, BAR_TOWARD_CAMERA);
+        let right = left + Vec3::X * BAR_WIDTH;
+        let done_to = left + Vec3::X * BAR_WIDTH * progress.fraction();
+        gizmos.line(left, done_to, BAR_FULL);
+        gizmos.line(done_to, right, BAR_EMPTY);
+    }
 }
 
 #[cfg(test)]
@@ -95,13 +163,18 @@ mod tests {
     /// A headless app, run for one frame: no window, no GPU. `MinimalPlugins` brings the
     /// schedules; the asset stores are what the spawn systems ask for, and in the real
     /// app they arrive with `DefaultPlugins`. No glTF loader is registered, so the fox's
-    /// handle never resolves to a model, which no test here needs.
+    /// handle never resolves to a model, which no test here needs. Gizmos want their
+    /// asset store and a config group registered, which `GizmoPlugin` would do.
     fn app_after_startup() -> App {
+        use bevy::gizmos::AppGizmoBuilder;
+
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, AssetPlugin::default()))
             .init_asset::<Mesh>()
             .init_asset::<StandardMaterial>()
             .init_asset::<WorldAsset>()
+            .init_asset::<bevy::gizmos::GizmoAsset>()
+            .init_gizmo_group::<DefaultGizmoConfigGroup>()
             .add_plugins(ScenePlugin);
         app.update();
         app
@@ -124,34 +197,17 @@ mod tests {
     }
 
     #[test]
-    fn a_fox_stands_at_the_origin() {
+    fn a_fox_stands_at_the_origin_facing_toward_the_camera_and_to_its_right() {
         let mut app = app_after_startup();
         let world = app.world_mut();
 
-        let fox = world
-            .query_filtered::<&Transform, With<Fox>>()
+        let (position, facing) = world
+            .query_filtered::<(&VoxelPosition, &Facing), With<Fox>>()
             .single(world)
             .expect("exactly one fox");
 
-        assert_eq!(fox.translation, Vec3::ZERO);
-    }
-
-    #[test]
-    fn the_fox_faces_half_past_four_toward_the_camera_and_to_its_right() {
-        let mut app = app_after_startup();
-        let world = app.world_mut();
-
-        let fox = world
-            .query_filtered::<&Transform, With<Fox>>()
-            .single(world)
-            .expect("exactly one fox");
-
-        let right_and_toward_the_camera = Vec3::new(1.0, 0.0, 1.0).normalize();
-        assert!(
-            fox.forward().abs_diff_eq(right_and_toward_the_camera, 1e-5),
-            "the fox faces {:?}",
-            fox.forward()
-        );
+        assert_eq!(position.0.to_world(), Vec3::ZERO);
+        assert_eq!(facing.0, Direction::ESE);
     }
 
     /// The model is made by the art pipeline, not by this crate. A rename there would
@@ -200,5 +256,49 @@ mod tests {
             .expect("exactly one sun");
 
         assert!(sun.forward().y < 0.0, "the sun points {:?}", sun.forward());
+    }
+
+    #[test]
+    fn the_fox_walks_a_twelve_sided_loop_and_comes_home() {
+        use bevy::gizmos::AppGizmoBuilder;
+        use bevy::time::TimeUpdateStrategy;
+        use murabito_actions::ActionsPlugin;
+        use murabito_movement::MovementPlugin;
+        use murabito_progress::ProgressPlugin;
+
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Mesh>()
+            .init_asset::<StandardMaterial>()
+            .init_asset::<WorldAsset>()
+            .init_asset::<bevy::gizmos::GizmoAsset>()
+            .init_gizmo_group::<DefaultGizmoConfigGroup>()
+            .add_plugins((ProgressPlugin, MovementPlugin, ActionsPlugin, ScenePlugin))
+            .insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
+        app.update();
+        let fox_at = |app: &mut App| {
+            let world = app.world_mut();
+            world
+                .query_filtered::<&VoxelPosition, With<Fox>>()
+                .single(world)
+                .expect("exactly one fox")
+                .0
+        };
+        let home = fox_at(&mut app);
+        let mut visited = std::collections::HashSet::from([home]);
+        let mut left_home = false;
+
+        // Six edges and six corners at 4 shaku/s: 6 + 6√3 = 16.39 shaku, 262.3 ticks of
+        // 1/16 shaku, so the last step lands on tick 263.
+        let came_home_on = (1..=400).find(|_| {
+            app.update();
+            let here = fox_at(&mut app);
+            visited.insert(here);
+            left_home |= here != home;
+            left_home && here == home
+        });
+
+        assert_eq!(came_home_on, Some(263));
+        assert_eq!(visited.len(), 12, "the fox visited only {visited:?}");
     }
 }
