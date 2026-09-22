@@ -1,7 +1,7 @@
 # Handoff — the main project
 
-Written 2026-09-22, after PR #25 (movement) merged. Everything here is on `main`; nothing is
-outstanding except the `todo` branch carrying `TODO.md` and this file. `AGENTS.md` is the
+Written 2026-09-22, after PR #25 (movement) merged; brought up to date the same day with the
+settings and i18n crates. Everything here is on `main`, or on the `settings-i18n` branch's PR. `AGENTS.md` is the
 authority on how to work; this is where things stand, for a session starting cold.
 
 ## What runs
@@ -11,7 +11,8 @@ ground one cho square under a pale sky, lit by a sun, and a fox at the origin wa
 twelve-sided loop, facing the way it goes, corner steps visibly slower than edge steps, with a
 progress bar filling on the ground in front of it once per step. WASD/arrows pan, the wheel
 zooms, both eased; the camera's feel numbers are the ones settled by feel-testing in the first
-attempt.
+attempt. The camera's settings (speed multiplier, pan binds) and the UI language persist to
+`~/.config/murabito/settings.yaml`, which is hand-editable.
 
 ## The crates
 
@@ -23,7 +24,10 @@ crate, and reads the same way.
 | `murabito` | `crates/murabito` | the app: a plugin list | |
 | `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns the fox with its position, facing, locomotion and action queue; refills its queue with the twelve-direction loop; draws the progress bar (placeholder until a UI module owns it) | `ScenePlugin` |
 | `murabito_camera` | `crates/camera` | the overhead rig: focus, direction, zoom; eased pan and zoom; settings | `CameraPlugin`, `CameraSettings` |
-| `murabito_keybinds` | `crates/keybinds` | `Binds`, up to three keys or mouse buttons for one action; `Inputs`, the system parameter | `Bind`, `Binds`, `Held`, `Inputs`, `MAX_BINDS` |
+| `murabito_keybinds` | `crates/keybinds` | `Binds`, up to three keys or mouse buttons for one action; `Inputs`, the system parameter; a `Bind` is one word in a file (`KeyW`, `Mouse7`) | `Bind`, `Binds`, `Held`, `Inputs`, `MAX_BINDS`, `UnknownBind` |
+| `murabito_user_data` | `crates/user_data` | the player's directory, `~/.config/murabito`; the only place that decides where it is | `UserData`, `UserDataPlugin` |
+| `murabito_settings` | `crates/settings` | `settings.yaml` in that directory: the app registers each module's settings resource with `persist::<T>("key")`; loaded as the app is built, written on the frame anything changes; a file or section that can't be read is backed up to `settings-<moment>.bak` then replaced | `SettingsPlugin`, `Persist` |
+| `murabito_i18n` | `crates/i18n` | `Language` (a setting, persisted as `language: en`), `Localized` (the key a text entity carries), the compiled-in catalogues `assets/locales/{en,ja}.yaml`, live re-localising | `Language`, `Localized`, `I18nPlugin` |
 | `murabito_hexcoords` | `crates/hexcoords` | `VoxelCoord` (cube in, axial stored, layer), `VoxelspacePos`, `Direction` (twelve, by compass point) with `neighbour`, `rotated`, `notches_to`, `heading` | those |
 | `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
 | `murabito_movement` | `crates/action/mechanisms/movement` | `VoxelPosition`, `Facing`, `Locomotion`; the `Step` and `Turn` intents and their tick systems; `place` | those, plus `cost`, `can_step`, `MovementPlugin` |
@@ -39,6 +43,18 @@ is still design. `TODO.md` is what's queued.
   tiny things that always travel together share one.
 - **The module that uses a setting owns it**, as a `pub` resource; whoever edits or saves it
   depends on that module. Decided so a persistence module never has to know its consumers.
+- **Only the app registers settings for persistence** (`.persist::<T>("key")` in `main.rs`),
+  chosen over each module's plugin registering itself so that no module depends on
+  `murabito_settings` and a headless test of a module needs no settings crate.
+- **A settings file the game can't read is backed up, then replaced.** Lexa's call: copy to
+  `settings-<moment>.bak` and carry on with what could be read. Sections nothing registered
+  ride along untouched, so an old or future key is never dropped.
+- **A `Bind` is one word in a file** (`KeyW`, `MouseLeft`, `Mouse7`), by hand-written serde:
+  the derived form nests an enum in an enum, which YAML can't hold. Bevy's `serialize`
+  feature is on so `KeyCode` spells itself; `FromStr` hands the word to Bevy's own serde.
+- **The catalogues start empty.** A key is added when the text that uses it is; a test fails
+  if `en.yaml` and `ja.yaml` disagree. A language's own name is `Language::own_name()`, on
+  the enum, never translated.
 - **Simulation on `FixedUpdate` at 64 Hz**, presentation on `Update`.
 - **Progress is measured in the mechanism's units, not ticks**, and the overshoot carries between
   actions of one kind. A run of steps lands when the total distance says (80 ticks, not 81, in
@@ -74,6 +90,9 @@ is still design. `TODO.md` is what's queued.
   resource.
 - `const { assert!(N <= 3) }` in a const-generic fn fails `cargo build`, not `cargo check`.
 - A query filter that clippy calls too complex reads better as a `type` alias anyway.
+- `serde_yaml_ng` refuses nested enums (`serializing nested enums in YAML is not supported
+  yet`). A YAML file of only comments parses as `null`, so read it as `Option<Map>`.
+- Turning on a Bevy feature (`serialize`) rebuilds most of the engine once: ~4 minutes.
 
 ## How the work is done
 
@@ -90,7 +109,7 @@ is still design. `TODO.md` is what's queued.
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `todo`; holds the warm `target/` (~34 GB) and is what the desktop shortcut runs |
-| `main` at handoff | `5f5600f`, the merge of PR #26 (understory art), on top of #25 |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement) |
+| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `settings-i18n`; holds the warm `target/` (~89 GB, mostly `target/debug`) and is what the desktop shortcut runs |
+| `main` at handoff | `28bad3b`, the merge of PR #27 (TODO and this file) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs); then the `settings-i18n` PR (user_data, settings, i18n) |
 | Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |
