@@ -35,11 +35,10 @@ const FOX_MODEL: &str = "models/fox.glb";
 const FOX_FACES: Direction = Direction::ESE;
 
 /// How the fox moves, until something more considered decides: a brisk walk of 4 shaku
-/// (about 1.2 m) a second, and a notch every five-sixths of a second: slow, so the bar can
-/// be seen filling.
+/// (about 1.2 m) a second, and half a turn a second.
 const FOX_LOCOMOTION: Locomotion = Locomotion {
     speed: 4.0,
-    turn_speed: 36.0,
+    turn_speed: 180.0,
 };
 
 /// The progress bar drawn under a body with something in flight: on the ground just in
@@ -51,7 +50,8 @@ const BAR_LIFT: f32 = 0.02;
 /// In pixels: gizmo lines are drawn in screen space.
 const BAR_THICKNESS: f32 = 6.0;
 const BAR_EMPTY: Color = Color::srgb(0.15, 0.15, 0.15);
-const BAR_FULL: Color = Color::srgb(0.95, 0.85, 0.2);
+/// A desaturated mint.
+const BAR_FULL: Color = Color::srgb(0.62, 0.85, 0.74);
 
 pub struct ScenePlugin;
 
@@ -134,9 +134,11 @@ fn thicken_bars(mut config: ResMut<GizmoConfigStore>) {
 }
 
 /// Until a UI module owns it: a bar under every body with something in flight, drawn
-/// with gizmos, which are lines redrawn each frame and need no mesh. Two lines, the empty
-/// bar and the filled part over it. It reads only `Progress`, so it shows a step, a notch
-/// of a turn, or anything a later mechanism does, without knowing which.
+/// with gizmos, which are lines redrawn each frame and need no mesh. Two lines end to
+/// end, the part done and the part still to do: they must not overlap, since gizmo
+/// lines are depth-tested and one drawn over another at the same depth loses to it. It
+/// reads only `Progress`, so it shows a step, a notch of a turn, or anything a later
+/// mechanism does, without knowing which.
 fn draw_progress_bars(mut gizmos: Gizmos, bodies: Query<(&Transform, &Progress)>) {
     for (transform, progress) in &bodies {
         if !progress.in_flight() {
@@ -144,9 +146,9 @@ fn draw_progress_bars(mut gizmos: Gizmos, bodies: Query<(&Transform, &Progress)>
         }
         let left = transform.translation + Vec3::new(-BAR_WIDTH / 2.0, BAR_LIFT, BAR_TOWARD_CAMERA);
         let right = left + Vec3::X * BAR_WIDTH;
-        let filled_to = left + Vec3::X * BAR_WIDTH * progress.fraction();
-        gizmos.line(left, right, BAR_EMPTY);
-        gizmos.line(left, filled_to, BAR_FULL);
+        let done_to = left + Vec3::X * BAR_WIDTH * progress.fraction();
+        gizmos.line(left, done_to, BAR_FULL);
+        gizmos.line(done_to, right, BAR_EMPTY);
     }
 }
 
