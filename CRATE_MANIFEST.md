@@ -18,7 +18,8 @@ crates/
 ├─ app_state/             murabito_app_state
 ├─ ui/                    the overlays: a group directory, not a crate
 │  ├─ kit/                murabito_ui
-│  └─ navigation/         murabito_navigation
+│  ├─ navigation/         murabito_navigation
+│  └─ menu/               murabito_menu
 └─ action/                the actions layer: a group directory, not a crate
    ├─ actions/            murabito_actions
    ├─ progress/           murabito_progress
@@ -50,6 +51,8 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   `Menu`, `Settings`), a sub-state of `AppState::Paused` so it exists only while the
   world is held still and vanishes when it resumes. Owns the back key (Escape). The
   overlays set it and never import each other.
+- **`murabito_menu`** — the menu over the paused world: Settings, Resume, Quit. Built
+  on entering `Overlay::Menu`, torn down on leaving it however it is left.
 
 ## The world and how it is seen
 
