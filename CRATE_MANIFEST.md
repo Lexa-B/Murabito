@@ -19,7 +19,8 @@ crates/
 ├─ ui/                    the overlays: a group directory, not a crate
 │  ├─ kit/                murabito_ui
 │  ├─ navigation/         murabito_navigation
-│  └─ menu/               murabito_menu
+│  ├─ menu/               murabito_menu
+│  └─ settings_page/      murabito_settings_page
 └─ action/                the actions layer: a group directory, not a crate
    ├─ actions/            murabito_actions
    ├─ progress/           murabito_progress
@@ -53,6 +54,10 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   overlays set it and never import each other.
 - **`murabito_menu`** — the menu over the paused world: Settings, Resume, Quit. Built
   on entering `Overlay::Menu`, torn down on leaving it however it is left.
+- **`murabito_settings_page`** — one row per setting and a way back: the language
+  picker and the pan-speed slider. Edits go straight into the resources their modules
+  own; saving is `murabito_settings`' doing. By nature the crate that knows every
+  setting's owner.
 
 ## The world and how it is seen
 
