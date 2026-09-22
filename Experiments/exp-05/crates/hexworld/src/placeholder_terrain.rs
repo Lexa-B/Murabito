@@ -6,22 +6,24 @@
 use crate::column::{Column, Material, Run};
 use crate::config::WorldConfig;
 use crate::hex::Hex;
+use crate::layer::layer_of_height;
 use crate::level::Level;
 use crate::noise::gradient_2d;
-use crate::plane::cell_centre_m;
+use crate::plane::cell_centre;
 
-/// Number of octaves. The first is 8 km across (about twice the ri width), the last about 0.5 m.
+/// Number of octaves. The first is about 27,000 shaku across (about twice the ri width),
+/// the last about 1.65 shaku.
 pub const OCTAVES: usize = 15;
-const BASE_WAVELENGTH_M: f64 = 8_192.0;
-const BASE_AMPLITUDE_M: f64 = 10.0;
-const GAIN: f64 = 0.75;
+const BASE_WAVELENGTH: f32 = 27_033.6; // 8,192 m
+const BASE_AMPLITUDE: f32 = 33.0; // 10 m
+const GAIN: f32 = 0.75;
 
-fn wavelength(octave: usize) -> f64 {
-    BASE_WAVELENGTH_M / (1 << octave) as f64
+fn wavelength(octave: usize) -> f32 {
+    BASE_WAVELENGTH / (1 << octave) as f32
 }
 
-fn amplitude(octave: usize) -> f64 {
-    BASE_AMPLITUDE_M * GAIN.powi(octave as i32)
+fn amplitude(octave: usize) -> f32 {
+    BASE_AMPLITUDE * GAIN.powi(octave as i32)
 }
 
 /// Whether a level keeps an octave: only those at least twice its cell width.
@@ -29,29 +31,31 @@ pub fn octave_kept(octave: usize, level: Level) -> bool {
     if level == Level::World {
         return false;
     }
-    wavelength(octave) >= 2.0 * level.width_m()
+    wavelength(octave) >= 2.0 * level.width()
 }
 
-/// One octave's contribution at a point.
-pub fn octave_value(cfg: &WorldConfig, east: f64, north: f64, octave: usize) -> f64 {
+/// One octave's contribution at a point. The noise is sampled at (x, −z), so north
+/// is up in noise space, as it was when this worked in (east, north) metres: the
+/// landscape is the same one.
+pub fn octave_value(cfg: &WorldConfig, x: f32, z: f32, octave: usize) -> f32 {
     let w = wavelength(octave);
     let seed = cfg.seed ^ (octave as u64).wrapping_mul(0x9E37_79B9);
-    gradient_2d(seed, east / w, north / w) * amplitude(octave)
+    gradient_2d(seed, x / w, -z / w) * amplitude(octave)
 }
 
-/// Terrain height in metres at a point, at a level's detail.
-pub fn height_m(cfg: &WorldConfig, east: f64, north: f64, level: Level) -> f64 {
+/// Terrain height in shaku at a point, at a level's detail.
+pub fn height(cfg: &WorldConfig, x: f32, z: f32, level: Level) -> f32 {
     (0..OCTAVES)
         .filter(|k| octave_kept(*k, level))
-        .map(|k| octave_value(cfg, east, north, k))
+        .map(|k| octave_value(cfg, x, z, k))
         .sum()
 }
 
 /// The column at a cell, sampled at that cell's centre.
 pub fn column_at(cfg: &WorldConfig, cell: Hex, level: Level) -> Column {
-    let (east, north) = cell_centre_m(cell, level);
-    let height = height_m(cfg, east, north, level);
-    let top = cfg.layer_of_height(height).max(cfg.bottom_layer);
+    let c = cell_centre(cell, level);
+    let h = height(cfg, c.x, c.z, level);
+    let top = layer_of_height(h).max(cfg.bottom_layer);
     let bottom = cfg.bottom_layer;
     let mut runs = Vec::with_capacity(3);
     // One layer of grass on top, two of dirt below it, rock all the way down.
@@ -87,8 +91,8 @@ mod tests {
     #[test]
     fn height_is_deterministic() {
         let cfg = WorldConfig::default();
-        let a = height_m(&cfg, 123.0, -45.0, Level::Shaku);
-        let b = height_m(&cfg, 123.0, -45.0, Level::Shaku);
+        let a = height(&cfg, 405.9, 148.5, Level::Shaku);
+        let b = height(&cfg, 405.9, 148.5, Level::Shaku);
         assert_eq!(a, b);
     }
 
@@ -97,28 +101,28 @@ mod tests {
         let cfg = WorldConfig::default();
 
         // Test at a lattice-aligned point
-        let (e, n) = (321.0, 654.0);
-        let fine = height_m(&cfg, e, n, Level::Shaku);
-        let coarse = height_m(&cfg, e, n, Level::Cho);
-        let dropped: f64 = (0..OCTAVES)
+        let (x, z) = (1059.3, -2158.2);
+        let fine = height(&cfg, x, z, Level::Shaku);
+        let coarse = height(&cfg, x, z, Level::Cho);
+        let dropped: f32 = (0..OCTAVES)
             .filter(|k| octave_kept(*k, Level::Shaku) && !octave_kept(*k, Level::Cho))
-            .map(|k| octave_value(&cfg, e, n, k))
+            .map(|k| octave_value(&cfg, x, z, k))
             .sum();
         assert!(
-            (fine - coarse - dropped).abs() < 1e-9,
+            (fine - coarse - dropped).abs() < 1e-3,
             "lattice-aligned: {fine} {coarse} {dropped}"
         );
 
         // Test at a non-lattice-aligned point to ensure the identity has teeth
-        let (e, n) = (321.3, 654.7);
-        let fine = height_m(&cfg, e, n, Level::Shaku);
-        let coarse = height_m(&cfg, e, n, Level::Cho);
-        let dropped: f64 = (0..OCTAVES)
+        let (x, z) = (1060.29, -2160.51);
+        let fine = height(&cfg, x, z, Level::Shaku);
+        let coarse = height(&cfg, x, z, Level::Cho);
+        let dropped: f32 = (0..OCTAVES)
             .filter(|k| octave_kept(*k, Level::Shaku) && !octave_kept(*k, Level::Cho))
-            .map(|k| octave_value(&cfg, e, n, k))
+            .map(|k| octave_value(&cfg, x, z, k))
             .sum();
         assert!(
-            (fine - coarse - dropped).abs() < 1e-9,
+            (fine - coarse - dropped).abs() < 1e-3,
             "non-aligned: {fine} {coarse} {dropped}"
         );
     }
@@ -132,19 +136,40 @@ mod tests {
     }
 
     #[test]
+    fn each_level_keeps_the_octaves_it_kept_in_metres() {
+        // The metre-era rule: octave k is kept at a level iff 8192 m / 2^k is at least
+        // twice the cell width in metres. Converting both sides by ×3.3 keeps the same set.
+        for level in crate::level::CELL_LEVELS {
+            for k in 0..OCTAVES {
+                let width_m = level.scale_shaku() as f64 * 10.0 / 33.0;
+                let kept_in_metres = 8_192.0 / (1u64 << k) as f64 >= 2.0 * width_m;
+                assert_eq!(
+                    octave_kept(k, level),
+                    kept_in_metres,
+                    "{level:?} octave {k}"
+                );
+            }
+        }
+        for k in 0..OCTAVES {
+            assert!(!octave_kept(k, Level::World));
+        }
+    }
+
+    #[test]
     fn relief_is_in_the_expected_range() {
         // Placeholder country: tens of metres of relief across a ri, not hundreds.
+        // In shaku: more than 16.5 (5 m) and less than 396 (120 m).
         let cfg = WorldConfig::default();
-        let mut min = f64::MAX;
-        let mut max = f64::MIN;
+        let mut min = f32::MAX;
+        let mut max = f32::MIN;
         for i in 0..200 {
-            let e = -1_900.0 + i as f64 * 19.0;
-            let h = height_m(&cfg, e, 0.0, Level::Shaku);
+            let x = -6_270.0 + i as f32 * 62.7;
+            let h = height(&cfg, x, 0.0, Level::Shaku);
             min = min.min(h);
             max = max.max(h);
         }
-        assert!(max - min > 5.0, "too flat: {min}..{max}");
-        assert!(max - min < 120.0, "too wild: {min}..{max}");
+        assert!(max - min > 16.5, "too flat: {min}..{max}");
+        assert!(max - min < 396.0, "too wild: {min}..{max}");
     }
 
     #[test]
@@ -164,8 +189,8 @@ mod tests {
     fn a_columns_top_follows_the_height_function() {
         let cfg = WorldConfig::default();
         let cell = Hex::axial(11, 5);
-        let (e, n) = crate::plane::cell_centre_m(cell, Level::Shaku);
-        let expected = cfg.layer_of_height(height_m(&cfg, e, n, Level::Shaku));
+        let c = cell_centre(cell, Level::Shaku);
+        let expected = layer_of_height(height(&cfg, c.x, c.z, Level::Shaku));
         assert_eq!(
             column_at(&cfg, cell, Level::Shaku).top_layer(),
             Some(expected)
@@ -176,9 +201,8 @@ mod tests {
     fn columns_are_seeded() {
         let a = WorldConfig::default();
         let b = WorldConfig { seed: 99, ..a };
-        // Cell (4, 4) is where this test sampled before +r pointed SSE; at the new
-        // physical position it samples, seeds 0 and 99 land on the same layer by
-        // coincidence. (6, 8) keeps a comfortable margin (3 layers) between the two.
+        // Two seeds can land on the same layer at a cell by coincidence; at (6, 8) the
+        // two tops are a comfortable margin (3 layers) apart.
         let cell = Hex::axial(6, 8);
         assert_ne!(
             column_at(&a, cell, Level::Shaku),

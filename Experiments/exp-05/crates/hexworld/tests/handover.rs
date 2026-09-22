@@ -3,9 +3,10 @@
 use std::collections::HashSet;
 
 use hexworld::chunk::{generate, ChunkKey};
+use hexworld::layer::layer_bottom;
 use hexworld::level::Level;
 use hexworld::mesh::{drawn_cells, mesh_chunk, MeshData};
-use hexworld::plane::{cell_centre_m, corners_m};
+use hexworld::plane::{cell_centre, corners};
 use hexworld::{Hex, WorldConfig};
 
 #[test]
@@ -37,19 +38,15 @@ fn a_parent_and_its_children_cover_the_ground_exactly_once() {
     // (side-wall vertices sit at corners, offset from centre) — so counting cells whose
     // exact local centre has a vertex counts how many of the cho's declared cells the mesh
     // actually drew.
-    let origin = cell_centre_m(cho_key.cell, Level::Cho);
-    let local = |cell: Hex| -> (f32, f32) {
-        let (e, n) = cell_centre_m(cell, Level::Ken);
-        ((e - origin.0) as f32, (n - origin.1) as f32)
-    };
+    let local = |cell: Hex| cell_centre(cell, Level::Ken) - cell_centre(cho_key.cell, Level::Cho);
     let count_drawn = |mesh: &MeshData| {
         all_kens
             .iter()
             .filter(|c| {
-                let (px, py) = local(**c);
+                let p = local(**c);
                 mesh.positions
                     .iter()
-                    .any(|v| (v[0] - px).abs() < 1e-4 && (v[1] - py).abs() < 1e-4)
+                    .any(|v| (v[0] - p.x).abs() < 1e-4 && (v[2] - p.z).abs() < 1e-4)
             })
             .count()
     };
@@ -164,8 +161,8 @@ fn outer_walls_reach_the_world_bottom() {
     let cfg = WorldConfig::default();
     let chunk = generate(&cfg, ChunkKey::new(Level::Ken, Hex::ZERO));
     let mesh = mesh_chunk(&cfg, &chunk, &HashSet::new());
-    let lowest = mesh.positions.iter().map(|p| p[2]).fold(f32::MAX, f32::min);
-    let expected = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
+    let lowest = mesh.positions.iter().map(|p| p[1]).fold(f32::MAX, f32::min);
+    let expected = layer_bottom(cfg.bottom_layer);
     assert!((lowest - expected).abs() < 1e-3, "{lowest} vs {expected}");
 }
 
@@ -209,37 +206,34 @@ fn an_omitted_cells_neighbours_grow_full_depth_walls() {
         "expected 3 of target's neighbours to be in this chunk's own drawn set"
     );
 
-    let bottom = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
-    let origin = cell_centre_m(key.cell, Level::Cho);
-    let corners = corners_m(Level::Ken); // the cho's child level
-    let mut expected: Vec<((f32, f32), (f32, f32))> = Vec::new();
+    let bottom = layer_bottom(cfg.bottom_layer);
+    let origin = cell_centre(key.cell, Level::Cho);
+    let corners = corners(Level::Ken); // the cho's child level
+    let mut expected = Vec::new();
     for k in walled {
         let neighbour = target + hexworld::DIRECTIONS[k];
-        let (ne, nn) = cell_centre_m(neighbour, Level::Ken);
-        let (nx, ny) = ((ne - origin.0) as f32, (nn - origin.1) as f32);
+        let local = cell_centre(neighbour, Level::Ken) - origin;
         // The wall is drawn by `neighbour`, at the direction index facing back at target.
         let j = (k + 3) % 6;
-        let (ax, ay) = corners[(j + 5) % 6];
-        let (bx, by) = corners[j];
-        let (mx, my) = ((ax + bx) / 2.0, (ay + by) / 2.0);
-        let len = (mx * mx + my * my).sqrt();
-        let normal = ((mx / len) as f32, (my / len) as f32);
-        expected.push(((nx + ax as f32, ny + ay as f32), normal));
-        expected.push(((nx + bx as f32, ny + by as f32), normal));
+        let a = corners[(j + 5) % 6];
+        let b = corners[j];
+        let normal = ((a + b) / 2.0).normalize_or_zero();
+        expected.push((local + a, normal));
+        expected.push((local + b, normal));
     }
 
     let near_hole = mesh
         .positions
         .iter()
         .enumerate()
-        .filter(|(_, p)| (p[2] - bottom).abs() < 1e-3)
+        .filter(|(_, p)| (p[1] - bottom).abs() < 1e-3)
         .filter(|(i, p)| {
             let n = mesh.normals[*i];
-            expected.iter().any(|((ex, ey), (enx, eny))| {
-                (p[0] - ex).abs() < 1e-3
-                    && (p[1] - ey).abs() < 1e-3
-                    && (n[0] - enx).abs() < 1e-4
-                    && (n[1] - eny).abs() < 1e-4
+            expected.iter().any(|(e, en)| {
+                (p[0] - e.x).abs() < 1e-3
+                    && (p[2] - e.z).abs() < 1e-3
+                    && (n[0] - en.x).abs() < 1e-4
+                    && (n[2] - en.z).abs() < 1e-4
             })
         })
         .count();
@@ -289,8 +283,8 @@ fn the_world_ends_in_a_wall() {
     // And the chunk actually walls that boundary down to the world bottom.
     let chunk = generate(&cfg, key);
     let mesh = mesh_chunk(&cfg, &chunk, &HashSet::new());
-    let lowest = mesh.positions.iter().map(|p| p[2]).fold(f32::MAX, f32::min);
-    let expected = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
+    let lowest = mesh.positions.iter().map(|p| p[1]).fold(f32::MAX, f32::min);
+    let expected = layer_bottom(cfg.bottom_layer);
     assert!((lowest - expected).abs() < 1e-3, "{lowest} vs {expected}");
 }
 

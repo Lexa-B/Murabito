@@ -68,7 +68,7 @@ impl std::ops::Sub for Hex {
 
 /// The six edge directions, in `Direction`'s index order: anticlockwise from east, 60°
 /// apart. The mesher pairs edge `k` with the cell edge between corners `k-1` and `k`, so
-/// this order and `plane::corners_m` go together.
+/// this order and `plane::corners` go together.
 pub const EDGES: [Direction; 6] = [
     Direction::E,
     Direction::NNE,

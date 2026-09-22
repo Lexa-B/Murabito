@@ -1,8 +1,8 @@
 //! The levels of the hierarchy. `World` is not a unit of length: it exists so that the
 //! chunk holding every ri has a parent level like any other chunk.
 
-pub const SHAKU_M: f64 = 10.0 / 33.0;
-pub const SUN_M: f64 = 1.0 / 33.0;
+/// Metres per shaku, for showing lengths to people; world space is in shaku.
+pub const SHAKU_M: f32 = 10.0 / 33.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub enum Level {
@@ -39,9 +39,9 @@ impl Level {
         }
     }
 
-    /// Flat-to-flat width in metres.
-    pub fn width_m(self) -> f64 {
-        self.scale_shaku() as f64 * SHAKU_M
+    /// Flat-to-flat width in shaku.
+    pub fn width(self) -> f32 {
+        self.scale_shaku() as f32
     }
 
     pub fn child(self) -> Option<Level> {
@@ -93,10 +93,11 @@ mod tests {
 
     #[test]
     fn widths_match_the_units() {
-        assert!((Level::Shaku.width_m() - 10.0 / 33.0).abs() < 1e-12);
-        assert!((Level::Ken.width_m() - 60.0 / 33.0).abs() < 1e-12);
-        assert!((Level::Cho.width_m() - 3_600.0 / 33.0).abs() < 1e-9);
-        assert!((Level::Ri.width_m() - 129_600.0 / 33.0).abs() < 1e-9);
+        assert_eq!(Level::Shaku.width(), 1.0);
+        assert_eq!(Level::Ken.width(), 6.0);
+        assert_eq!(Level::Cho.width(), 360.0);
+        assert_eq!(Level::Ri.width(), 12_960.0);
+        assert!((Level::Ri.width() * SHAKU_M - 129_600.0 / 33.0).abs() < 1e-3);
     }
 
     #[test]

@@ -1,115 +1,111 @@
-//! The hex plane in metres. Positions are `(east, north)`; height is separate.
-//! Pointy-top cells: the position of axial (q, r), in units of the cell's flat-to-flat
-//! width, is (q + r/2, −r·√3/2).
+//! The hex plane in world space: Bevy's `Vec3`, in shaku, with east +X and north −Z, as
+//! in `murabito_hexcoords`. Pointy-top cells: the position of axial (q, r), in units of
+//! the cell's flat-to-flat width, is x = q + r/2, z = r·√3/2, so +r is SSE.
+
+use std::f32::consts::{FRAC_PI_3, FRAC_PI_6};
+
+use bevy::math::Vec3;
+use murabito_hexcoords::VoxelspacePos;
 
 use crate::hex::Hex;
 use crate::level::Level;
 
-const SQRT3: f64 = 1.732_050_807_568_877_2;
+const ROW_SPACING: f32 = 0.866_025_4; // √3 / 2
 
-/// The centre of a cell, in metres east and north of the world centre. `+r` is SSE,
-/// as in `murabito_hexcoords`: half a cell east and one row south.
-pub fn cell_centre_m(cell: Hex, level: Level) -> (f64, f64) {
-    let w = level.width_m();
-    let q = cell.q() as f64;
-    let r = cell.r() as f64;
-    ((q + r / 2.0) * w, -r * SQRT3 / 2.0 * w)
+/// The centre of a cell on the ground plane (y = 0).
+pub fn cell_centre(cell: Hex, level: Level) -> Vec3 {
+    let w = level.width();
+    let (q, r) = (cell.q() as f32, cell.r() as f32);
+    Vec3::new((q + r / 2.0) * w, 0.0, r * ROW_SPACING * w)
 }
 
-/// Fractional axial coordinates of a point at a level.
-pub fn metres_to_axial(east: f64, north: f64, level: Level) -> (f64, f64) {
-    let w = level.width_m();
-    let r = -north / (SQRT3 / 2.0 * w);
-    (east / w - r / 2.0, r)
+/// The cell whose ideal hexagon contains the point, at the given level. Height is
+/// ignored. Rounding is `murabito_hexcoords`'s, on the point scaled to the level's cells.
+pub fn round_at(pos: Vec3, level: Level) -> Hex {
+    let w = level.width();
+    let voxel = VoxelspacePos::from(Vec3::new(pos.x / w, 0.0, pos.z / w)).round();
+    Hex::axial(voxel.q(), voxel.r())
 }
 
-/// Round fractional axial coordinates to the nearest cell.
-pub fn hex_round(fq: f64, fr: f64) -> Hex {
-    let fs = -fq - fr;
-    let (mut q, mut r, s) = (fq.round(), fr.round(), fs.round());
-    let (dq, dr, ds) = ((q - fq).abs(), (r - fr).abs(), (s - fs).abs());
-    if dq > dr && dq > ds {
-        q = -r - s;
-    } else if dr > ds {
-        r = -q - s;
-    }
-    Hex::axial(q as i32, r as i32)
-}
-
-/// The cell whose ideal hexagon contains the point, at the given level.
-pub fn round_at(east: f64, north: f64, level: Level) -> Hex {
-    let (fq, fr) = metres_to_axial(east, north, level);
-    hex_round(fq, fr)
-}
-
-/// The six corners of a cell at this level, relative to its centre, anticlockwise.
-/// Pointy top: a corner points north.
-pub fn corners_m(level: Level) -> [(f64, f64); 6] {
-    let w = level.width_m();
-    let radius = w / SQRT3; // centre to corner
-    let mut out = [(0.0, 0.0); 6];
-    for (i, slot) in out.iter_mut().enumerate() {
-        let angle = std::f64::consts::FRAC_PI_6 + i as f64 * std::f64::consts::FRAC_PI_3;
-        *slot = (radius * angle.cos(), radius * angle.sin());
-    }
-    out
+/// The six corners of a cell at this level, relative to its centre, anticlockwise on
+/// screen from 30° (east and a little north). Corner k-1 to corner k is the edge facing
+/// `hex::EDGES[k]`.
+pub fn corners(level: Level) -> [Vec3; 6] {
+    let radius = level.width() / 3f32.sqrt(); // centre to corner
+    std::array::from_fn(|i| {
+        let angle = FRAC_PI_6 + i as f32 * FRAC_PI_3;
+        Vec3::new(radius * angle.cos(), 0.0, -radius * angle.sin())
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use murabito_hexcoords::VoxelCoord;
 
     #[test]
     fn the_origin_is_the_centre_of_every_level() {
         for level in crate::level::CELL_LEVELS {
-            let (e, n) = cell_centre_m(Hex::ZERO, level);
-            assert!(e.abs() < 1e-12 && n.abs() < 1e-12, "{level:?}");
+            assert_eq!(cell_centre(Hex::ZERO, level), Vec3::ZERO, "{level:?}");
         }
     }
 
     #[test]
-    fn a_step_east_is_one_width() {
-        let (e, n) = cell_centre_m(Hex::axial(1, 0), Level::Shaku);
-        assert!((e - Level::Shaku.width_m()).abs() < 1e-12);
-        assert!(n.abs() < 1e-12);
+    fn a_step_east_is_one_width_along_x() {
+        let p = cell_centre(Hex::axial(1, 0), Level::Ken);
+        assert!((p - Vec3::new(6.0, 0.0, 0.0)).length() < 1e-5, "{p}");
     }
 
     #[test]
-    fn metres_and_axial_round_trip() {
+    fn a_plus_r_step_is_half_a_cell_east_and_a_row_down_the_screen() {
+        // As murabito_hexcoords' `one_step_along_r_is_half_a_cell_right_and_a_row_down_the_screen`.
+        let p = cell_centre(Hex::axial(0, 1), Level::Shaku);
+        assert!(
+            (p - Vec3::new(0.5, 0.0, 3f32.sqrt() / 2.0)).length() < 1e-6,
+            "{p}"
+        );
+    }
+
+    #[test]
+    fn shaku_centres_agree_with_voxel_coords() {
+        for (q, r) in [(0, 0), (5, -3), (-17, 41), (4_211, -9_003)] {
+            let voxel = VoxelCoord::new(q, r, -q - r, 0).unwrap();
+            let p = cell_centre(Hex::axial(q, r), Level::Shaku);
+            assert!((p - voxel.to_world()).length() < 1e-3, "{q},{r}");
+        }
+    }
+
+    #[test]
+    fn rounding_inverts_the_centre_at_every_level() {
         for level in crate::level::CELL_LEVELS {
-            for cell in [Hex::axial(0, 0), Hex::axial(5, -3), Hex::axial(-17, 41)] {
-                let (e, n) = cell_centre_m(cell, level);
-                assert_eq!(round_at(e, n, level), cell, "{level:?} {cell:?}");
+            for cell in [Hex::ZERO, Hex::axial(5, -3), Hex::axial(-17, 41)] {
+                assert_eq!(
+                    round_at(cell_centre(cell, level), level),
+                    cell,
+                    "{level:?} {cell:?}"
+                );
             }
         }
     }
 
     #[test]
-    fn rounding_picks_the_nearest_centre() {
-        // A point a tenth of a width east of a centre still belongs to that cell.
-        let (e, n) = cell_centre_m(Hex::axial(3, 2), Level::Ken);
-        let nudged = (e + 0.1 * Level::Ken.width_m(), n);
-        assert_eq!(round_at(nudged.0, nudged.1, Level::Ken), Hex::axial(3, 2));
+    fn rounding_picks_the_nearest_centre_and_ignores_height() {
+        let c = cell_centre(Hex::axial(3, 2), Level::Ken);
+        let nudged = c + Vec3::new(0.1 * Level::Ken.width(), 40.0, 0.0);
+        assert_eq!(round_at(nudged, Level::Ken), Hex::axial(3, 2));
     }
 
     #[test]
-    fn a_plus_r_step_is_half_a_cell_east_and_a_row_south() {
-        // As murabito_hexcoords' `one_step_along_r_is_half_a_cell_right_and_a_row_down_the_screen`.
-        let w = Level::Shaku.width_m();
-        let (e, n) = cell_centre_m(Hex::axial(0, 1), Level::Shaku);
-        assert!((e - w / 2.0).abs() < 1e-12, "{e}");
-        assert!((n + w * 3f64.sqrt() / 2.0).abs() < 1e-12, "{n}");
-    }
-
-    #[test]
-    fn corners_are_a_pointy_top_hexagon() {
-        let corners = corners_m(Level::Shaku);
-        let w = Level::Shaku.width_m();
-        // Pointy top: the tallest corner is at half the corner-to-corner height,
-        // which is the width / sqrt(3).
-        let max_north = corners.iter().map(|c| c.1).fold(f64::MIN, f64::max);
-        assert!((max_north - w / 3f64.sqrt()).abs() < 1e-12, "{max_north}");
-        let max_east = corners.iter().map(|c| c.0).fold(f64::MIN, f64::max);
-        assert!((max_east - w / 2.0).abs() < 1e-12, "{max_east}");
+    fn corners_are_a_pointy_top_hexagon_with_north_at_minus_z() {
+        let corners = corners(Level::Shaku);
+        let w = Level::Shaku.width();
+        // Pointy top: the northernmost corner (most negative z) is width/√3 out.
+        let min_z = corners.iter().map(|c| c.z).fold(f32::MAX, f32::min);
+        assert!((min_z + w / 3f32.sqrt()).abs() < 1e-6, "{min_z}");
+        let max_x = corners.iter().map(|c| c.x).fold(f32::MIN, f32::max);
+        assert!((max_x - w / 2.0).abs() < 1e-6, "{max_x}");
+        assert!(corners.iter().all(|c| c.y == 0.0));
+        // The first corner is at 30°, anticlockwise on screen: east and a little north.
+        assert!(corners[0].x > 0.0 && corners[0].z < 0.0);
     }
 }

@@ -5,12 +5,14 @@
 
 use std::collections::{HashMap, HashSet};
 
+use bevy::math::Vec3;
+
 use crate::chunk::{Chunk, ChunkKey};
 use crate::config::WorldConfig;
 use crate::hex::{range, Hex};
 use crate::level::Level;
 use crate::owner::up;
-use crate::plane::cell_centre_m;
+use crate::plane::cell_centre;
 use crate::world::cell_in_world;
 
 /// How many rings of neighbouring cells a loader wants at each detail level.
@@ -85,18 +87,15 @@ pub fn requests(cfg: &WorldConfig, loader: &Loader) -> Vec<ChunkKey> {
 /// with the key as a tie-break so the order never depends on the input order.
 pub fn load_order(cfg: &WorldConfig, loaders: &[Loader], keys: &mut [ChunkKey]) {
     let _ = cfg;
-    let distance2 = |key: &ChunkKey| -> f64 {
+    let distance2 = |key: &ChunkKey| -> f32 {
         if key.level == Level::World {
             return 0.0;
         }
-        let (ce, cn) = cell_centre_m(key.cell, key.level);
+        let centre = cell_centre(key.cell, key.level);
         loaders
             .iter()
-            .map(|l| {
-                let (fe, fn_) = cell_centre_m(l.focus, Level::Shaku);
-                (ce - fe).powi(2) + (cn - fn_).powi(2)
-            })
-            .fold(f64::MAX, f64::min)
+            .map(|l| centre.distance_squared(cell_centre(l.focus, Level::Shaku)))
+            .fold(f32::MAX, f32::min)
     };
     keys.sort_by(|a, b| {
         coarseness_rank(a.level)
@@ -321,11 +320,11 @@ impl ChunkStore {
     }
 
     /// The height of the ground at a point, at the finest detail loaded there.
-    pub fn surface_height_m(&self, east: f64, north: f64) -> Option<f64> {
+    pub fn surface_height(&self, pos: Vec3) -> Option<f32> {
         for level in crate::level::CELL_LEVELS {
-            let cell = crate::plane::round_at(east, north, level);
+            let cell = crate::plane::round_at(pos, level);
             if let Some(column) = self.column(level, cell) {
-                return Some(column.surface_height_m(&self.cfg));
+                return Some(column.surface_height());
             }
         }
         None
@@ -749,7 +748,7 @@ mod store_tests {
             .expect("something is loaded everywhere in the ri");
         assert!(level > Level::Shaku, "{level:?}");
         assert!(s.column(Level::Shaku, Hex::ZERO).is_some());
-        assert!(s.surface_height_m(0.0, 0.0).is_some());
+        assert!(s.surface_height(Vec3::ZERO).is_some());
     }
 
     #[test]
