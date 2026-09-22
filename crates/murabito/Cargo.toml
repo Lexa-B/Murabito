@@ -16,3 +16,4 @@ murabito_settings.workspace = true
 murabito_i18n.workspace = true
 murabito_app_state.workspace = true
 murabito_ui.workspace = true
+murabito_navigation.workspace = true
