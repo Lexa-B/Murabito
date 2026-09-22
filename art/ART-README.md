@@ -76,6 +76,12 @@ unless there's a reason not to.
 - **Rig-ready animals:** each animal is one connected mesh with a ring of vertices at every
   joint (shoulders, elbows, knees, neck, tail, ears), so a skeleton can bend it later.
   None are rigged yet.
+- **Draping plants are rigged:** a plant that lies over the ground (the kudzu) carries a
+  skeleton of *drape points* (`rig.py`), exported as a glTF skin. Each drape point is a bone
+  standing straight up at a spot on the ground; **the game raises every drape point to the
+  terrain height under its resting spot** (one vertical translation per bone), and the
+  model settles onto the ground. At rest they sit on level ground, so an un-draped model
+  looks as built. `root` holds any part that stays put.
 - **Buried trunks:** every tree's trunk reaches 1.5 shaku below ground (`flora.ROOT_DEPTH`)
   with its bottom rings level, so it sits on sloping terrain with no gap. The bamboo is
   scaled down whole (`SCALE`), so its culms reach only 0.6 shaku below.
@@ -157,10 +163,27 @@ Foliage:
 | `wrap_sprays(b, group, …)` | wrap a group of sprays as one skin with even triangles |
 | `clustered_crown(b, sprays, …, tier, sectors)` | cut a crown into tiers and sectors, one skin each (the hinoki's) |
 | `clump(...)` | an old-style separate blob (only the cloud-pruned maple uses it) |
-| `blade(...)`, `blade_cluster(...)` | flat, pointed leaves, ridged down the middle, fanning in drooping clusters (the bamboo's) |
+| `blade(...)`, `blade_cluster(...)` | flat, pointed leaves, ridged down the middle, fanning in drooping clusters (the bamboo's); `rounded=True` makes a broad oval leaf with two points down each edge instead (the aucuba's) |
+| `trifoliate(...)` | a leaf of three broad oval leaflets lying nearly flat (the kudzu's; clover and beans too) |
+| `frond(...)` | a fern frond arching up from its base and over, its edges scalloped to suggest leaflets: how steeply it sets off (`rise`), how far its tip arches past level (`fall`), where the bend gathers (`bend`), how deep its teeth are (`notch`) |
 
 Colouring: skins pick a colour per face at random from `leaves`, or from `shades` if the
 face points down. Repeat a colour in a list to make it more likely.
+
+### `rig.py`: skeletons for models that bend
+
+| | |
+|---|---|
+| `Rig(name)` | an armature, exported with the model as a glTF skin (`loft.run` exports a mesh's rig with it) |
+| `bone(name, head, tail, parent)`, `chain(prefix, points, parent)` | bones by hand, or one per segment of a polyline, each joined to the last |
+| `drape_point(name, x, y)` | a bone standing up at a spot on the ground, for the game to raise to the terrain height there |
+| `DrapeGrid(rig, name, x0, x1, y0, y1, spacing)` | drape points on a grid under something wide and low; `weights(x, y)` blends a spot between the four points around it |
+| `weigh(indices, bone)`, `weigh_blend(indices, pairs)` | bind vertices to a bone, or blend them between several, while building: vertex indices are the order the `Builder` made them, so note `len(b.bm.verts)` before and after building a part |
+| `bind(mesh_obj, default)` | build the bones, turn the weights into vertex groups (any vertex not weighed rides on `default`), and parent the mesh to the rig |
+
+Weigh a leaf with the weights of the spot it grows from, all its vertices alike, so it
+moves as one piece instead of warping. glTF carries at most four bones per vertex, which
+a `DrapeGrid` blend never exceeds.
 
 ## Making a new model
 
@@ -203,6 +226,9 @@ Start from whichever existing plant is closest:
 | a conifer: broad, layered fans | `hinoki.py` | `conifer` with `clustered_crown` |
 | grasses, reeds, bamboo, anything with narrow leaves | `bamboo.py` | `blade_cluster`s on culms |
 | a low shrub | `azalea.py` | one `canopy` mound on the ground, with its triangle size scaled down |
+| a leafy shrub on visible stems | `aoki.py` | green stems forking twice, pairs of oval leaves along each shoot and a rosette at its tip |
+| a fern, or any rosette of arching leaves | `shida.py` | `frond`s spiralling up from a crown |
+| something lying over the ground (vines, mats, moss) | `kuzu.py` | a low skin with leaves on it and runners off it, rigged with drape points |
 
 Then:
 
@@ -317,6 +343,9 @@ And by eye:
 | bamboo (真竹) | `00`–`04` | a | summer | arching culms, clusters of leaf blades |
 | azalea (ヤマツツジ) | `00` | a | summer, spring | low mound; spring flowers in patches |
 | sakura (山桜) | `00`–`04` | a | spring, summer, winter | gnarled, horizontal limbs; bare in winter |
+| shida (シダ) | `00` | a | summer | a woodland fern after the Japanese shield fern (ベニシダ); a loose shuttlecock of sixteen scalloped fronds |
+| aoki (アオキ) | `00` | a | summer | the aucuba; a compact bush of green stems and big glossy oval leaves |
+| kuzu (葛) | `00` | a | summer | a kudzu patch smothering the undergrowth, with runners; **rigged with drape points** to settle onto terrain |
 
 ## Lessons from what didn't work
 
@@ -358,6 +387,16 @@ And by eye:
 - **A ring bigger than both neighbours shows as a ridge**, and a rump that ends in one
   ring looks chopped off. Round rumps over two or three rings, from the side and from
   above (the hare, the deer).
+- **A leafy shrub is not tall bare stems with tufts on top.** The aucuba's first two
+  passes read as papyrus, then as a table on stilts: fork low, vary the shoot lengths so
+  the tips spread over a dome, and put leaves along the shoots as well as at their tips.
+- **Diamond leaves in rosettes read as stars.** Broad leaves need the oval blade.
+- **Leaves on a skin must be big to read.** The kudzu's first leaves were specks on a
+  smooth blob; at almost twice the size, and more of them, they cover it.
+- **Drape points hug the ground only as closely as they're spaced.** Between points a
+  draped skin runs straight, so on ground steeper than the spacing allows it hangs or cuts
+  in, and a runner whose next point is far below drops straight down. 2 shaku suits gentle
+  slopes; sharp bumps would want 1.
 
 ## Ideas waiting
 
@@ -365,5 +404,8 @@ And by eye:
 - Autumn (the maples especially) and winter for the other broadleaves.
 - More flower colours for the azalea; more colour variants generally.
 - Shrubs not made yet: sasa (dwarf bamboo, which could reuse the bamboo's blades), bush
-  clover (萩), kerria (ヤマブキ), camellia (椿), tea, mulberry, paper mulberry.
+  clover (萩), kerria (ヤマブキ), camellia (椿), tea, mulberry, paper mulberry, eurya
+  (ヒサカキ), pieris (アセビ), bracken (ワラビ, a `frond` fern).
+- The shield fern's coppery spring fronds; the aucuba's red winter berries; kudzu's
+  purple late-summer flowers.
 - The cloud-pruned maple, shrunk, as a garden tree.

@@ -431,6 +431,18 @@ def blade_cluster(b, origin, direction, count, length, width, leaves, shades, rn
         )
 
 
+def trifoliate(b, origin, heading, size, leaves, shades, rng, tilt=0.15):
+    """A leaf of three broad oval leaflets (kudzu, clover, beans): one straight out
+    along heading (radians round the vertical), two smaller at either side,
+    lying nearly flat, tipped down by about tilt radians."""
+    for turn, scale in ((0.0, 1.0), (1.2, 0.85), (-1.2, 0.85)):
+        angle = heading + turn + rng.uniform(-0.15, 0.15)
+        dip = tilt + rng.uniform(-0.1, 0.1)
+        way = Vector((math.cos(angle) * math.cos(dip), math.sin(angle) * math.cos(dip), -math.sin(dip)))
+        blade(b, origin, way, size * scale, size * scale * 0.75, rng.choice(leaves), rng.choice(shades),
+              droop=0.08, rounded=True)
+
+
 def frond(b, base, heading, length, width, rise, fall, leaves, shades, rng, segments=10, bend=2.0, notch=0.7):
     """A fern frond: a long leaf arching up from base and over, its edges
     zig-zagging to suggest rows of leaflets.

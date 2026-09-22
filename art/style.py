@@ -250,6 +250,14 @@ PALETTE = [
     ("aoki_shade", "#2C4E2A"),
     ("aoki_shade_light", "#37583A"),
     ("aoki_stem", "#6E9A4A"),
+    # kudzu
+    ("kuzu_green", "#5C8A3A"),
+    ("kuzu_green_light", "#6E9C46"),
+    ("kuzu_green_deep", "#4A7631"),
+    ("kuzu_green_yellow", "#7E9A48"),
+    ("kuzu_shade", "#3A5C2C"),
+    ("kuzu_shade_deep", "#304E26"),
+    ("kuzu_vine", "#6B6A3E"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -349,8 +357,11 @@ def apply_swatches(obj, face_swatches):
 
 
 def export_glb(obj, path):
+    """Export obj as .glb, with its rig (see rig.py) as a skin if it has one."""
     bpy.ops.object.select_all(action="DESELECT")
     obj.select_set(True)
+    if obj.parent is not None:
+        obj.parent.select_set(True)
     bpy.context.view_layer.objects.active = obj
     bpy.ops.export_scene.gltf(
         filepath=str(path),
