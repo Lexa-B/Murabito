@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use murabito_actions::ActionsPlugin;
-use murabito_app_state::AppStatePlugin;
+use murabito_app_state::{AppStatePlugin, AppStateSettings};
 use murabito_camera::{CameraPlugin, CameraSettings};
 use murabito_i18n::{I18nPlugin, Language};
 use murabito_movement::MovementPlugin;
@@ -31,5 +31,6 @@ fn main() {
         // under which key in settings.yaml.
         .persist::<CameraSettings>("camera")
         .persist::<Language>("language")
+        .persist::<AppStateSettings>("app_state")
         .run();
 }

@@ -11,8 +11,8 @@
 //! simulation at once and no mechanism needs to know a menu exists. `Time<Real>` keeps
 //! running underneath, for whatever must stay alive while the world is still.
 //!
-//! A key toggles between the two, bound in [`AppStateSettings`] by the keybinds rule.
-//! Escape for now, until a menu takes Escape and this moves to a key of its own.
+//! A key toggles between the two, bound in [`AppStateSettings`] by the keybinds rule:
+//! Space. Escape is the menu's, when there is one.
 
 use bevy::prelude::*;
 use murabito_keybinds::{Binds, Inputs};
@@ -54,7 +54,7 @@ pub struct AppStateSettings {
 impl Default for AppStateSettings {
     fn default() -> Self {
         Self {
-            toggle_pause: Binds::new([KeyCode::Escape]),
+            toggle_pause: Binds::new([KeyCode::Space]),
         }
     }
 }
@@ -245,21 +245,21 @@ mod tests {
     }
 
     #[test]
-    fn escape_pauses_a_playing_world() {
+    fn space_pauses_a_playing_world() {
         let mut app = app();
 
-        tap(&mut app, KeyCode::Escape);
+        tap(&mut app, KeyCode::Space);
 
         assert_eq!(state(&app), AppState::Paused);
         assert!(is_paused(&app));
     }
 
     #[test]
-    fn escape_again_resumes_it() {
+    fn space_again_resumes_it() {
         let mut app = app();
-        tap(&mut app, KeyCode::Escape);
+        tap(&mut app, KeyCode::Space);
 
-        tap(&mut app, KeyCode::Escape);
+        tap(&mut app, KeyCode::Space);
 
         assert_eq!(state(&app), AppState::Playing);
         assert!(!is_paused(&app));
@@ -269,7 +269,7 @@ mod tests {
     fn holding_the_key_toggles_once_not_every_frame() {
         let mut app = app();
 
-        key_down(&mut app, KeyCode::Escape);
+        key_down(&mut app, KeyCode::Space);
         (0..5).for_each(|_| app.update());
 
         assert_eq!(state(&app), AppState::Paused);
@@ -279,7 +279,7 @@ mod tests {
     fn a_key_that_is_not_bound_does_nothing() {
         let mut app = app();
 
-        tap(&mut app, KeyCode::KeyP);
+        tap(&mut app, KeyCode::Escape);
 
         assert_eq!(state(&app), AppState::Playing);
     }
@@ -307,6 +307,6 @@ mod tests {
     fn the_settings_write_as_one_word_per_bind() {
         let yaml = serde_yaml_ng::to_string(&AppStateSettings::default()).expect("serialises");
 
-        assert_eq!(yaml.trim(), "toggle_pause:\n- Escape");
+        assert_eq!(yaml.trim(), "toggle_pause:\n- Space");
     }
 }
