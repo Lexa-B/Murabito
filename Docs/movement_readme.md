@@ -40,6 +40,20 @@ Implemented, in `murabito_movement`, on the one accumulation bar of `actions_rea
   the total distance says, not each step rounded up to a tick; a tick spent standing still
   forgets the head start.
 
+## Turning
+
+Implemented, in `murabito_movement`, on the same bar.
+
+- `Turn(Direction)` is the intent. The `turn` system carries it out a notch of 30° at a time:
+  each notch is its own action on the bar, `start::<Turn>(30)` then `advance(turn_speed × tick)`,
+  and on reaching it `Facing` moves one notch toward the target, the short way round, so a wide
+  swing passes through every direction between. Exactly opposite is the one tie, and goes
+  anticlockwise. The `Turn` is gone once the body faces the target; a `Turn` to the way already
+  faced is done on its first tick. Turning never moves the body.
+- Leftover degrees carry from one notch to the next, and from one `Turn` straight into another,
+  exactly as shaku carry between steps: a wide swing takes the ticks its total angle says.
+- At most one notch is taken per tick, so a turn speed above 1920°/s is capped at that.
+
 ## 12-direction movement
 
 Entities move in 12 directions: the 6 edge moves plus the 6 corner moves. They are

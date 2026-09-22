@@ -17,11 +17,14 @@ use murabito_progress::{MechanismSet, Progress};
 /// The distance to a corner neighbour, in shaku, and so the cost of stepping to one.
 const SQRT_3: f32 = 1.732_050_8;
 
+/// One notch of the compass, in degrees, and so the cost of turning one.
+const NOTCH: f32 = 30.0;
+
 pub struct MovementPlugin;
 
 impl Plugin for MovementPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(FixedUpdate, step.in_set(MechanismSet))
+        app.add_systems(FixedUpdate, (step, turn).in_set(MechanismSet))
             .add_systems(Update, place);
     }
 }
@@ -42,6 +45,12 @@ pub struct Locomotion {
 /// another while one is in flight.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Step(pub Direction);
+
+/// The intent to turn to face a direction. Put it on a body with a `Locomotion` and
+/// `turn` carries it out a notch of 30° at a time, the short way round, passing through
+/// every direction between, then removes it. One at a time, as for `Step`.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Turn(pub Direction);
 
 /// What a step costs, in shaku walked: 1 to a face neighbour, √3 to a corner one.
 pub fn cost(direction: Direction) -> f32 {
@@ -114,6 +123,32 @@ fn place(mut placed: Query<(&VoxelPosition, &Facing, &mut Transform), Moved>) {
     }
 }
 
+/// Carries out every `Turn` in flight, one tick's turning at a time: each notch is its
+/// own action on the bar, so a wide swing is a run of them and the leftover degrees carry
+/// from one to the next. At most one notch is taken per tick.
+fn turn(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut bodies: Query<(Entity, &Turn, &Locomotion, &mut Facing, &mut Progress)>,
+) {
+    for (body, turn, locomotion, mut facing, mut progress) in &mut bodies {
+        if facing.0 == turn.0 {
+            commands.entity(body).remove::<Turn>();
+            continue;
+        }
+        if !progress.in_flight() {
+            progress.start::<Turn>(NOTCH);
+        }
+        if progress.advance(locomotion.turn_speed * time.delta_secs()) {
+            facing.0 = facing.0.rotated(facing.0.notches_to(turn.0).signum());
+            progress.finish();
+            if facing.0 == turn.0 {
+                commands.entity(body).remove::<Turn>();
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,6 +206,25 @@ mod tests {
             }
         }
         panic!("the step never landed");
+    }
+
+    fn is_turning(app: &App, body: Entity) -> bool {
+        app.world().get::<Turn>(body).is_some()
+    }
+
+    /// Issues a turn and records the facing after each tick until it is done, giving up
+    /// after too many. The first entry is the facing after the first tick.
+    fn facings_while_turning(app: &mut App, body: Entity, direction: Direction) -> Vec<Direction> {
+        app.world_mut().entity_mut(body).insert(Turn(direction));
+        let mut seen = Vec::new();
+        for _ in 1..=400 {
+            app.update();
+            seen.push(facing_of(app, body));
+            if !is_turning(app, body) {
+                return seen;
+            }
+        }
+        panic!("the turn never finished");
     }
 
     #[test]
@@ -351,5 +405,81 @@ mod tests {
         app.update();
 
         assert_eq!(transform_of(&app, entity), nudged);
+    }
+
+    fn turner_facing(facing: Direction, turn_speed: f32) -> (App, Entity) {
+        let (mut app, body) = body_at(voxel(0, 0, 0), facing, 4.0);
+        app.world_mut()
+            .get_mut::<Locomotion>(body)
+            .expect("a locomotion")
+            .turn_speed = turn_speed;
+        (app, body)
+    }
+
+    #[test]
+    fn a_half_turn_at_ninety_degrees_a_second_takes_two_seconds_of_ticks() {
+        let (mut app, body) = turner_facing(Direction::E, 90.0);
+
+        let seen = facings_while_turning(&mut app, body, Direction::W);
+
+        assert_eq!(seen.len(), 128);
+        assert_eq!(facing_of(&app, body), Direction::W);
+    }
+
+    #[test]
+    fn a_wide_swing_passes_through_every_direction_between() {
+        let (mut app, body) = turner_facing(Direction::E, 90.0);
+
+        let mut seen = facings_while_turning(&mut app, body, Direction::W);
+        seen.dedup();
+
+        let every_notch: Vec<_> = (0..=6).map(|n| Direction::E.rotated(n)).collect();
+        assert_eq!(seen, every_notch);
+    }
+
+    #[test]
+    fn a_turn_goes_the_short_way_round_either_way() {
+        let (mut app, body) = turner_facing(Direction::E, 90.0);
+        let mut clockwise = facings_while_turning(&mut app, body, Direction::SSE);
+        clockwise.dedup();
+
+        let (mut app, body) = turner_facing(Direction::E, 90.0);
+        let mut anticlockwise = facings_while_turning(&mut app, body, Direction::NNE);
+        anticlockwise.dedup();
+
+        assert_eq!(clockwise, [Direction::E, Direction::ESE, Direction::SSE]);
+        assert_eq!(
+            anticlockwise,
+            [Direction::E, Direction::ENE, Direction::NNE]
+        );
+    }
+
+    #[test]
+    fn turning_to_face_the_way_already_faced_is_done_on_the_first_tick() {
+        let (mut app, body) = turner_facing(Direction::N, 90.0);
+
+        let seen = facings_while_turning(&mut app, body, Direction::N);
+
+        assert_eq!(seen, [Direction::N]);
+    }
+
+    #[test]
+    fn a_turn_does_not_move_the_body() {
+        let (mut app, body) = turner_facing(Direction::E, 90.0);
+
+        facings_while_turning(&mut app, body, Direction::W);
+
+        assert_eq!(position_of(&app, body), voxel(0, 0, 0));
+    }
+
+    #[test]
+    fn leftover_degrees_carry_from_one_turn_straight_into_the_next() {
+        // At 90 degrees/s a notch is 21.3 ticks: rounded one by one, two notches are 22 + 22.
+        let (mut app, body) = turner_facing(Direction::E, 90.0);
+
+        let first = facings_while_turning(&mut app, body, Direction::ENE).len();
+        let second = facings_while_turning(&mut app, body, Direction::NNE).len();
+
+        assert_eq!((first, second), (22, 21));
     }
 }
