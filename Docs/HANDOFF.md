@@ -2,7 +2,7 @@
 
 Written 2026-09-22, after PR #25 (movement) merged; brought up to date the same day with the
 settings and i18n crates, then with app state, then with the overlays and the settings page,
-then with the kinds. Everything here is on `main`, or on the `kinds-skeleton` branch's PR. `AGENTS.md` is the
+then with the kinds. Everything here is on `main`; nothing is outstanding. `AGENTS.md` is the
 authority on how to work; this is where things stand, for a session starting cold.
 
 ## What runs
@@ -160,13 +160,18 @@ is still design. `TODO.md` is what's queued.
 - Work in a worktree under `.claude/worktrees/`; the main checkout is shared with other
   sessions and is not branched or edited.
 - `rg`, not `grep`; `uv`, not `pip`.
+- A scripted edit that asserts on file text must gate everything after it on its exit code
+  (`python … && cargo test && git commit`), never `;`: `cargo fmt` reformats what a script
+  expects to find, and one such miss committed a scratch test before the mistake was seen.
+- The next work, in the order agreed: the keyboard gate and typed values, the rebind screen,
+  then the larger modules; all in `TODO.md`.
 
 ## Where things are
 
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `kinds-skeleton`; holds the warm `target/` (~89 GB, mostly `target/debug`) and is what the desktop shortcut runs |
-| `main` at handoff | `eb78b6a`, the merge of PR #33 (the settings page) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page); then the `kinds-skeleton` PR |
+| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `docs-overlay-rule` (this file's PR), otherwise parked; holds the warm `target/` (~89 GB, mostly `target/debug`) and is what the desktop shortcut runs |
+| `main` at handoff | `01d547f`, the merge of PR #35 (the kinds) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds); then this file's PR |
 | Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |
