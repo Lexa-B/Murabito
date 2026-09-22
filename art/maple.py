@@ -1,4 +1,4 @@
-"""The Japanese maple (イロハモミジ): a mature hillside tree, about 30 shaku (~9 m) tall.
+"""The Japanese maple (イロハモミジ): a hillside tree about 30 shaku (~9 m) tall and 7-8 m across.
 
     blender -b --python art/maple.py -- --out assets/models/maple-00-a-summer.glb \
         [--version 00] [--colour a] [--season summer] [--renders <dir>]
@@ -66,37 +66,37 @@ LEADER = [0.7, 0.45, 0.25]
 # With a "canopy" centre the clumps are wrapped in one continuous skin (a wild
 # crown); without one each clump is its own blob (clipped pads).
 VERSIONS = {
-    "00": {
+    "00": {  # a village tree: its crown about 7-8 m across
         "seed": 0,
         "lumpiness": 0.15,
         "trunk": (
-            [(0, 0, -0.5), (0, 0, 1.5), (0.2, 0.1, 3.5), (0.3, 0.2, 5.5)],
+            [(0, 0, -0.5), (0, 0, 1.5), (0.14, 0.07, 3.5), (0.21, 0.14, 5.5)],
             [1.8, 1.35, 1.15, 1.0],
         ),
         "leaders": [  # splitting low, spreading up into the underside of the crown
-            ([(0.3, 0.2, 4.5), (5, 1, 8.5), (9, 2, 12.5)], LEADER),
-            ([(0.3, 0.2, 4.5), (-4, 4, 8.5), (-7, 7, 12.5)], LEADER),
-            ([(0.3, 0.2, 4.5), (-3, -4, 9), (-5, -8, 13)], LEADER),
-            ([(0.3, 0.2, 4.5), (4, -4, 9), (7, -7, 13)], LEADER),
-            ([(0.3, 0.2, 4.5), (3, 5, 9), (4, 8, 13)], [0.6, 0.4, 0.22]),
-            ([(0.3, 0.2, 5), (0.6, 0.6, 10), (1, 1, 15)], [0.75, 0.55, 0.35]),
+            ([(0.21, 0.14, 4.5), (3.5, 0.7, 8.5), (6.3, 1.4, 12.5)], LEADER),
+            ([(0.21, 0.14, 4.5), (-2.8, 2.8, 8.5), (-4.9, 4.9, 12.5)], LEADER),
+            ([(0.21, 0.14, 4.5), (-2.1, -2.8, 9), (-3.5, -5.6, 13)], LEADER),
+            ([(0.21, 0.14, 4.5), (2.8, -2.8, 9), (4.9, -4.9, 13)], LEADER),
+            ([(0.21, 0.14, 4.5), (2.1, 3.5, 9), (2.8, 5.6, 13)], [0.6, 0.4, 0.22]),
+            ([(0.21, 0.14, 5), (0.42, 0.42, 10), (0.7, 0.7, 15)], [0.75, 0.55, 0.35]),
         ],
-        "canopy": (1, 0, 16),  # the crown is one skin over these lumps
+        "canopy": (0.7, 0, 16),  # the crown is one skin over these lumps
         "clumps": [
             # the cap: a tall dome with a flattish underside
-            ((1, 0, 15), 14, 11, 2.5),
+            ((0.7, 0, 15), 10, 10, 2.5),
             # lumps around the rim, drooping below the cap's underside like the
             # curled edge of a mushroom
-            ((12, 2, 14), 6, 4.5, 3),
-            ((-9, 9, 13.5), 6.5, 4.5, 3),
-            ((-7, -9, 14), 6, 4.5, 3),
-            ((9, -8, 14.5), 5.5, 4.5, 3),
-            ((5, 11, 14.5), 5.5, 4, 3),
-            ((-13, -1, 14), 5.5, 4, 3),
+            ((8.4, 1.4, 14), 4.5, 4.5, 3),
+            ((-6.3, 6.3, 13.5), 4.9, 4.5, 3),
+            ((-4.9, -6.3, 14), 4.5, 4.5, 3),
+            ((6.3, -5.6, 14.5), 4.1, 4.5, 3),
+            ((3.5, 7.7, 14.5), 4.1, 4, 3),
+            ((-9.1, -0.7, 14), 4.1, 4, 3),
             # lumps on the upper slopes and top
-            ((6, -4, 20), 6.5, 4.5, 2),
-            ((-6, 4, 20.5), 6.5, 4.5, 2),
-            ((1, 1, 24), 6.5, 4.5, 2),
+            ((4.2, -2.8, 20), 5.2, 4.5, 2),
+            ((-4.2, 2.8, 20.5), 5.2, 4.5, 2),
+            ((0.7, 0.7, 24), 5.2, 4.5, 2),
         ],
     },
     "pruned-00": {  # cloud-pruned in flat tiers, for a garden tree

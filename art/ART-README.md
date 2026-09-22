@@ -77,7 +77,13 @@ unless there's a reason not to.
   joint (shoulders, elbows, knees, neck, tail, ears), so a skeleton can bend it later.
   None are rigged yet.
 - **Buried trunks:** every tree's trunk reaches 1.5 shaku below ground (`flora.ROOT_DEPTH`)
-  with its bottom rings level, so it sits on sloping terrain with no gap.
+  with its bottom rings level, so it sits on sloping terrain with no gap. The bamboo is
+  scaled down whole (`SCALE`), so its culms reach only 0.6 shaku below.
+- **Real sizes:** models are sized to real Japanese species (shoulder heights for animals,
+  sourced figures for plants), trees as younger, well-used village trees rather than old
+  giants. A script that is built in its own numbers and then sized states it once, as
+  `SCALE` with its source, passed to `finish(scale=...)`; a few (fox, crane, dog) are
+  sized by eye beside the others, and say so.
 
 ## The palette
 
@@ -119,7 +125,7 @@ sampler), so faces get exactly the swatch colour.
 
 | | |
 |---|---|
-| `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `stud(centre, normal, size, colour, sides=4, tall=1.0)` (a small closed stud standing on a surface: eyes, spots; more sides make it rounder, `tall` stretches it up and down), `finish(name, shaded=False)` → a coloured object; `shaded=True` varies each fur or feather face among its `SHADES`, from a stream seeded by `name` |
+| `Builder` | a bmesh whose faces each remember a swatch: `face(verts, colour)`, `paint(faces, colour)`, `stud(centre, normal, size, colour, sides=4, tall=1.0)` (a small closed stud standing on a surface: eyes, spots; more sides make it rounder, `tall` stretches it up and down), `finish(name, shaded=False, scale=1.0)` → a coloured object; `shaded=True` varies each fur or feather face among its `SHADES`, from a stream seeded by `name`; `scale` sizes the whole model about the origin (feet stay on the ground) |
 | `Builder.spine(start_tip, rings, end_tip, upright=0)` | loft an animal's body along a spine in the YZ plane, octagonal rings from tail tip to nose (an optional seventh value tapers a ring, wider at the top: a trapezoid face), each square to the spine except the `upright` ones (a count from the start, or ring indices), which stand straight up (a tail fan, a rump under a high tail); returns the faces per segment |
 | `Builder.limb(face, rings, mirror, tip)` | replace one of those faces with a limb (leg, ear) lofted through square rings; returns its faces |
 | `run(build, name, target, extent)` | the shared command line (`--out`, `--renders`); scripts parse their own extra flags first |

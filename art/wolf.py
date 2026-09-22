@@ -10,7 +10,7 @@ bushy, dusky tail hanging down behind (after a preserved specimen).
 
 Built with loft.py on the dog's layout at one and a half times the size, so it
 keeps the dog's lessons: a flat, upright rump under the tail, hind legs dropping
-straight from it, a tucked groin, and a level back. About 1.8 shaku (~55 cm) to
+straight from it, a tucked groin, and a level back. About 1.5 shaku (~46 cm, once scaled) to
 the shoulder, feet on z = 0.
 """
 
@@ -101,6 +101,8 @@ EYE_SEGMENT = 14  # cheeks -> muzzle: an eye on each upper side
 EYE_SIZE = 0.065
 
 
+SCALE = 0.84  # built in its own numbers, then sized to the museum specimens' ~46 cm at the shoulder
+
 def build_wolf():
     b = loft.Builder()
     segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP, upright=RUMP_RINGS)
@@ -123,8 +125,8 @@ def build_wolf():
         limbs.append((segments[EAR_SEGMENT][upper], EAR, mirror, EAR_TIP))
     for face, rings, mirror, tip in limbs:
         b.limb(face, rings, mirror, tip)
-    return b.finish("Wolf", shaded=True)
+    return b.finish("Wolf", shaded=True, scale=SCALE)
 
 
 if __name__ == "__main__":
-    loft.run(build_wolf, "wolf", target=(0, -0.05, 1.3), extent=3.4)
+    loft.run(build_wolf, "wolf", target=(0.00, -0.04, 1.09), extent=2.86)

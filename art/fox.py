@@ -77,6 +77,8 @@ EAR = [
 EAR_TIP = Vector((0.29, 0.73, 2.50))
 
 
+SCALE = 0.8  # built in its own numbers, then sized to about 33 cm at the shoulder: a real fox's ~40 cm read large with its chibi body and tail
+
 def build_fox():
     b = loft.Builder()
     segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP)
@@ -101,8 +103,8 @@ def build_fox():
         limbs.append((segments[EAR_SEGMENT][upper], EAR, mirror, EAR_TIP))
     for face, rings, mirror, tip in limbs:
         b.limb(face, rings, mirror, tip)
-    return b.finish("Fox", shaded=True)
+    return b.finish("Fox", shaded=True, scale=SCALE)
 
 
 if __name__ == "__main__":
-    loft.run(build_fox, "fox", target=(0, -0.45, 1.15), extent=3.8)
+    loft.run(build_fox, "fox", target=(0.00, -0.36, 0.92), extent=3.04)

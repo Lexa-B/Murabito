@@ -1,4 +1,4 @@
-"""The mountain azalea (ヤマツツジ): a wild, mounded shrub about 5 shaku (~1.5 m) tall.
+"""The mountain azalea (ヤマツツジ): a wild, mounded shrub about 3.6 shaku (~1.1 m) tall.
 
     blender -b --python art/azalea.py -- --out assets/models/azalea-00-a-summer.glb \
         [--version 00] [--colour a] [--season summer] [--renders <dir>]
@@ -47,8 +47,8 @@ COLOURS = {
 VERSIONS = {
     "00": {
         "seed": 0,
-        "height": 5,
-        "width": 7,  # across the mound
+        "height": 4,
+        "width": 5.6,  # across the mound
         "lumps": 11,  # swelling over the dome's top and sides
         "stems": 6,
         "blossoms": 40,  # patches of flowers, when in flower

@@ -8,7 +8,7 @@ ring"), a tan muzzle and big round ears. Stocky, with a big round head and short
 thick legs on long flat feet.
 
 Built with loft.py: one connected, rig-ready mesh, with a ring of vertices at
-every joint. About 2.1 shaku (~64 cm) to the shoulder and 2.9 shaku from nose to
+every joint. About 1.9 shaku (~58 cm) to the shoulder once scaled and 2.6 shaku from nose to
 rump, feet on z = 0.
 """
 
@@ -83,6 +83,8 @@ CRESCENT = [
 ]
 
 
+SCALE = 0.9  # built in its own numbers, then sized to a Japanese black bear's ~58 cm at the shoulder
+
 def build_bear():
     b = loft.Builder()
     segments = b.spine(TAIL_TIP, SPINE, NOSE_TIP)
@@ -97,8 +99,8 @@ def build_bear():
         limbs.append((segments[EAR_SEGMENT][upper], EAR, mirror, EAR_TIP))
     for face, rings, mirror, tip in limbs:
         b.limb(face, rings, mirror, tip)
-    return b.finish("Bear", shaded=True)
+    return b.finish("Bear", shaded=True, scale=SCALE)
 
 
 if __name__ == "__main__":
-    loft.run(build_bear, "bear", target=(0, 0.1, 1.1), extent=3.2)
+    loft.run(build_bear, "bear", target=(0.00, 0.09, 0.99), extent=2.88)

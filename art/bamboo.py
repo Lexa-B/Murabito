@@ -66,6 +66,8 @@ VERSIONS.update({
 })
 
 
+SCALE = 0.4  # built as a timber-sized grove, then sized to the 4-5 m bamboo of a shrine garden
+
 def _culm(b, base, height, out, lean, radius, spec):
     """Loft one culm, node by node, arching out along out; returns where along
     it (a function of 0..1) things can hang."""
@@ -120,7 +122,7 @@ def build_bamboo(version="00", colour="a", season="summer"):
             b, at(1), out, spec["blades"][1] + 2, length * 1.1, width, leaves, shades, rng,
             spread=1.4, droop=(0.5, 1.1),
         )
-    return b.finish(f"Bamboo-{version}-{colour}-{season}")
+    return b.finish(f"Bamboo-{version}-{colour}-{season}", scale=SCALE)
 
 
 if __name__ == "__main__":
@@ -130,7 +132,7 @@ if __name__ == "__main__":
     parser.add_argument("--colour", default="a", choices=COLOURS)
     parser.add_argument("--season", default="summer")
     args, _ = parser.parse_known_args(argv)
-    top = VERSIONS[args.version]["height"][1]
+    top = VERSIONS[args.version]["height"][1] * SCALE
     loft.run(
         lambda: build_bamboo(args.version, args.colour, args.season),
         f"bamboo-{args.version}-{args.colour}-{args.season}",
