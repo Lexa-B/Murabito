@@ -290,7 +290,7 @@ PALETTE = [
     ("cloth_white_light", "#EDE6D5"),
     ("cloth_white_deep", "#DCD3BE"),
 ]
-PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
+PALETTE_SIZE = 32  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
 SWATCH = {name: i for i, (name, _) in enumerate(PALETTE)}
 

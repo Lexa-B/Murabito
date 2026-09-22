@@ -127,7 +127,7 @@ unless there's a reason not to.
 ## The palette
 
 All colour comes from `PALETTE` in `art/style.py`: a list of `(name, "#RRGGBB")` swatches.
-Each swatch is one pixel of a 16×16 texture (`PALETTE_SIZE`), and every face points all
+Each swatch is one pixel of a 32×32 texture (`PALETTE_SIZE`), and every face points all
 its UVs at the centre of its swatch's pixel, sampled with no blending (a `NEAREST`
 sampler), so faces get exactly the swatch colour.
 
@@ -142,9 +142,10 @@ sampler), so faces get exactly the swatch colour.
   (their geometry and colours don't change, only the embedded texture): run
   `art/tools/check.sh <dir>`, and if it reports `ALL MATCH`, copy `<dir>/rebuild/`
   over `assets/entity_models/` (`cp -r <dir>/rebuild/. assets/entity_models/`).
-- The texture holds 256 swatches; about 100 are used. If it fills, raise `PALETTE_SIZE`
+- The texture holds 1024 swatches; about 250 are used. If it fills, raise `PALETTE_SIZE`
   (`palette_image` asserts before it overflows). That changes every model's UVs, so
-  re-export everything, as happened when it grew from 8×8.
+  re-export everything, as happened when it grew from 8×8 and from 16×16 (`check.sh`
+  still matches: it compares the colour a face lands on, not its UVs).
 - Name swatches by what they're for: `sakura_petal`, `pine_bark_red`, `leaf_green_shade`.
 
 ## The shared modules
@@ -397,6 +398,7 @@ themselves.
 | `ground.py -- <glb>…` | each model's lowest heights: trunks should bottom out at −1.5, animals' soles at 0, a shrub's skirt a little below 0. |
 | `sheet.py -- --renders <dir> --out <png> <name>…` | the front and three-quarter views of several rendered models side by side, to compare versions, colours or seasons. |
 | `zoom.py -- <in.png> <out.png> <x> <y> <w> <h> [scale]` | crop part of a render and enlarge it. |
+| `lineup.py -- <out_dir> [folder …]` | every model (or those under the given folders of `assets/entity_models/`) on one ground, from an isometric camera, to compare sizes and vibe: creatures (people, animals, yokai) in the front row, smallest to largest, then each plant species a row. Writes `lineup.png`, and `lineup-creatures.png` when there are plants too. |
 
 For example:
 
@@ -533,8 +535,6 @@ And by eye:
 
 ## Ideas waiting
 
-- **The palette has 252 of its 256 swatches:** raise `PALETTE_SIZE` to 32 before the next
-  model that needs new colours (every model is then re-exported).
 - People: outer clothes (kosode, hakama, obi), expressions (blend shapes on the face
   pieces), more villagers from the same `Shape`s (older, younger, stouter), sakayaki as a
   variant, humanoid yokai built on them.
