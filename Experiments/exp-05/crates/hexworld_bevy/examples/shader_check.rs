@@ -13,14 +13,13 @@ const EXIT_AFTER_FRAMES: u32 = 120;
 
 fn main() {
     App::new()
-        // Bevy's asset root is `CARGO_MANIFEST_DIR` (set by `cargo run`), not the process's
-        // cwd — verified by running this example and watching the asset server's "path not
-        // found" error name the crate directory even when launched from the workspace root.
-        // This crate always sits at `<workspace>/crates/hexworld_bevy`, so two levels up puts
-        // the asset root back at the workspace's own `assets/` directory, where the shader
-        // lives (see `assets/shaders/ground.wgsl` at the workspace root).
+        // Bevy's asset root is `BEVY_ASSET_ROOT` when set, falling back to
+        // `CARGO_MANIFEST_DIR` (set by `cargo run`) otherwise, not the process's cwd.
+        // `Experiments/exp-05/.cargo/config.toml` sets `BEVY_ASSET_ROOT` to the workspace
+        // root, so `file_path` here is just `assets`, where the shader lives (see
+        // `assets/shaders/ground.wgsl` at the workspace root).
         .add_plugins(DefaultPlugins.set(AssetPlugin {
-            file_path: "../../assets".to_string(),
+            file_path: "assets".to_string(),
             ..default()
         }))
         .add_plugins(HexWorldPlugin::default())

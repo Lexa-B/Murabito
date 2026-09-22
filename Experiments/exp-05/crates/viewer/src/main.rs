@@ -1,11 +1,10 @@
 //! Murabito hexworld viewer: an overhead camera flying over the procedurally generated
 //! hex world.
 //!
-//! Bevy's asset root, under `cargo run`, resolves against `CARGO_MANIFEST_DIR` (this
-//! crate's own directory), not the process's working directory. This crate sits two
-//! levels below the workspace root (`crates/viewer`), and the shared ground shader lives
-//! in the workspace-root `assets/` directory (see `assets/shaders/ground.wgsl`), so the
-//! asset path is overridden the same way `hexworld_bevy`'s `shader_check` example does it.
+//! Bevy's asset root is `BEVY_ASSET_ROOT` when set, falling back to `CARGO_MANIFEST_DIR`
+//! (this crate's own directory) otherwise. This workspace's own `Experiments/exp-05/.cargo/config.toml`
+//! sets `BEVY_ASSET_ROOT` to the workspace root, so `file_path` here is just `assets`,
+//! resolved against that — the same way `hexworld_bevy`'s `shader_check` example does it.
 
 mod camera;
 mod headless;
@@ -35,7 +34,7 @@ fn main() {
     app.add_plugins(
         DefaultPlugins
             .set(AssetPlugin {
-                file_path: "../../assets".to_string(),
+                file_path: "assets".to_string(),
                 ..default()
             })
             .set(WindowPlugin {

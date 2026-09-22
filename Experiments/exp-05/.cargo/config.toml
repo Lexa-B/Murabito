@@ -1,0 +1,9 @@
+# The repo root's own `.cargo/config.toml` sets `BEVY_ASSET_ROOT` to the repo root, for
+# the main project's `assets/`. Cargo discovers config files from the current directory
+# upward, so that root config also reaches builds and runs from here — pointing this
+# experiment's asset server outside the repo entirely. This nearer config file overrides
+# that key for anything built or run from within `Experiments/exp-05`, so the experiment
+# stays self-contained. `relative = true` resolves the value against the directory that
+# holds this `.cargo/`, i.e. `Experiments/exp-05` itself.
+[env]
+BEVY_ASSET_ROOT = { value = "", relative = true }
