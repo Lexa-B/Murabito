@@ -35,6 +35,20 @@ class Hair:
     tail: rings from the tie down the back, the same way; the last closes to a
         point below it.
     cord: (z, height) of the paper cord (motoyui) binding the hair at the tie.
+    swoops: strands falling from near the middle of the hairline out across the
+        temple and down beside the face, (root azimuth, tip azimuth, tip z,
+        width), right side, mirrored.
+    sweeps: shallow ridges lying on the cap from the front hairline back over
+        the crown to the knot, (azimuth, width): hair pulled back.
+    ahoge: stray strands springing up from the cap, (azimuth, where from the
+        crown to the hairline, length), curling over at the tip.
+    wisps: loose short strands escaping past the hairline, (azimuth, length),
+        hanging down over the skin.
+    knot: a topknot at the back of the crown, (where from the crown to the
+        nape, 0 to 1, length, radius): a bundle bound with the paper cord.
+    tuft: the knot's loose ends flaring out of it, each (round the knot in
+        degrees, 0 behind and 90 to the right, out from its axis in degrees,
+        length, width), drooping a little at their tips.
     """
 
     centre: tuple
@@ -46,6 +60,12 @@ class Hair:
     fall: list = ()
     tail: list = ()
     cord: tuple = None
+    swoops: list = ()
+    sweeps: list = ()
+    ahoge: list = ()
+    wisps: list = ()
+    knot: tuple = None
+    tuft: list = ()
     rows: int = 7
     sides: int = 24
     colour: str = "hair"
@@ -104,6 +124,17 @@ def build(b, scalp, hair):
     for azimuth, tip_z, width in hair.locks:
         for mirror in (1, -1):
             lock(b, scalp, hair, azimuth * mirror, tip_z, width)
+    for root, tip, tip_z, width in hair.swoops:
+        for mirror in (1, -1):
+            swoop(b, scalp, hair, root * mirror, tip * mirror, tip_z, width)
+    for azimuth, width in hair.sweeps:
+        sweep(b, scalp, hair, azimuth, width)
+    for azimuth, t, length in hair.ahoge:
+        spring(b, scalp, hair, azimuth, t, length)
+    for azimuth, length in hair.wisps:
+        wisp(b, scalp, hair, azimuth, length)
+    if hair.knot:
+        topknot(b, scalp, hair)
     tail = tied_tail(b, scalp, hair) if hair.tail else []
     in_tail = {v for ring, _ in tail for v in ring}
     return [v for v in b.bm.verts if v not in before and v not in in_tail], tail
@@ -115,6 +146,14 @@ def _direction(scalp, hair, azimuth, t):
     crown, _ = scalp.along(UP)
     line, _ = scalp.at(azimuth, _hairline_z(hair, azimuth))
     return (crown - scalp.centre).normalized().slerp((line - scalp.centre).normalized(), t)
+
+
+def _on_cap(scalp, hair, azimuth, t, above=0.0):
+    """A point on the cap's outer surface (and the scalp's normal there)."""
+    point, normal = scalp.along(_direction(scalp, hair, azimuth, t))
+    lift = hair.thickness[0] + (hair.thickness[1] - hair.thickness[0]) * t
+    fuller = hair.volume * (1 - math.cos(math.radians(azimuth))) / 2 * math.sin(math.pi * t)
+    return point + normal * (lift + fuller + above), normal
 
 
 def cap(b, scalp, hair):
@@ -209,3 +248,85 @@ def tied_tail(b, scalp, hair):
         for ring, d in zip(band, (-height, height)):
             figure.cap(b, ring, centre + axis.normalized() * d, "hair_cord")
     return [(rings[k], keys[k][0]) for k in range(tie, len(keys))]
+
+
+def swoop(b, scalp, hair, root_azimuth, tip_azimuth, tip_z, width):
+    """A long strand from under the cap near the middle of the forehead, out over
+    the hairline, across the temple and down beside the face to a point, its
+    flat side turned forward."""
+    root, root_n = scalp.along(_direction(scalp, hair, root_azimuth, 0.5))
+    edge_z = _hairline_z(hair, root_azimuth)
+    edge, edge_n = scalp.at(root_azimuth, edge_z)
+    middle_azimuth = root_azimuth + (tip_azimuth - root_azimuth) * 0.6
+    middle, middle_n = scalp.at(middle_azimuth, edge_z - (edge_z - tip_z) * 0.35)
+    tip, tip_n = scalp.at(tip_azimuth, tip_z)
+    ahead = Vector((0, 1, 0))
+    points = [root + root_n * hair.thickness[0] * 0.5, edge + edge_n * (hair.thickness[1] + 0.03) + UP * 0.02,
+              middle + middle_n * 0.035, tip + tip_n * 0.02]
+    normals = [root_n] + [(n + ahead * 0.8).normalized() for n in (edge_n, middle_n, tip_n)]
+    figure.strip(b, points, normals, [width * 0.8, width, width * 0.8, width * 0.2], 0.01, hair.colour)
+
+
+def spring(b, scalp, hair, azimuth, t, length):
+    """An ahoge: a thin strand springing up out of the cap and curling over."""
+    root, normal = _on_cap(scalp, hair, azimuth, t, above=-0.02)
+    rise = (normal + UP).normalized()
+    over = (_outward(azimuth) + UP * 0.2).normalized()
+    middle = root + rise * length * 0.6
+    tip = middle + (rise * 0.3 + over).normalized() * length * 0.5
+    across = rise.cross(over)
+    flat = across.normalized() if across.length > 1e-3 else Vector((1, 0, 0))
+    figure.strip(b, [root, middle, tip], [flat] * 3, [0.03, 0.025, 0.006], 0.008, hair.colour)
+
+
+def wisp(b, scalp, hair, azimuth, length):
+    """A loose strand escaping from under the cap past the hairline, hanging down
+    over the skin to a point."""
+    root, normal = _on_cap(scalp, hair, azimuth, 0.85, above=-0.01)
+    z = _hairline_z(hair, azimuth)
+    edge, edge_n = scalp.at(azimuth, z)
+    low, low_n = scalp.at(azimuth, z - length)
+    points = [root, edge + edge_n * 0.015, low + low_n * 0.012]
+    figure.strip(b, points, [normal, edge_n, low_n], [0.035, 0.028, 0.006], 0.006, hair.colour)
+
+
+def sweep(b, scalp, hair, azimuth, width):
+    """A clump lying on the cap from the front hairline back over the crown
+    towards the knot: hair pulled back, with volume."""
+    back = hair.knot[0] if hair.knot else 0.4
+    path = [(azimuth, t) for t in (0.95, 0.7, 0.45, 0.2)] + [(180 if azimuth >= 0 else -180, back * 0.6)]
+    points, normals = zip(*(_on_cap(scalp, hair, a, t) for a, t in path))
+    widths = [width * w for w in (0.5, 1, 1, 0.8, 0.35)]
+    figure.strip(b, list(points), list(normals), widths, 0.02, hair.colour)
+
+
+def topknot(b, scalp, hair):
+    """A short bulging bun at the back of the crown, bound with the paper cord,
+    its loose ends flaring out of it in pointed blades."""
+    t, length, radius = hair.knot
+    base, normal = _on_cap(scalp, hair, 180, t)
+    axis = (normal + UP).normalized()
+    side = Vector((1, 0, 0))
+    behind = axis.cross(side).normalized()  # square to the axis, towards the back
+    if behind.y > 0:
+        behind = -behind
+    rings = [figure.ring(b, base + axis * d, axis, side, 8, r, r, r)
+             for d, r in ((-0.03, radius * 1.1), (length * 0.4, radius * 1.25), (length, radius * 0.9))]
+    figure.tube(b, rings, hair.colour)
+    figure.cap(b, rings[0], base - axis * 0.06, hair.colour)
+    top = base + axis * length
+    figure.cap(b, rings[-1], top + axis * 0.015, hair.colour)
+    band = [figure.ring(b, base + axis * d, axis, side, 8, radius * 1.3, radius * 1.3, radius * 1.3)
+            for d in (length * 0.08, length * 0.3)]
+    figure.tube(b, band, "hair_cord")
+    figure.cap(b, band[0], base + axis * length * 0.05, "hair_cord")
+    figure.cap(b, band[1], base + axis * length * 0.33, "hair_cord")
+    for around, out, blade, width in hair.tuft:
+        a, e = math.radians(around), math.radians(out)
+        direction = axis * math.cos(e) + (behind * math.cos(a) + side * math.sin(a)) * math.sin(e)
+        start = top - axis * 0.02
+        middle = start + direction * blade * 0.5
+        tip = middle + direction * blade * 0.5 - UP * blade * 0.2
+        radial = direction - axis * direction.dot(axis)
+        normal = radial.normalized() if radial.length > 1e-3 else behind  # broad side out from the bun, like a petal
+        figure.strip(b, [start, middle, tip], [normal] * 3, [width, width * 0.8, width * 0.2], width * 0.3, hair.colour)
