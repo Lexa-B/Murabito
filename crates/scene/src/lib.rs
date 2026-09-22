@@ -8,7 +8,8 @@
 
 use bevy::prelude::*;
 use murabito_hexcoords::{Direction, VoxelCoord};
-use murabito_movement::{Facing, Locomotion, VoxelPosition};
+use murabito_movement::{Facing, Locomotion, Turn, VoxelPosition};
+use murabito_progress::MechanismSet;
 
 /// One 町 (cho): 360 shaku, about 109 m.
 const GROUND_SIDE: f32 = 360.0;
@@ -49,7 +50,8 @@ impl Plugin for ScenePlugin {
                 brightness: SKY_GLOW,
                 ..default()
             })
-            .add_systems(Startup, (spawn_ground, spawn_sun, spawn_fox));
+            .add_systems(Startup, (spawn_ground, spawn_sun, spawn_fox))
+            .add_systems(FixedUpdate, spin_the_fox.before(MechanismSet));
     }
 }
 
@@ -99,6 +101,19 @@ fn spawn_fox(mut commands: Commands, assets: Res<AssetServer>) {
         Facing(FOX_FACES),
         FOX_LOCOMOTION,
     ));
+}
+
+/// Until the actions layer exists, the fox spins on the spot: whenever it has no turn in
+/// flight it is asked to face the opposite way, and a half turn always goes
+/// anticlockwise, so it keeps going round. Runs before the mechanisms so the new turn
+/// starts on the tick the last one ended, with no tick at rest between.
+/// A fox with no turn in flight.
+type IdleFox = (With<Fox>, Without<Turn>);
+
+fn spin_the_fox(mut commands: Commands, foxes: Query<(Entity, &Facing), IdleFox>) {
+    for (fox, facing) in &foxes {
+        commands.entity(fox).insert(Turn(facing.0.rotated(6)));
+    }
 }
 
 #[cfg(test)]
@@ -196,5 +211,34 @@ mod tests {
             .expect("exactly one sun");
 
         assert!(sun.forward().y < 0.0, "the sun points {:?}", sun.forward());
+    }
+
+    #[test]
+    fn the_fox_keeps_turning() {
+        use bevy::time::TimeUpdateStrategy;
+        use murabito_movement::MovementPlugin;
+        use murabito_progress::ProgressPlugin;
+
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Mesh>()
+            .init_asset::<StandardMaterial>()
+            .init_asset::<WorldAsset>()
+            .add_plugins((ProgressPlugin, MovementPlugin, ScenePlugin))
+            .insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
+        app.update();
+        let mut seen = std::collections::HashSet::new();
+
+        for _ in 0..512 {
+            app.update();
+            let world = app.world_mut();
+            let facing = world
+                .query_filtered::<&Facing, With<Fox>>()
+                .single(world)
+                .expect("exactly one fox");
+            seen.insert(facing.0);
+        }
+
+        assert_eq!(seen.len(), 12, "the fox faced only {seen:?}");
     }
 }

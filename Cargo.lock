@@ -3487,6 +3487,7 @@ dependencies = [
  "bevy",
  "murabito_hexcoords",
  "murabito_movement",
+ "murabito_progress",
 ]
 
 [[package]]
