@@ -15,10 +15,12 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 - **Selection and an overlay.** A selection module that turns clicks into a `Selected` marker,
   and an overlay module that draws progress bars for selected bodies from `Progress` alone.
   Replaces `draw_progress_bars` in `murabito_scene`, which draws one under every busy body.
-- **The UI kit, the menus and the settings screen.** Escape opens the menu and drives `AppState`
-  to `Paused`; which screen is up is the UI's own state, never `AppState`'s. Including a language picker (the first
-  thing to write `Language`, which persists already) and a rebind screen, the first thing to
-  edit `Binds`. The catalogues in `assets/locales/` gain their first keys with the first screen.
+- **The settings page.** `murabito_settings_page` under `crates/ui/`, answering `Overlay::Settings`
+  (today a bare dimmed overlay): a language picker (the first thing to write `Language`) and the
+  pan-speed slider in octaves, which brings `spawn_slider` and thumb placement into the kit. Agreed
+  2026-09-22 as the PR after the kit.
+- **The rebind screen.** The first thing to edit `Binds`: capture the next key or mouse button,
+  three slots per action, show conflicts. Its own design conversation.
 - **The screenshot tool and the debug screen.** From the archive.
 - **Hex: distance and the `units` module.** `Docs/hex_units_readme.md`'s build order, item 4.
 
@@ -33,8 +35,12 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   inconsistent rig unbuildable, once more code constructs rigs.
 - Pan speed is constant per zoom; nothing stops the camera panning off the edge of the ground.
 - The fox's `FOX_LOCOMOTION` (4 shaku/s, 180°/s) is a placeholder until species decide it.
-- `Language::ALL` and `Localized` have no consumer until the UI kit; the i18n systems have
-  work only in their tests.
+- `Language::ALL` has no consumer until the language picker.
+- Space with an overlay up resumes the world and closes the overlay, which will also close the
+  settings page mid-drag on a slider. Accepted for now; the fix is a "the UI has the keyboard"
+  gate, decided the day a text field exists.
+- A pause with nothing over it (`Overlay::None`, what Space gives) shows no sign of being paused.
+  A small PAUSED indicator is the missing piece.
 - The real `~/.config/murabito/settings.yaml` still carries a `ui: {language: en}` section from
   the first attempt, which nothing registers; it rides along harmlessly and can be deleted.
 

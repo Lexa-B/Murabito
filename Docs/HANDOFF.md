@@ -1,7 +1,7 @@
 # Handoff — the main project
 
 Written 2026-09-22, after PR #25 (movement) merged; brought up to date the same day with the
-settings and i18n crates, then with app state. Everything here is on `main`, or on the `app-state` branch's PR. `AGENTS.md` is the
+settings and i18n crates, then with app state, then with the overlays. Everything here is on `main`, or on the `ui-kit` branch's PR. `AGENTS.md` is the
 authority on how to work; this is where things stand, for a session starting cold.
 
 ## What runs
@@ -12,7 +12,9 @@ twelve-sided loop, facing the way it goes, corner steps visibly slower than edge
 progress bar filling on the ground in front of it once per step. WASD/arrows pan, the wheel
 zooms, both eased; the camera's feel numbers are the ones settled by feel-testing in the first
 attempt. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
-resumes. The camera's settings (speed multiplier, pan binds), the pause key and the UI language
+resumes. Escape opens the menu over the paused world (Settings / Resume / Quit, in the UI's
+font, in English or Japanese); Escape again, or Resume, resumes. Settings is a bare dimmed
+overlay until the settings page lands. The camera's settings (speed multiplier, pan binds), the pause key and the UI language
 persist to `~/.config/murabito/settings.yaml`, which is hand-editable.
 
 ## The crates
@@ -29,6 +31,9 @@ crate, and reads the same way.
 | `murabito_user_data` | `crates/user_data` | the player's directory, `~/.config/murabito`; the only place that decides where it is | `UserData`, `UserDataPlugin` |
 | `murabito_settings` | `crates/settings` | `settings.yaml` in that directory: the app registers each module's settings resource with `persist::<T>("key")`; loaded as the app is built, written on the frame anything changes; a file or section that can't be read is backed up to `settings-<moment>.bak` then replaced | `SettingsPlugin`, `Persist` |
 | `murabito_app_state` | `crates/app_state` | `AppState`: `Playing` or `Paused`, whether the world runs and nothing about screens; pauses `Time<Virtual>` on the frame a transition lands, which freezes the whole `FixedUpdate` simulation; `AppStateSettings`, the pause key (Space) | `AppState`, `AppStateSettings`, `AppStatePlugin` |
+| `murabito_ui` | `crates/ui/kit` | the look and the parts every overlay is built from: the dimmed frame, a button carrying whatever action component the screen chose and a `Localized` key, the font (Noto Sans JP, loaded before Startup), tinting that answers the pointer | `UiPlugin`, `UiFont`, `overlay`, `spawn_button`, `spawn_literal_button`, `ButtonSelected`, `text_font`, `SCRIM`, `TEXT` |
+| `murabito_navigation` | `crates/ui/navigation` | `Overlay` (`None`, `Menu`, `Settings`), a sub-state of `AppState::Paused`; where back leads, as one table; the back key (Escape) in `NavigationSettings` | `Overlay`, `NavigationSettings`, `NavigationPlugin` |
+| `murabito_menu` | `crates/ui/menu` | Settings / Resume / Quit, built on entering `Overlay::Menu` and torn down on leaving it however it is left | `MenuPlugin` |
 | `murabito_i18n` | `crates/i18n` | `Language` (a setting, persisted as `language: en`), `Localized` (the key a text entity carries), the compiled-in catalogues `assets/locales/{en,ja}.yaml`, live re-localising | `Language`, `Localized`, `I18nPlugin` |
 | `murabito_hexcoords` | `crates/hexcoords` | `VoxelCoord` (cube in, axial stored, layer), `VoxelspacePos`, `Direction` (twelve, by compass point) with `neighbour`, `rotated`, `notches_to`, `heading` | those |
 | `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
@@ -65,6 +70,15 @@ is still design. `TODO.md` is what's queued.
   its input on `Playing` and depends on `murabito_app_state`; nothing depends on the camera.
 - **Escape is the menu's; Space pauses.** The pause bind lives in `AppStateSettings`, owned by
   the crate that flips the state, and is persisted like every other setting.
+- **`Overlay` is a sub-state of `Paused` and the overlays never import each other.** Chosen over
+  a second independent state kept in step by hand: leaving `Paused` removes the overlay and runs
+  its `OnExit`, so an overlay closed by the world resuming tears down the same as one closed by
+  its button. The menu's Settings button and the page's Back button both set `Overlay`; a new
+  overlay is a variant there and a crate of its own. Named `Overlay`, not `Screen`, which read as
+  hardware. The kit, `murabito_ui`, is our own on Bevy's headless widgets: `bevy_feathers` says
+  itself it is for editors, not games.
+- **Space with an overlay up resumes and closes it.** Coherent ("Space runs the world"), with one
+  known edge, a slider mid-drag; see `TODO.md`.
 - **Progress is measured in the mechanism's units, not ticks**, and the overshoot carries between
   actions of one kind. A run of steps lands when the total distance says (80 ticks, not 81, in
   the test); a tick at rest forgets the leftover.
@@ -85,6 +99,10 @@ is still design. `TODO.md` is what's queued.
 
 - `SceneRoot` is `WorldAssetRoot`; a glTF scene is `GltfAssetLabel::Scene(0).from_asset(path)`.
 - Events are messages: `MessageReader`, `add_message`, `world.write_message`.
+- A sub-state set on the frame its parent comes into being starts at the value asked for (the
+  transition table in `bevy_state`'s `state_set.rs`), which is how Escape lands in `Paused` and
+  `Overlay::Menu` together. `NextState::set` re-runs `OnEnter`/`OnExit` even for the state already
+  in force: set only what changes.
 - `InputPlugin` clears `just_pressed` in `PreUpdate`, so a test can't fake a tap by writing to
   `ButtonInput`; it sends the `KeyboardInput` / `MouseButtonInput` message the window would.
 - A system asking for a missing resource panics; the message names the fix (`init_resource`,
@@ -120,7 +138,7 @@ is still design. `TODO.md` is what's queued.
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `app-state`; holds the warm `target/` (~89 GB, mostly `target/debug`) and is what the desktop shortcut runs |
-| `main` at handoff | `264a051`, the merge of PR #29 (the crate manifest) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest); then the `app-state` PR |
+| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `ui-kit`; holds the warm `target/` (~89 GB, mostly `target/debug`) and is what the desktop shortcut runs |
+| `main` at handoff | `1317594`, the merge of PR #31 (models under `entity_models/`) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session); then the `ui-kit` PR |
 | Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |
