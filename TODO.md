@@ -15,10 +15,14 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 - **Selection and an overlay.** A selection module that turns clicks into a `Selected` marker,
   and an overlay module that draws progress bars for selected bodies from `Progress` alone.
   Replaces `draw_progress_bars` in `murabito_scene`, which draws one under every busy body.
-- **The settings page.** `murabito_settings_page` under `crates/ui/`, answering `Overlay::Settings`
-  (today a bare dimmed overlay): a language picker (the first thing to write `Language`) and the
-  pan-speed slider in octaves, which brings `spawn_slider` and thumb placement into the kit. Agreed
-  2026-09-22 as the PR after the kit.
+- **The keyboard gate, then typing a number into the settings page.** Agreed 2026-09-22 as its own
+  PR, in this order. (1) While Bevy's `InputFocus` holds an entity, game keys don't fire: a run
+  condition on `app_state`'s pause toggle and `navigation`'s back, an engine resource so neither
+  crate gains a dependency; it also ends the slider-mid-drag edge below if the slider takes focus.
+  (2) Double-click on the pan-speed readout (picking's `Click { count }`) swaps it for an
+  `EditableText` field from `bevy_ui_widgets`; Enter parses, clamps to the slider's range, writes
+  `CameraSettings` and replaces `SliderValue`; Escape or losing focus cancels. `bevy_feathers`'
+  `number_input` is the crib. Parse and clamp are pure functions in the kit.
 - **The rebind screen.** The first thing to edit `Binds`: capture the next key or mouse button,
   three slots per action, show conflicts. Its own design conversation.
 - **The screenshot tool and the debug screen.** From the archive.
@@ -35,10 +39,10 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   inconsistent rig unbuildable, once more code constructs rigs.
 - Pan speed is constant per zoom; nothing stops the camera panning off the edge of the ground.
 - The fox's `FOX_LOCOMOTION` (4 shaku/s, 180°/s) is a placeholder until species decide it.
-- `Language::ALL` has no consumer until the language picker.
-- Space with an overlay up resumes the world and closes the overlay, which will also close the
-  settings page mid-drag on a slider. Accepted for now; the fix is a "the UI has the keyboard"
-  gate, decided the day a text field exists.
+- Space with an overlay up resumes the world and closes the overlay, which also closes the
+  settings page mid-drag on a slider. Accepted for now; the keyboard gate above is the fix.
+- The Japanese for "Pan speed" is `視点移動速度`, the common phrasing on Japanese settings screens,
+  chosen by the agent, not a translator.
 - A pause with nothing over it (`Overlay::None`, what Space gives) shows no sign of being paused.
   A small PAUSED indicator is the missing piece.
 - The real `~/.config/murabito/settings.yaml` still carries a `ui: {language: en}` section from

@@ -1,7 +1,7 @@
 # Handoff — the main project
 
 Written 2026-09-22, after PR #25 (movement) merged; brought up to date the same day with the
-settings and i18n crates, then with app state, then with the overlays. Everything here is on `main`, or on the `ui-kit` branch's PR. `AGENTS.md` is the
+settings and i18n crates, then with app state, then with the overlays and the settings page. Everything here is on `main`, or on the `settings-page` branch's PR. `AGENTS.md` is the
 authority on how to work; this is where things stand, for a session starting cold.
 
 ## What runs
@@ -13,9 +13,11 @@ progress bar filling on the ground in front of it once per step. WASD/arrows pan
 zooms, both eased; the camera's feel numbers are the ones settled by feel-testing in the first
 attempt. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
 resumes. Escape opens the menu over the paused world (Settings / Resume / Quit, in the UI's
-font, in English or Japanese); Escape again, or Resume, resumes. Settings is a bare dimmed
-overlay until the settings page lands. The camera's settings (speed multiplier, pan binds), the pause key and the UI language
-persist to `~/.config/murabito/settings.yaml`, which is hand-editable.
+font, in English or Japanese); Escape again, or Resume, resumes. Settings is a page with a
+pan-speed slider (a quarter speed to six times, in octaves, with a readout) and a language picker
+that relabels everything in place. The camera's settings (speed multiplier, pan binds), the
+pause and back keys and the UI language persist to `~/.config/murabito/settings.yaml`, which is
+hand-editable.
 
 ## The crates
 
@@ -34,6 +36,7 @@ crate, and reads the same way.
 | `murabito_ui` | `crates/ui/kit` | the look and the parts every overlay is built from: the dimmed frame, a button carrying whatever action component the screen chose and a `Localized` key, the font (Noto Sans JP, loaded before Startup), tinting that answers the pointer | `UiPlugin`, `UiFont`, `overlay`, `spawn_button`, `spawn_literal_button`, `ButtonSelected`, `text_font`, `SCRIM`, `TEXT` |
 | `murabito_navigation` | `crates/ui/navigation` | `Overlay` (`None`, `Menu`, `Settings`), a sub-state of `AppState::Paused`; where back leads, as one table; the back key (Escape) in `NavigationSettings` | `Overlay`, `NavigationSettings`, `NavigationPlugin` |
 | `murabito_menu` | `crates/ui/menu` | Settings / Resume / Quit, built on entering `Overlay::Menu` and torn down on leaving it however it is left | `MenuPlugin` |
+| `murabito_settings_page` | `crates/ui/settings_page` | one row per setting and Back: the language picker (each language named in its own script, the one in force marked) and the pan-speed slider; edits go straight into `Language` and `CameraSettings`, and the file follows | `SettingsPagePlugin` |
 | `murabito_i18n` | `crates/i18n` | `Language` (a setting, persisted as `language: en`), `Localized` (the key a text entity carries), the compiled-in catalogues `assets/locales/{en,ja}.yaml`, live re-localising | `Language`, `Localized`, `I18nPlugin` |
 | `murabito_hexcoords` | `crates/hexcoords` | `VoxelCoord` (cube in, axial stored, layer), `VoxelspacePos`, `Direction` (twelve, by compass point) with `neighbour`, `rotated`, `notches_to`, `heading` | those |
 | `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
@@ -78,7 +81,12 @@ is still design. `TODO.md` is what's queued.
   hardware. The kit, `murabito_ui`, is our own on Bevy's headless widgets: `bevy_feathers` says
   itself it is for editors, not games.
 - **Space with an overlay up resumes and closes it.** Coherent ("Space runs the world"), with one
-  known edge, a slider mid-drag; see `TODO.md`.
+  known edge, a slider mid-drag; the keyboard gate in `TODO.md` is the fix.
+- **The slider's observer rides on the slider entity**, as Bevy's own examples do. A global
+  `add_observer` would also see a `ValueChange` (measured, after a false start: see the gotcha
+  below); the entity one is scoped to that slider and needs no marker check.
+- **The pan-speed slider tops out at 6x**, Lexa's call, over the archive's 4x; the floor stays a
+  quarter speed. In octaves, so the default is no longer dead centre, which is fine.
 - **Progress is measured in the mechanism's units, not ticks**, and the overshoot carries between
   actions of one kind. A run of steps lands when the total distance says (80 ticks, not 81, in
   the test); a tick at rest forgets the leftover.
@@ -103,6 +111,9 @@ is still design. `TODO.md` is what's queued.
   transition table in `bevy_state`'s `state_set.rs`), which is how Escape lands in `Paused` and
   `Overlay::Menu` together. `NextState::set` re-runs `OnEnter`/`OnExit` even for the state already
   in force: set only what changes.
+- A float literal in a generic event infers as `f64` when nothing pins it: `ValueChange { value:
+  1.0, .. }` is a `ValueChange<f64>` that no `On<ValueChange<f32>>` observer sees, with no error.
+  Write `1.0_f32`. This cost a wrong conclusion about global observers before it was found.
 - `InputPlugin` clears `just_pressed` in `PreUpdate`, so a test can't fake a tap by writing to
   `ButtonInput`; it sends the `KeyboardInput` / `MouseButtonInput` message the window would.
 - A system asking for a missing resource panics; the message names the fix (`init_resource`,
@@ -138,7 +149,7 @@ is still design. `TODO.md` is what's queued.
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `ui-kit`; holds the warm `target/` (~89 GB, mostly `target/debug`) and is what the desktop shortcut runs |
-| `main` at handoff | `1317594`, the merge of PR #31 (models under `entity_models/`) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session); then the `ui-kit` PR |
+| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `settings-page`; holds the warm `target/` (~89 GB, mostly `target/debug`) and is what the desktop shortcut runs |
+| `main` at handoff | `ececdaf`, the merge of PR #32 (the overlays) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays); then the `settings-page` PR |
 | Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |
