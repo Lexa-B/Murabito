@@ -41,8 +41,8 @@ North is −Z in both, so **the rendered world is not mirrored and the triangle 
 - Only its `Cargo.toml` differs, because exp-05's workspace is not main's:
   - `edition = "2024"` is set on the crate itself (exp-05's workspace default is 2021);
   - Bevy is `default-features = false`, since the crate only needs `bevy::math`. The plugin and viewer turn on the features they need, as now.
-- `hexworld` depends on `murabito_hexcoords`. That is its only dependency.
-- The rule in `AGENTS.md`, the README and the original spec that `hexworld` has no dependencies becomes: **`hexworld` depends only on `murabito_hexcoords`, and through it on Bevy's math types.** It still holds no rendering, ECS or asset code; those stay in `hexworld_bevy` and `viewer`.
+- `hexworld` depends on `murabito_hexcoords`, and on `bevy` with `default-features = false` for `bevy::math::Vec3`. The vendored crate takes `Vec3` in its API but doesn't re-export it, and its source isn't edited here, so `hexworld` names Bevy itself, the same way main's crate does.
+- The rule in `AGENTS.md`, the README and the original spec that `hexworld` has no dependencies becomes: **`hexworld` depends only on `murabito_hexcoords` and on `bevy` without default features, for its math types.** It still holds no rendering, ECS or asset code; those stay in `hexworld_bevy` and `viewer`.
 
 ## Labels: `Hex`
 
