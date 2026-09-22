@@ -221,29 +221,27 @@ mod tests {
         assert!(has::<WorldAssetRoot>(app.world(), fox));
     }
 
-    /// The models are made by the art pipeline, not here. A rename there would
-    /// otherwise show up only as a thing quietly missing from the screen.
-    #[test]
-    fn every_model_a_kind_names_is_on_disk() {
-        let mut world = World::new();
+    /// Every kind there is, spawned once. A loop in the requirements panics on the first
+    /// spawn of a kind in it, naming the loop; spawning the leaves registers every tier
+    /// above them, and the leafless tiers are spawned as themselves.
+    fn spawn_every_kind(world: &mut World) {
         world.spawn(Fox);
-
-        let assets = bevy::asset::io::file::FileAssetReader::get_base_path().join("assets");
-        for model in world.query::<&Model>().iter(&world) {
-            let file = assets.join(model.0);
-            assert!(file.is_file(), "no model at {}", file.display());
-        }
-    }
-
-    /// Requirements are registered the first time a kind is spawned, and a loop in them
-    /// panics there, naming the loop. Spawning the deepest tier of every branch registers
-    /// every tier above it.
-    #[test]
-    fn every_tier_spawns() {
-        let mut world = World::new();
-
-        world.spawn(Beast);
-        world.spawn(Bird);
+        world.spawn(Wolf);
+        world.spawn(Hare);
+        world.spawn(Boar);
+        world.spawn(Deer);
+        world.spawn(Bear);
+        world.spawn(Macaque);
+        world.spawn(Cat);
+        world.spawn(Rat);
+        world.spawn(Dog);
+        world.spawn(Tanuki);
+        world.spawn(Horse);
+        world.spawn(Ox);
+        world.spawn(Crane);
+        world.spawn(Heron);
+        world.spawn(Chicken);
+        world.spawn(Pheasant);
         world.spawn(Critter);
         world.spawn(Fish);
         world.spawn(Human);
@@ -259,11 +257,57 @@ mod tests {
         world.spawn(Furniture);
         world.spawn(Rock);
         world.spawn(Intangible);
+    }
+
+    #[test]
+    fn every_kind_spawns_and_is_a_thing() {
+        let mut world = World::new();
+
+        spawn_every_kind(&mut world);
 
         let things = world
             .query_filtered::<(), With<AllThings>>()
             .iter(&world)
             .count();
-        assert_eq!(things, 17);
+        assert_eq!(things, 32, "one entity per spawn, each of them a thing");
+    }
+
+    #[test]
+    fn every_animal_is_one() {
+        let mut world = World::new();
+        spawn_every_kind(&mut world);
+
+        let animals = world
+            .query_filtered::<(), With<Animal>>()
+            .iter(&world)
+            .count();
+        let beasts = world
+            .query_filtered::<(), With<Beast>>()
+            .iter(&world)
+            .count();
+        let birds = world
+            .query_filtered::<(), With<Bird>>()
+            .iter(&world)
+            .count();
+
+        assert_eq!((beasts, birds), (13, 4));
+        assert_eq!(animals, 13 + 4 + 2, "plus a bare critter and a bare fish");
+    }
+
+    /// The models are made by the art pipeline, not here. A rename there would
+    /// otherwise show up only as a thing quietly missing from the screen.
+    #[test]
+    fn every_model_a_kind_names_is_on_disk() {
+        let mut world = World::new();
+        spawn_every_kind(&mut world);
+
+        let assets = bevy::asset::io::file::FileAssetReader::get_base_path().join("assets");
+        let mut named = 0;
+        for model in world.query::<&Model>().iter(&world) {
+            let file = assets.join(model.0);
+            assert!(file.is_file(), "no model at {}", file.display());
+            named += 1;
+        }
+        assert_eq!(named, 17, "every animal names its model");
     }
 }
