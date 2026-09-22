@@ -8,15 +8,15 @@ authority on how to work; this is where things stand, for a session starting col
 ## What runs
 
 `cargo run -p murabito`, or `scripts/run.sh` (what the desktop shortcut points at): a green
-ground one cho square under a pale sky, lit by a sun, and a fox five cells west of the origin
+ground one cho square under a pale sky, lit by a sun, and a fox eight cells west of the origin
 walking a twelve-sided loop, facing the way it goes, corner steps visibly slower than edge steps,
 with a progress bar filling on the ground in front of it once per step. WASD/arrows pan, the wheel
 zooms, both eased; the camera's feel numbers are the ones settled by feel-testing in the first
 attempt. Six cells east of the origin, a hare walks a triangle: three steps, a second's rest, a
-third of a turn, and again; a sugi stands three cells short of it, on the fox's line. Each
+third of a turn, and again; a sugi stands north of the line between them, clear of both walks. Each
 looker's cone is drawn on the ground in its colour, orange for the fox and pale blue for the hare,
-with a line to each thing it sees, solid up close and fainter with distance: the fox sees the tree
-and not the hare behind it until its loop carries it clear. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
+with a line to each thing it sees, solid up close and fainter with distance: from its start the
+fox sees the tree near and the hare beyond it less well, and loses each as its loop turns it away. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
 resumes. Escape opens the menu over the paused world (Settings / Resume / Quit, in the UI's
 font, in English or Japanese); Escape again, or Resume, resumes. Settings is a page with a
 pan-speed slider (a quarter speed to six times, in octaves, with a readout) and a language picker

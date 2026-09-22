@@ -69,9 +69,9 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 ## The world and how it is seen
 
 - **`murabito_scene`** — the placeholder world: a ground one cho square, a sun, the sky
-  colour and ambient light, a `Fox` from `murabito_kinds` five cells west of the origin
+  colour and ambient light, a `Fox` from `murabito_kinds` eight cells west of the origin
   walking a twelve-sided loop, a `Hare` six cells east walking a triangle with a rest at
-  each corner, and a `Sugi` between them; a progress bar drawn in front of whatever is
+  each corner, and a `Sugi` north of the line between them; a progress bar drawn in front of whatever is
   busy, and each looker's cone and sightlines in its own colour (the bar and the
   sightlines belong to a debug module once one exists). Where a thing stands and which
   way it starts off facing is the scene's business; what it is, is the kind's.

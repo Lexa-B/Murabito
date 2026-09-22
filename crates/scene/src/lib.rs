@@ -31,11 +31,11 @@ const SKY_COLOUR: Color = Color::srgb(0.53, 0.81, 0.92);
 /// whatever faces away from the sun is pure black.
 const SKY_GLOW: f32 = 200.0;
 
-/// Where the fox starts: five cells west of the origin, so that its loop, which runs
-/// five cells east and six north of its start, stays west of the tree; and which way it
-/// starts off facing: toward the camera and to its right, which shows its face and its
-/// flank at once.
-const FOX_STARTS_AT: (i32, i32, i32) = (-5, 0, 5);
+/// Where the fox starts: eight cells west of the origin, so that its loop, which runs
+/// five cells east and six north of its start, stays well west of the tree; and which
+/// way it starts off facing: toward the camera and to its right, which shows its face
+/// and its flank at once.
+const FOX_STARTS_AT: (i32, i32, i32) = (-8, 0, 8);
 const FOX_FACES: Direction = Direction::ESE;
 
 /// Where the hare starts: six cells east of the origin, on the fox's line and clear of
@@ -50,10 +50,9 @@ const HARE_TRIANGLE: [Direction; 3] = [Direction::E, Direction::NNW, Direction::
 const HARE_SIDE_STEPS: usize = 3;
 const HARE_REST: Duration = Duration::from_secs(1);
 
-/// Where the tree stands: on the line from the fox's start to the hare's, three cells
-/// short of the hare, so that from where it starts the fox sees the tree and not the
-/// hare behind it; and east of everywhere the fox's loop goes.
-const TREE_AT: (i32, i32, i32) = (3, 0, -3);
+/// Where the tree stands: two corner steps north of the line from the fox's start to
+/// the hare's, clear of both walks, and in the fox's cone from where it starts.
+const TREE_AT: (i32, i32, i32) = (5, -4, -1);
 
 /// Sightlines and cones are drawn per looker in its own colour: not the species' hue,
 /// so the two stay tellable apart where they cross.
@@ -340,8 +339,10 @@ mod tests {
             .count()
     }
 
+    /// The tree stands where the scene says, and the hare's triangle never enters its
+    /// cell nor the ring of cells around it, which is about where the canopy ends.
     #[test]
-    fn a_tree_stands_between_the_fox_and_the_hare() {
+    fn a_tree_stands_north_of_the_hare_clear_of_its_triangle() {
         let mut app = app_after_startup();
         let world = app.world_mut();
 
@@ -354,10 +355,13 @@ mod tests {
         let (q, r, s) = TREE_AT;
         assert_eq!(tree, VoxelCoord::new(q, r, s, 0).expect("on the plane"));
         let (hq, hr, hs) = HARE_STARTS_AT;
-        let hare = VoxelCoord::new(hq, hr, hs, 0).expect("on the plane");
-        let (fq, fr, fs) = FOX_STARTS_AT;
-        let fox = VoxelCoord::new(fq, fr, fs, 0).expect("on the plane");
-        assert_eq!(fox.distance(tree) + tree.distance(hare), fox.distance(hare));
+        let mut here = VoxelCoord::new(hq, hr, hs, 0).expect("on the plane");
+        for side in HARE_TRIANGLE {
+            for _ in 0..HARE_SIDE_STEPS {
+                here = here.neighbour(side);
+                assert!(here.distance(tree) > 1, "the triangle passes {here:?}");
+            }
+        }
     }
 
     /// The fox's loop never enters the tree's cell, nor the ring of cells around it,
@@ -378,11 +382,11 @@ mod tests {
         }
     }
 
-    /// The starting tableau, as a claim rather than a screenshot: the fox faces the hare
-    /// with the tree in the way, so it sees the tree and not the hare; the hare faces
-    /// away and sees neither.
+    /// The starting tableau, as a claim rather than a screenshot: the fox faces east
+    /// across the ground and sees the tree, near, and the hare beyond it, less well; the
+    /// hare faces away and sees neither.
     #[test]
-    fn at_the_start_the_fox_sees_the_tree_and_not_the_hare_behind_it() {
+    fn at_the_start_the_fox_sees_the_tree_near_and_the_hare_beyond_it() {
         use bevy::gizmos::AppGizmoBuilder;
         use bevy::time::TimeUpdateStrategy;
         use murabito_perception::PerceptionPlugin;
@@ -417,9 +421,13 @@ mod tests {
         assert_eq!(
             fox_sees.sees(tree),
             Some(Acuity::Near),
-            "the tree is eight cells off"
+            "the tree is eleven and a half shaku off"
         );
-        assert_eq!(fox_sees.sees(hare), None, "the hare is behind it");
+        assert_eq!(
+            fox_sees.sees(hare),
+            Some(Acuity::Mid),
+            "the hare is fourteen shaku off"
+        );
         let hare_sees = world.get::<Seen>(hare).expect("the hare has eyes");
         assert!(hare_sees.is_empty(), "the hare faces east, away from both");
     }
@@ -433,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn a_fox_stands_five_cells_west_of_the_origin_facing_toward_the_camera_and_to_its_right() {
+    fn a_fox_stands_eight_cells_west_of_the_origin_facing_toward_the_camera_and_to_its_right() {
         let mut app = app_after_startup();
         let world = app.world_mut();
 
@@ -442,7 +450,7 @@ mod tests {
             .single(world)
             .expect("exactly one fox");
 
-        assert_eq!(position.0.to_world(), Vec3::new(-5.0, 0.0, 0.0));
+        assert_eq!(position.0.to_world(), Vec3::new(-8.0, 0.0, 0.0));
         assert_eq!(facing.0, Direction::ESE);
     }
 
