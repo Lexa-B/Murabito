@@ -9,7 +9,8 @@
 use bevy::prelude::*;
 use murabito_actions::{Action, ActionQueue};
 use murabito_hexcoords::{Direction, VoxelCoord};
-use murabito_movement::{Facing, Locomotion, VoxelPosition};
+use murabito_kinds::Fox;
+use murabito_movement::{Facing, VoxelPosition};
 use murabito_progress::Progress;
 
 /// One 町 (cho): 360 shaku, about 109 m.
@@ -27,20 +28,9 @@ const SKY_COLOUR: Color = Color::srgb(0.53, 0.81, 0.92);
 /// whatever faces away from the sun is pure black.
 const SKY_GLOW: f32 = 200.0;
 
-/// Relative to `assets/`. The model is in shaku, faces forward (-Z) and stands with
-/// its soles at y = 0, so it needs no scaling or righting: see `art/ART-README.md`.
-const FOX_MODEL: &str = "entity_models/living/animals/fox.glb";
-
 /// Which way the fox starts off facing: toward the camera and to its right, which shows
 /// its face and its flank at once.
 const FOX_FACES: Direction = Direction::ESE;
-
-/// How the fox moves, until something more considered decides: a brisk walk of 4 shaku
-/// (about 1.2 m) a second, and half a turn a second.
-const FOX_LOCOMOTION: Locomotion = Locomotion {
-    speed: 4.0,
-    turn_speed: 180.0,
-};
 
 /// The progress bar drawn under a body with something in flight: on the ground just in
 /// front of it, toward the camera, a shaku wide. Placeholder until a UI module owns it.
@@ -77,10 +67,6 @@ struct Ground;
 #[derive(Component)]
 struct Sun;
 
-/// Marks the fox.
-#[derive(Component)]
-struct Fox;
-
 fn spawn_ground(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -105,17 +91,11 @@ fn spawn_sun(mut commands: Commands) {
     ));
 }
 
-fn spawn_fox(mut commands: Commands, assets: Res<AssetServer>) {
-    let model = assets.load(GltfAssetLabel::Scene(0).from_asset(FOX_MODEL));
+/// What a fox is, has and looks like is the kind's business; where this one stands and
+/// which way it starts off facing is the scene's.
+fn spawn_fox(mut commands: Commands) {
     let origin = VoxelCoord::new(0, 0, 0, 0).expect("the origin is on the plane");
-    commands.spawn((
-        Fox,
-        WorldAssetRoot(model),
-        VoxelPosition(origin),
-        Facing(FOX_FACES),
-        FOX_LOCOMOTION,
-        ActionQueue::default(),
-    ));
+    commands.spawn((Fox, VoxelPosition(origin), Facing(FOX_FACES)));
 }
 
 /// Until something decides for it, the fox walks a loop: whenever its queue runs dry it
@@ -208,17 +188,6 @@ mod tests {
 
         assert_eq!(position.0.to_world(), Vec3::ZERO);
         assert_eq!(facing.0, Direction::ESE);
-    }
-
-    /// The model is made by the art pipeline, not by this crate. A rename there would
-    /// otherwise show up only as a fox quietly missing from the screen.
-    #[test]
-    fn the_fox_model_is_where_the_scene_looks_for_it() {
-        let model = bevy::asset::io::file::FileAssetReader::get_base_path()
-            .join("assets")
-            .join(FOX_MODEL);
-
-        assert!(model.is_file(), "no model at {}", model.display());
     }
 
     #[test]

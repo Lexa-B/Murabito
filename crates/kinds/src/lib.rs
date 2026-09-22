@@ -57,13 +57,28 @@
 //! (`Locomotion`, at a placeholder pace a kind overrides) and takes orders; yokai move
 //! as much as beasts do. The tiers below it add nothing yet.
 //!
+//! A kind that is drawn names its file with `Model`, and `KindsPlugin`'s one observer
+//! loads it as the thing is spawned.
+//!
 //! This crate depends on the mechanism crates whose components the tiers require, and
 //! nothing but what spawns things depends on it. A cycle in the requirements panics at
 //! registration, naming the loop, so the tests spawn every kind.
 
 pub mod all_things;
+mod model;
 
 pub use all_things::*;
+pub use model::Model;
+
+/// Loads the model of anything spawned with one. The kinds themselves are types and
+/// need no plugin; this is the one system the crate has.
+pub struct KindsPlugin;
+
+impl bevy::app::Plugin for KindsPlugin {
+    fn build(&self, app: &mut bevy::app::App) {
+        app.add_observer(model::load_model);
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -176,6 +191,48 @@ mod tests {
             })
         );
         assert!(has::<Beast>(&world, one));
+    }
+
+    #[test]
+    fn a_fox_is_a_beast_with_its_own_pace() {
+        let mut world = World::new();
+
+        let fox = world.spawn(Fox).id();
+
+        assert!(has::<Beast>(&world, fox));
+        assert_eq!(
+            world.entity(fox).get::<Locomotion>(),
+            Some(&Locomotion {
+                speed: 4.0,
+                turn_speed: 180.0
+            })
+        );
+    }
+
+    #[test]
+    fn a_fox_is_drawn_from_its_model_once_spawned() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), KindsPlugin))
+            .init_asset::<WorldAsset>();
+
+        let fox = app.world_mut().spawn(Fox).id();
+        app.update();
+
+        assert!(has::<WorldAssetRoot>(app.world(), fox));
+    }
+
+    /// The models are made by the art pipeline, not here. A rename there would
+    /// otherwise show up only as a thing quietly missing from the screen.
+    #[test]
+    fn every_model_a_kind_names_is_on_disk() {
+        let mut world = World::new();
+        world.spawn(Fox);
+
+        let assets = bevy::asset::io::file::FileAssetReader::get_base_path().join("assets");
+        for model in world.query::<&Model>().iter(&world) {
+            let file = assets.join(model.0);
+            assert!(file.is_file(), "no model at {}", file.display());
+        }
     }
 
     /// Requirements are registered the first time a kind is spawned, and a loop in them
