@@ -4,6 +4,7 @@
 
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
+use murabito_app_state::AppState;
 use murabito_keybinds::{Binds, Held, Inputs};
 use serde::{Deserialize, Serialize};
 
@@ -88,7 +89,17 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CameraSettings>()
             .add_systems(Startup, spawn_camera)
-            .add_systems(Update, (pan_camera, zoom_camera, apply_rig).chain());
+            .add_systems(
+                Update,
+                // Input only while the world runs: a held key behind a menu should not
+                // pan, and a wheel notch over one should not zoom. The rig is still
+                // applied, so wherever the camera was, it stays drawn there.
+                (
+                    (pan_camera, zoom_camera).run_if(in_state(AppState::Playing)),
+                    apply_rig,
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -263,9 +274,25 @@ mod tests {
     /// system asks for, with no keys held; in the real app it arrives with
     /// `DefaultPlugins`.
     fn headless_app() -> App {
+        use bevy::state::app::StatesPlugin;
+        use murabito_app_state::AppStatePlugin;
+
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, InputPlugin, CameraPlugin));
+        app.add_plugins((
+            MinimalPlugins,
+            InputPlugin,
+            StatesPlugin,
+            AppStatePlugin,
+            CameraPlugin,
+        ));
         app
+    }
+
+    fn pause(app: &mut App) {
+        app.world_mut()
+            .resource_mut::<NextState<AppState>>()
+            .set(AppState::Paused);
+        app.update();
     }
 
     fn camera_after_startup() -> Transform {
@@ -817,5 +844,21 @@ mod tests {
 
         assert_eq!(read.pan_speed_scale, 0.5);
         assert_eq!(read.pan_forward, CameraSettings::default().pan_forward);
+    }
+
+    /// The proof that the input systems are gated. Zoom is the one that can show it:
+    /// a notch moves the target whatever the clock says, so an ungated zoom would move
+    /// it while paused. The pan is driven by the clock alone, and a paused clock hands
+    /// it a zero delta, so an ungated pan does nothing observable either: a test of it
+    /// cannot tell the gate from the frozen clock, and there is none.
+    #[test]
+    fn a_wheel_notch_zooms_nothing_while_paused() {
+        let mut app = app_in_tenths_of_a_second();
+        pause(&mut app);
+        notch(&mut app, 1.0);
+
+        (0..A_GOOD_WHILE).for_each(|_| app.update());
+
+        assert_eq!(rig_zoom_and_target(&mut app), (START_ZOOM, START_ZOOM));
     }
 }

@@ -7,6 +7,7 @@ publish.workspace = true
 [dependencies]
 bevy.workspace = true
 murabito_keybinds.workspace = true
+murabito_app_state.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
