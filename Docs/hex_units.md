@@ -162,7 +162,11 @@ A corner direction `k` is the sum of its flanking edges: `dir[k] = dir[k − 1] 
 
 Bevy's forward, −Z, is north, direction 3: a corner. An entity walking an edge direction is never
 facing Bevy's default forward, which is fine as long as models are rotated to face their heading:
-heading `k` is `from_rotation_y((k − 3) · 30°)`, a constant offset.
+heading `k` is `from_rotation_y((k − 3) · 30°)`, a constant offset. That is `Direction::heading()`.
+
+Turning is in notches of 30°: `rotated(n)` is `n` notches anticlockwise (negative for clockwise),
+and `notches_to(other)` is the shortest turn to another direction, in `−5..=6`. Exactly opposite
+is the one tie, and it goes anticlockwise, the index direction.
 
 Which of these an entity may actually move to is a movement rule, covered in `movement.md`.
 
@@ -170,7 +174,7 @@ Which of these an entity may actually move to is a movement rule, covered in `mo
 
 1. `VoxelCoord`, `new`, the getters and their tests. Done.
 2. Voxel ↔ world conversion and cube rounding. Done, with `VoxelspacePos`.
-3. The direction table and neighbours. Done: `Direction`, `neighbour`, `neighbours`.
+3. The direction table and neighbours. Done: `Direction`, `neighbour`, `neighbours`, and the turning helpers `rotated`, `notches_to`, `heading`.
 4. Later: distance and the heuristic (see `movement.md`), and the `units` module when needed.
 
 ## Open questions

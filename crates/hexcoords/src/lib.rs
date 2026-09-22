@@ -17,7 +17,7 @@
 
 use std::fmt;
 
-use bevy::math::Vec3;
+use bevy::math::{Quat, Vec3};
 
 /// A voxel's height, in shaku: 5 sun.
 const LAYER_HEIGHT: f32 = 0.5;
@@ -294,6 +294,32 @@ impl Direction {
         }
         let k = usize::from(self.index());
         Some((Self::ALL[(k + 11) % 12], Self::ALL[(k + 1) % 12]))
+    }
+
+    /// The direction `notches` turns of 30° anticlockwise from this one; negative turns
+    /// clockwise. Wraps, so any count is fine.
+    pub fn rotated(self, notches: i8) -> Self {
+        let k = i16::from(self.index()) + i16::from(notches);
+        Self::ALL[usize::try_from(k.rem_euclid(12)).expect("0 to 11")]
+    }
+
+    /// The shortest turn from this direction to `other`, in notches of 30°: positive is
+    /// anticlockwise, in `-5..=6`. Exactly opposite is the one tie, and goes anticlockwise.
+    pub fn notches_to(self, other: Self) -> i8 {
+        let anticlockwise = (i16::from(other.index()) - i16::from(self.index())).rem_euclid(12);
+        let notches = if anticlockwise > 6 {
+            anticlockwise - 12
+        } else {
+            anticlockwise
+        };
+        i8::try_from(notches).expect("-5 to 6")
+    }
+
+    /// The rotation that turns something built facing Bevy's forward, -Z, to face this
+    /// way. -Z is north, direction 3, so heading `k` is `(k - 3)` turns of 30° about Y.
+    pub fn heading(self) -> Quat {
+        let turns = f32::from(self.index()) - 3.0;
+        Quat::from_rotation_y((turns * 30.0).to_radians())
     }
 
     /// The axial step this direction is, `(dq, dr)`.
@@ -694,5 +720,58 @@ mod tests {
         let distinct: std::collections::HashSet<_> = neighbours.into_iter().collect();
 
         assert_eq!(distinct.len(), 12);
+    }
+
+    #[test]
+    fn rotating_a_direction_wraps_around_the_compass() {
+        assert_eq!(Direction::E.rotated(1), Direction::ENE);
+        assert_eq!(Direction::E.rotated(-1), Direction::ESE);
+        assert_eq!(Direction::ESE.rotated(1), Direction::E);
+        assert_eq!(Direction::N.rotated(12), Direction::N);
+        assert_eq!(Direction::N.rotated(-25), Direction::NNE);
+    }
+
+    #[test]
+    fn the_shortest_turn_goes_whichever_way_is_nearer() {
+        assert_eq!(Direction::E.notches_to(Direction::E), 0);
+        assert_eq!(Direction::E.notches_to(Direction::NNE), 2);
+        assert_eq!(Direction::E.notches_to(Direction::ESE), -1);
+        assert_eq!(Direction::ESE.notches_to(Direction::E), 1);
+        assert_eq!(Direction::N.notches_to(Direction::SSE), -5);
+    }
+
+    #[test]
+    fn a_turn_to_the_opposite_direction_goes_anticlockwise() {
+        for direction in Direction::ALL {
+            let opposite = direction.rotated(6);
+            assert_eq!(direction.notches_to(opposite), 6, "{direction:?}");
+        }
+    }
+
+    #[test]
+    fn rotating_by_the_shortest_turn_arrives() {
+        for from in Direction::ALL {
+            for to in Direction::ALL {
+                assert_eq!(from.rotated(from.notches_to(to)), to, "{from:?} to {to:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_heading_turns_bevys_forward_to_point_the_direction_it_names() {
+        for direction in Direction::ALL {
+            let faces = direction.heading() * Vec3::NEG_Z;
+            let step = voxel(0, 0, 0).neighbour(direction).to_world().normalize();
+
+            assert!(
+                faces.abs_diff_eq(step, 1e-5),
+                "heading {direction:?} faces {faces}, the step goes {step}"
+            );
+        }
+    }
+
+    #[test]
+    fn facing_north_is_no_turn_at_all() {
+        assert!(Direction::N.heading().abs_diff_eq(Quat::IDENTITY, 1e-6));
     }
 }
