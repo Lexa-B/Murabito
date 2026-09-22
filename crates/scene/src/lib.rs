@@ -1,5 +1,5 @@
 //! The placeholder world: a ground, a sun and sky to see it by, a fox walking a
-//! twelve-sided loop about the origin, a hare walking a triangle beside it, and a tree
+//! twelve-sided loop west of the origin, a hare walking a triangle east of it, and a tree
 //! between them, so that there is something to look at and something in the way.
 //!
 //! Lengths are in shaku: one world unit is one 尺, about 30.3 cm. Metres appear only in

@@ -69,11 +69,12 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 ## The world and how it is seen
 
 - **`murabito_scene`** — the placeholder world: a ground one cho square, a sun, the sky
-  colour and ambient light, a `Fox` from `murabito_kinds` at the origin walking a
-  twelve-sided loop, and a `Hare` six shaku east walking a triangle with a rest at each
-  corner, with a progress bar drawn in front of whatever is busy (the bar belongs to a UI
-  module once one exists). Where a thing stands and which way it starts off facing is the
-  scene's business; what it is, is the kind's.
+  colour and ambient light, a `Fox` from `murabito_kinds` five cells west of the origin
+  walking a twelve-sided loop, a `Hare` six cells east walking a triangle with a rest at
+  each corner, and a `Sugi` between them; a progress bar drawn in front of whatever is
+  busy, and each looker's cone and sightlines in its own colour (the bar and the
+  sightlines belong to a debug module once one exists). Where a thing stands and which
+  way it starts off facing is the scene's business; what it is, is the kind's.
 - **`murabito_camera`** — the overhead camera as a rig (focus, direction, zoom) from
   which one system derives the transform; eased pan and zoom, pan speed following zoom.
   Owns `CameraSettings`: the speed multiplier and the four pan binds.
