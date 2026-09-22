@@ -8,7 +8,7 @@
 
 use bevy::prelude::*;
 use murabito_hexcoords::{Direction, VoxelCoord};
-use murabito_movement::{Facing, VoxelPosition};
+use murabito_movement::{Facing, Locomotion, VoxelPosition};
 
 /// One 町 (cho): 360 shaku, about 109 m.
 const GROUND_SIDE: f32 = 360.0;
@@ -32,6 +32,13 @@ const FOX_MODEL: &str = "models/fox.glb";
 /// Which way the fox starts off facing: toward the camera and to its right, which shows
 /// its face and its flank at once.
 const FOX_FACES: Direction = Direction::ESE;
+
+/// How the fox moves, until something more considered decides: a brisk walk of 4 shaku
+/// (about 1.2 m) a second, and half a turn a second.
+const FOX_LOCOMOTION: Locomotion = Locomotion {
+    speed: 4.0,
+    turn_speed: 180.0,
+};
 
 pub struct ScenePlugin;
 
@@ -90,6 +97,7 @@ fn spawn_fox(mut commands: Commands, assets: Res<AssetServer>) {
         WorldAssetRoot(model),
         VoxelPosition(origin),
         Facing(FOX_FACES),
+        FOX_LOCOMOTION,
     ));
 }
 

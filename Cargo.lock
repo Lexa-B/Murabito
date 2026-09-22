@@ -3470,6 +3470,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "murabito_hexcoords",
+ "murabito_progress",
 ]
 
 [[package]]

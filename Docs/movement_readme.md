@@ -22,6 +22,24 @@ Implemented, in `murabito_movement`.
 
 These are plain components any entity can carry: nothing in them says what the entity is.
 
+## Stepping
+
+Implemented, in `murabito_movement`, on the one accumulation bar of `actions_readme.md`.
+
+- `Locomotion { speed, turn_speed }`: shaku per second and degrees per second. A body's physical
+  properties, so they live here; it requires a `Progress`.
+- `Step(Direction)` is the intent. Put it on a body and the `step` system, in `FixedUpdate`,
+  carries it out: `Progress::start::<Step>(cost)`, then `advance(speed × tick)` each tick, and on
+  reaching the cost the body is in the neighbour, faces the way it went, and the `Step` is gone.
+  Movement is by whole voxels: mid-step the body is still in the voxel it left from.
+- `cost(direction)` is 1 for an edge, √3 for a corner: the shaku walked.
+- `can_step(facing, direction)`: a step is allowed only when the body faces the way it is to go
+  or one notch either side. That one-notch turn is free, taken on landing. Anything wider is a
+  turn first, and a `Step` that breaks this is refused: removed with a warning.
+- Since progress is in shaku and carries between steps of the same kind, a run of steps lands when
+  the total distance says, not each step rounded up to a tick; a tick spent standing still
+  forgets the head start.
+
 ## 12-direction movement
 
 Entities move in 12 directions: the 6 edge moves plus the 6 corner moves. They are
