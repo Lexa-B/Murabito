@@ -15,9 +15,8 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 - **Selection and an overlay.** A selection module that turns clicks into a `Selected` marker,
   and an overlay module that draws progress bars for selected bodies from `Progress` alone.
   Replaces `draw_progress_bars` in `murabito_scene`, which draws one under every busy body.
-- **App state and pausing.** Playing / menu / settings; the archive paused `Time<Virtual>`, to
-  be re-decided.
-- **The UI kit, the menus and the settings screen.** Including a language picker (the first
+- **The UI kit, the menus and the settings screen.** Escape opens the menu and drives `AppState`
+  to `Paused`; which screen is up is the UI's own state, never `AppState`'s. Including a language picker (the first
   thing to write `Language`, which persists already) and a rebind screen, the first thing to
   edit `Binds`. The catalogues in `assets/locales/` gain their first keys with the first screen.
 - **The screenshot tool and the debug screen.** From the archive.
