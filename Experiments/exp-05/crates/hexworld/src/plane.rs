@@ -10,8 +10,8 @@ const SQRT3: f64 = 1.732_050_807_568_877_2;
 /// The centre of a cell, in metres east and north of the world centre.
 pub fn cell_centre_m(cell: Hex, level: Level) -> (f64, f64) {
     let w = level.width_m();
-    let q = cell.q as f64;
-    let r = cell.r as f64;
+    let q = cell.q() as f64;
+    let r = cell.r() as f64;
     ((q + r / 2.0) * w, r * SQRT3 / 2.0 * w)
 }
 
@@ -32,7 +32,7 @@ pub fn hex_round(fq: f64, fr: f64) -> Hex {
     } else if dr > ds {
         r = -q - s;
     }
-    Hex::new(q as i32, r as i32)
+    Hex::axial(q as i32, r as i32)
 }
 
 /// The cell whose ideal hexagon contains the point, at the given level.
@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn a_step_east_is_one_width() {
-        let (e, n) = cell_centre_m(Hex::new(1, 0), Level::Shaku);
+        let (e, n) = cell_centre_m(Hex::axial(1, 0), Level::Shaku);
         assert!((e - Level::Shaku.width_m()).abs() < 1e-12);
         assert!(n.abs() < 1e-12);
     }
@@ -76,7 +76,7 @@ mod tests {
     #[test]
     fn metres_and_axial_round_trip() {
         for level in crate::level::CELL_LEVELS {
-            for cell in [Hex::new(0, 0), Hex::new(5, -3), Hex::new(-17, 41)] {
+            for cell in [Hex::axial(0, 0), Hex::axial(5, -3), Hex::axial(-17, 41)] {
                 let (e, n) = cell_centre_m(cell, level);
                 assert_eq!(round_at(e, n, level), cell, "{level:?} {cell:?}");
             }
@@ -86,9 +86,9 @@ mod tests {
     #[test]
     fn rounding_picks_the_nearest_centre() {
         // A point a tenth of a width east of a centre still belongs to that cell.
-        let (e, n) = cell_centre_m(Hex::new(3, 2), Level::Ken);
+        let (e, n) = cell_centre_m(Hex::axial(3, 2), Level::Ken);
         let nudged = (e + 0.1 * Level::Ken.width_m(), n);
-        assert_eq!(round_at(nudged.0, nudged.1, Level::Ken), Hex::new(3, 2));
+        assert_eq!(round_at(nudged.0, nudged.1, Level::Ken), Hex::axial(3, 2));
     }
 
     #[test]

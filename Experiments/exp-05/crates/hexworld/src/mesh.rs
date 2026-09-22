@@ -280,7 +280,7 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
 /// A material's colour, shaded slightly per cell so neighbouring cells read apart.
 fn shaded(material: crate::column::Material, cell: Hex) -> [f32; 4] {
     let base = material.colour();
-    let hash = crate::noise::gradient_2d(0x5EED, cell.q as f64 * 0.37, cell.r as f64 * 0.51);
+    let hash = crate::noise::gradient_2d(0x5EED, cell.q() as f64 * 0.37, cell.r() as f64 * 0.51);
     let k = 1.0 + 0.06 * hash as f32;
     [base[0] * k, base[1] * k, base[2] * k, 1.0]
 }

@@ -150,7 +150,7 @@ mod tests {
     #[test]
     fn a_column_is_rock_then_dirt_then_grass() {
         let cfg = WorldConfig::default();
-        let col = column_at(&cfg, Hex::new(3, -2), Level::Shaku);
+        let col = column_at(&cfg, Hex::axial(3, -2), Level::Shaku);
         assert_eq!(col.runs.first().unwrap().material, Material::Rock);
         assert_eq!(col.runs.first().unwrap().bottom, cfg.bottom_layer);
         assert_eq!(col.runs.last().unwrap().material, Material::Grass);
@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn a_columns_top_follows_the_height_function() {
         let cfg = WorldConfig::default();
-        let cell = Hex::new(11, 5);
+        let cell = Hex::axial(11, 5);
         let (e, n) = crate::plane::cell_centre_m(cell, Level::Shaku);
         let expected = cfg.layer_of_height(height_m(&cfg, e, n, Level::Shaku));
         assert_eq!(
@@ -176,7 +176,7 @@ mod tests {
     fn columns_are_seeded() {
         let a = WorldConfig::default();
         let b = WorldConfig { seed: 99, ..a };
-        let cell = Hex::new(4, 4);
+        let cell = Hex::axial(4, 4);
         assert_ne!(
             column_at(&a, cell, Level::Shaku),
             column_at(&b, cell, Level::Shaku)
@@ -191,7 +191,7 @@ mod tests {
             ..WorldConfig::default()
         };
         // This will produce a very negative height, landing well below bottom_layer = 100
-        let col = column_at(&cfg, Hex::new(0, 0), Level::Shaku);
+        let col = column_at(&cfg, Hex::axial(0, 0), Level::Shaku);
 
         // The column must have at least one run (the grass at bottom_layer)
         assert!(!col.runs.is_empty(), "column has no runs");
@@ -233,7 +233,7 @@ mod tests {
 
         for q in -50..=50 {
             for r in -50..=50 {
-                let cell = Hex::new(q, r);
+                let cell = Hex::axial(q, r);
                 let col = column_at(&cfg, cell, Level::Shaku);
                 total_count += 1;
 

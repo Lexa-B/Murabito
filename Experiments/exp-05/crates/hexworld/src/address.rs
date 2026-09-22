@@ -34,17 +34,17 @@ pub fn address_of(shaku: Hex, layer: i32) -> Address {
 }
 
 pub fn shaku_of(addr: &Address) -> (Hex, i32) {
-    let cho = Hex::new(
-        addr.ri.q * Level::Ri.packing() + addr.cho.q,
-        addr.ri.r * Level::Ri.packing() + addr.cho.r,
+    let cho = Hex::axial(
+        addr.ri.q() * Level::Ri.packing() + addr.cho.q(),
+        addr.ri.r() * Level::Ri.packing() + addr.cho.r(),
     );
-    let ken = Hex::new(
-        cho.q * Level::Cho.packing() + addr.ken.q,
-        cho.r * Level::Cho.packing() + addr.ken.r,
+    let ken = Hex::axial(
+        cho.q() * Level::Cho.packing() + addr.ken.q(),
+        cho.r() * Level::Cho.packing() + addr.ken.r(),
     );
-    let shaku = Hex::new(
-        ken.q * Level::Ken.packing() + addr.shaku.q,
-        ken.r * Level::Ken.packing() + addr.shaku.r,
+    let shaku = Hex::axial(
+        ken.q() * Level::Ken.packing() + addr.shaku.q(),
+        ken.r() * Level::Ken.packing() + addr.shaku.r(),
     );
     (shaku, addr.layer)
 }
@@ -53,16 +53,8 @@ impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "ri ({},{}) / cho ({},{}) / ken ({},{}) / shaku ({},{}) / layer {}",
-            self.ri.q,
-            self.ri.r,
-            self.cho.q,
-            self.cho.r,
-            self.ken.q,
-            self.ken.r,
-            self.shaku.q,
-            self.shaku.r,
-            self.layer
+            "ri {} / cho {} / ken {} / shaku {} / layer {}",
+            self.ri, self.cho, self.ken, self.shaku, self.layer
         )
     }
 }
@@ -75,9 +67,9 @@ mod tests {
     fn addresses_round_trip() {
         for shaku in [
             Hex::ZERO,
-            Hex::new(1, -1),
-            Hex::new(4_211, -9_003),
-            Hex::new(-12_961, 7),
+            Hex::axial(1, -1),
+            Hex::axial(4_211, -9_003),
+            Hex::axial(-12_961, 7),
         ] {
             for layer in [-7, 0, 213] {
                 let addr = address_of(shaku, layer);
@@ -98,8 +90,8 @@ mod tests {
     #[test]
     fn neighbouring_shaku_across_a_ken_border_differ_in_ken() {
         // The shaku east of a ken's eastern edge belongs to the next ken.
-        let a = Hex::new(2, 0);
-        let b = Hex::new(3, 0);
+        let a = Hex::axial(2, 0);
+        let b = Hex::axial(3, 0);
         let addr_a = address_of(a, 0);
         let addr_b = address_of(b, 0);
         assert_ne!(addr_a.ken, addr_b.ken, "{addr_a} vs {addr_b}");
@@ -107,7 +99,7 @@ mod tests {
 
     #[test]
     fn display_lists_every_part() {
-        let text = format!("{}", address_of(Hex::new(7, -3), 12));
+        let text = format!("{}", address_of(Hex::axial(7, -3), 12));
         assert!(text.contains("ri ("), "{text}");
         assert!(text.contains("cho ("), "{text}");
         assert!(text.contains("ken ("), "{text}");

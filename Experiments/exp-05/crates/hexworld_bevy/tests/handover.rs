@@ -338,7 +338,7 @@ fn the_guest_sides_mesh_drops_the_shared_vertex_the_frame_both_neighbours_are_sh
     // least one guest cell (see `hexworld`'s `shared_cells_are_exactly_guests`), and both
     // are well within the default window (rings.shaku = 3) around the origin.
     let a = ChunkKey::new(Level::Ken, Hex::ZERO);
-    let b = ChunkKey::new(Level::Ken, Hex::new(1, 0));
+    let b = ChunkKey::new(Level::Ken, Hex::new(1, 0, -1).unwrap());
     let cfg = WorldConfig::default();
 
     // Which of a/b owns the shared tie cell is fixed by geometry alone, independent of
@@ -346,7 +346,7 @@ fn the_guest_sides_mesh_drops_the_shared_vertex_the_frame_both_neighbours_are_sh
     let cells_a: HashSet<Hex> = hexworld::mesh::drawn_cells(&cfg, a).into_iter().collect();
     let cells_b: HashSet<Hex> = hexworld::mesh::drawn_cells(&cfg, b).into_iter().collect();
     let mut shared: Vec<Hex> = cells_a.intersection(&cells_b).copied().collect();
-    shared.sort_by_key(|h| (h.q, h.r));
+    shared.sort_by_key(|h| (h.q(), h.r()));
     let cell = *shared
         .first()
         .expect("a and b are known neighbours and must share at least one guest cell");

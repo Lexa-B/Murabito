@@ -105,7 +105,7 @@ fn a_second_loader_adds_its_windows_with_no_other_changes() {
     assert_eq!(before, 76, "a single loader's whole window");
 
     // One more entity with a Loader: that is the whole API.
-    let far_cell = Hex::new(400, 200);
+    let far_cell = Hex::new(400, 200, -600).unwrap();
     let cfg = WorldConfig::default();
     assert!(
         hexworld::cell_in_world(far_cell, Level::Shaku, &cfg),

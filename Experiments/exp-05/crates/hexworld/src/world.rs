@@ -30,7 +30,7 @@ mod tests {
         let cfg = WorldConfig::default();
         assert_eq!(world_ri(&cfg), vec![Hex::ZERO]);
         assert!(in_world(Hex::ZERO, &cfg));
-        assert!(!in_world(Hex::new(1, 0), &cfg));
+        assert!(!in_world(Hex::axial(1, 0), &cfg));
     }
 
     #[test]
@@ -47,7 +47,7 @@ mod tests {
         let cfg = WorldConfig::default();
         assert!(cell_in_world(Hex::ZERO, Level::Shaku, &cfg));
         // A shaku far outside ri (0, 0): 3 ri east.
-        let far = Hex::new(3 * Level::Ri.scale_shaku(), 0);
+        let far = Hex::axial(3 * Level::Ri.scale_shaku(), 0);
         assert!(!cell_in_world(far, Level::Shaku, &cfg));
     }
 }

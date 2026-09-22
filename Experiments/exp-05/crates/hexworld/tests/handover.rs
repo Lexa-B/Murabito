@@ -87,7 +87,7 @@ fn shared_cells_are_exactly_guests() {
     // d2 to both centres — and owned by exactly one of the two chunks.
     let cfg = WorldConfig::default();
     let a = ChunkKey::new(Level::Ken, Hex::ZERO);
-    let b = ChunkKey::new(Level::Ken, Hex::new(1, 0));
+    let b = ChunkKey::new(Level::Ken, Hex::new(1, 0, -1).unwrap());
     let cells_a: HashSet<Hex> = drawn_cells(&cfg, a).into_iter().collect();
     let cells_b: HashSet<Hex> = drawn_cells(&cfg, b).into_iter().collect();
     let shared: Vec<Hex> = cells_a.intersection(&cells_b).copied().collect();
@@ -259,7 +259,7 @@ fn the_world_ends_in_a_wall() {
     let cfg = WorldConfig::default();
     let mut edge_ken = None;
     for q in 0..20_000 {
-        let ken = Hex::new(q, 0);
+        let ken = Hex::new(q, 0, -q).unwrap();
         let cells = drawn_cells(&cfg, ChunkKey::new(Level::Ken, ken));
         if cells.is_empty() {
             continue;
