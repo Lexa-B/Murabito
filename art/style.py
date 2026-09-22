@@ -285,6 +285,10 @@ PALETTE = [
     ("hair_light", "#443A3D"),
     ("hair_deep", "#312A2C"),
     ("hair_cord", "#EDE6D6"),
+    # people: undergarments of unbleached cotton
+    ("cloth_white", "#E6DECB"),
+    ("cloth_white_light", "#EDE6D5"),
+    ("cloth_white_deep", "#DCD3BE"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -327,6 +331,7 @@ SHADES = {
         "pheasant_tail",
         "heron_grey",
         "hair",
+        "cloth_white",
     )
 }
 

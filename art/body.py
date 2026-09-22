@@ -30,6 +30,7 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 import figure
+import garment
 import hair as hairdo
 import loft
 import rig
@@ -159,6 +160,7 @@ class Shape:
     elbow: int = 1
     face: Face = None
     hair: hairdo.Hair = None
+    garments: list = ()
 
 
 def build(shape, name):
@@ -177,6 +179,7 @@ def build(shape, name):
     for mirror in (1, -1):
         body.leg(torso[0], mirror)
         body.arm(torso, mirror)
+    body.dress()
     b.bm.verts.index_update()
     for verts, pairs in body.weights:
         body.rig.weigh_blend([v.index for v in verts if v.is_valid], pairs)
@@ -236,6 +239,8 @@ class _Body:
         self.b, self.s, self.rig = b, shape, skeleton
         self.weights = []  # (vertices, [(bone, weight)]), turned into indices once built
         self.tree = None  # the head without its features, for placing things on it
+        self.parts = {"legs": [], "shoulders": []}  # faces of each part, for garments to measure
+        self.skin = []  # the body's own ring vertices, whose weights garments copy
         self.torso_faces = {}  # (row, k): the torso's face k between ring row and the ring above
 
     def weigh(self, verts, *pairs):
@@ -263,6 +268,7 @@ class _Body:
                     continue
                 self.torso_faces[i, k] = b.face((lower[k], lower[(k + 1) % n], upper[(k + 1) % n], upper[k]), s.skin)
         self.rings = rings
+        self.skin += [v for ring in rings for v in ring]
         crown = figure.cap(b, rings[-1], s.crown, s.skin)
         self.spine_bones(rings, where)
         self.weigh(crown[0].verts[2:], ("head", 1))
@@ -292,6 +298,46 @@ class _Body:
             vert.co.y += out * pull
             fullness = max(1 - abs(t - rise) / 0.5, 0.0)  # widest round the tip
             vert.co.x *= 0.35 - 0.15 * t + 0.15 * fullness  # drawn in to the middle: a narrow bridge, a button tip
+
+    def dress(self):
+        """The shape's garments, measured off the torso and legs (or torso and
+        shoulders, for a robe), each vertex riding on the bones of the skin
+        nearest it."""
+        s = self.s
+        if not s.garments:
+            return
+        torso = [f for f in self.torso_faces.values() if f.is_valid]
+        trees = {"hips": garment.tree_of(torso + self.parts["legs"]),
+                 "chest": garment.tree_of(torso + self.parts["shoulders"])}
+        drop = math.radians(s.arm_drop)
+        arms = [(Vector((s.shoulder_joint[0] * m, s.shoulder_joint[1], s.shoulder_joint[2])),
+                 Vector((math.cos(drop) * m, 0, -math.sin(drop))), s.arm) for m in (1, -1)]
+        made = []
+        for spec in s.garments:
+            if isinstance(spec, garment.Koshimaki):
+                made += garment.koshimaki(self.b, trees, spec)
+            elif isinstance(spec, garment.Hadagi):
+                made += garment.hadagi(self.b, trees, spec, arms)
+            elif isinstance(spec, garment.Fundoshi):
+                made += garment.fundoshi(self.b, trees, spec)
+        self.ride_on_nearest_skin(made)
+
+    def ride_on_nearest_skin(self, verts):
+        """Give each vertex the weights of the nearest vertex of the body's skin."""
+        from mathutils.kdtree import KDTree
+
+        pairs = {}
+        for group, weights in self.weights:
+            for v in group:
+                pairs.setdefault(v, []).extend(weights)
+        skin = [v for v in self.skin if v.is_valid and v in pairs]
+        tree = KDTree(len(skin))
+        for i, v in enumerate(skin):
+            tree.insert(v.co, i)
+        tree.balance()
+        for v in verts:
+            _, i, _ = tree.find(v.co)
+            self.weigh([v], *pairs[skin[i]])
 
     def spine_bones(self, rings, where):
         """hips to head up the middle, each ring riding on the bones round it."""
@@ -460,7 +506,9 @@ class _Body:
         ]
         groin = self.crotch_loop(hips, mirror)
         eased = [figure.blend(b, groin, rings[0], t, swell) for t, swell in s.groin]
-        figure.tube(b, [groin] + eased + rings, s.skin)
+        rows = figure.tube(b, [groin] + eased + rings, s.skin)
+        self.parts["legs"] += [f for row in rows for f in row]
+        self.skin += [v for ring in eased + rings for v in ring]
         toe = Vector((s.toe[0] * mirror, s.toe[1], s.toe[2]))
         tip = figure.cap(b, rings[-1], toe, s.skin)[0].verts[2]
 
@@ -504,6 +552,8 @@ class _Body:
         top, bottom = self.knuckle_row(wrist + along * s.knuckles, back_of_hand)
         loops = [hole] + eased + chain + [top + bottom[::-1]]
         rows = figure.tube(b, loops, s.skin)
+        self.parts["shoulders"] += [f for row in rows[: len(eased) + 2] for f in row]
+        self.skin += [v for ring in eased + chain for v in ring]
 
         bones = [f"{side}{n}" for n in ("UpperArm", "LowerArm", "Hand")]
         shoulder, (upper, lower, hand) = f"{side}Shoulder", bones

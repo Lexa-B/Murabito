@@ -14,6 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(next(p for p in Path(__file__).resolve().parents if (p / "loft.py").exists())))
 import body  # noqa: E402
+import garment  # noqa: E402
 import hair  # noqa: E402
 import loft  # noqa: E402
 
@@ -107,6 +108,10 @@ WOMAN = body.Shape(
         tail=[(3.95, 0.095, 0.052, 0.065), (3.7, 0.115, 0.052, 0.06), (3.45, 0.105, 0.046, 0.055), (3.25, 0.075, 0.04, 0.05)],
         cord=(4.1, 0.04),
     ),
+    garments=[
+        garment.Koshimaki(top=2.9, hem=1.5),
+        garment.Hadagi(hem=2.6, neck=3.93, v_bottom=3.25),
+    ],
 )
 
 
