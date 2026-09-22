@@ -136,6 +136,38 @@ def hole(b, faces):
     return loop
 
 
+def catmull(p0, p1, p2, p3, t):
+    """The Catmull-Rom curve through p1 (t = 0) and p2 (t = 1), shaped by its
+    neighbours p0 and p3: numbers or Vectors."""
+    return 0.5 * (
+        p1 * 2
+        + (p2 - p0) * t
+        + (p0 * 2 - p1 * 5 + p2 * 4 - p3) * t * t
+        + (p1 * 3 - p0 - p2 * 3 + p3) * t * t * t
+    )
+
+
+def densify(keys, steps):
+    """More rings, on a smooth curve through the key rings: keys are dicts of
+    numbers or Vectors, all with the same keys, and steps[i] is how many pieces
+    the gap after key i is cut into (1 leaves it alone). Returns the rings and,
+    for each, its position counted in keys (key 2 is 2.0, half way to key 3 is
+    2.5), for weighing it between bones."""
+    rings, where = [], []
+    last = len(keys) - 1
+    for i, key in enumerate(keys):
+        rings.append(dict(key))
+        where.append(float(i))
+        if i == last:
+            break
+        p0, p1, p2, p3 = keys[max(i - 1, 0)], key, keys[i + 1], keys[min(i + 2, last)]
+        for step in range(1, steps[i]):
+            t = step / steps[i]
+            rings.append({name: catmull(p0[name], p1[name], p2[name], p3[name], t) for name in key})
+            where.append(i + t)
+    return rings, where
+
+
 def tube(b, rings, colour):
     """Bridge each ring to the next; returns rows of faces."""
     return [bridge(b, a, c, colour) for a, c in zip(rings, rings[1:])]
