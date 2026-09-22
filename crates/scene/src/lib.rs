@@ -35,10 +35,11 @@ const FOX_MODEL: &str = "models/fox.glb";
 const FOX_FACES: Direction = Direction::ESE;
 
 /// How the fox moves, until something more considered decides: a brisk walk of 4 shaku
-/// (about 1.2 m) a second, and half a turn a second.
+/// (about 1.2 m) a second, and a notch every five-sixths of a second: slow, so the bar can
+/// be seen filling.
 const FOX_LOCOMOTION: Locomotion = Locomotion {
     speed: 4.0,
-    turn_speed: 180.0,
+    turn_speed: 36.0,
 };
 
 /// The progress bar drawn under a body with something in flight: on the ground just in
@@ -270,7 +271,9 @@ mod tests {
         app.update();
         let mut seen = std::collections::HashSet::new();
 
-        for _ in 0..512 {
+        // A full circle at the fox's turn speed, at 64 ticks a second, and a little over.
+        let a_full_circle = (360.0 / FOX_LOCOMOTION.turn_speed * 64.0 * 1.1) as u32;
+        for _ in 0..a_full_circle {
             app.update();
             let world = app.world_mut();
             let facing = world
