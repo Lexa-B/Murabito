@@ -3,8 +3,21 @@
 //! The world is hexagonal prisms, pointy-top, stacked in layers. A cell is addressed in
 //! cube coordinates `(q, r, s)`, which always satisfy `q + r + s = 0`, plus an integer
 //! layer. `Docs/hex_units.md` is the design this implements.
+//!
+//! World space is Bevy's: `f32` shaku, Y up. A voxel is one shaku flat to flat and half a
+//! shaku (5 sun) tall, and its world position is the centre of its bottom face.
 
 use std::fmt;
+
+use bevy::math::Vec3;
+
+/// A voxel's height, in shaku: 5 sun.
+const LAYER_HEIGHT: f32 = 0.5;
+
+/// How far apart rows of pointy-top hexes are, in cell widths: √3 / 2.
+const ROW_SPACING: f32 = SQRT_3 / 2.0;
+
+const SQRT_3: f32 = 1.732_050_8;
 
 /// The address of one voxel: a cell of the hex plane and a layer.
 ///
@@ -69,6 +82,45 @@ impl VoxelCoord {
 
     pub fn layer(self) -> i32 {
         self.layer
+    }
+
+    /// The centre of this voxel's bottom face, in world space.
+    pub fn to_world(self) -> Vec3 {
+        let q = self.q as f32;
+        let r = self.r as f32;
+        Vec3::new(
+            q + r / 2.0,
+            self.layer as f32 * LAYER_HEIGHT,
+            r * ROW_SPACING,
+        )
+    }
+
+    /// The voxel a point of world space is in. Every point is in exactly one voxel, so
+    /// this can't fail: a point on the plane between two cells goes to whichever the
+    /// rounding favours, and a point on a layer's bottom face belongs to that layer.
+    pub fn from_world(point: Vec3) -> Self {
+        let r = point.z / ROW_SPACING;
+        let q = point.x - r / 2.0;
+        let (q, r) = cube_round(q, r, -q - r);
+        let layer = (point.y / LAYER_HEIGHT).floor() as i32;
+        Self { q, r, layer }
+    }
+}
+
+/// The nearest cell to fractional cube coordinates, as axial `(q, r)`.
+///
+/// Rounding each coordinate on its own can break the sum: `(0.4, 0.4, -0.8)` rounds to
+/// `(0, 0, -1)`. So all three are rounded, and the one that moved furthest from its
+/// fractional value is recomputed from the other two, which puts the sum back to zero.
+fn cube_round(q: f32, r: f32, s: f32) -> (i32, i32) {
+    let (rq, rr, rs) = (q.round(), r.round(), s.round());
+    let (dq, dr, ds) = ((rq - q).abs(), (rr - r).abs(), (rs - s).abs());
+    if dq > dr && dq > ds {
+        ((-rr - rs) as i32, rr as i32)
+    } else if dr > ds {
+        (rq as i32, (-rq - rs) as i32)
+    } else {
+        (rq as i32, rr as i32)
     }
 }
 
@@ -148,5 +200,115 @@ mod tests {
         let above = VoxelCoord::new(0, 0, 0, 1).expect("on the plane");
 
         assert_ne!(ground, above);
+    }
+
+    fn voxel(q: i32, r: i32, layer: i32) -> VoxelCoord {
+        VoxelCoord::new(q, r, -q - r, layer).expect("axial input is always on the plane")
+    }
+
+    fn axial_and_layer(voxel: VoxelCoord) -> (i32, i32, i32) {
+        (voxel.q(), voxel.r(), voxel.layer())
+    }
+
+    #[test]
+    fn the_origin_voxel_sits_at_the_world_origin() {
+        assert_eq!(voxel(0, 0, 0).to_world(), Vec3::ZERO);
+    }
+
+    #[test]
+    fn one_step_along_q_is_one_shaku_along_x() {
+        assert_eq!(voxel(1, 0, 0).to_world(), Vec3::new(1.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn one_step_along_r_is_half_a_cell_right_and_a_row_down_the_screen() {
+        assert_eq!(voxel(0, 1, 0).to_world(), Vec3::new(0.5, 0.0, ROW_SPACING));
+    }
+
+    #[test]
+    fn two_rows_down_lands_in_the_same_column_root_three_away() {
+        let two_down = voxel(-1, 2, 0).to_world();
+
+        assert_eq!(two_down.x, 0.0);
+        assert!((two_down.z - SQRT_3).abs() < 1e-6, "z is {}", two_down.z);
+    }
+
+    #[test]
+    fn a_layer_is_five_sun_up() {
+        assert_eq!(voxel(0, 0, 3).to_world().y, 1.5);
+    }
+
+    #[test]
+    fn every_voxel_on_a_patch_round_trips_through_world_space() {
+        for q in -12..=12 {
+            for r in -12..=12 {
+                for layer in [-3, 0, 41] {
+                    let there = voxel(q, r, layer);
+
+                    let back = VoxelCoord::from_world(there.to_world());
+
+                    assert_eq!(back, there);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_point_inside_a_cell_belongs_to_it() {
+        let cell = voxel(3, -2, 0);
+        let centre = cell.to_world();
+        // Inside the cell's inscribed circle, radius 0.5, in all directions.
+        for step in 0..24 {
+            let angle = step as f32 * std::f32::consts::TAU / 24.0;
+            let inside = centre + Vec3::new(angle.cos(), 0.0, angle.sin()) * 0.45;
+
+            assert_eq!(VoxelCoord::from_world(inside), cell, "at {inside}");
+        }
+    }
+
+    #[test]
+    fn a_point_across_the_edge_between_two_cells_belongs_to_the_other_one() {
+        let just_left_of_the_edge = Vec3::new(0.45, 0.0, 0.0);
+        let just_right_of_the_edge = Vec3::new(0.55, 0.0, 0.0);
+
+        assert_eq!(
+            axial_and_layer(VoxelCoord::from_world(just_left_of_the_edge)),
+            (0, 0, 0)
+        );
+        assert_eq!(
+            axial_and_layer(VoxelCoord::from_world(just_right_of_the_edge)),
+            (1, 0, 0)
+        );
+    }
+
+    #[test]
+    fn a_point_just_past_a_corner_belongs_to_the_cell_beyond_it() {
+        // The corner shared by (0, 0), (1, 0) and (0, 1) is at (0.5, √3/6); this point
+        // is a little past it toward (0, 1).
+        let past_the_corner = Vec3::new(0.5, 0.0, 0.35);
+
+        assert_eq!(
+            axial_and_layer(VoxelCoord::from_world(past_the_corner)),
+            (0, 1, 0)
+        );
+    }
+
+    #[test]
+    fn a_layer_owns_everything_from_its_bottom_face_up_to_the_next() {
+        let at = |y| VoxelCoord::from_world(Vec3::new(0.0, y, 0.0)).layer();
+
+        assert_eq!(at(0.0), 0);
+        assert_eq!(at(0.49), 0);
+        assert_eq!(at(0.5), 1);
+        assert_eq!(at(-0.01), -1);
+    }
+
+    #[test]
+    fn cube_round_keeps_the_sum_at_zero() {
+        // Rounded one by one these give (0, 0, -1), which is off the plane. q moved the
+        // furthest, so it is the one recomputed: (1, 0, -1).
+        let (q, r) = cube_round(0.4, 0.3, -0.7);
+
+        assert_eq!((q, r), (1, 0));
     }
 }
