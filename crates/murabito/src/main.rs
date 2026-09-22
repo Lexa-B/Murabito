@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use murabito_actions::ActionsPlugin;
 use murabito_camera::CameraPlugin;
 use murabito_movement::MovementPlugin;
 use murabito_progress::ProgressPlugin;
@@ -12,6 +13,7 @@ fn main() {
             CameraPlugin,
             MovementPlugin,
             ProgressPlugin,
+            ActionsPlugin,
         ))
         .run();
 }

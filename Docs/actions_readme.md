@@ -76,19 +76,29 @@ is the first mechanism; its rules are in `movement_readme.md`.
 
 ## The queue
 
-Design. `murabito_actions` owns `Orders`: a queue of actions such as `Go(Direction)` and
-`Face(Direction)`, and one `FixedUpdate` system that, when the entity has nothing in flight,
-takes the next order and issues the intent for it. It is where sequencing lives:
+Implemented, in `murabito_actions`. `ActionQueue` is a component holding a queue of `Action`s,
+`Go(Direction)` and `Face(Direction)` so far, first to last. It is a queue of actions and nothing
+more: anything may push onto it, an instinct, a social pull, a player's command, a planner, and
+nothing in it says who did or why.
 
-- `Face(d)` issues a `Turn(d)`.
-- `Go(d)` issues a `Turn` first if the facing is more than one notch off, then a `Step(d)`; the
-  order stays at the head of the queue until its step has been issued. That is the
+One `FixedUpdate` system, `issue`, runs before the mechanisms. For a body with nothing in flight
+(no `Step` or `Turn` on it, and `Progress` idle) it takes the action at the head and issues the
+intent it needs next; the action is dropped once its last intent is out. That is where sequencing
+lives:
+
+- `Face(d)` issues a `Turn(d)`, and is done.
+- `Go(d)`, when the body faces within one notch of `d`, issues a `Step(d)`, and is done: the
+  landing takes the last notch for free.
+- `Go(d)` otherwise issues a `Turn` to one notch short of `d` on the near side, and stays at the
+  head; on the tick after that turn ends it is looked at again, and is now a step. That is the
   turn-then-step rule, in one place.
-- Nothing is issued while something is in flight, read from `Progress`.
+- Nothing is issued while something is in flight, whatever kind it is.
 
-The state machine is mostly implicit: the state is the order at the head plus what `Progress` says
-is in flight, read from the components rather than kept in an enum. When a new kind of action
-arrives it is a new variant here and a new mechanism crate below; the queue does not change.
+Running before the mechanisms means an intent issued on a tick starts on that tick, so a `Go` that
+needs no turn lands exactly when a bare `Step` would. The state machine is implicit: the state is
+the action at the head plus what is in flight, read from the components rather than kept in an
+enum. When a new kind of action arrives it is a new `Action` variant here and a new mechanism crate
+below; the queue does not change.
 
 ## Open questions
 

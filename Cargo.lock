@@ -3436,10 +3436,21 @@ name = "murabito"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "murabito_actions",
  "murabito_camera",
  "murabito_movement",
  "murabito_progress",
  "murabito_scene",
+]
+
+[[package]]
+name = "murabito_actions"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_hexcoords",
+ "murabito_movement",
+ "murabito_progress",
 ]
 
 [[package]]

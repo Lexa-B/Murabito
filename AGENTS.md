@@ -34,9 +34,10 @@ Murabito/
 │  ├─ keybinds/            `murabito_keybinds`: `Binds`, up to three keys or mouse buttons for one action
 │  ├─ hexcoords/           `murabito_hexcoords`: hex voxel coordinates (`VoxelCoord`), per `Docs/hex_units_readme.md`
 │  └─ action/              the actions layer, per `Docs/actions_readme.md`: a group of crates, not one
-│     ├─ progress/         `murabito_progress`: the one accumulation bar every sustained action fills
-│     └─ mechanisms/       one crate per kind of thing a body can do
-│        └─ movement/      `murabito_movement`: where a body is and which way it faces, and the mechanics of stepping and turning, per `Docs/movement_readme.md`
+│     ├─ actions/          `murabito_actions`: `ActionQueue`, what a body has been asked to do, and the one system that issues intents for it
+│     ├─ mechanisms/       one crate per kind of thing a body can do
+│     │  └─ movement/      `murabito_movement`: where a body is and which way it faces, and the mechanics of stepping and turning, per `Docs/movement_readme.md`
+│     └─ progress/         `murabito_progress`: the one accumulation bar every sustained action fills
 ├─ scripts/run.sh          launches the app; what a desktop entry points at. Finds the display itself, logs to ~/.cache/murabito/run.log
 ├─ Docs/                   project docs (no specs or plans; see below)
 ├─ _Archives/
