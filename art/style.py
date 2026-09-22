@@ -272,6 +272,23 @@ PALETTE = [
     ("grass_green_yellow", "#9AAA55"),
     ("grass_shade", "#48703A"),
     ("grass_shade_deep", "#3D6232"),
+    # people: sun-tanned villager skin
+    ("skin_tan", "#C9926A"),
+    ("skin_tan_light", "#D6A47D"),
+    ("skin_tan_deep", "#B47E58"),
+    # people: faces and hair
+    ("sclera", "#F4F0E8"),
+    ("iris_brown", "#2B1C16"),
+    ("hair_black", "#221D1E"),
+    ("mouth_line", "#8A4A3E"),
+    ("hair", "#3A3033"),
+    ("hair_light", "#443A3D"),
+    ("hair_deep", "#312A2C"),
+    ("hair_cord", "#EDE6D6"),
+    # people: undergarments of unbleached cotton
+    ("cloth_white", "#E6DECB"),
+    ("cloth_white_light", "#EDE6D5"),
+    ("cloth_white_deep", "#DCD3BE"),
 ]
 PALETTE_SIZE = 16  # the texture is PALETTE_SIZE x PALETTE_SIZE pixels, one per swatch
 
@@ -313,6 +330,8 @@ SHADES = {
         "pheasant_back",
         "pheasant_tail",
         "heron_grey",
+        "hair",
+        "cloth_white",
     )
 }
 
@@ -417,6 +436,7 @@ def render_sheet(target, extent, out_png, size=512):
     shading.light = "STUDIO"
     shading.color_type = "TEXTURE"
     shading.show_object_outline = True
+    shading.show_specular_highlight = False  # a shine greys dark swatches (irises) facing the light
     if scene.world is None:
         scene.world = bpy.data.worlds.new("world")
     scene.world.color = (0.55, 0.6, 0.55)

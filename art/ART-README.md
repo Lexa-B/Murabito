@@ -7,7 +7,8 @@ a `.glb` that Bevy loads directly. Changing a model means changing numbers and r
 its script, so every change is a readable diff.
 
 - Scripts live in `art/entity_models/`, the code they share (`style.py`, `loft.py`,
-  `flora.py`, `rig.py`) in `art/`, and tools for checking the models in `art/tools/`.
+  `flora.py`, `rig.py`, and for people `figure.py`, `body.py`, `hair.py`,
+  `garment.py`) in `art/`, and tools for checking the models in `art/tools/`.
   They are code, under MIT.
 - What they produce lives in `assets/entity_models/`, in the same folder as its script.
   That is an asset, under CC BY-SA 4.0, stored through Git LFS (`.glb` and `.png` are
@@ -45,6 +46,10 @@ You need Blender (5.0 is what's been used). From the repo root:
 # an animal
 blender -b --python art/entity_models/living/animals/fox.py -- \
     --out assets/entity_models/living/animals/fox.glb
+
+# a villager: body, face, hair and undergarments, with its skeleton
+blender -b --python art/entity_models/living/human/woman.py -- \
+    --out assets/entity_models/living/human/woman.glb
 
 # a plant: pick a version, colour variant and season (each has a default)
 blender -b --python art/entity_models/flora/trees/maple.py -- \
@@ -204,7 +209,7 @@ face points down. Repeat a colour in a list to make it more likely.
 | | |
 |---|---|
 | `Rig(name)` | an armature, exported with the model as a glTF skin (`loft.run` exports a mesh's rig with it) |
-| `bone(name, head, tail, parent)`, `chain(prefix, points, parent)` | bones by hand, or one per segment of a polyline, each joined to the last |
+| `bone(name, head, tail, parent, connected, roll_to)`, `chain(prefix, points, parent)` | bones by hand, or one per segment of a polyline, each joined to the last; `roll_to` turns a bone about its length so its own z points that way, which sets which way it bends |
 | `drape_point(name, x, y)` | a bone standing up at a spot on the ground, for the game to raise to the terrain height there |
 | `DrapeGrid(rig, name, x0, x1, y0, y1, spacing)` | drape points on a grid under something wide and low; `weights(x, y)` blends a spot between the four points around it |
 | `weigh(indices, bone)`, `weigh_blend(indices, pairs)` | bind vertices to a bone, or blend them between several, while building: vertex indices are the order the `Builder` made them, so note `len(b.bm.verts)` before and after building a part |
@@ -214,6 +219,58 @@ face points down. Repeat a colour in a list to make it more likely.
 Weigh a leaf with the weights of the spot it grows from, all its vertices alike, so it
 moves as one piece instead of warping. glTF carries at most four bones per vertex, which
 a `DrapeGrid` blend never exceeds.
+
+### People: `figure.py`, `body.py`, `hair.py`, `garment.py`
+
+A person is a torso of rings running up into the head, legs split from its bottom ring,
+arms bridged into holes left in its sides, and hands whose fingers grow from a row of
+knuckles: one sealed mesh with a real skeleton, plus small closed pieces for the face,
+hair and clothes. A model script (`woman.py`, `man.py`) is only numbers.
+
+`figure.py`, rings and how they join:
+
+| | |
+|---|---|
+| `ring(b, centre, axis, side, n, half_width, front, back, offset, pinch, bumps)` | an egg-shaped ring square to an axis: `front`/`back` its depth either side, `pinch` narrowing its front half (a jaw), `bumps` pushing it out round an angle (a bust, the seat, a calf) |
+| `bridge`, `tube`, `cap` | quads between two loops (turned to wind the same way and start in step), a run of them, a fan to a point |
+| `blend(b, upper, lower, t, swell)` | a new loop part way from one to another: eases a shape into a different one (the hips' share of a leg into a round thigh, an arm hole into the deltoid) |
+| `bridge_split` | a loop into one with k times the vertices |
+| `hole(b, faces)` | delete a patch of faces and return the loop round it, for a limb to grow from (the thumb) |
+| `densify(keys, steps)` | more rings on a Catmull-Rom curve through key rings, each with its place along the chain: the approved key rings stay in charge and the shape rounds |
+| `strip(b, points, normals, widths, thickness)` | a thin raised ridge along a surface, pointed at both ends: brows, lash lines, mouths, hair blades |
+
+`body.py`: `Shape` holds one body's numbers (key rings for torso, leg, foot, arm, palm;
+knuckles, fingers, thumb; `Face`; `Hair`; `garments`), and `build(shape, name)` makes the
+mesh and its skeleton. The topology is fixed: torso and head rings of 30 (a vertex dead
+ahead and dead behind for the legs to share), legs 16, arms 18 (the hole in the torso),
+fingers 6 (a share of a nine-point knuckle row). Every gap between key rings is densified.
+The skeleton is VRM's humanoid set (hips, spine, chest, upperChest, neck, head; per side
+shoulder, upperArm, lowerArm, hand, three bones a finger and thumb, upperLeg, lowerLeg,
+foot, toes; the model's right is +X), so every body shares animations; a ring's weights
+come from its place along its chain, half and half at a joint and fading over a key gap
+either way, so joints bend over three rings and keep their volume. The face is placed
+where rays from ahead meet the head: eyes are decals draped over it (white in an
+`EYE_OUTLINE`, a tall oval iris, a glint on the same side of both eyes, lash lines meeting
+in a sideways V), brows and mouth are strips, the nose is inset and pulled out of the face
+itself, ears are shells of rings. Everything on the head rides on `head`.
+
+`hair.py`: a cap cast over the scalp from the crown to a `hairline` (thicker at the
+crown, `volume` fuller at the back), and clumps from under it: `bangs`, `locks` (flat
+side forward), `swoops` (from a centre part out across the temples), `sweeps` (lying
+back over the crown), `ahoge`, `wisps`; a tied tail (`fall`, `tail`, `cord`) that hangs
+straight down past the nape and has its own chain of bones; a topknot (`knot`, `tuft`).
+Hair is placed on a copy of the head without its features, so it lies on the skin, not
+the ears.
+
+`garment.py`: clothes measured off the body. At each height a ray is shot in from every
+column round it (hits that slip through a gap to the far side are dropped), the row is
+pulled taut round the outside (cloth bridges hollows, between the legs and across the
+seat), eased out, and the surface given thickness by an inner twin and rims, built in
+order (Blender's own solidify orders its faces differently each run, which breaks
+`check.sh`). Wraps close left over right: the outer layer stands proud of the edge on
+(`_overlap`) with a hemmed edge. Each garment vertex rides on the bones of the nearest
+skin. `Koshimaki` (wrapped skirt), `Hadagi` (inner robe, crossed collar with the under
+front's band tucking beneath the outer's, short sleeves), `Fundoshi` (etchu, with apron).
 
 ## Making a new model
 
@@ -242,6 +299,17 @@ before showing it.
    A new coat colour needs `_light` and `_deep` swatches beside it and an entry in
    `SHADES`; small details (a crown, a bill, legs) can stay a single swatch.
 6. Add any new swatches to the palette, build, render, iterate.
+
+### A person (or a humanoid yokai)
+
+1. Copy `woman.py` or `man.py`: the `Shape` is all there is. Change key rings, not the
+   topology; the densifying rounds whatever the key rings say.
+2. Judge proportions on the blockout first (no face or hair), then the joints with a pose
+   test (bend knees, elbows, hips, fingers; turn the head), then the face, hair and
+   clothes, one at a time.
+3. Keep the rebuild identical (build twice, compare `fingerprint.py`): never create
+   geometry while iterating a Python set of mesh elements.
+4. A humanoid yokai starts from a villager's `Shape` and adds its own parts and bones.
 
 ### A plant
 
@@ -350,6 +418,8 @@ And by eye:
 
 | Model | Versions | Colours | Seasons | Notes |
 |---|---|---|---|---|
+| woman | – | – | – | village woman of about 1550, 145 cm, 6.5 heads, lean and toned; '90s anime eyes; bangs, face-framing locks and a tail tied low with a paper cord; koshimaki and hadagi; 52-bone skeleton plus three for the tail; about 10.5k tris |
+| man | – | – | – | village man, 157 cm, 6.5 heads, broad and lean; narrow eyes rising to a high corner; swept back into a messy bun with strands framing the face, ahoge and wisps; etchu-fundoshi; 52-bone skeleton; about 7.9k tris |
 | fox | – | – | – | the style reference; red fox, standing; big round eyes with a white glint, in little sockets (poked faces) |
 | hare | – | – | – | Japanese hare (野兎), sitting in a loaf |
 | cat | – | – | – | mike (三毛) calico, long tail, standing |
@@ -433,7 +503,41 @@ And by eye:
   in, and a runner whose next point is far below drops straight down. 2 shaku suits gentle
   slopes; sharp bumps would want 1.
 
+- **People: legs and arms must flow out of the torso.** Separate parts leave seams that
+  open when they bend; a leg split from the hips ring along a dip (like a bikini line),
+  eased into a round thigh over a couple of rings, reads as one body. The hips are widest
+  at the top of the thighs (an hourglass, not an inverted triangle), and a seat rounds
+  over two rings or it comes to a point or sits on a shelf.
+- **People: a deltoid ring facing straight out caps the shoulder and notches the
+  armpit.** Lean it halfway to the arm's hang and ease the arm hole into it.
+- **People: one ring at a joint pinches when it bends.** Weights fading over three rings
+  keep the volume; the pose test finds this before the detail goes on.
+- **Hands:** a palm is about square, its knuckles in line with the thumb's middle knuckle;
+  fingers grown from a row of knuckles, with a narrower ring before a rounded tip.
+- **Faces:** a nose stuck on as a stud reads as a spike in profile; inset a ring in the
+  face and pull the patch out and in to a button. A flat decal can come out inside out:
+  close it with a point sunk into the head. Eyes are about a fifth of the head's width;
+  the male eye is narrower, its top rising to a high outer corner, its lower line falling
+  steeply.
+- **Preview renders drop the specular highlight**, which greyed dark swatches (irises)
+  that faced the light.
+- **Hair:** a cap alone is a helmet: give it volume at the back and let blades grow from
+  under it. Blades seen edge-on vanish: turn locks' flat sides forward, bun ends like
+  petals. A tied tail hangs straight down from the back of the head; following the body
+  in makes it look sucked into the neck.
+- **Clothes:** cloth measured as a plain oval cuts into bulges and holes where the body
+  curves; cast a ray per column, drop hits that slip through gaps, pull the row taut. A
+  crossed collar is a straight-sided V (height by how far across the chest, not how far
+  round), a column dead ahead for its point, and two bands, the under one tucking beneath.
+  A fundoshi's back panel must follow the seat down below the crotch before it turns under.
+
 ## Ideas waiting
+
+- **The palette has 252 of its 256 swatches:** raise `PALETTE_SIZE` to 32 before the next
+  model that needs new colours (every model is then re-exported).
+- People: outer clothes (kosode, hakama, obi), expressions (blend shapes on the face
+  pieces), more villagers from the same `Shape`s (older, younger, stouter), sakayaki as a
+  variant, humanoid yokai built on them.
 
 - Low-LoD versions of everything, to fade to at distance.
 - Autumn (the maples especially) and winter for the other broadleaves.

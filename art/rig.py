@@ -27,11 +27,14 @@ class Rig:
     def __init__(self, name):
         self.obj = bpy.data.objects.new(name, bpy.data.armatures.new(name))
         bpy.context.scene.collection.objects.link(self.obj)
-        self._bones = []  # (name, head, tail, parent, connected)
+        self._bones = []  # (name, head, tail, parent, connected, roll_to)
         self._weights = {}  # vertex index -> [(bone, weight)]
 
-    def bone(self, name, head, tail, parent=None, connected=False):
-        self._bones.append((name, tuple(head), tuple(tail), parent, connected))
+    def bone(self, name, head, tail, parent=None, connected=False, roll_to=None):
+        """A bone from head to tail. roll_to turns it about its length so its own
+        z axis points that way, which sets which way it bends when rotated."""
+        roll_to = None if roll_to is None else tuple(roll_to)
+        self._bones.append((name, tuple(head), tuple(tail), parent, connected, roll_to))
         return name
 
     def chain(self, prefix, points, parent=None):
@@ -65,9 +68,11 @@ class Rig:
         bpy.context.view_layer.objects.active = self.obj
         bpy.ops.object.mode_set(mode="EDIT")
         edit_bones = self.obj.data.edit_bones
-        for name, head, tail, parent, connected in self._bones:
+        for name, head, tail, parent, connected, roll_to in self._bones:
             bone = edit_bones.new(name)
             bone.head, bone.tail = head, tail
+            if roll_to:
+                bone.align_roll(roll_to)
             if parent:
                 bone.parent = edit_bones[parent]
                 bone.use_connect = connected
