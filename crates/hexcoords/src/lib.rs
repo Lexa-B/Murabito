@@ -241,15 +241,15 @@ impl VoxelCoord {
 pub enum Direction {
     E = 0,
     ENE = 1,
-    NE = 2,
+    NNE = 2,
     N = 3,
-    NW = 4,
+    NNW = 4,
     WNW = 5,
     W = 6,
     WSW = 7,
-    SW = 8,
+    SSW = 8,
     S = 9,
-    SE = 10,
+    SSE = 10,
     ESE = 11,
 }
 
@@ -258,15 +258,15 @@ impl Direction {
     pub const ALL: [Self; 12] = [
         Self::E,
         Self::ENE,
-        Self::NE,
+        Self::NNE,
         Self::N,
-        Self::NW,
+        Self::NNW,
         Self::WNW,
         Self::W,
         Self::WSW,
-        Self::SW,
+        Self::SSW,
         Self::S,
-        Self::SE,
+        Self::SSE,
         Self::ESE,
     ];
 
@@ -301,15 +301,15 @@ impl Direction {
         match self {
             Self::E => (1, 0),
             Self::ENE => (2, -1),
-            Self::NE => (1, -1),
+            Self::NNE => (1, -1),
             Self::N => (1, -2),
-            Self::NW => (0, -1),
+            Self::NNW => (0, -1),
             Self::WNW => (-1, -1),
             Self::W => (-1, 0),
             Self::WSW => (-2, 1),
-            Self::SW => (-1, 1),
+            Self::SSW => (-1, 1),
             Self::S => (-1, 2),
-            Self::SE => (0, 1),
+            Self::SSE => (0, 1),
             Self::ESE => (1, 1),
         }
     }
@@ -663,8 +663,11 @@ mod tests {
     }
 
     #[test]
-    fn north_is_flanked_by_north_east_and_north_west() {
-        assert_eq!(Direction::N.flanks(), Some((Direction::NE, Direction::NW)));
+    fn north_is_flanked_by_north_north_east_and_north_north_west() {
+        assert_eq!(
+            Direction::N.flanks(),
+            Some((Direction::NNE, Direction::NNW))
+        );
     }
 
     #[test]

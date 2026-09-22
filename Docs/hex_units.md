@@ -137,21 +137,24 @@ Together they give 12 directions, evenly spaced every 30°, alternating edge and
 `Quat::from_rotation_y(k · 30°)` applied to +X. A positive rotation about Y turns +X toward −Z,
 which is anticlockwise when looking straight down with +X to the right and −Z up the screen. So
 index 0 is east, the indices run anticlockwise like a compass, edges are the even indices and
-corners the odd ones. The `Direction` enum names them by compass point (decided 2026-09-22).
+corners the odd ones. The `Direction` enum names them by compass point (decided 2026-09-22),
+using the 16-point names nearest each 30° step: every name is 7.5° off its true bearing, so
+the 60° edge is `NNE` (67.5°), not `NE` (45°, which would be 15° off), and likewise in each
+quadrant. There is deliberately no `NE`, `NW`, `SW` or `SE`.
 
 | k | Angle | `Direction` | Kind | Axial `(q, r)` | Cube `(q, r, s)` | Distance (shaku) | Flanked by |
 |---|---|---|---|---|---|---|---|
 | 0  | 0°   | `E`   | edge   | `( 1,  0)` | `( 1,  0, −1)` | 1  | |
 | 1  | 30°  | `ENE` | corner | `( 2, −1)` | `( 2, −1, −1)` | √3 | 0 and 2 |
-| 2  | 60°  | `NE`  | edge   | `( 1, −1)` | `( 1, −1,  0)` | 1  | |
+| 2  | 60°  | `NNE` | edge   | `( 1, −1)` | `( 1, −1,  0)` | 1  | |
 | 3  | 90°  | `N`   | corner | `( 1, −2)` | `( 1, −2,  1)` | √3 | 2 and 4 |
-| 4  | 120° | `NW`  | edge   | `( 0, −1)` | `( 0, −1,  1)` | 1  | |
+| 4  | 120° | `NNW` | edge   | `( 0, −1)` | `( 0, −1,  1)` | 1  | |
 | 5  | 150° | `WNW` | corner | `(−1, −1)` | `(−1, −1,  2)` | √3 | 4 and 6 |
 | 6  | 180° | `W`   | edge   | `(−1,  0)` | `(−1,  0,  1)` | 1  | |
 | 7  | 210° | `WSW` | corner | `(−2,  1)` | `(−2,  1,  1)` | √3 | 6 and 8 |
-| 8  | 240° | `SW`  | edge   | `(−1,  1)` | `(−1,  1,  0)` | 1  | |
+| 8  | 240° | `SSW` | edge   | `(−1,  1)` | `(−1,  1,  0)` | 1  | |
 | 9  | 270° | `S`   | corner | `(−1,  2)` | `(−1,  2, −1)` | √3 | 8 and 10 |
-| 10 | 300° | `SE`  | edge   | `( 0,  1)` | `( 0,  1, −1)` | 1  | |
+| 10 | 300° | `SSE` | edge   | `( 0,  1)` | `( 0,  1, −1)` | 1  | |
 | 11 | 330° | `ESE` | corner | `( 1,  1)` | `( 1,  1, −2)` | √3 | 10 and 0 |
 
 A corner direction `k` is the sum of its flanking edges: `dir[k] = dir[k − 1] + dir[k + 1]`
