@@ -6,6 +6,11 @@
 //!
 //! World space is Bevy's: `f32` shaku, Y up. A voxel is one shaku flat to flat and half a
 //! shaku (5 sun) tall, and its world position is the centre of its bottom face.
+//!
+//! Two types share the same axes. [`VoxelCoord`] is integer: the address of one voxel.
+//! [`VoxelspacePos`] is `f32`: any point, in voxel units, such as where a moving entity is
+//! between two cells. World space and `VoxelspacePos` convert exactly, both ways, through
+//! `From`; a `VoxelCoord` is what a `VoxelspacePos` rounds to.
 
 use std::fmt;
 
@@ -18,6 +23,10 @@ const LAYER_HEIGHT: f32 = 0.5;
 const ROW_SPACING: f32 = SQRT_3 / 2.0;
 
 const SQRT_3: f32 = 1.732_050_8;
+
+/// How far from zero `q + r + s` may be for fractional coordinates to count as on the
+/// plane. Real arithmetic lands near zero, not on it.
+pub const ON_PLANE_TOLERANCE: f32 = 1e-4;
 
 /// The address of one voxel: a cell of the hex plane and a layer.
 ///
@@ -51,6 +60,109 @@ impl fmt::Display for NotOnHexPlane {
 }
 
 impl std::error::Error for NotOnHexPlane {}
+
+/// A point in voxel space: cube `(q, r, s)` and a layer, all fractional. Where something
+/// is, rather than which voxel it is in. Stored axial, like [`VoxelCoord`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct VoxelspacePos {
+    q: f32,
+    r: f32,
+    layer: f32,
+}
+
+/// Fractional cube coordinates that are not on the hex plane: their sum is further from
+/// zero than [`ON_PLANE_TOLERANCE`]. Carries the values and the sum they gave.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NotNearHexPlane {
+    pub q: f32,
+    pub r: f32,
+    pub s: f32,
+    pub sum: f32,
+}
+
+impl fmt::Display for NotNearHexPlane {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self { q, r, s, sum } = self;
+        write!(
+            f,
+            "({q}, {r}, {s}) is not on the hex plane: q + r + s is {sum}, not 0"
+        )
+    }
+}
+
+impl std::error::Error for NotNearHexPlane {}
+
+impl VoxelspacePos {
+    /// A point from cube coordinates and a layer, if the coordinates are on the plane to
+    /// within [`ON_PLANE_TOLERANCE`].
+    pub fn new(q: f32, r: f32, s: f32, layer: f32) -> Result<Self, NotNearHexPlane> {
+        let sum = q + r + s;
+        if sum.abs() < ON_PLANE_TOLERANCE {
+            Ok(Self { q, r, layer })
+        } else {
+            Err(NotNearHexPlane { q, r, s, sum })
+        }
+    }
+
+    pub fn q(self) -> f32 {
+        self.q
+    }
+
+    pub fn r(self) -> f32 {
+        self.r
+    }
+
+    pub fn s(self) -> f32 {
+        -self.q - self.r
+    }
+
+    pub fn layer(self) -> f32 {
+        self.layer
+    }
+
+    /// The voxel this point is in. Every point is in exactly one, so this can't fail: a
+    /// point on the plane between two cells goes to whichever the rounding favours, and a
+    /// point on a layer's bottom face belongs to that layer.
+    pub fn round(self) -> VoxelCoord {
+        let (q, r) = cube_round(self.q, self.r, self.s());
+        let layer = self.layer.floor() as i32;
+        VoxelCoord { q, r, layer }
+    }
+}
+
+/// World space to voxel space: exact, since nothing is rounded.
+impl From<Vec3> for VoxelspacePos {
+    fn from(world: Vec3) -> Self {
+        let r = world.z / ROW_SPACING;
+        Self {
+            q: world.x - r / 2.0,
+            r,
+            layer: world.y / LAYER_HEIGHT,
+        }
+    }
+}
+
+/// Voxel space to world space: exact.
+impl From<VoxelspacePos> for Vec3 {
+    fn from(pos: VoxelspacePos) -> Self {
+        Vec3::new(
+            pos.q + pos.r / 2.0,
+            pos.layer * LAYER_HEIGHT,
+            pos.r * ROW_SPACING,
+        )
+    }
+}
+
+/// A voxel's address as a point: its centre, at its bottom face. Exact, so `From`.
+impl From<VoxelCoord> for VoxelspacePos {
+    fn from(voxel: VoxelCoord) -> Self {
+        Self {
+            q: voxel.q as f32,
+            r: voxel.r as f32,
+            layer: voxel.layer as f32,
+        }
+    }
+}
 
 impl VoxelCoord {
     /// A voxel from cube coordinates and a layer, if the coordinates are on the plane.
@@ -86,24 +198,13 @@ impl VoxelCoord {
 
     /// The centre of this voxel's bottom face, in world space.
     pub fn to_world(self) -> Vec3 {
-        let q = self.q as f32;
-        let r = self.r as f32;
-        Vec3::new(
-            q + r / 2.0,
-            self.layer as f32 * LAYER_HEIGHT,
-            r * ROW_SPACING,
-        )
+        VoxelspacePos::from(self).into()
     }
 
-    /// The voxel a point of world space is in. Every point is in exactly one voxel, so
-    /// this can't fail: a point on the plane between two cells goes to whichever the
-    /// rounding favours, and a point on a layer's bottom face belongs to that layer.
-    pub fn from_world(point: Vec3) -> Self {
-        let r = point.z / ROW_SPACING;
-        let q = point.x - r / 2.0;
-        let (q, r) = cube_round(q, r, -q - r);
-        let layer = (point.y / LAYER_HEIGHT).floor() as i32;
-        Self { q, r, layer }
+    /// The voxel a point of world space is in. Rounds, so it is a named method rather
+    /// than a `From`; see [`VoxelspacePos::round`] for what the rounding does.
+    pub fn from_world(world: Vec3) -> Self {
+        VoxelspacePos::from(world).round()
     }
 }
 
@@ -310,5 +411,81 @@ mod tests {
         let (q, r) = cube_round(0.4, 0.3, -0.7);
 
         assert_eq!((q, r), (1, 0));
+    }
+
+    fn pos(q: f32, r: f32, layer: f32) -> VoxelspacePos {
+        VoxelspacePos::new(q, r, -q - r, layer).expect("axial input is always on the plane")
+    }
+
+    #[test]
+    fn a_point_near_enough_the_plane_is_accepted() {
+        let nearly = VoxelspacePos::new(0.3, 0.3, -0.6 + 1e-6, 0.0);
+
+        assert!(nearly.is_ok());
+    }
+
+    #[test]
+    fn a_point_too_far_off_the_plane_is_refused_with_the_sum_it_gave() {
+        let refused = VoxelspacePos::new(0.5, 0.5, 0.0, 0.0);
+
+        assert_eq!(
+            refused,
+            Err(NotNearHexPlane {
+                q: 0.5,
+                r: 0.5,
+                s: 0.0,
+                sum: 1.0
+            })
+        );
+    }
+
+    #[test]
+    fn world_and_voxel_space_convert_exactly_both_ways() {
+        for (x, y, z) in [(0.0, 0.0, 0.0), (0.37, 1.25, -2.9), (-41.5, 0.1, 17.3)] {
+            let world = Vec3::new(x, y, z);
+
+            let back = Vec3::from(VoxelspacePos::from(world));
+
+            assert!(back.abs_diff_eq(world, 1e-5), "{world} came back as {back}");
+        }
+    }
+
+    #[test]
+    fn halfway_between_two_cells_is_halfway_in_world_space_too() {
+        let halfway = pos(0.5, 0.0, 0.0);
+
+        assert_eq!(Vec3::from(halfway), Vec3::new(0.5, 0.0, 0.0));
+    }
+
+    #[test]
+    fn half_a_layer_up_is_a_quarter_shaku_up() {
+        assert_eq!(Vec3::from(pos(0.0, 0.0, 0.5)).y, 0.25);
+    }
+
+    #[test]
+    fn a_voxel_as_a_point_is_its_centre_at_its_bottom_face() {
+        let cell = voxel(3, -2, 4);
+
+        let as_point = VoxelspacePos::from(cell);
+
+        assert_eq!(
+            (as_point.q(), as_point.r(), as_point.layer()),
+            (3.0, -2.0, 4.0)
+        );
+        assert_eq!(as_point.round(), cell);
+    }
+
+    #[test]
+    fn a_point_rounds_to_the_voxel_it_is_in() {
+        let just_inside_the_next_cell = pos(0.55, 0.0, 1.9);
+
+        assert_eq!(just_inside_the_next_cell.round(), voxel(1, 0, 1));
+    }
+
+    #[test]
+    fn into_works_where_the_target_type_is_known() {
+        let world: Vec3 = pos(1.0, 0.0, 0.0).into();
+
+        assert_eq!(world, Vec3::new(1.0, 0.0, 0.0));
     }
 }

@@ -65,6 +65,23 @@ rather than `y` or `z` so the integer layer index is never confused with the flo
 - Rows are √3/2 shaku apart. Two rows down (`q − 1, r + 2`) lands back in the same screen column,
   √3 shaku away.
 
+## `VoxelspacePos`
+
+The fractional twin of `VoxelCoord`: `q`, `r`, `s` and `layer` as `f32`, for a point in voxel
+space rather than a voxel's address, such as where a moving entity is between two cells. Decided
+2026-09-22. Same rules: stored axial, cube in through `new -> Result<_, NotNearHexPlane>`, cube out.
+The on-plane check has a tolerance, `ON_PLANE_TOLERANCE = 1e-4`, since real arithmetic lands near
+zero rather than on it.
+
+Conversions follow Rust's `From`/`Into` convention, so callers get `.into()` and `Vec3::from(pos)`
+the way they do everywhere in Bevy. `From` is only for the exact ones:
+
+- `Vec3` ↔ `VoxelspacePos`: `From` both ways, lossless.
+- `VoxelCoord` → `VoxelspacePos`: `From`; the voxel's centre at its bottom face.
+- `VoxelspacePos` → `VoxelCoord`: `pos.round()`, named because it rounds.
+- `VoxelCoord::to_world()` and `VoxelCoord::from_world(v)` are the two above composed, and stay
+  named methods for the same reason.
+
 ## Voxel ↔ world
 
 A voxel's world position is the **centre of its bottom face**.
