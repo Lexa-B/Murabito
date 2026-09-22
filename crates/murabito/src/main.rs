@@ -7,6 +7,7 @@ use murabito_kinds::KindsPlugin;
 use murabito_menu::MenuPlugin;
 use murabito_movement::MovementPlugin;
 use murabito_navigation::{NavigationPlugin, NavigationSettings};
+use murabito_perception::PerceptionPlugin;
 use murabito_placement::PlacementPlugin;
 use murabito_progress::ProgressPlugin;
 use murabito_scene::ScenePlugin;
@@ -14,6 +15,7 @@ use murabito_settings::{Persist, SettingsPlugin};
 use murabito_settings_page::SettingsPagePlugin;
 use murabito_ui::UiPlugin;
 use murabito_user_data::UserDataPlugin;
+use murabito_vision::VisionPlugin;
 
 fn main() {
     App::new()
@@ -36,6 +38,7 @@ fn main() {
                 ProgressPlugin,
                 ActionsPlugin,
             ),
+            (PerceptionPlugin, VisionPlugin),
         ))
         // Each module owns its settings; the app says which are kept between runs, and
         // under which key in settings.yaml.

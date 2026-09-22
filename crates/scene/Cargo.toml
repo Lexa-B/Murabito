@@ -12,3 +12,7 @@ murabito_placement.workspace = true
 murabito_progress.workspace = true
 murabito_actions.workspace = true
 murabito_kinds.workspace = true
+murabito_vision.workspace = true
+
+[dev-dependencies]
+murabito_perception.workspace = true

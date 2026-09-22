@@ -44,6 +44,8 @@ crate, and reads the same way.
 | `murabito_hexcoords` | `crates/hexcoords` | `VoxelCoord` (cube in, axial stored, layer), `VoxelspacePos`, `Direction` (twelve, by compass point) with `neighbour`, `rotated`, `notches_to`, `heading`; `Offset` (one voxel relative to another, `b - a`), `distance` in steps, `ring`, `rings_covering`, `corners` | those, plus the errors `NotOnHexPlane`, `NotNearHexPlane` and `ON_PLANE_TOLERANCE` |
 | `murabito_placement` | `crates/placement` | `VoxelPosition` and `Facing`, the plain components any thing in the world carries, and `place`, the one system that writes a `Transform` from them | those, plus `PlacementPlugin` |
 | `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
+| `murabito_perception` | `crates/perception/perception` | `Occupancy`, which things stand in which voxel, rebuilt each tick; `PerceptionSet::{Gather, Sense}` in `FixedUpdate` after `MechanismSet` | `Occupancy`, `PerceptionSet`, `PerceptionPlugin` |
+| `murabito_vision` | `crates/perception/senses/vision` | `Vision` (a cone on `Facing`, three bands, `Vision::BLIND`), a member of `Sentient`; the cast, private; `Seen`, the tick's `Sighting`s (entity, offset, acuity) | `Vision`, `Band`, `Acuity`, `Seen`, `Sighting`, `VisionPlugin` |
 | `murabito_movement` | `crates/action/mechanisms/movement` | `Locomotion`; the `Step` and `Turn` intents and their tick systems, which write `murabito_placement`'s position and facing | those, plus `cost`, `can_step`, `MovementPlugin` |
 | `murabito_actions` | `crates/action/actions` | `ActionQueue` of `Action::{Go, Face}`; `issue`, where turn-then-step lives, after `AskingSet` | `Action`, `ActionQueue`, `AskingSet`, `ActionsPlugin` |
 
@@ -118,6 +120,19 @@ is still design. `TODO.md` is what's queued.
   which is how a scene says which way a fox faces and which sakura it wants.
 - **`AskingSet`**: pushes onto a queue run before `issue`. Found when a second walker made the
   fox land a tick late: the order had held by the scheduler's whim.
+- **Position and facing are `murabito_placement`'s**, below the movement mechanism that writes
+  them: a tree has a position and never moves, and the senses read where things are without
+  depending on what moves them.
+- **A sense is its own crate with its own list in its own shape; nothing merges them.** Lexa's
+  call: vision gives `(entity, offset, acuity)`, hearing will give a bearing and an intensity,
+  smell an intensity and a gradient. Merging across senses, if ever, is the AI's. The field of
+  cells the cast computes stays private, opened only if debugging needs it. Everything is
+  opaque for now; obscuring, heights and ambiguation (a 妖狐 in human form at `Mid` reads as a
+  humanoid) are facet debt, to land in `murabito_perception`, not the AI.
+- **Perceiving is simulation**: `PerceptionSet` in `FixedUpdate` after `MechanismSet`, every tick
+  for now, with gating on change written down as the next step. `Vision` is a member of
+  `Sentient` (yokai see too; a species can require `Vision::BLIND`), and the cone follows
+  `Facing`, so turning is what points the eyes.
 
 ## Bevy 0.19 things that cost time
 
@@ -151,6 +166,14 @@ is still design. `TODO.md` is what's queued.
 - `serde_yaml_ng` refuses nested enums (`serializing nested enums in YAML is not supported
   yet`). A YAML file of only comments parses as `null`, so read it as `Option<Map>`.
 - Turning on a Bevy feature (`serialize`) rebuilds most of the engine once: ~4 minutes.
+- `add_plugins` takes a tuple of at most sixteen; nest tuples (a nested tuple is a plugin list).
+- A workspace `members` glob that matches nothing is a hard error, so `crates/perception/senses/*`
+  could only go in with the first sense.
+- `Entity::from_bits` panics on bits it considers invalid; a test wanting ids spawns empties in a
+  scratch `World`.
+- `arc_3d(angle, radius, isometry, colour)` sweeps from the isometry's +X about its +Y, the same
+  sense as `Direction`'s index, so a cone's arc is `from_rotation_y(bearing − half_arc)` and a
+  sweep of the cone's width.
 
 ## How the work is done
 

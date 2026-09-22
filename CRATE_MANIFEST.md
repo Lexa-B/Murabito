@@ -23,11 +23,15 @@ crates/
 │  ├─ menu/               murabito_menu
 │  └─ settings_page/      murabito_settings_page
 ├─ kinds/                 murabito_kinds
-└─ action/                the actions layer: a group directory, not a crate
-   ├─ actions/            murabito_actions
-   ├─ progress/           murabito_progress
-   └─ mechanisms/         one crate per kind of thing a body can do
-      └─ movement/        murabito_movement
+├─ action/                the actions layer: a group directory, not a crate
+│  ├─ actions/            murabito_actions
+│  ├─ progress/           murabito_progress
+│  └─ mechanisms/         one crate per kind of thing a body can do
+│     └─ movement/        murabito_movement
+└─ perception/            the senses: a group directory, not a crate
+   ├─ perception/         murabito_perception
+   └─ senses/             one crate per sense, each with its own list in its own shape
+      └─ vision/          murabito_vision
 ```
 
 Arrows in the dependency graph all point down, toward whoever owns a type. The app
@@ -105,6 +109,18 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 - **`murabito_movement`** — the movement mechanism: how fast a body goes
   (`Locomotion`), and the `Step` and `Turn` intents it carries out on `FixedUpdate`,
   writing `murabito_placement`'s position and facing. Design: `Docs/movement_readme.md`.
+
+## Reading the world
+
+- **`murabito_perception`** — what every sense shares and no sense owns: `Occupancy`,
+  which things stand in which voxel, rebuilt every tick; and `PerceptionSet`, when the
+  senses run in `FixedUpdate` (`Gather` the map after the mechanisms, then `Sense`).
+  Where the facet debts land when facets return: obscuring, heights, ambiguation.
+  Design: `Docs/perception_readme.md`.
+- **`murabito_vision`** — sight: `Vision`, a cone on `Facing` with acuity in three
+  bands, a member of `Sentient`; the cast, shadowcasting over `Occupancy` with
+  everything opaque, whose field of cells is private; and `Seen`, the per-tick list of
+  `Sighting`s, each a thing, its offset from the looker and how well it was seen.
 
 ## Input, settings and text
 

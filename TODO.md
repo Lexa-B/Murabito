@@ -20,7 +20,17 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   reads a calendar.
 - **Obstruction and stepping up.** The design-only parts of `Docs/movement_readme.md`: a corner
   move only when both flanking faces are open, step-up by size, cost of climbing, and the A\*
-  heuristic. Needs something in the world to be an obstacle, so it follows world objects.
+  heuristic. `murabito_perception::Occupancy` is already the map of what stands where; the
+  corner rule is a read of it.
+- **The senses' facet debt.** `Docs/perception_readme.md`: obscuring and heights (grass costs a
+  band; knee-high grass hides a hare and not a person), and ambiguation (a 妖狐 in human form at
+  `Mid` reads as a humanoid; the percept becomes something short of an `Entity`). Both in
+  `murabito_perception`, when facets return, since they apply to every sense's list.
+- **Hearing and smell.** Each its own crate under `crates/perception/senses/`, its own list in
+  its own shape: a bearing and an intensity; an intensity and a gradient. Design in
+  `Docs/perception_readme.md`.
+- **Seeing across layers.** The cast is planar on the eye's layer; `Offset` already carries
+  `dlayer`.
 - **Selection and an overlay.** A selection module that turns clicks into a `Selected` marker,
   and an overlay module that draws progress bars for selected bodies from `Progress` alone.
   Replaces `draw_progress_bars` in `murabito_scene`, which draws one under every busy body.
@@ -34,7 +44,8 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   `number_input` is the crib. Parse and clamp are pure functions in the kit.
 - **The rebind screen.** The first thing to edit `Binds`: capture the next key or mouse button,
   three slots per action, show conflicts. Its own design conversation.
-- **The screenshot tool and the debug screen.** From the archive.
+- **The screenshot tool and the debug screen.** From the archive. The sightlines and cones
+  `murabito_scene` draws go there with the progress bar.
 - **Hex: distance and the `units` module.** `Docs/hex_units_readme.md`'s build order, item 4.
 
 ## Loose ends in what's there
@@ -50,6 +61,11 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   `velocity` with zero); a `CameraRig::at_rest(focus, zoom)` constructor would make an
   inconsistent rig unbuildable, once more code constructs rigs.
 - Pan speed is constant per zoom; nothing stops the camera panning off the edge of the ground.
+- The cast runs every tick for every sighted body, and `Occupancy` is rebuilt every tick from
+  every position: about 8,400 cells per fox per tick. Fine for a few bodies; the agreed next
+  step is to recast only when the looker's position or facing changed or anything's position
+  changed, and to update the map on `Changed<VoxelPosition>`. The full-recompute version is the
+  baseline to beat.
 - Space with an overlay up resumes the world and closes the overlay, which also closes the
   settings page mid-drag on a slider. Accepted for now; the keyboard gate above is the fix.
 - The Japanese for "Pan speed" is `視点移動速度`, the common phrasing on Japanese settings screens,

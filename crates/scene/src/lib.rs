@@ -1,6 +1,6 @@
 //! The placeholder world: a ground, a sun and sky to see it by, a fox walking a
-//! twelve-sided loop about the origin, and a hare walking a triangle beside it, so that
-//! there is something to look at.
+//! twelve-sided loop about the origin, a hare walking a triangle beside it, and a tree
+//! between them, so that there is something to look at and something in the way.
 //!
 //! Lengths are in shaku: one world unit is one 尺, about 30.3 cm. Metres appear only in
 //! comments, to give a familiar sense of scale.
@@ -10,9 +10,10 @@
 use bevy::prelude::*;
 use murabito_actions::{Action, ActionQueue, AskingSet};
 use murabito_hexcoords::{Direction, VoxelCoord};
-use murabito_kinds::{Fox, Hare};
+use murabito_kinds::{Fox, Hare, Sugi};
 use murabito_placement::{Facing, VoxelPosition};
 use murabito_progress::Progress;
+use murabito_vision::{Acuity, Seen, Vision};
 use std::time::Duration;
 
 /// One 町 (cho): 360 shaku, about 109 m.
@@ -45,6 +46,22 @@ const HARE_TRIANGLE: [Direction; 3] = [Direction::E, Direction::NNW, Direction::
 const HARE_SIDE_STEPS: usize = 3;
 const HARE_REST: Duration = Duration::from_secs(1);
 
+/// Where the tree stands: halfway between the fox's start and the hare's, so that from
+/// where it starts the fox sees the tree and not the hare behind it.
+const TREE_AT: (i32, i32, i32) = (3, 0, -3);
+
+/// Sightlines and cones are drawn per looker in its own colour: not the species' hue,
+/// so the two stay tellable apart where they cross.
+const FOX_SIGHT: Color = Color::srgb(1.0, 0.45, 0.1);
+const HARE_SIGHT: Color = Color::srgb(0.35, 0.8, 1.0);
+/// How solid a sightline is, by how well the thing was seen.
+const SIGHT_ALPHA: [f32; 3] = [1.0, 0.55, 0.25];
+const CONE_ALPHA: f32 = 0.35;
+/// Sightlines run at about eye height, clear of the ground and the bar; the cone is
+/// drawn on the ground, a hair above it.
+const SIGHT_LIFT: f32 = 0.6;
+const CONE_LIFT: f32 = 0.03;
+
 /// The progress bar drawn under a body with something in flight: on the ground just in
 /// front of it, toward the camera, a shaku wide. Placeholder until a UI module owns it.
 const BAR_WIDTH: f32 = 1.0;
@@ -68,10 +85,17 @@ impl Plugin for ScenePlugin {
             })
             .add_systems(
                 Startup,
-                (spawn_ground, spawn_sun, spawn_fox, spawn_hare, thicken_bars),
+                (
+                    spawn_ground,
+                    spawn_sun,
+                    spawn_fox,
+                    spawn_hare,
+                    spawn_tree,
+                    thicken_bars,
+                ),
             )
             .add_systems(FixedUpdate, (walk_the_fox, walk_the_hare).in_set(AskingSet))
-            .add_systems(Update, draw_progress_bars);
+            .add_systems(Update, (draw_progress_bars, draw_cones, draw_sightings));
     }
 }
 
@@ -82,6 +106,11 @@ struct Ground;
 /// Marks the sun.
 #[derive(Component)]
 struct Sun;
+
+/// The colour a looker's sightlines and cone are drawn in. The scene's, not the
+/// senses': what a body sees is the same whatever colour it is drawn in.
+#[derive(Component, Clone, Copy)]
+struct SightColour(Color);
 
 fn spawn_ground(
     mut commands: Commands,
@@ -111,7 +140,12 @@ fn spawn_sun(mut commands: Commands) {
 /// which way it starts off facing is the scene's.
 fn spawn_fox(mut commands: Commands) {
     let origin = VoxelCoord::new(0, 0, 0, 0).expect("the origin is on the plane");
-    commands.spawn((Fox, VoxelPosition(origin), Facing(FOX_FACES)));
+    commands.spawn((
+        Fox,
+        VoxelPosition(origin),
+        Facing(FOX_FACES),
+        SightColour(FOX_SIGHT),
+    ));
 }
 
 /// Which corner of its triangle the hare heads for next, and how long it has rested at
@@ -138,8 +172,17 @@ fn spawn_hare(mut commands: Commands) {
         Hare,
         VoxelPosition(start),
         Facing(HARE_FACES),
+        SightColour(HARE_SIGHT),
         TriangleWalk::default(),
     ));
+}
+
+/// Something in the way. A tree is a thing with a place and nothing else: it neither
+/// faces nor sees, and it stands where it is put.
+fn spawn_tree(mut commands: Commands) {
+    let (q, r, s) = TREE_AT;
+    let at = VoxelCoord::new(q, r, s, 0).expect("the tree's place is on the plane");
+    commands.spawn((Sugi, VoxelPosition(at)));
 }
 
 /// Until something decides for it, the fox walks a loop: whenever its queue runs dry it
@@ -177,6 +220,62 @@ fn walk_the_hare(
         (0..HARE_SIDE_STEPS).for_each(|_| queue.push(Action::Go(side)));
         walk.corner = (walk.corner + 1) % HARE_TRIANGLE.len();
         walk.rest.reset();
+    }
+}
+
+/// Until a debug module owns it: the bare cone of every sighted body, drawn on the
+/// ground in its colour, three arcs at the bands' ranges and the two edges. What the
+/// eye could see with nothing in the way; the sightlines say what it does see. Reads
+/// only the public `Vision`, `Facing` and the body's `Transform`.
+fn draw_cones(mut gizmos: Gizmos, lookers: Query<(&Transform, &Facing, &Vision, &SightColour)>) {
+    for (transform, facing, vision, colour) in &lookers {
+        if vision.is_blind() {
+            continue;
+        }
+        let eye = transform.translation.with_y(CONE_LIFT);
+        let colour = colour.0.with_alpha(CONE_ALPHA);
+        // A direction's bearing is its index in turns of 30° from +X about Y, the same
+        // sense an arc gizmo sweeps in from its own +X, so the arc starts at the cone's
+        // clockwise edge and sweeps the cone's width anticlockwise.
+        let bearing = f32::from(facing.0.index()) * 30.0;
+        let half_arc = vision.arc * 0.5;
+        let edge_from = Quat::from_rotation_y((bearing - half_arc).to_radians());
+        let edge_to = Quat::from_rotation_y((bearing + half_arc).to_radians());
+        for acuity in Acuity::ALL {
+            let range = vision.bands[acuity as usize].range as f32;
+            gizmos
+                .arc_3d(
+                    vision.arc.to_radians(),
+                    range,
+                    Isometry3d::new(eye, edge_from),
+                    colour,
+                )
+                .resolution(64);
+        }
+        let reach = vision.far_range() as f32;
+        gizmos.line(eye, eye + edge_from * Vec3::X * reach, colour);
+        gizmos.line(eye, eye + edge_to * Vec3::X * reach, colour);
+    }
+}
+
+/// Until a debug module owns it: a line from every sighted body to each thing it sees,
+/// in the looker's colour, solid when seen sharply and fainter with distance. Reads
+/// only the public `Seen`: what is drawn is exactly what the AI will be handed.
+fn draw_sightings(
+    mut gizmos: Gizmos,
+    lookers: Query<(&Transform, &Seen, &SightColour)>,
+    placed: Query<&Transform>,
+) {
+    for (transform, seen, colour) in &lookers {
+        let from = transform.translation.with_y(SIGHT_LIFT);
+        for sighting in seen.iter() {
+            let Ok(target) = placed.get(sighting.entity) else {
+                continue;
+            };
+            let to = target.translation.with_y(SIGHT_LIFT);
+            let alpha = SIGHT_ALPHA[sighting.acuity as usize];
+            gizmos.line(from, to, colour.0.with_alpha(alpha));
+        }
     }
 }
 
@@ -233,6 +332,74 @@ mod tests {
             .query_filtered::<(), With<Marker>>()
             .iter(world)
             .count()
+    }
+
+    #[test]
+    fn a_tree_stands_between_the_fox_and_the_hare() {
+        let mut app = app_after_startup();
+        let world = app.world_mut();
+
+        let tree = world
+            .query_filtered::<&VoxelPosition, With<Sugi>>()
+            .single(world)
+            .expect("exactly one tree")
+            .0;
+
+        let (q, r, s) = TREE_AT;
+        assert_eq!(tree, VoxelCoord::new(q, r, s, 0).expect("on the plane"));
+        let (hq, hr, hs) = HARE_STARTS_AT;
+        let hare = VoxelCoord::new(hq, hr, hs, 0).expect("on the plane");
+        let origin = VoxelCoord::new(0, 0, 0, 0).expect("on the plane");
+        assert_eq!(
+            origin.distance(tree) + tree.distance(hare),
+            origin.distance(hare)
+        );
+    }
+
+    /// The starting tableau, as a claim rather than a screenshot: the fox faces the hare
+    /// with the tree in the way, so it sees the tree and not the hare; the hare faces
+    /// away and sees neither.
+    #[test]
+    fn at_the_start_the_fox_sees_the_tree_and_not_the_hare_behind_it() {
+        use bevy::gizmos::AppGizmoBuilder;
+        use bevy::time::TimeUpdateStrategy;
+        use murabito_perception::PerceptionPlugin;
+        use murabito_vision::VisionPlugin;
+
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Mesh>()
+            .init_asset::<StandardMaterial>()
+            .init_asset::<WorldAsset>()
+            .init_asset::<bevy::gizmos::GizmoAsset>()
+            .init_gizmo_group::<DefaultGizmoConfigGroup>()
+            .add_plugins((PerceptionPlugin, VisionPlugin, ScenePlugin))
+            .insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
+        app.update();
+        app.update();
+
+        let world = app.world_mut();
+        let fox = world
+            .query_filtered::<Entity, With<Fox>>()
+            .single(world)
+            .expect("a fox");
+        let hare = world
+            .query_filtered::<Entity, With<Hare>>()
+            .single(world)
+            .expect("a hare");
+        let tree = world
+            .query_filtered::<Entity, With<Sugi>>()
+            .single(world)
+            .expect("a tree");
+        let fox_sees = world.get::<Seen>(fox).expect("the fox has eyes");
+        assert_eq!(
+            fox_sees.sees(tree),
+            Some(Acuity::Near),
+            "the tree is three cells off"
+        );
+        assert_eq!(fox_sees.sees(hare), None, "the hare is behind it");
+        let hare_sees = world.get::<Seen>(hare).expect("the hare has eyes");
+        assert!(hare_sees.is_empty(), "the hare faces east, away from both");
     }
 
     #[test]
