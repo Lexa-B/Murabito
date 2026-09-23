@@ -8,15 +8,15 @@ use murabito_app_state::AppState;
 use murabito_keybinds::{Binds, Held, Inputs};
 use serde::{Deserialize, Serialize};
 
-/// How far the camera starts from its focus: 7 間 (42 shaku, about 12.7 m).
-const START_ZOOM: f32 = 42.0;
+/// How far the camera starts from its focus: 14 間 (84 shaku, about 25.5 m).
+const START_ZOOM: f32 = 84.0;
 
 /// How fast the focus moves across the ground while a pan key is held, at
 /// `PAN_REF_ZOOM`: 45 shaku per second, about 7.5 間.
 const PAN_SPEED: f32 = 45.0;
 
-/// The zoom distance at which the pan runs at exactly `PAN_SPEED`: the starting zoom.
-const PAN_REF_ZOOM: f32 = START_ZOOM;
+/// The zoom distance at which the pan runs at exactly `PAN_SPEED`: 7 間, about 12.7 m.
+const PAN_REF_ZOOM: f32 = 42.0;
 
 /// How strongly pan speed follows zoom distance. 0.0 pans at a fixed speed in shaku
 /// (fine zoomed out, sluggish up close); 1.0 pans at a fixed speed in screen-widths
@@ -35,9 +35,9 @@ const PAN_RESPONSE: f32 = 13.0;
 /// exponential ease never quite arrives, and would leave the camera creeping forever.
 const PAN_REST_FRACTION: f32 = 1e-3;
 
-/// Closest and furthest the camera may sit from its focus, in shaku: about 4 m to 60 m.
+/// Closest and furthest the camera may sit from its focus, in shaku: about 4 m to 90 m.
 const ZOOM_MIN: f32 = 13.0;
-const ZOOM_MAX: f32 = 198.0;
+const ZOOM_MAX: f32 = 297.0;
 
 /// How much one wheel notch changes the distance. A ratio, not a length, so a notch
 /// changes the view by the same proportion however far out the camera is.
@@ -328,12 +328,12 @@ mod tests {
     }
 
     #[test]
-    fn the_camera_sits_seven_ken_from_the_origin() {
+    fn the_camera_sits_fourteen_ken_from_the_origin() {
         let camera = camera_after_startup();
 
         let shaku = camera.translation.length();
 
-        assert!((shaku - 42.0).abs() < 0.01, "it sits {shaku} shaku away");
+        assert!((shaku - 84.0).abs() < 0.01, "it sits {shaku} shaku away");
     }
 
     /// A rig somewhere other than the default, so a test can't pass by coincidence
@@ -498,7 +498,7 @@ mod tests {
 
         let velocity = pan_velocity(&mut app);
         assert!(
-            velocity.abs_diff_eq(Vec3::X * PAN_SPEED, 1e-3),
+            velocity.abs_diff_eq(Vec3::X * pan_speed(START_ZOOM, 1.0), 1e-3),
             "panning at {velocity}"
         );
     }
@@ -514,7 +514,7 @@ mod tests {
 
         let velocity = pan_velocity(&mut app);
         assert!(
-            velocity.abs_diff_eq(Vec3::X * PAN_SPEED * 2.0, 1e-3),
+            velocity.abs_diff_eq(Vec3::X * pan_speed(START_ZOOM, 2.0), 1e-3),
             "panning at {velocity}"
         );
     }
@@ -527,7 +527,7 @@ mod tests {
 
         let speed = pan_velocity(&mut app).x;
         assert!(
-            0.0 < speed && speed < PAN_SPEED,
+            0.0 < speed && speed < pan_speed(START_ZOOM, 1.0),
             "after one frame the pan runs at {speed}"
         );
     }
@@ -541,7 +541,7 @@ mod tests {
 
         let speed = pan_velocity(&mut app).x;
         assert!(
-            0.0 < speed && speed < PAN_SPEED,
+            0.0 < speed && speed < pan_speed(START_ZOOM, 1.0),
             "a frame after letting go: {speed}"
         );
     }
