@@ -60,8 +60,11 @@
 //! yokai move and see as much as beasts do. The tiers below it add nothing yet.
 //!
 //! Every thing gets a `ThingId` as it is spawned, stamped by an observer on `AllThings`,
-//! the root, unless it was spawned with one. A kind that is drawn names its file with
-//! `Model`, and a second observer loads it as the thing is spawned. A plant names its first version in summer; a
+//! the root, unless it was spawned with one. Every tangible thing must be spawned with a
+//! `VoxelPosition`: the tree can't require one, since a place is the instance's and not
+//! the kind's, so an observer on `Tangible` checks and panics if it is missing. A kind
+//! that is drawn names its file with `Model`, and a third observer loads it as the thing
+//! is spawned. A plant names its first version in summer; a
 //! spawner that wants another version, colour or season gives its own `Model` beside
 //! the kind, and what is given at spawn wins.
 //!
@@ -71,14 +74,15 @@
 
 pub mod all_things;
 mod model;
+mod placed;
 mod thing_id;
 
 pub use all_things::*;
 pub use model::Model;
 
-/// Stamps an id on every thing and loads the model of anything spawned with one. The
-/// kinds themselves are types and need no plugin; these two observers are all the
-/// crate runs. The ids come from `murabito_identity`'s counter, so that plugin is
+/// Stamps an id on every thing, checks every tangible thing was given a place, and
+/// loads the model of anything spawned with one. The kinds themselves are types and
+/// need no plugin; these three observers are all the crate runs. The ids come from `murabito_identity`'s counter, so that plugin is
 /// added here if the app hasn't already.
 pub struct KindsPlugin;
 
@@ -88,6 +92,7 @@ impl bevy::app::Plugin for KindsPlugin {
             app.add_plugins(murabito_identity::IdentityPlugin);
         }
         app.add_observer(thing_id::stamp_id)
+            .add_observer(placed::check_placed)
             .add_observer(model::load_model);
     }
 }
@@ -98,9 +103,10 @@ mod tests {
     use bevy::prelude::*;
     use murabito_actions::ActionQueue;
     use murabito_hexcoords::Direction;
+    use murabito_hexcoords::VoxelCoord;
     use murabito_identity::{IdentityPlugin, NextThingId, ThingId};
     use murabito_movement::Locomotion;
-    use murabito_placement::Facing;
+    use murabito_placement::{Facing, VoxelPosition};
     use murabito_progress::Progress;
     use murabito_vision::{Seen, Vision};
 
@@ -281,6 +287,11 @@ mod tests {
         app
     }
 
+    /// Somewhere to put a thing: the tests here are not about where.
+    fn here() -> VoxelPosition {
+        VoxelPosition(VoxelCoord::new(0, 0, 0, 0).expect("the origin"))
+    }
+
     fn id_of(app: &App, entity: Entity) -> Option<ThingId> {
         app.world().entity(entity).get::<ThingId>().copied()
     }
@@ -288,7 +299,7 @@ mod tests {
     #[test]
     fn a_fox_is_drawn_from_its_model_once_spawned() {
         let mut app = app();
-        let fox = app.world_mut().spawn(Fox).id();
+        let fox = app.world_mut().spawn((Fox, here())).id();
         app.update();
 
         assert!(has::<WorldAssetRoot>(app.world(), fox));
@@ -297,8 +308,8 @@ mod tests {
     #[test]
     fn things_are_numbered_from_one_in_the_order_they_are_spawned() {
         let mut app = app();
-        let fox = app.world_mut().spawn(Fox).id();
-        let sugi = app.world_mut().spawn(Sugi).id();
+        let fox = app.world_mut().spawn((Fox, here())).id();
+        let sugi = app.world_mut().spawn((Sugi, here())).id();
         app.update();
 
         assert_eq!(id_of(&app, fox).map(ThingId::number), Some(1));
@@ -318,8 +329,8 @@ mod tests {
     fn a_number_given_at_spawn_is_kept_and_costs_the_counter_nothing() {
         let mut app = app();
         let given = app.world_mut().resource_mut::<NextThingId>().mint();
-        let hare = app.world_mut().spawn((Hare, given)).id();
-        let fox = app.world_mut().spawn(Fox).id();
+        let hare = app.world_mut().spawn((Hare, given, here())).id();
+        let fox = app.world_mut().spawn((Fox, here())).id();
         app.update();
 
         assert_eq!(id_of(&app, hare), Some(given));
@@ -332,10 +343,10 @@ mod tests {
     #[test]
     fn a_despawned_things_number_is_never_given_again() {
         let mut app = app();
-        let first = app.world_mut().spawn(Hare).id();
+        let first = app.world_mut().spawn((Hare, here())).id();
         let gone = id_of(&app, first).expect("stamped at spawn");
         app.world_mut().despawn(first);
-        let next = app.world_mut().spawn(Hare).id();
+        let next = app.world_mut().spawn((Hare, here())).id();
 
         assert_eq!(
             id_of(&app, next).map(ThingId::number),
@@ -353,9 +364,33 @@ mod tests {
             KindsPlugin,
         ))
         .init_asset::<WorldAsset>();
-        let fox = app.world_mut().spawn(Fox).id();
+        let fox = app.world_mut().spawn((Fox, here())).id();
 
         assert_eq!(id_of(&app, fox).map(ThingId::number), Some(1));
+    }
+
+    #[test]
+    fn a_tangible_thing_spawned_with_a_place_is_fine() {
+        let mut app = app();
+        let sugi = app.world_mut().spawn((Sugi, here())).id();
+
+        assert!(has::<VoxelPosition>(app.world(), sugi));
+    }
+
+    #[test]
+    #[should_panic(expected = "spawned with no VoxelPosition")]
+    fn a_tangible_thing_spawned_with_no_place_is_a_mistake_said_at_once() {
+        let mut app = app();
+        app.world_mut().spawn(Sugi);
+    }
+
+    #[test]
+    fn an_intangible_thing_needs_no_place() {
+        let mut app = app();
+        let happening = app.world_mut().spawn(Intangible).id();
+
+        assert!(id_of(&app, happening).is_some());
+        assert!(!has::<VoxelPosition>(app.world(), happening));
     }
 
     /// Every kind there is, spawned once. A loop in the requirements panics on the first
