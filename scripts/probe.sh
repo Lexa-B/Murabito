@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Watches the debug server: asks it the same question every half second and redraws.
 #
-#   scripts/probe.sh              every thing: id, position, and facing, cone, seen list where it has them
+#   scripts/probe.sh              every thing by id, with place, facing, cone and seen list where it has them
 #   scripts/probe.sh occupancy    the map of what stands where
 #   scripts/probe.sh types        every component type the server knows
 #   scripts/probe.sh <method> '<params json>'   any other question, raw
@@ -12,11 +12,12 @@ set -euo pipefail
 PORT=15702
 EVERY=0.5
 
-# Every thing (what all of them have), with what each has of the rest: a tree has an id
-# and a place and none of the optional three.
+# Every thing, which is anything with an id, with what each has of the rest: a tree has a
+# place and nothing else; an intangible thing has not even that.
 things='{"data":{
-  "components":["murabito_identity::ThingId","murabito_placement::VoxelPosition"],
-  "option":["murabito_placement::Facing","murabito_vision::Vision","murabito_vision::Seen"]
+  "components":["murabito_identity::ThingId"],
+  "option":["murabito_placement::VoxelPosition","murabito_placement::Facing",
+            "murabito_vision::Vision","murabito_vision::Seen"]
 }}'
 
 case "${1:-things}" in
