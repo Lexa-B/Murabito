@@ -10,6 +10,7 @@ members = [
     "crates/keybinds",
     "crates/hexcoords",
     "crates/placement",
+    "crates/all_things/identity",
     "crates/action/progress",
     "crates/action/mechanisms/*",
     "crates/action/actions",
@@ -21,7 +22,7 @@ members = [
     "crates/ui/navigation",
     "crates/ui/menu",
     "crates/ui/settings_page",
-    "crates/kinds",
+    "crates/all_things/kinds",
     "crates/perception/perception",
     "crates/perception/senses/*",
 ]
@@ -39,10 +40,11 @@ murabito_camera = { path = "crates/camera" }
 murabito_keybinds = { path = "crates/keybinds" }
 murabito_hexcoords = { path = "crates/hexcoords" }
 murabito_placement = { path = "crates/placement" }
+murabito_identity = { path = "crates/all_things/identity" }
 murabito_progress = { path = "crates/action/progress" }
 murabito_movement = { path = "crates/action/mechanisms/movement" }
 murabito_actions = { path = "crates/action/actions" }
-murabito_kinds = { path = "crates/kinds" }
+murabito_kinds = { path = "crates/all_things/kinds" }
 murabito_perception = { path = "crates/perception/perception" }
 murabito_vision = { path = "crates/perception/senses/vision" }
 murabito_user_data = { path = "crates/user_data" }

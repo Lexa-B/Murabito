@@ -2,9 +2,9 @@
 
 Written 2026-09-22, after PR #25 (movement) merged; brought up to date the same day with the
 settings and i18n crates, then with app state, then with the overlays and the settings page,
-then with the kinds; and on 2026-09-23 with placement, the hex additions, and perception and
-sight. Everything here is on `main` or in PR #41 (`vision`), which is open and reviewed by
-Lexa on screen. `AGENTS.md` is the authority on how to work; this is where things stand, for a
+then with the kinds; on 2026-09-23 with placement, the hex additions, and perception and
+sight; and on 2026-09-24 with identity. Everything here is on `main` or on the `debug-mode`
+branch, whose first PR (identity) is what this update describes. `AGENTS.md` is the authority on how to work; this is where things stand, for a
 session starting cold.
 
 ## What runs
@@ -35,7 +35,8 @@ crate, and reads the same way.
 |---|---|---|---|
 | `murabito` | `crates/murabito` | the app: a plugin list | |
 | `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns a `Fox` and a `Hare` from the kinds with a position and a facing; refills the fox's queue with the twelve-direction loop and walks the hare's triangle with a rest at each corner (its own timer); draws the progress bar (placeholder until a UI module owns it) | `ScenePlugin` |
-| `murabito_kinds` | `crates/kinds` | the tree of kinds: every tier and kind a unit component whose `#[require]` is its parent and members; one file per node in folders that mirror the tree; `Model`, the glTF path a kind names, loaded by the plugin's one observer; the tiers, seventeen animals and twelve plants | every kind, `Model`, `KindsPlugin` |
+| `murabito_identity` | `crates/all_things/identity` | `ThingId`, a serial number for life, never reused; `NextThingId`, the counter it comes from, the one thing here a save keeps | `ThingId`, `NextThingId`, `IdentityPlugin` |
+| `murabito_kinds` | `crates/all_things/kinds` | the tree of kinds: every tier and kind a unit component whose `#[require]` is its parent and members; one file per node in folders that mirror the tree; `Model`, the glTF path a kind names, loaded by the plugin's one observer; the tiers, seventeen animals and twelve plants | every kind, `Model`, `KindsPlugin` |
 | `murabito_camera` | `crates/camera` | the overhead rig: focus, direction, zoom; eased pan and zoom, taking input only in `AppState::Playing`; settings | `CameraPlugin`, `CameraSettings` |
 | `murabito_keybinds` | `crates/keybinds` | `Binds`, up to three keys or mouse buttons for one action; `Inputs`, the system parameter; a `Bind` is one word in a file (`KeyW`, `Mouse7`) | `Bind`, `Binds`, `Held`, `Inputs`, `MAX_BINDS`, `UnknownBind` |
 | `murabito_user_data` | `crates/user_data` | the player's directory, `~/.config/murabito`; the only place that decides where it is | `UserData`, `UserDataPlugin` |
@@ -50,7 +51,7 @@ crate, and reads the same way.
 | `murabito_placement` | `crates/placement` | `VoxelPosition` and `Facing`, the plain components any thing in the world carries, and `place`, the one system that writes a `Transform` from them | those, plus `PlacementPlugin` |
 | `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
 | `murabito_perception` | `crates/perception/perception` | `Occupancy`, which things stand in which voxel, rebuilt each tick; `PerceptionSet::{Gather, Sense}` in `FixedUpdate` after `MechanismSet` | `Occupancy`, `PerceptionSet`, `PerceptionPlugin` |
-| `murabito_vision` | `crates/perception/senses/vision` | `Vision` (a cone on `Facing`, three bands, `Vision::BLIND`), a member of `Sentient`; the cast, private; `Seen`, the tick's `Sighting`s (entity, offset, acuity) | `Vision`, `Band`, `Acuity`, `Seen`, `Sighting`, `VisionPlugin` |
+| `murabito_vision` | `crates/perception/senses/vision` | `Vision` (a cone on `Facing`, three bands, `Vision::BLIND`), a member of `Sentient`; the cast, private; `Seen`, the tick's `Sighting`s (entity, id, offset, acuity) | `Vision`, `Band`, `Acuity`, `Seen`, `Sighting`, `VisionPlugin` |
 | `murabito_movement` | `crates/action/mechanisms/movement` | `Locomotion`; the `Step` and `Turn` intents and their tick systems, which write `murabito_placement`'s position and facing | those, plus `cost`, `can_step`, `MovementPlugin` |
 | `murabito_actions` | `crates/action/actions` | `ActionQueue` of `Action::{Go, Face}`; `issue`, where turn-then-step lives, after `AskingSet` | `Action`, `ActionQueue`, `AskingSet`, `ActionsPlugin` |
 
@@ -129,11 +130,19 @@ is still design. `TODO.md` is what's queued.
   them: a tree has a position and never moves, and the senses read where things are without
   depending on what moves them.
 - **A sense is its own crate with its own list in its own shape; nothing merges them.** Lexa's
-  call: vision gives `(entity, offset, acuity)`, hearing will give a bearing and an intensity,
+  call: vision gives `(entity, id, offset, acuity)`, hearing will give a bearing and an intensity,
   smell an intensity and a gradient. Merging across senses, if ever, is the AI's. The field of
   cells the cast computes stays private, opened only if debugging needs it. Everything is
   opaque for now; obscuring, heights and ambiguation (a 妖狐 in human form at `Mid` reads as a
   humanoid) are facet debt, to land in `murabito_perception`, not the AI.
+- **Every thing has a `ThingId` for life**, Lexa's call on 2026-09-24, needed for a save and
+  wanted by the AI: a counter (`NextThingId`) over a UUID, since one world mints in one place
+  and a small number reads well; stamped at the root of the kind tree by an observer, since
+  a `require` constructor can't reach a counter; what is given at spawn wins, for a loader.
+  A `Sighting` carries both the `Entity` and the `ThingId` (chosen over either alone): the
+  engine acts through the handle, memory keys on the number. A positioned entity without an
+  id makes `look` panic, agreed over leaving it silently unseen. `murabito_identity` and
+  `murabito_kinds` sit together under `crates/all_things/`, a group directory.
 - **Perceiving is simulation**: `PerceptionSet` in `FixedUpdate` after `MechanismSet`, every tick
   for now, with gating on change written down as the next step. `Vision` is a member of
   `Sentient` (yokai see too; a species can require `Vision::BLIND`), and the cone follows
@@ -192,18 +201,24 @@ is still design. `TODO.md` is what's queued.
 - A scripted edit that asserts on file text must gate everything after it on its exit code
   (`python … && cargo test && git commit`), never `;`: `cargo fmt` reformats what a script
   expects to find, and one such miss committed a scratch test before the mistake was seen.
-- The next work, each its own design talk first: hearing, the second sense (a push from a
+- The next work: the debug feature, designed on 2026-09-24 and being built on the same branch
+  as its second PR: a Cargo feature `debug`, off by default, that turns on `Reflect` derives
+  and registration in each crate (each registers its own types) and Bevy's remote protocol
+  server in a `murabito_debug` crate that depends on nothing of ours; `Occupancy` gets a
+  hand-written wire shape (JSON can't key a map by a struct); every kind derives `Reflect`
+  so an entity's chain shows; the cast's field stays closed; a `uv` probe script is the
+  first client, a web page later. Then, each its own design talk: hearing (a push from a
   source, a bearing and an intensity, attenuated along the shortest unobstructed path over
-  `Occupancy`); facets, which unlock the senses' three debts; a debug module to take the
-  progress bar, cones and sightlines off the scene. Still queued from before: the keyboard
-  gate and typed values, the rebind screen. All in `TODO.md`.
+  `Occupancy`); facets, which unlock the senses' three debts; a tick-by-tick view; a debug
+  module to take the progress bar, cones and sightlines off the scene. Still queued from
+  before: the keyboard gate and typed values, the rebind screen. All in `TODO.md`.
 
 ## Where things are
 
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `vision` until PR #41 merges, then parked at `main`; holds the warm `target/` (~170 GB, mostly `target/debug`) and is what the desktop shortcut runs |
-| `main` at handoff | `89842ed`, the merge of PR #40 (the camera starts further out, another session) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session) |
+| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `debug-mode`; holds the warm `target/` (~170 GB, mostly `target/debug`) and is what the desktop shortcut runs |
+| `main` at handoff | `457db18`, the merge of PR #41 (vision) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight) |
 | Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |

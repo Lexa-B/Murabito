@@ -7,6 +7,7 @@ publish.workspace = true
 [dependencies]
 bevy.workspace = true
 murabito_hexcoords.workspace = true
+murabito_identity.workspace = true
 murabito_placement.workspace = true
 murabito_perception.workspace = true
 

@@ -25,7 +25,7 @@ Each sense's list has the shape that sense can honestly give:
 
 | Sense | One entry says | Status |
 |---|---|---|
-| vision | *this thing*, at *this offset* from me, seen *this well* (`Sighting`) | implemented |
+| vision | *this thing* (its handle and its number), at *this offset* from me, seen *this well* (`Sighting`) | implemented |
 | hearing | *something*, from *this bearing*, *this loud*: a direction and an intensity, no position | design |
 | smell | *this strong here*, and *stronger that way by this much*: an intensity and a gradient, no bearing | design |
 | others (spiritual pressure, …) | whatever that sense gives; each is its own crate and its own list | design |
@@ -60,8 +60,9 @@ Implemented.
   walk linear in cells. A cell is judged on its centre. A blocker is itself in view; one standing in
   shadow casts nothing. The cells in view are the crate's private intermediate: **the field is not
   public**, and is opened only if debugging comes to need it.
-- **`Seen`** is the output, required by `Vision`: the list of `Sighting { entity, offset, acuity }`
-  this tick, `offset` being the thing's voxel minus the looker's. Two things in one cell are two
+- **`Seen`** is the output, required by `Vision`: the list of `Sighting { entity, id, offset, acuity }`
+  this tick, `entity` the engine's handle for this run, `id` the thing's `ThingId` for life
+  (what memory keys on), `offset` the thing's voxel minus the looker's. Two things in one cell are two
   sightings; the looker never sees itself; a thing sharing its cell is seen `Near` at no offset.
   Replaced whole each tick; empty for a blind body.
 - **Everything is opaque.** Any thing in a voxel stops sight through it, a fox as much as a tree.

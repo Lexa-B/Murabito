@@ -48,6 +48,11 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   three slots per action, show conflicts. Its own design conversation.
 - **The screenshot tool and the debug screen.** From the archive. The sightlines and cones
   `murabito_scene` draws go there with the progress bar.
+- **A tick-by-tick view.** Lexa, 2026-09-24: after the debug mode, something that shows
+  every step of a tick in order (asking, issuing, mechanisms, sweep and gather, sensing) and
+  what each wrote, to wrap one's head around the cycle. Design on the debug feature: the
+  remote server sees a frame's end, so this needs either a step-one-tick control or a
+  per-step trace the server can read. Its own design conversation.
 - **Hex: distance and the `units` module.** `Docs/hex_units_readme.md`'s build order, item 4.
 
 ## Loose ends in what's there
