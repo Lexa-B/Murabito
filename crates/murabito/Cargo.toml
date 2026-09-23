@@ -7,7 +7,11 @@ publish.workspace = true
 [features]
 # The debug build: `cargo run -p murabito --features debug`. Turns on each module's
 # debug feature (its types on the wire) and the server that serves them. Off by default.
-debug = ["murabito_debug/debug"]
+debug = [
+    "murabito_debug/debug",
+    "murabito_placement/debug",
+    "murabito_identity/debug",
+]
 
 [dependencies]
 bevy.workspace = true

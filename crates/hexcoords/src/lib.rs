@@ -42,6 +42,7 @@ pub const ON_PLANE_TOLERANCE: f32 = 1e-4;
 /// can never drift out of true. The fields are private, so [`VoxelCoord::new`] is the
 /// only way to make one, and every `VoxelCoord` that exists is on the plane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "debug", derive(bevy::reflect::Reflect))]
 pub struct VoxelCoord {
     q: i32,
     r: i32,
@@ -290,6 +291,7 @@ pub fn rings_covering(shaku: f32) -> u32 {
 /// coordinate so that an address is never mistaken for a displacement: "three cells
 /// that way" and "the cell three east of the origin" are different things.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "debug", derive(bevy::reflect::Reflect))]
 pub struct Offset {
     dq: i32,
     dr: i32,
@@ -378,6 +380,7 @@ impl Add<Offset> for VoxelCoord {
 /// Direction `k` is `Quat::from_rotation_y(k · 30°)` applied to +X, so the index matches
 /// Bevy's rotation sense and a heading needs no conversion. Bevy's forward, −Z, is north.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "debug", derive(bevy::reflect::Reflect))]
 #[repr(u8)]
 pub enum Direction {
     E = 0,

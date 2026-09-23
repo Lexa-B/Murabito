@@ -4,5 +4,10 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[features]
+# The debug build: this crate's types derive `Reflect`, so a debug client can
+# read them by type path. Off by default; the app's `debug` feature turns it on.
+debug = []
+
 [dependencies]
 bevy.workspace = true

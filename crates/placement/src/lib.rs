@@ -17,6 +17,9 @@ pub struct PlacementPlugin;
 impl Plugin for PlacementPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, place);
+        #[cfg(feature = "debug")]
+        app.register_type::<VoxelPosition>()
+            .register_type::<Facing>();
     }
 }
 
@@ -25,11 +28,13 @@ impl Plugin for PlacementPlugin {
 ///
 /// Requires a `Transform`, so `place` has somewhere to put the model.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Transform)]
 pub struct VoxelPosition(pub VoxelCoord);
 
 /// Which of the twelve compass directions an entity faces.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 pub struct Facing(pub Direction);
 
 /// An entity whose position or facing changed since `place` last ran.
@@ -49,6 +54,31 @@ fn place(mut placed: Query<(&VoxelPosition, &Facing, &mut Transform), Moved>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "debug")]
+    #[test]
+    fn in_the_debug_build_position_and_facing_are_on_the_wire_as_components() {
+        use bevy::ecs::reflect::ReflectComponent;
+
+        let mut app = App::new();
+        app.add_plugins(PlacementPlugin);
+        let registry = app.world().resource::<AppTypeRegistry>().read();
+        for path in [
+            "murabito_placement::VoxelPosition",
+            "murabito_placement::Facing",
+        ] {
+            let registered = registry.get_with_type_path(path).expect(path);
+            assert!(
+                registered.data::<ReflectComponent>().is_some(),
+                "{path} as a component"
+            );
+        }
+        assert!(
+            registry
+                .get_with_type_path("murabito_hexcoords::VoxelCoord")
+                .is_some()
+        );
+    }
 
     fn voxel(q: i32, r: i32, layer: i32) -> VoxelCoord {
         VoxelCoord::new(q, r, -q - r, layer).expect("on the plane")
