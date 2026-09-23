@@ -46,7 +46,7 @@ const SENTIENT_VISION: Vision = Vision {
 
 /// 有情: whatever takes いる. It faces somewhere, it moves, it looks where it faces, and
 /// it can be asked to do things. Yokai move and see as much as beasts do. Which way it
-/// faces is the instance's, given at spawn like its place, and checked there.
+/// faces comes with its place, from `Tangible`: the instance's, given at spawn.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[require(
     Tangible,

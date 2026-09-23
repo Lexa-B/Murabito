@@ -53,6 +53,8 @@ const HARE_REST: Duration = Duration::from_secs(1);
 /// Where the tree stands: two corner steps north of the line from the fox's start to
 /// the hare's, clear of both walks, and in the fox's cone from where it starts.
 const TREE_AT: (i32, i32, i32) = (5, -4, -1);
+/// A tree faces some way like anything with a place; north, for want of a reason.
+const TREE_FACES: Direction = Direction::N;
 
 /// Sightlines and cones are drawn per looker in its own colour: not the species' hue,
 /// so the two stay tellable apart where they cross.
@@ -187,7 +189,7 @@ fn spawn_hare(mut commands: Commands) {
 fn spawn_tree(mut commands: Commands) {
     let (q, r, s) = TREE_AT;
     let at = VoxelCoord::new(q, r, s, 0).expect("the tree's place is on the plane");
-    commands.spawn((Sugi, VoxelPosition(at)));
+    commands.spawn((Sugi, VoxelPosition(at), Facing(TREE_FACES)));
 }
 
 /// Until something decides for it, the fox walks a loop: whenever its queue runs dry it
@@ -337,6 +339,25 @@ mod tests {
             .query_filtered::<(), With<Marker>>()
             .iter(world)
             .count()
+    }
+
+    /// Placed on screen where its voxel is. The tree had no facing once, and `place`
+    /// needs one, so its model stood at the world origin while its voxel said otherwise.
+    #[test]
+    fn the_tree_stands_on_screen_where_its_voxel_is() {
+        use murabito_placement::PlacementPlugin;
+
+        let mut app = app_after_startup();
+        app.add_plugins(PlacementPlugin);
+        app.update();
+        let world = app.world_mut();
+
+        let (voxel, transform) = world
+            .query_filtered::<(&VoxelPosition, &Transform), With<Sugi>>()
+            .single(world)
+            .expect("exactly one tree");
+        assert_eq!(transform.translation, voxel.0.to_world());
+        assert_ne!(transform.translation, Vec3::ZERO);
     }
 
     /// The tree stands where the scene says, and the hare's triangle never enters its
