@@ -61,10 +61,11 @@
 //!
 //! Every thing gets a `ThingId` as it is spawned, stamped by an observer on `AllThings`,
 //! the root, unless it was spawned with one. Every tangible thing must be spawned with a
-//! `VoxelPosition`: the tree can't require one, since a place is the instance's and not
-//! the kind's, so an observer on `Tangible` checks and panics if it is missing. A kind
-//! that is drawn names its file with `Model`, and a third observer loads it as the thing
-//! is spawned. A plant names its first version in summer; a
+//! `VoxelPosition`, and every sentient thing with a `Facing`: the tree can't require
+//! either, since where a thing stands and which way it faces are the instance's and not
+//! the kind's, so observers on `Tangible` and `Sentient` check and panic if one is
+//! missing. A kind that is drawn names its file with `Model`, and another observer
+//! loads it as the thing is spawned. A plant names its first version in summer; a
 //! spawner that wants another version, colour or season gives its own `Model` beside
 //! the kind, and what is given at spawn wins.
 //!
@@ -80,9 +81,9 @@ mod thing_id;
 pub use all_things::*;
 pub use model::Model;
 
-/// Stamps an id on every thing, checks every tangible thing was given a place, and
-/// loads the model of anything spawned with one. The kinds themselves are types and
-/// need no plugin; these three observers are all the crate runs. The ids come from `murabito_identity`'s counter, so that plugin is
+/// Stamps an id on every thing, checks every tangible thing was given a place and every
+/// sentient thing a facing, and loads the model of anything spawned with one. The kinds
+/// themselves are types and need no plugin; these observers are all the crate runs. The ids come from `murabito_identity`'s counter, so that plugin is
 /// added here if the app hasn't already.
 pub struct KindsPlugin;
 
@@ -93,6 +94,7 @@ impl bevy::app::Plugin for KindsPlugin {
         }
         app.add_observer(thing_id::stamp_id)
             .add_observer(placed::check_placed)
+            .add_observer(placed::check_facing)
             .add_observer(model::load_model);
     }
 }
@@ -140,14 +142,13 @@ mod tests {
     }
 
     #[test]
-    fn a_sentient_thing_moves_faces_somewhere_and_takes_orders() {
+    fn a_sentient_thing_moves_and_takes_orders() {
         let mut world = World::new();
 
         let beast = world.spawn(Beast).id();
 
         assert!(has::<Locomotion>(&world, beast));
         assert!(has::<Progress>(&world, beast), "Locomotion brings its bar");
-        assert!(has::<Facing>(&world, beast));
         assert!(has::<ActionQueue>(&world, beast));
     }
 
@@ -200,11 +201,22 @@ mod tests {
     fn what_is_given_at_spawn_is_kept_over_the_tier_default() {
         let mut world = World::new();
 
-        let beast = world.spawn((Beast, Facing(Direction::S))).id();
+        let beast = world
+            .spawn((
+                Beast,
+                Locomotion {
+                    speed: 1.0,
+                    turn_speed: 10.0,
+                },
+            ))
+            .id();
 
         assert_eq!(
-            world.entity(beast).get::<Facing>(),
-            Some(&Facing(Direction::S))
+            world.entity(beast).get::<Locomotion>(),
+            Some(&Locomotion {
+                speed: 1.0,
+                turn_speed: 10.0
+            })
         );
     }
 
@@ -287,9 +299,12 @@ mod tests {
         app
     }
 
-    /// Somewhere to put a thing: the tests here are not about where.
-    fn here() -> VoxelPosition {
-        VoxelPosition(VoxelCoord::new(0, 0, 0, 0).expect("the origin"))
+    /// Somewhere to put a thing, facing somewhere: the tests here are not about where.
+    fn here() -> (VoxelPosition, Facing) {
+        (
+            VoxelPosition(VoxelCoord::new(0, 0, 0, 0).expect("the origin")),
+            Facing(Direction::E),
+        )
     }
 
     fn id_of(app: &App, entity: Entity) -> Option<ThingId> {
@@ -382,6 +397,23 @@ mod tests {
     fn a_tangible_thing_spawned_with_no_place_is_a_mistake_said_at_once() {
         let mut app = app();
         app.world_mut().spawn(Sugi);
+    }
+
+    #[test]
+    #[should_panic(expected = "spawned with no Facing")]
+    fn a_sentient_thing_spawned_facing_nowhere_is_a_mistake_said_at_once() {
+        let mut app = app();
+        let (place, _) = here();
+        app.world_mut().spawn((Hare, place));
+    }
+
+    #[test]
+    fn a_tree_is_not_asked_which_way_it_faces() {
+        let mut app = app();
+        let (place, _) = here();
+        let sugi = app.world_mut().spawn((Sugi, place)).id();
+
+        assert!(!has::<Facing>(app.world(), sugi));
     }
 
     #[test]
