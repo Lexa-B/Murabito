@@ -8,5 +8,6 @@ use crate::Spiritual;
 
 /// 神
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Spiritual)]
 pub struct Kami;

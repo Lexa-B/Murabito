@@ -15,5 +15,6 @@ pub use sentient::*;
 /// 物: a thing with a place in the world, facing some way. Both are the instance's,
 /// given at spawn beside the kind and checked there; the tree names no place.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(AllThings)]
 pub struct Tangible;

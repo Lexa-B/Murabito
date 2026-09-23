@@ -20,5 +20,6 @@ pub use sugi::*;
 
 /// 木: maple, sakura, hinoki, redpine, sugi.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Plant)]
 pub struct Tree;

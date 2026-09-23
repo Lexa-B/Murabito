@@ -36,5 +36,6 @@ pub use wolf::*;
 
 /// 獣: fox, wolf, hare, boar, deer, bear, macaque, cat, rat, dog, tanuki, horse, ox.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Animal)]
 pub struct Beast;

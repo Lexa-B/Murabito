@@ -8,5 +8,6 @@ use crate::Object;
 
 /// 岩
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Object)]
 pub struct Rock;

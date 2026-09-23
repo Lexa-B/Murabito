@@ -48,6 +48,7 @@ const SENTIENT_VISION: Vision = Vision {
 /// it can be asked to do things. Yokai move and see as much as beasts do. Which way it
 /// faces comes with its place, from `Tangible`: the instance's, given at spawn.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(
     Tangible,
     Locomotion = SENTIENT_LOCOMOTION,

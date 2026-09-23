@@ -30,6 +30,7 @@ const HARE_VISION: Vision = Vision {
 };
 
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(
     Beast,
     Locomotion = Locomotion { speed: 5.0, turn_speed: 240.0 },

@@ -14,5 +14,6 @@ pub use azalea::*;
 
 /// 茂み: azalea, aoki.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Plant)]
 pub struct Shrub;

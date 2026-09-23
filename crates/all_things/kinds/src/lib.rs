@@ -95,12 +95,110 @@ impl bevy::app::Plugin for KindsPlugin {
         app.add_observer(thing_id::stamp_id)
             .add_observer(placed::check_placed)
             .add_observer(model::load_model);
+        #[cfg(feature = "debug")]
+        register_kinds(app);
     }
+}
+
+/// Every node of the tree and `Model`, on the debug wire, so that listing a thing's
+/// components says what it is: its whole chain, by each node's full module path, which
+/// is the tree itself. One line per node; a node missing here is missing on the wire,
+/// and a test counts them.
+#[cfg(feature = "debug")]
+fn register_kinds(app: &mut bevy::app::App) {
+    app.register_type::<Akuma>()
+        .register_type::<AllThings>()
+        .register_type::<Animal>()
+        .register_type::<Aoki>()
+        .register_type::<Azalea>()
+        .register_type::<Bamboo>()
+        .register_type::<Bear>()
+        .register_type::<Beast>()
+        .register_type::<Bird>()
+        .register_type::<Boar>()
+        .register_type::<Cat>()
+        .register_type::<Chicken>()
+        .register_type::<Crane>()
+        .register_type::<Critter>()
+        .register_type::<Deer>()
+        .register_type::<Dog>()
+        .register_type::<Fish>()
+        .register_type::<Fox>()
+        .register_type::<Furniture>()
+        .register_type::<Hare>()
+        .register_type::<Heron>()
+        .register_type::<Hinoki>()
+        .register_type::<Horse>()
+        .register_type::<Human>()
+        .register_type::<Intangible>()
+        .register_type::<Kami>()
+        .register_type::<Kusa>()
+        .register_type::<Kuzu>()
+        .register_type::<Living>()
+        .register_type::<Macaque>()
+        .register_type::<Madake>()
+        .register_type::<Maple>()
+        .register_type::<Model>()
+        .register_type::<NonSentient>()
+        .register_type::<Object>()
+        .register_type::<Ox>()
+        .register_type::<Pheasant>()
+        .register_type::<Plant>()
+        .register_type::<Rat>()
+        .register_type::<Redpine>()
+        .register_type::<Rei>()
+        .register_type::<Rock>()
+        .register_type::<Sakura>()
+        .register_type::<Sasa>()
+        .register_type::<Sentient>()
+        .register_type::<Shida>()
+        .register_type::<Shrub>()
+        .register_type::<Spiritual>()
+        .register_type::<Sugi>()
+        .register_type::<Tangible>()
+        .register_type::<Tanuki>()
+        .register_type::<Tool>()
+        .register_type::<Tree>()
+        .register_type::<Undergrowth>()
+        .register_type::<Wolf>()
+        .register_type::<Yokai>();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every node in the tree and `Model` are on the wire: as many registrations as
+    /// there are `Component` derives under `src/`.
+    #[cfg(feature = "debug")]
+    #[test]
+    fn in_the_debug_build_every_kind_is_on_the_wire_by_its_place_in_the_tree() {
+        use bevy::ecs::reflect::ReflectComponent;
+
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), KindsPlugin))
+            .init_asset::<WorldAsset>();
+        let registry = app.world().resource::<AppTypeRegistry>().read();
+
+        let fox = registry
+            .get_with_type_path(
+                "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox::Fox",
+            )
+            .expect("the fox, by its place in the tree");
+        assert!(fox.data::<ReflectComponent>().is_some());
+
+        let ours = registry
+            .iter()
+            .filter(|registration| {
+                registration
+                    .type_info()
+                    .type_path()
+                    .starts_with("murabito_kinds::")
+            })
+            .filter(|registration| registration.data::<ReflectComponent>().is_some())
+            .count();
+        assert_eq!(ours, 56, "55 nodes and Model");
+    }
     use bevy::prelude::*;
     use murabito_actions::ActionQueue;
     use murabito_hexcoords::Direction;

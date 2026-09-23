@@ -8,5 +8,6 @@ use crate::Object;
 
 /// 家具
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Object)]
 pub struct Furniture;

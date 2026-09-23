@@ -16,5 +16,6 @@ pub use shida::*;
 
 /// 草: what grows at ground level: kusa, kuzu, shida. 草 is wider than *grass*.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Plant)]
 pub struct Undergrowth;

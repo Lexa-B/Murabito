@@ -11,6 +11,7 @@ debug = [
     "murabito_debug/debug",
     "murabito_placement/debug",
     "murabito_identity/debug",
+    "murabito_kinds/debug",
     "murabito_perception/debug",
     "murabito_vision/debug",
 ]

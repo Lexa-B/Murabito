@@ -14,5 +14,6 @@ pub use human::*;
 
 /// 生き物: a living thing.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Sentient)]
 pub struct Living;

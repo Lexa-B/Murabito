@@ -8,5 +8,6 @@ use crate::AllThings;
 
 /// 事: an event or a happening, with no place to point at. A tier nothing requires yet.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(AllThings)]
 pub struct Intangible;

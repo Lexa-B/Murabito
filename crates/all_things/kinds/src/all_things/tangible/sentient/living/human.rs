@@ -8,5 +8,6 @@ use crate::Living;
 
 /// 人間
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Living)]
 pub struct Human;

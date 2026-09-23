@@ -12,4 +12,5 @@ pub use tangible::*;
 
 /// 諸法: every phenomenon. The root; nothing is not this.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 pub struct AllThings;

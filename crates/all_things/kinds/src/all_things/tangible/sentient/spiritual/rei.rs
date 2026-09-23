@@ -8,5 +8,6 @@ use crate::Spiritual;
 
 /// 霊: hitodama, …
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Spiritual)]
 pub struct Rei;
