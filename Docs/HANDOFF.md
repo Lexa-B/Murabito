@@ -3,13 +3,15 @@
 Written 2026-09-22, after PR #25 (movement) merged; brought up to date the same day with the
 settings and i18n crates, then with app state, then with the overlays and the settings page,
 then with the kinds; on 2026-09-23 with placement, the hex additions, and perception and
-sight; and on 2026-09-24 with identity. Everything here is on `main` or on the `debug-mode`
-branch, whose first PR (identity) is what this update describes. `AGENTS.md` is the authority on how to work; this is where things stand, for a
+sight; and on 2026-09-24 with identity (PR #42) and the debug feature (branch `debug-feature`,
+the PR this update describes). Everything here is on `main` or on that branch. `AGENTS.md` is the authority on how to work; this is where things stand, for a
 session starting cold.
 
 ## What runs
 
-`cargo run -p murabito`, or `scripts/run.sh` (what the desktop shortcut points at): a green
+`cargo run -p murabito`, or `scripts/run.sh` (what the desktop shortcut points at); add
+`--features debug` or `--debug` for the debug build, which also serves the world's data on
+`127.0.0.1:15702` for `scripts/probe.sh` to read. What runs: a green
 ground one cho square under a pale sky, lit by a sun, and a fox eight cells west of the origin
 walking a twelve-sided loop, facing the way it goes, corner steps visibly slower than edge steps,
 with a progress bar filling on the ground in front of it once per step. WASD/arrows pan, the wheel
@@ -33,7 +35,8 @@ crate, and reads the same way.
 
 | Crate | Directory | Job | Public |
 |---|---|---|---|
-| `murabito` | `crates/murabito` | the app: a plugin list | |
+| `murabito` | `crates/murabito` | the app: a plugin list; its `debug` feature turns on every crate's and the server | |
+| `murabito_debug` | `crates/debug` | Bevy's remote protocol on the loopback address, behind the `debug` feature; an empty plugin without it; registers nothing, depends on no module | `DebugPlugin`, `PORT` |
 | `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns a `Fox` and a `Hare` from the kinds with a position and a facing; refills the fox's queue with the twelve-direction loop and walks the hare's triangle with a rest at each corner (its own timer); draws the progress bar (placeholder until a UI module owns it) | `ScenePlugin` |
 | `murabito_identity` | `crates/all_things/identity` | `ThingId`, a serial number for life, never reused; `NextThingId`, the counter it comes from, the one thing here a save keeps | `ThingId`, `NextThingId`, `IdentityPlugin` |
 | `murabito_kinds` | `crates/all_things/kinds` | the tree of kinds: every tier and kind a unit component whose `#[require]` is its parent and members; one file per node in folders that mirror the tree; `Model`, the glTF path a kind names; three observers: stamp the id, check a tangible thing was given its place and facing, load the model; the tiers, seventeen animals and twelve plants | every kind, `Model`, `KindsPlugin` |
@@ -154,6 +157,18 @@ is still design. `TODO.md` is what's queued.
   sightline's target all agreed on somewhere else; the scene's test checked the voxel, not
   the screen. Now the tree is given a facing and a test pins its `Transform` to its voxel.
   Lesson: a drawing that only agrees with itself proves nothing; pin the screen to the data.
+- **The debug view is Bevy's remote protocol, behind a Cargo feature, and the wire mirrors
+  memory.** Lexa, 2026-09-24, choosing an external view over an in-window panel or a dump
+  ("we can stand up a web visualizer later"). A feature, not `cfg(debug_assertions)`, so
+  that without it nothing exists, not even `bevy_remote`; off by default, since the everyday
+  build is the shortcut's. Each crate registers its own types (over one list in the debug
+  crate, which would depend on everything). The wire shows a type exactly as it is in memory,
+  axial voxels included, over a prettier cube form: "it lets me catch when the agent builds
+  things weird". `Occupancy` is the one hand-written shape, pairs over named fields. Every
+  kind derives `Reflect` so a thing's chain shows. The cast's field stays closed. Found on
+  the way: Bevy's plugin can't be made read-only (its method list only grows), and the
+  `http` feature turns on `bevy_tasks/async-io`, so the first debug build is a full engine
+  rebuild (3 min 38 s here) that then lives beside the everyday one in `target/`.
 - **Perceiving is simulation**: `PerceptionSet` in `FixedUpdate` after `MechanismSet`, every tick
   for now, with gating on change written down as the next step. `Vision` is a member of
   `Sentient` (yokai see too; a species can require `Vision::BLIND`), and the cone follows
@@ -196,6 +211,17 @@ is still design. `TODO.md` is what's queued.
   could only go in with the first sense.
 - `Entity::from_bits` panics on bits it considers invalid; a test wanting ids spawns empties in a
   scratch `World`.
+- `RemotePlugin::default()` is every method, mutating ones included; the empty constructor is
+  private and `with_method` only adds. Bind to loopback and accept it.
+- `ReflectSerializer` flattens a one-field tuple struct to its field, and serialises a map
+  with `serialize_map`, which `serde_json` refuses for a struct key ("key must be a string"):
+  a `HashMap<VoxelCoord, _>` needs `#[reflect(opaque)]` plus a hand-written `Serialize`,
+  registered with `reflect(Serialize)`.
+- `register_type::<T>()` registers the types of `T`'s fields too, so a crate without a
+  plugin needs no registration of its own.
+- A `world.query` with a `components` list answers only entities that have all of them;
+  `option` lists what to include when present. Nothing asks for "every component": that is
+  `world.list_components` per entity.
 - `arc_3d(angle, radius, isometry, colour)` sweeps from the isometry's +X about its +Y, the same
   sense as `Direction`'s index, so a cone's arc is `from_rotation_y(bearing − half_arc)` and a
   sweep of the cone's width.
@@ -212,13 +238,8 @@ is still design. `TODO.md` is what's queued.
 - A scripted edit that asserts on file text must gate everything after it on its exit code
   (`python … && cargo test && git commit`), never `;`: `cargo fmt` reformats what a script
   expects to find, and one such miss committed a scratch test before the mistake was seen.
-- The next work: the debug feature, designed on 2026-09-24 and being built on the same branch
-  as its second PR: a Cargo feature `debug`, off by default, that turns on `Reflect` derives
-  and registration in each crate (each registers its own types) and Bevy's remote protocol
-  server in a `murabito_debug` crate that depends on nothing of ours; `Occupancy` gets a
-  hand-written wire shape (JSON can't key a map by a struct); every kind derives `Reflect`
-  so an entity's chain shows; the cast's field stays closed; a `uv` probe script is the
-  first client, a web page later. Then, each its own design talk: hearing (a push from a
+- The next work, each its own design talk: a web page on the debug server, Lexa's stated
+  want; hearing (a push from a
   source, a bearing and an intensity, attenuated along the shortest unobstructed path over
   `Occupancy`); facets, which unlock the senses' three debts; a tick-by-tick view; a debug
   module to take the progress bar, cones and sightlines off the scene. Still queued from
@@ -229,7 +250,7 @@ is still design. `TODO.md` is what's queued.
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `debug-mode`; holds the warm `target/` (~170 GB, mostly `target/debug`) and is what the desktop shortcut runs |
-| `main` at handoff | `457db18`, the merge of PR #41 (vision) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight) |
+| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `debug-feature`; holds the warm `target/` (~170 GB before the debug build, which adds a second engine build beside it) and is what the desktop shortcut runs |
+| `main` at handoff | `42c4ea1`, the merge of PR #42 (identity) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`) |
 | Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |

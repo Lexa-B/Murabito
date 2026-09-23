@@ -8,6 +8,7 @@ crate's public items; a crate's `src/lib.rs` doc comment is the authority on its
 ```
 crates/
 ├─ murabito/              the app
+├─ debug/                 murabito_debug
 ├─ scene/                 murabito_scene
 ├─ camera/                murabito_camera
 ├─ keybinds/              murabito_keybinds
@@ -42,7 +43,13 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 ## The app
 
 - **`murabito`** — the one binary. A plugin list, the `.persist::<T>("key")` line per
-  settings resource, and nothing else.
+  settings resource, and nothing else. Its `debug` feature, off by default, turns on every
+  crate's `debug` feature and the server below.
+- **`murabito_debug`** — the debug build's window into the running world: Bevy's remote
+  protocol served on the loopback address, so that something outside the process can read
+  the world's components and resources as they stand at the end of each frame. Behind the
+  `debug` feature; an empty plugin without it. Registers nothing and depends on no module:
+  each crate puts its own types on the wire. Design: `Docs/debug_readme.md`.
 
 ## The app's state
 
