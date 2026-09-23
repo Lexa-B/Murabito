@@ -128,7 +128,8 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 - **`murabito_vision`** — sight: `Vision`, a cone on `Facing` with acuity in three
   bands, a member of `Sentient`; the cast, shadowcasting over `Occupancy` with
   everything opaque, whose field of cells is private; and `Seen`, the per-tick list of
-  `Sighting`s, each a thing, its offset from the looker and how well it was seen.
+  `Sighting`s, each a thing (by `Entity` and by `ThingId`), its offset from the looker
+  and how well it was seen.
 
 ## Input, settings and text
 
