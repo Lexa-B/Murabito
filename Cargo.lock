@@ -3485,6 +3485,7 @@ dependencies = [
  "murabito_app_state",
  "murabito_camera",
  "murabito_i18n",
+ "murabito_identity",
  "murabito_kinds",
  "murabito_menu",
  "murabito_movement",
@@ -3549,6 +3550,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "murabito_identity"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "murabito_keybinds"
 version = "0.1.0"
 dependencies = [
@@ -3564,6 +3572,7 @@ dependencies = [
  "bevy",
  "murabito_actions",
  "murabito_hexcoords",
+ "murabito_identity",
  "murabito_movement",
  "murabito_placement",
  "murabito_progress",
@@ -3690,6 +3699,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "murabito_hexcoords",
+ "murabito_identity",
  "murabito_movement",
  "murabito_perception",
  "murabito_placement",
