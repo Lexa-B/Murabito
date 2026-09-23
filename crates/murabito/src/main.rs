@@ -3,6 +3,7 @@ use murabito_actions::ActionsPlugin;
 use murabito_app_state::{AppStatePlugin, AppStateSettings};
 use murabito_camera::{CameraPlugin, CameraSettings};
 use murabito_i18n::{I18nPlugin, Language};
+use murabito_identity::IdentityPlugin;
 use murabito_kinds::KindsPlugin;
 use murabito_menu::MenuPlugin;
 use murabito_movement::MovementPlugin;
@@ -31,7 +32,7 @@ fn main() {
             (UserDataPlugin::from_config_dir(), SettingsPlugin),
             (I18nPlugin, AppStatePlugin),
             (UiPlugin, NavigationPlugin, MenuPlugin, SettingsPagePlugin),
-            (KindsPlugin, ScenePlugin, CameraPlugin),
+            (IdentityPlugin, KindsPlugin, ScenePlugin, CameraPlugin),
             (
                 PlacementPlugin,
                 MovementPlugin,

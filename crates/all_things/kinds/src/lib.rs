@@ -59,8 +59,9 @@
 //! (`Vision`, a placeholder cone a kind overrides, or `Vision::BLIND`) and takes orders;
 //! yokai move and see as much as beasts do. The tiers below it add nothing yet.
 //!
-//! A kind that is drawn names its file with `Model`, and `KindsPlugin`'s one observer
-//! loads it as the thing is spawned. A plant names its first version in summer; a
+//! Every thing gets a `ThingId` as it is spawned, stamped by an observer on `AllThings`,
+//! the root, unless it was spawned with one. A kind that is drawn names its file with
+//! `Model`, and a second observer loads it as the thing is spawned. A plant names its first version in summer; a
 //! spawner that wants another version, colour or season gives its own `Model` beside
 //! the kind, and what is given at spawn wins.
 //!
@@ -70,17 +71,24 @@
 
 pub mod all_things;
 mod model;
+mod thing_id;
 
 pub use all_things::*;
 pub use model::Model;
 
-/// Loads the model of anything spawned with one. The kinds themselves are types and
-/// need no plugin; this is the one system the crate has.
+/// Stamps an id on every thing and loads the model of anything spawned with one. The
+/// kinds themselves are types and need no plugin; these two observers are all the
+/// crate runs. The ids come from `murabito_identity`'s counter, so that plugin is
+/// added here if the app hasn't already.
 pub struct KindsPlugin;
 
 impl bevy::app::Plugin for KindsPlugin {
     fn build(&self, app: &mut bevy::app::App) {
-        app.add_observer(model::load_model);
+        if !app.is_plugin_added::<murabito_identity::IdentityPlugin>() {
+            app.add_plugins(murabito_identity::IdentityPlugin);
+        }
+        app.add_observer(thing_id::stamp_id)
+            .add_observer(model::load_model);
     }
 }
 
@@ -90,6 +98,7 @@ mod tests {
     use bevy::prelude::*;
     use murabito_actions::ActionQueue;
     use murabito_hexcoords::Direction;
+    use murabito_identity::{IdentityPlugin, NextThingId, ThingId};
     use murabito_movement::Locomotion;
     use murabito_placement::Facing;
     use murabito_progress::Progress;
@@ -263,16 +272,90 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_fox_is_drawn_from_its_model_once_spawned() {
+    /// A headless app with the kinds' observers running. Assets, because a spawned
+    /// kind with a `Model` asks for its file.
+    fn app() -> App {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, AssetPlugin::default(), KindsPlugin))
             .init_asset::<WorldAsset>();
+        app
+    }
 
+    fn id_of(app: &App, entity: Entity) -> Option<ThingId> {
+        app.world().entity(entity).get::<ThingId>().copied()
+    }
+
+    #[test]
+    fn a_fox_is_drawn_from_its_model_once_spawned() {
+        let mut app = app();
         let fox = app.world_mut().spawn(Fox).id();
         app.update();
 
         assert!(has::<WorldAssetRoot>(app.world(), fox));
+    }
+
+    #[test]
+    fn things_are_numbered_from_one_in_the_order_they_are_spawned() {
+        let mut app = app();
+        let fox = app.world_mut().spawn(Fox).id();
+        let sugi = app.world_mut().spawn(Sugi).id();
+        app.update();
+
+        assert_eq!(id_of(&app, fox).map(ThingId::number), Some(1));
+        assert_eq!(id_of(&app, sugi).map(ThingId::number), Some(2));
+    }
+
+    #[test]
+    fn what_is_not_a_thing_gets_no_number() {
+        let mut app = app();
+        let light = app.world_mut().spawn(Transform::default()).id();
+        app.update();
+
+        assert_eq!(id_of(&app, light), None);
+    }
+
+    #[test]
+    fn a_number_given_at_spawn_is_kept_and_costs_the_counter_nothing() {
+        let mut app = app();
+        let given = app.world_mut().resource_mut::<NextThingId>().mint();
+        let hare = app.world_mut().spawn((Hare, given)).id();
+        let fox = app.world_mut().spawn(Fox).id();
+        app.update();
+
+        assert_eq!(id_of(&app, hare), Some(given));
+        assert_eq!(
+            id_of(&app, fox).map(ThingId::number),
+            Some(given.number() + 1)
+        );
+    }
+
+    #[test]
+    fn a_despawned_things_number_is_never_given_again() {
+        let mut app = app();
+        let first = app.world_mut().spawn(Hare).id();
+        let gone = id_of(&app, first).expect("stamped at spawn");
+        app.world_mut().despawn(first);
+        let next = app.world_mut().spawn(Hare).id();
+
+        assert_eq!(
+            id_of(&app, next).map(ThingId::number),
+            Some(gone.number() + 1)
+        );
+    }
+
+    #[test]
+    fn the_identity_plugin_may_be_added_by_the_app_first() {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            AssetPlugin::default(),
+            IdentityPlugin,
+            KindsPlugin,
+        ))
+        .init_asset::<WorldAsset>();
+        let fox = app.world_mut().spawn(Fox).id();
+
+        assert_eq!(id_of(&app, fox).map(ThingId::number), Some(1));
     }
 
     /// Every kind there is, spawned once. A loop in the requirements panics on the first
