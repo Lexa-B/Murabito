@@ -1,0 +1,13 @@
+[package]
+name = "murabito_debug"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[features]
+# The debug build: Bevy's remote protocol server, so a client outside the process can
+# read the world. Off, this crate is an empty plugin and the engine feature stays off.
+debug = ["bevy/bevy_remote"]
+
+[dependencies]
+bevy.workspace = true

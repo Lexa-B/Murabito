@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use murabito_actions::ActionsPlugin;
 use murabito_app_state::{AppStatePlugin, AppStateSettings};
 use murabito_camera::{CameraPlugin, CameraSettings};
+use murabito_debug::DebugPlugin;
 use murabito_i18n::{I18nPlugin, Language};
 use murabito_identity::IdentityPlugin;
 use murabito_kinds::KindsPlugin;
@@ -40,6 +41,8 @@ fn main() {
                 ActionsPlugin,
             ),
             (PerceptionPlugin, VisionPlugin),
+            // Last, and nothing without the `debug` feature.
+            DebugPlugin,
         ))
         // Each module owns its settings; the app says which are kept between runs, and
         // under which key in settings.yaml.

@@ -4,10 +4,16 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[features]
+# The debug build: `cargo run -p murabito --features debug`. Turns on each module's
+# debug feature (its types on the wire) and the server that serves them. Off by default.
+debug = ["murabito_debug/debug"]
+
 [dependencies]
 bevy.workspace = true
 murabito_scene.workspace = true
 murabito_camera.workspace = true
+murabito_debug.workspace = true
 murabito_movement.workspace = true
 murabito_placement.workspace = true
 murabito_perception.workspace = true

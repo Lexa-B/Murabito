@@ -5,6 +5,7 @@ resolver = "3"
 # mechanism under `crates/action/mechanisms/` needs nothing.
 members = [
     "crates/murabito",
+    "crates/debug",
     "crates/scene",
     "crates/camera",
     "crates/keybinds",
@@ -41,6 +42,7 @@ murabito_keybinds = { path = "crates/keybinds" }
 murabito_hexcoords = { path = "crates/hexcoords" }
 murabito_placement = { path = "crates/placement" }
 murabito_identity = { path = "crates/all_things/identity" }
+murabito_debug = { path = "crates/debug" }
 murabito_progress = { path = "crates/action/progress" }
 murabito_movement = { path = "crates/action/mechanisms/movement" }
 murabito_actions = { path = "crates/action/actions" }
