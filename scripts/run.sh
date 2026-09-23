@@ -29,8 +29,16 @@ log_dir="${XDG_CACHE_HOME:-$HOME/.cache}/murabito"
 mkdir -p "$log_dir"
 exec > >(tee "$log_dir/run.log") 2>&1
 
-echo "murabito: $root"
-# Debug, not release: the dev profile already builds dependencies at opt-level 3 and our
-# own code at 1, which is plenty, and a release build is a long wait for a launcher.
+# `--debug` first is ours: the debug build, which also serves the world's data to
+# scripts/probe.sh (Docs/debug_readme.md). Everything else goes to the game.
+features=()
+if [[ "${1:-}" == "--debug" ]]; then
+    features=(--features debug)
+    shift
+fi
+
+echo "murabito: $root ${features[*]:-}"
+# Dev profile, not release: it already builds dependencies at opt-level 3 and our own
+# code at 1, which is plenty, and a release build is a long wait for a launcher.
 # `--` so flags reach the game, not cargo.
-exec cargo run -p murabito -- "$@"
+exec cargo run -p murabito "${features[@]}" -- "$@"

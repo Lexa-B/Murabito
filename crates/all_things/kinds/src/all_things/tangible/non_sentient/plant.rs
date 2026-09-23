@@ -18,5 +18,6 @@ pub use undergrowth::*;
 
 /// 植物: the tiers below match `assets/entity_models/flora/`.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(NonSentient)]
 pub struct Plant;

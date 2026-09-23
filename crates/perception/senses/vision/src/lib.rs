@@ -25,6 +25,8 @@ pub struct VisionPlugin;
 impl Plugin for VisionPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(FixedUpdate, look.in_set(PerceptionSet::Sense));
+        #[cfg(feature = "debug")]
+        app.register_type::<Vision>().register_type::<Seen>();
     }
 }
 
@@ -35,6 +37,7 @@ const EDGE: f32 = 1e-5;
 
 /// How well something was made out: which of the three bands it was seen in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "debug", derive(Reflect))]
 pub enum Acuity {
     Near,
     Mid,
@@ -47,6 +50,7 @@ impl Acuity {
 
 /// One band of a cone: everything out to `range` that isn't in a nearer band.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "debug", derive(Reflect))]
 pub struct Band {
     /// Outer edge, in whole shaku: a range is a count of cells, not a length.
     pub range: u32,
@@ -62,6 +66,7 @@ pub struct Band {
 /// A member of `Sentient`: a species puts its own cone in its own `require`, or
 /// [`Vision::BLIND`] if it has none.
 #[derive(Component, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Seen)]
 pub struct Vision {
     /// Full width, in degrees. The cone spans half this either side of forward.
@@ -127,12 +132,14 @@ impl Vision {
 /// looker, and how well it was made out. Replaced whole every tick, and empty for a body
 /// that is blind or has nothing in view.
 #[derive(Component, Debug, Default)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 pub struct Seen(Vec<Sighting>);
 
 /// One thing seen, this tick. It is named twice: `entity` is the handle the engine acts
 /// through, good for this run only; `id` is the thing's number for life, what anything
 /// that remembers it across ticks and saves keys on.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "debug", derive(Reflect))]
 pub struct Sighting {
     pub entity: Entity,
     pub id: ThingId,
@@ -617,6 +624,35 @@ mod tests {
 
     fn id_of(app: &App, thing: Entity) -> ThingId {
         *app.world().get::<ThingId>(thing).expect("stamped at spawn")
+    }
+
+    /// Through the serializer the debug server uses: a sighting on the wire is the four
+    /// fields as they are, the offset in its axial form, the entity as one number. A
+    /// one-field tuple struct (`Seen`, `ThingId`) is flattened to its field.
+    #[cfg(feature = "debug")]
+    #[test]
+    fn on_the_wire_a_sighting_is_its_four_fields_as_they_are() {
+        use bevy::reflect::serde::ReflectSerializer;
+        use serde_json::json;
+
+        let mut app = ticking_app();
+        let fox = looker_at(&mut app, voxel(0, 0), Direction::E, eyes());
+        let hare = thing_at(&mut app, voxel(2, 0));
+        app.update();
+
+        let registry = app.world().resource::<AppTypeRegistry>().read();
+        let wire = serde_json::to_value(ReflectSerializer::new(seen_by(&app, fox), &registry))
+            .expect("serialises");
+        println!("WIRE {wire}");
+        assert_eq!(
+            wire,
+            json!({"murabito_vision::Seen": [{
+                "entity": hare.to_bits(),
+                "id": id_of(&app, hare).number(),
+                "offset": {"dq": 2, "dr": 0, "dlayer": 0},
+                "acuity": "Near",
+            }]})
+        );
     }
 
     fn seen_by(app: &App, looker: Entity) -> &Seen {

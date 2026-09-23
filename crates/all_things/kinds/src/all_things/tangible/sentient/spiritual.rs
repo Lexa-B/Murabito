@@ -18,5 +18,6 @@ pub use yokai::*;
 
 /// 幽: the unseen. Sentient, and not living.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Sentient)]
 pub struct Spiritual;

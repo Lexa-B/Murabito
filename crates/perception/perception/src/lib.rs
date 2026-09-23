@@ -46,14 +46,28 @@ impl Plugin for PerceptionPlugin {
                     .after(MechanismSet),
             )
             .add_systems(FixedUpdate, gather.in_set(PerceptionSet::Gather));
+        #[cfg(feature = "debug")]
+        app.register_type::<Occupancy>();
     }
 }
 
 /// Which things stand in which voxel. Rebuilt whole each tick from every entity with a
 /// `VoxelPosition`, so nothing registers or unregisters and nothing can be forgotten.
 /// A body is in exactly one voxel; a voxel may hold several things.
-#[derive(Resource, Default, Debug)]
+#[derive(Resource, Default, Debug, Clone)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(opaque))]
+#[cfg_attr(feature = "debug", reflect(Resource, Serialize))]
 pub struct Occupancy(HashMap<VoxelCoord, Vec<Entity>>);
+
+/// On the debug wire: the map as a list of its entries, each `[voxel, things]`, in the
+/// map's own order, which is none. JSON can't key an object by a struct, so this is the
+/// nearest thing to the map as it is in memory.
+#[cfg(feature = "debug")]
+impl serde::Serialize for Occupancy {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(self.0.iter())
+    }
+}
 
 impl Occupancy {
     /// A fixed map, for a test or for anything that needs one that is not the world's.
@@ -104,6 +118,42 @@ fn gather(mut occupancy: ResMut<Occupancy>, things: Query<(Entity, &VoxelPositio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Through the serializer the debug server uses: the map is a list of pairs.
+    #[cfg(feature = "debug")]
+    #[test]
+    fn on_the_wire_the_map_is_a_list_of_voxel_and_things_pairs() {
+        use bevy::reflect::serde::ReflectSerializer;
+        use serde_json::{Value, json};
+
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, ProgressPlugin, PerceptionPlugin));
+        let (a, b) = (
+            app.world_mut().spawn_empty().id(),
+            app.world_mut().spawn_empty().id(),
+        );
+        let occupancy = Occupancy::from_cells([
+            (voxel(1, -1, 0), a),
+            (voxel(1, -1, 0), b),
+            (voxel(0, 2, 1), a),
+        ]);
+
+        let registry = app.world().resource::<AppTypeRegistry>().read();
+        let wire = serde_json::to_value(ReflectSerializer::new(&occupancy, &registry))
+            .expect("serialises");
+        println!("WIRE {wire}");
+        let Value::Array(entries) = &wire["murabito_perception::Occupancy"] else {
+            panic!("a list of entries under the type path: {wire}");
+        };
+        let mut entries = entries.clone();
+        entries.sort_by_key(Value::to_string);
+        let mut expected = vec![
+            json!([{"q": 1, "r": -1, "layer": 0}, [a.to_bits(), b.to_bits()]]),
+            json!([{"q": 0, "r": 2, "layer": 1}, [a.to_bits()]]),
+        ];
+        expected.sort_by_key(Value::to_string);
+        assert_eq!(entries, expected);
+    }
     use murabito_hexcoords::Direction;
     use murabito_movement::{Locomotion, MovementPlugin, Step};
     use murabito_placement::Facing;

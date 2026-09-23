@@ -21,12 +21,16 @@ impl Plugin for IdentityPlugin {
         // `init_resource`, so a counter already there, restored from a save before the
         // plugin was added, is kept.
         app.init_resource::<NextThingId>();
+        #[cfg(feature = "debug")]
+        app.register_type::<ThingId>()
+            .register_type::<NextThingId>();
     }
 }
 
 /// A thing's number, for life. There is no unassigned value: an entity has one or it is
 /// not a thing. Made only by [`NextThingId::mint`]. Reads as `#7`.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 pub struct ThingId(u64);
 
 impl ThingId {
@@ -46,6 +50,7 @@ impl fmt::Display for ThingId {
 /// thing's, and the one piece of this crate a save must keep, or the next spawn after a
 /// load would mint a number something already has.
 #[derive(Resource, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Resource))]
 pub struct NextThingId(u64);
 
 impl Default for NextThingId {
@@ -67,6 +72,24 @@ impl NextThingId {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "debug")]
+    #[test]
+    fn in_the_debug_build_the_id_is_a_component_and_the_counter_a_resource_on_the_wire() {
+        use bevy::ecs::reflect::{ReflectComponent, ReflectResource};
+
+        let mut app = App::new();
+        app.add_plugins(IdentityPlugin);
+        let registry = app.world().resource::<AppTypeRegistry>().read();
+        let id = registry
+            .get_with_type_path("murabito_identity::ThingId")
+            .expect("ThingId");
+        assert!(id.data::<ReflectComponent>().is_some());
+        let counter = registry
+            .get_with_type_path("murabito_identity::NextThingId")
+            .expect("NextThingId");
+        assert!(counter.data::<ReflectResource>().is_some());
+    }
 
     #[test]
     fn the_first_id_minted_is_one() {

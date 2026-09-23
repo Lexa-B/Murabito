@@ -10,6 +10,7 @@ use bevy::prelude::*;
 /// The glTF file a thing is drawn from, relative to `assets/`. Put on a kind by its
 /// `require`; the entity gets a `WorldAssetRoot` for it as soon as it is spawned.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 pub struct Model(pub &'static str);
 
 /// Loads the model of anything that just got one.

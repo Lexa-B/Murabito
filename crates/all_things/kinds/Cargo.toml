@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[features]
+# The debug build: every node of the tree and `Model` derive `Reflect` and the plugin
+# registers them, so a thing's components say what it is. Off by default; the app's
+# `debug` feature turns it on.
+debug = []
+
 [dependencies]
 bevy.workspace = true
 murabito_actions.workspace = true

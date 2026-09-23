@@ -8,6 +8,7 @@ crate's public items; a crate's `src/lib.rs` doc comment is the authority on its
 ```
 crates/
 ├─ murabito/              the app
+├─ debug/                 murabito_debug
 ├─ scene/                 murabito_scene
 ├─ camera/                murabito_camera
 ├─ keybinds/              murabito_keybinds
@@ -42,7 +43,13 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 ## The app
 
 - **`murabito`** — the one binary. A plugin list, the `.persist::<T>("key")` line per
-  settings resource, and nothing else.
+  settings resource, and nothing else. Its `debug` feature, off by default, turns on every
+  crate's `debug` feature and the server below.
+- **`murabito_debug`** — the debug build's window into the running world: Bevy's remote
+  protocol served on the loopback address, so that something outside the process can read
+  the world's components and resources as they stand at the end of each frame. Behind the
+  `debug` feature; an empty plugin without it. Registers nothing and depends on no module:
+  each crate puts its own types on the wire. Design: `Docs/debug_readme.md`.
 
 ## The app's state
 
@@ -101,8 +108,10 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   is a unit component whose `#[require]` is its parent and its members, so spawning a
   kind inserts the whole chain and the node itself says what it has. A species' numbers
   sit in its own `require` and win over its tiers'. One file per node, in folders that
-  mirror the tree. A kind that is drawn names its file with `Model`, and `KindsPlugin`'s
-  one observer loads it as the thing is spawned. Depends on the mechanism crates whose
+  mirror the tree. `KindsPlugin` is three observers: one stamps a `ThingId` on every
+  thing, one checks a tangible thing was spawned with its place and facing (the tree
+  can't require either: they are the instance's), and one loads the `Model` a drawn
+  kind names. Depends on the mechanism crates whose
   components the tiers require; only what spawns things depends on it.
 
 ## Doing things

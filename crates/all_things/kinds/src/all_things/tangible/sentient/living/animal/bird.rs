@@ -18,5 +18,6 @@ pub use pheasant::*;
 
 /// 鳥: crane, heron, chicken, pheasant.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Animal)]
 pub struct Bird;

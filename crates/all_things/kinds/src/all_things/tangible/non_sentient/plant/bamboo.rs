@@ -14,5 +14,6 @@ pub use sasa::*;
 
 /// 竹: bamboo and sasa. Neither tree nor grass, as the saying goes.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Plant)]
 pub struct Bamboo;

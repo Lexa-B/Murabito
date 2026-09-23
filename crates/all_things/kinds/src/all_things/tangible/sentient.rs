@@ -4,9 +4,7 @@
 
 use bevy::prelude::*;
 use murabito_actions::ActionQueue;
-use murabito_hexcoords::Direction;
 use murabito_movement::Locomotion;
-use murabito_placement::Facing;
 use murabito_vision::{Band, Vision};
 
 use crate::Tangible;
@@ -47,11 +45,12 @@ const SENTIENT_VISION: Vision = Vision {
 };
 
 /// 有情: whatever takes いる. It faces somewhere, it moves, it looks where it faces, and
-/// it can be asked to do things. Yokai move and see as much as beasts do.
+/// it can be asked to do things. Yokai move and see as much as beasts do. Which way it
+/// faces comes with its place, from `Tangible`: the instance's, given at spawn.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(
     Tangible,
-    Facing = Facing(Direction::E),
     Locomotion = SENTIENT_LOCOMOTION,
     Vision = SENTIENT_VISION,
     ActionQueue,

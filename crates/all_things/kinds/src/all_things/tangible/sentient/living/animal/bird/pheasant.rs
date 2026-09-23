@@ -8,6 +8,7 @@ use crate::{Bird, Model};
 /// 雉: the green pheasant (キジ). Its pace is a guess at a walk, 2.5 shaku (about
 /// 0.8 m) a second, until someone who knows says otherwise.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(
     Bird,
     Locomotion = Locomotion { speed: 2.5, turn_speed: 240.0 },

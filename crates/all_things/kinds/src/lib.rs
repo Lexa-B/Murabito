@@ -49,20 +49,24 @@
 //! first found depth-first through the parents in list order. So a species' numbers sit
 //! in the species' own `require`, and a tier's are the placeholder its children override.
 //!
-//! What a kind requires is what it *has*; what it is *at* (`murabito_placement`'s
-//! `VoxelPosition`) is given
-//! when it is spawned, beside the kind. That line also decides what survives
-//! reclassifying a thing later with `remove_with_requires`, which takes the whole chain.
+//! What a kind requires is what it *has*; where it *is* and which way it faces
+//! (`murabito_placement`'s `VoxelPosition` and `Facing`) is given when it is spawned,
+//! beside the kind. That line also decides what survives reclassifying a thing later
+//! with `remove_with_requires`, which takes the whole chain.
 //!
-//! `Sentient` is where the members sit today: whatever takes いる faces somewhere, moves
-//! (`Locomotion`, at a placeholder pace a kind overrides), looks where it faces
-//! (`Vision`, a placeholder cone a kind overrides, or `Vision::BLIND`) and takes orders;
-//! yokai move and see as much as beasts do. The tiers below it add nothing yet.
+//! `Sentient` is where the members sit today: whatever takes いる moves (`Locomotion`,
+//! at a placeholder pace a kind overrides), looks where it faces (`Vision`, a
+//! placeholder cone a kind overrides, or `Vision::BLIND`) and takes orders; yokai move
+//! and see as much as beasts do. The tiers below it add nothing yet.
 //!
 //! Every thing gets a `ThingId` as it is spawned, stamped by an observer on `AllThings`,
-//! the root, unless it was spawned with one. A kind that is drawn names its file with
-//! `Model`, and a second observer loads it as the thing is spawned. A plant names its first version in summer; a
-//! spawner that wants another version, colour or season gives its own `Model` beside
+//! the root, unless it was spawned with one. Every tangible thing must be spawned with a
+//! `VoxelPosition` and a `Facing`: the tree can't require either, since where a thing
+//! stands and which way it faces are the instance's and not the kind's, so an observer
+//! on `Tangible` checks and panics if one is missing. A kind that is drawn names its
+//! file with `Model`, and a third observer loads it as the thing is spawned. A plant
+//! names its first version in summer; a spawner that wants another version, colour or
+//! season gives its own `Model` beside
 //! the kind, and what is given at spawn wins.
 //!
 //! This crate depends on the mechanism crates whose components the tiers require, and
@@ -71,14 +75,15 @@
 
 pub mod all_things;
 mod model;
+mod placed;
 mod thing_id;
 
 pub use all_things::*;
 pub use model::Model;
 
-/// Stamps an id on every thing and loads the model of anything spawned with one. The
-/// kinds themselves are types and need no plugin; these two observers are all the
-/// crate runs. The ids come from `murabito_identity`'s counter, so that plugin is
+/// Stamps an id on every thing, checks every tangible thing was given a place and a
+/// facing, and loads the model of anything spawned with one. The kinds themselves are
+/// types and need no plugin; these three observers are all the crate runs. The ids come from `murabito_identity`'s counter, so that plugin is
 /// added here if the app hasn't already.
 pub struct KindsPlugin;
 
@@ -88,19 +93,119 @@ impl bevy::app::Plugin for KindsPlugin {
             app.add_plugins(murabito_identity::IdentityPlugin);
         }
         app.add_observer(thing_id::stamp_id)
+            .add_observer(placed::check_placed)
             .add_observer(model::load_model);
+        #[cfg(feature = "debug")]
+        register_kinds(app);
     }
+}
+
+/// Every node of the tree and `Model`, on the debug wire, so that listing a thing's
+/// components says what it is: its whole chain, by each node's full module path, which
+/// is the tree itself. One line per node; a node missing here is missing on the wire,
+/// and a test counts them.
+#[cfg(feature = "debug")]
+fn register_kinds(app: &mut bevy::app::App) {
+    app.register_type::<Akuma>()
+        .register_type::<AllThings>()
+        .register_type::<Animal>()
+        .register_type::<Aoki>()
+        .register_type::<Azalea>()
+        .register_type::<Bamboo>()
+        .register_type::<Bear>()
+        .register_type::<Beast>()
+        .register_type::<Bird>()
+        .register_type::<Boar>()
+        .register_type::<Cat>()
+        .register_type::<Chicken>()
+        .register_type::<Crane>()
+        .register_type::<Critter>()
+        .register_type::<Deer>()
+        .register_type::<Dog>()
+        .register_type::<Fish>()
+        .register_type::<Fox>()
+        .register_type::<Furniture>()
+        .register_type::<Hare>()
+        .register_type::<Heron>()
+        .register_type::<Hinoki>()
+        .register_type::<Horse>()
+        .register_type::<Human>()
+        .register_type::<Intangible>()
+        .register_type::<Kami>()
+        .register_type::<Kusa>()
+        .register_type::<Kuzu>()
+        .register_type::<Living>()
+        .register_type::<Macaque>()
+        .register_type::<Madake>()
+        .register_type::<Maple>()
+        .register_type::<Model>()
+        .register_type::<NonSentient>()
+        .register_type::<Object>()
+        .register_type::<Ox>()
+        .register_type::<Pheasant>()
+        .register_type::<Plant>()
+        .register_type::<Rat>()
+        .register_type::<Redpine>()
+        .register_type::<Rei>()
+        .register_type::<Rock>()
+        .register_type::<Sakura>()
+        .register_type::<Sasa>()
+        .register_type::<Sentient>()
+        .register_type::<Shida>()
+        .register_type::<Shrub>()
+        .register_type::<Spiritual>()
+        .register_type::<Sugi>()
+        .register_type::<Tangible>()
+        .register_type::<Tanuki>()
+        .register_type::<Tool>()
+        .register_type::<Tree>()
+        .register_type::<Undergrowth>()
+        .register_type::<Wolf>()
+        .register_type::<Yokai>();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every node in the tree and `Model` are on the wire: as many registrations as
+    /// there are `Component` derives under `src/`.
+    #[cfg(feature = "debug")]
+    #[test]
+    fn in_the_debug_build_every_kind_is_on_the_wire_by_its_place_in_the_tree() {
+        use bevy::ecs::reflect::ReflectComponent;
+
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), KindsPlugin))
+            .init_asset::<WorldAsset>();
+        let registry = app.world().resource::<AppTypeRegistry>().read();
+
+        let fox = registry
+            .get_with_type_path(
+                "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox::Fox",
+            )
+            .expect("the fox, by its place in the tree");
+        assert!(fox.data::<ReflectComponent>().is_some());
+
+        let ours = registry
+            .iter()
+            .filter(|registration| {
+                registration
+                    .type_info()
+                    .type_path()
+                    .starts_with("murabito_kinds::")
+            })
+            .filter(|registration| registration.data::<ReflectComponent>().is_some())
+            .count();
+        assert_eq!(ours, 56, "55 nodes and Model");
+    }
     use bevy::prelude::*;
     use murabito_actions::ActionQueue;
     use murabito_hexcoords::Direction;
+    use murabito_hexcoords::VoxelCoord;
     use murabito_identity::{IdentityPlugin, NextThingId, ThingId};
     use murabito_movement::Locomotion;
-    use murabito_placement::Facing;
+    use murabito_placement::{Facing, VoxelPosition};
     use murabito_progress::Progress;
     use murabito_vision::{Seen, Vision};
 
@@ -134,14 +239,13 @@ mod tests {
     }
 
     #[test]
-    fn a_sentient_thing_moves_faces_somewhere_and_takes_orders() {
+    fn a_sentient_thing_moves_and_takes_orders() {
         let mut world = World::new();
 
         let beast = world.spawn(Beast).id();
 
         assert!(has::<Locomotion>(&world, beast));
         assert!(has::<Progress>(&world, beast), "Locomotion brings its bar");
-        assert!(has::<Facing>(&world, beast));
         assert!(has::<ActionQueue>(&world, beast));
     }
 
@@ -194,11 +298,22 @@ mod tests {
     fn what_is_given_at_spawn_is_kept_over_the_tier_default() {
         let mut world = World::new();
 
-        let beast = world.spawn((Beast, Facing(Direction::S))).id();
+        let beast = world
+            .spawn((
+                Beast,
+                Locomotion {
+                    speed: 1.0,
+                    turn_speed: 10.0,
+                },
+            ))
+            .id();
 
         assert_eq!(
-            world.entity(beast).get::<Facing>(),
-            Some(&Facing(Direction::S))
+            world.entity(beast).get::<Locomotion>(),
+            Some(&Locomotion {
+                speed: 1.0,
+                turn_speed: 10.0
+            })
         );
     }
 
@@ -281,6 +396,14 @@ mod tests {
         app
     }
 
+    /// Somewhere to put a thing, facing somewhere: the tests here are not about where.
+    fn here() -> (VoxelPosition, Facing) {
+        (
+            VoxelPosition(VoxelCoord::new(0, 0, 0, 0).expect("the origin")),
+            Facing(Direction::E),
+        )
+    }
+
     fn id_of(app: &App, entity: Entity) -> Option<ThingId> {
         app.world().entity(entity).get::<ThingId>().copied()
     }
@@ -288,7 +411,7 @@ mod tests {
     #[test]
     fn a_fox_is_drawn_from_its_model_once_spawned() {
         let mut app = app();
-        let fox = app.world_mut().spawn(Fox).id();
+        let fox = app.world_mut().spawn((Fox, here())).id();
         app.update();
 
         assert!(has::<WorldAssetRoot>(app.world(), fox));
@@ -297,8 +420,8 @@ mod tests {
     #[test]
     fn things_are_numbered_from_one_in_the_order_they_are_spawned() {
         let mut app = app();
-        let fox = app.world_mut().spawn(Fox).id();
-        let sugi = app.world_mut().spawn(Sugi).id();
+        let fox = app.world_mut().spawn((Fox, here())).id();
+        let sugi = app.world_mut().spawn((Sugi, here())).id();
         app.update();
 
         assert_eq!(id_of(&app, fox).map(ThingId::number), Some(1));
@@ -318,8 +441,8 @@ mod tests {
     fn a_number_given_at_spawn_is_kept_and_costs_the_counter_nothing() {
         let mut app = app();
         let given = app.world_mut().resource_mut::<NextThingId>().mint();
-        let hare = app.world_mut().spawn((Hare, given)).id();
-        let fox = app.world_mut().spawn(Fox).id();
+        let hare = app.world_mut().spawn((Hare, given, here())).id();
+        let fox = app.world_mut().spawn((Fox, here())).id();
         app.update();
 
         assert_eq!(id_of(&app, hare), Some(given));
@@ -332,10 +455,10 @@ mod tests {
     #[test]
     fn a_despawned_things_number_is_never_given_again() {
         let mut app = app();
-        let first = app.world_mut().spawn(Hare).id();
+        let first = app.world_mut().spawn((Hare, here())).id();
         let gone = id_of(&app, first).expect("stamped at spawn");
         app.world_mut().despawn(first);
-        let next = app.world_mut().spawn(Hare).id();
+        let next = app.world_mut().spawn((Hare, here())).id();
 
         assert_eq!(
             id_of(&app, next).map(ThingId::number),
@@ -353,9 +476,43 @@ mod tests {
             KindsPlugin,
         ))
         .init_asset::<WorldAsset>();
-        let fox = app.world_mut().spawn(Fox).id();
+        let fox = app.world_mut().spawn((Fox, here())).id();
 
         assert_eq!(id_of(&app, fox).map(ThingId::number), Some(1));
+    }
+
+    #[test]
+    fn a_tangible_thing_spawned_with_a_place_is_fine() {
+        let mut app = app();
+        let sugi = app.world_mut().spawn((Sugi, here())).id();
+
+        assert!(has::<VoxelPosition>(app.world(), sugi));
+    }
+
+    #[test]
+    #[should_panic(expected = "spawned with no VoxelPosition")]
+    fn a_tangible_thing_spawned_with_no_place_is_a_mistake_said_at_once() {
+        let mut app = app();
+        app.world_mut().spawn(Sugi);
+    }
+
+    /// A tree too: `place` needs a facing to put a model anywhere, so a tree without
+    /// one would stand at the world origin whatever its voxel said.
+    #[test]
+    #[should_panic(expected = "spawned with no Facing")]
+    fn a_tangible_thing_spawned_facing_nowhere_is_a_mistake_said_at_once() {
+        let mut app = app();
+        let (place, _) = here();
+        app.world_mut().spawn((Sugi, place));
+    }
+
+    #[test]
+    fn an_intangible_thing_needs_no_place() {
+        let mut app = app();
+        let happening = app.world_mut().spawn(Intangible).id();
+
+        assert!(id_of(&app, happening).is_some());
+        assert!(!has::<VoxelPosition>(app.world(), happening));
     }
 
     /// Every kind there is, spawned once. A loop in the requirements panics on the first

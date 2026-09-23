@@ -16,5 +16,6 @@ pub use tool::*;
 
 /// 物体: things that are neither plant nor animal.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(NonSentient)]
 pub struct Object;

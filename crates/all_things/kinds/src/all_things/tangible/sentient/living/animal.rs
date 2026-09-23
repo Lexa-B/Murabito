@@ -18,5 +18,6 @@ pub use fish::*;
 
 /// 動物
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Living)]
 pub struct Animal;

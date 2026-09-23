@@ -8,5 +8,6 @@ use crate::Spiritual;
 
 /// 妖怪: tsukumogami, yoko, bakedanuki, ningyo, kaika, …
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 #[require(Spiritual)]
 pub struct Yokai;

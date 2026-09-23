@@ -46,8 +46,13 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   `number_input` is the crib. Parse and clamp are pure functions in the kit.
 - **The rebind screen.** The first thing to edit `Binds`: capture the next key or mouse button,
   three slots per action, show conflicts. Its own design conversation.
-- **The screenshot tool and the debug screen.** From the archive. The sightlines and cones
-  `murabito_scene` draws go there with the progress bar.
+- **The screenshot tool, and a debug overlay in the window.** From the archive. The debug
+  feature (`Docs/debug_readme.md`) reads the world from outside instead; what is still queued
+  is an in-window home for the sightlines, cones and progress bar `murabito_scene` draws.
+- **A web page on the debug server.** Lexa's stated want after `scripts/probe.sh`: a page
+  that polls or watches and draws things, `Seen` as lines and `Occupancy` as cells beside the
+  raw JSON. The CORS headers are already on. Design in `Docs/debug_readme.md`.
+- **`Progress`, `ActionQueue` and the camera on the debug wire.** Two lines each when wanted.
 - **A tick-by-tick view.** Lexa, 2026-09-24: after the debug mode, something that shows
   every step of a tick in order (asking, issuing, mechanisms, sweep and gather, sensing) and
   what each wrote, to wrap one's head around the cycle. Design on the debug feature: the
@@ -59,7 +64,7 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 
 - `Action::Face` is in the enum and tested, but nothing uses it since the spin placeholder
   went. The first thing that wants to look somewhere without moving takes it up.
-- `Sentient` carries `Facing`, `Locomotion` (a placeholder pace) and `ActionQueue`; the
+- `Sentient` carries `Locomotion` (a placeholder pace), `Vision` and `ActionQueue`; the
   animals' paces are guesses at a walk, marked as such in each file, until someone who
   knows says otherwise. The fox's are the ones settled by eye in the first attempt.
 - `Progress` could record the intent's type name alongside its `TypeId`, exposed as
