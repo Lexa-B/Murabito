@@ -3,8 +3,8 @@
 //!
 //! A pull sense: each tick a sighted body asks what is in front of it, and the answer is
 //! computed from scratch, holding nothing between ticks. What it reports is its own
-//! list, [`Seen`]: each thing in view, where it is relative to the looker, and how well
-//! it was made out. The field the cast computes on the way, which cells are in view, is
+//! list, [`Seen`]: each thing in view, by the engine's handle and by its `ThingId`,
+//! where it is relative to the looker, and how well it was made out. The field the cast computes on the way, which cells are in view, is
 //! this crate's business and nobody else's.
 //!
 //! Everything is opaque for now: any thing standing in a voxel stops sight through it, a
@@ -16,6 +16,7 @@ use std::f32::consts::{PI, TAU};
 
 use bevy::prelude::*;
 use murabito_hexcoords::{Direction, Offset, VoxelCoord, rings_covering};
+use murabito_identity::ThingId;
 use murabito_perception::{Occupancy, PerceptionSet};
 use murabito_placement::{Facing, VoxelPosition};
 
@@ -128,10 +129,13 @@ impl Vision {
 #[derive(Component, Debug, Default)]
 pub struct Seen(Vec<Sighting>);
 
-/// One thing seen, this tick.
+/// One thing seen, this tick. It is named twice: `entity` is the handle the engine acts
+/// through, good for this run only; `id` is the thing's number for life, what anything
+/// that remembers it across ticks and saves keys on.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sighting {
     pub entity: Entity,
+    pub id: ThingId,
     /// Where it is relative to the looker: `its voxel - mine`.
     pub offset: Offset,
     pub acuity: Acuity,
@@ -161,13 +165,21 @@ impl Seen {
 
 /// Every sighted body looks, once, after the map of what stands where is gathered:
 /// its `Seen` is replaced with what is in view this tick. A blind body's list is empty.
+///
+/// Everything with a place is a thing and has its number; one without is a spawner's
+/// mistake (spawn things as kinds), and this says so rather than leaving it unseen.
 fn look(
     occupancy: Res<Occupancy>,
+    ids: Query<&ThingId>,
     mut lookers: Query<(Entity, &VoxelPosition, &Facing, &Vision, &mut Seen)>,
 ) {
+    let id_of = |thing: Entity| {
+        *ids.get(thing)
+            .expect("a thing with a place has a ThingId: was it spawned as a kind?")
+    };
     for (looker, position, facing, vision, mut seen) in &mut lookers {
         let in_view = cast(position.0, facing.0, vision, &occupancy);
-        seen.0 = sightings(looker, position.0, &in_view, &occupancy);
+        seen.0 = sightings(looker, position.0, &in_view, &occupancy, id_of);
     }
 }
 
@@ -178,6 +190,7 @@ fn sightings(
     eye: VoxelCoord,
     in_view: &[(VoxelCoord, Acuity)],
     occupancy: &Occupancy,
+    id_of: impl Fn(Entity) -> ThingId,
 ) -> Vec<Sighting> {
     in_view
         .iter()
@@ -186,8 +199,9 @@ fn sightings(
                 .at(*cell)
                 .iter()
                 .filter(move |thing| **thing != looker)
-                .map(move |thing| Sighting {
+                .map(|thing| Sighting {
                     entity: *thing,
+                    id: id_of(*thing),
                     offset: *cell - eye,
                     acuity: *acuity,
                 })
@@ -559,6 +573,7 @@ mod tests {
         assert_eq!(seen, view(eye, Direction::E, &short_eyes(), &nothing()));
     }
 
+    use murabito_identity::{IdentityPlugin, NextThingId};
     use murabito_movement::{Locomotion, MovementPlugin, Step};
     use murabito_perception::PerceptionPlugin;
     use murabito_progress::ProgressPlugin;
@@ -572,6 +587,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins((
             MinimalPlugins,
+            IdentityPlugin,
             ProgressPlugin,
             MovementPlugin,
             PerceptionPlugin,
@@ -582,14 +598,25 @@ mod tests {
         app
     }
 
+    /// The tests spawn no kinds, so they stamp the numbers themselves.
+    fn mint(app: &mut App) -> ThingId {
+        app.world_mut().resource_mut::<NextThingId>().mint()
+    }
+
     fn looker_at(app: &mut App, cell: VoxelCoord, facing: Direction, vision: Vision) -> Entity {
+        let id = mint(app);
         app.world_mut()
-            .spawn((VoxelPosition(cell), Facing(facing), vision))
+            .spawn((id, VoxelPosition(cell), Facing(facing), vision))
             .id()
     }
 
     fn thing_at(app: &mut App, cell: VoxelCoord) -> Entity {
-        app.world_mut().spawn(VoxelPosition(cell)).id()
+        let id = mint(app);
+        app.world_mut().spawn((id, VoxelPosition(cell))).id()
+    }
+
+    fn id_of(app: &App, thing: Entity) -> ThingId {
+        *app.world().get::<ThingId>(thing).expect("stamped at spawn")
     }
 
     fn seen_by(app: &App, looker: Entity) -> &Seen {
@@ -620,6 +647,19 @@ mod tests {
         let sighting = seen.iter().next().expect("one sighting");
         assert_eq!(sighting.offset, voxel(2, 0) - voxel(0, 0));
         assert_eq!((sighting.offset.dq(), sighting.offset.dr()), (2, 0));
+    }
+
+    #[test]
+    fn a_sighting_names_the_thing_by_handle_and_by_number() {
+        let mut app = ticking_app();
+        let fox = looker_at(&mut app, voxel(0, 0), Direction::E, eyes());
+        let hare = thing_at(&mut app, voxel(2, 0));
+        app.update();
+
+        let sighting = *seen_by(&app, fox).iter().next().expect("the hare");
+        assert_eq!(sighting.entity, hare);
+        assert_eq!(sighting.id, id_of(&app, hare));
+        assert_ne!(sighting.id, id_of(&app, fox));
     }
 
     #[test]
@@ -700,9 +740,11 @@ mod tests {
         let edge = voxel(0, 0)
             .neighbour(Direction::NNE)
             .neighbour(Direction::NNE);
+        let id = mint(&mut app);
         let hare = app
             .world_mut()
             .spawn((
+                id,
                 VoxelPosition(edge),
                 Facing(Direction::NNW),
                 Locomotion {

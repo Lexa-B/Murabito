@@ -389,6 +389,7 @@ mod tests {
     fn at_the_start_the_fox_sees_the_tree_near_and_the_hare_beyond_it() {
         use bevy::gizmos::AppGizmoBuilder;
         use bevy::time::TimeUpdateStrategy;
+        use murabito_kinds::KindsPlugin;
         use murabito_perception::PerceptionPlugin;
         use murabito_vision::VisionPlugin;
 
@@ -399,7 +400,7 @@ mod tests {
             .init_asset::<WorldAsset>()
             .init_asset::<bevy::gizmos::GizmoAsset>()
             .init_gizmo_group::<DefaultGizmoConfigGroup>()
-            .add_plugins((PerceptionPlugin, VisionPlugin, ScenePlugin))
+            .add_plugins((KindsPlugin, PerceptionPlugin, VisionPlugin, ScenePlugin))
             .insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
         app.update();
         app.update();
