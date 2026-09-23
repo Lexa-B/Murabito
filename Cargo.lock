@@ -3489,6 +3489,7 @@ dependencies = [
  "murabito_menu",
  "murabito_movement",
  "murabito_navigation",
+ "murabito_perception",
  "murabito_placement",
  "murabito_progress",
  "murabito_scene",
@@ -3496,6 +3497,7 @@ dependencies = [
  "murabito_settings_page",
  "murabito_ui",
  "murabito_user_data",
+ "murabito_vision",
 ]
 
 [[package]]
@@ -3565,6 +3567,7 @@ dependencies = [
  "murabito_movement",
  "murabito_placement",
  "murabito_progress",
+ "murabito_vision",
 ]
 
 [[package]]
@@ -3601,6 +3604,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "murabito_perception"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_hexcoords",
+ "murabito_movement",
+ "murabito_placement",
+ "murabito_progress",
+]
+
+[[package]]
 name = "murabito_placement"
 version = "0.1.0"
 dependencies = [
@@ -3624,8 +3638,10 @@ dependencies = [
  "murabito_hexcoords",
  "murabito_kinds",
  "murabito_movement",
+ "murabito_perception",
  "murabito_placement",
  "murabito_progress",
+ "murabito_vision",
 ]
 
 [[package]]
@@ -3666,6 +3682,18 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "dirs",
+]
+
+[[package]]
+name = "murabito_vision"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_hexcoords",
+ "murabito_movement",
+ "murabito_perception",
+ "murabito_placement",
+ "murabito_progress",
 ]
 
 [[package]]

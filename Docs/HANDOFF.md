@@ -2,18 +2,23 @@
 
 Written 2026-09-22, after PR #25 (movement) merged; brought up to date the same day with the
 settings and i18n crates, then with app state, then with the overlays and the settings page,
-then with the kinds. Everything here is on `main`; nothing is outstanding. `AGENTS.md` is the
-authority on how to work; this is where things stand, for a session starting cold.
+then with the kinds; and on 2026-09-23 with placement, the hex additions, and perception and
+sight. Everything here is on `main` or in PR #41 (`vision`), which is open and reviewed by
+Lexa on screen. `AGENTS.md` is the authority on how to work; this is where things stand, for a
+session starting cold.
 
 ## What runs
 
 `cargo run -p murabito`, or `scripts/run.sh` (what the desktop shortcut points at): a green
-ground one cho square under a pale sky, lit by a sun, and a fox at the origin walking a
-twelve-sided loop, facing the way it goes, corner steps visibly slower than edge steps, with a
-progress bar filling on the ground in front of it once per step. WASD/arrows pan, the wheel
+ground one cho square under a pale sky, lit by a sun, and a fox eight cells west of the origin
+walking a twelve-sided loop, facing the way it goes, corner steps visibly slower than edge steps,
+with a progress bar filling on the ground in front of it once per step. WASD/arrows pan, the wheel
 zooms, both eased; the camera's feel numbers are the ones settled by feel-testing in the first
-attempt. Six shaku east, a hare walks a triangle: three steps, a second's rest, a third of a
-turn, and again. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
+attempt. Six cells east of the origin, a hare walks a triangle: three steps, a second's rest, a
+third of a turn, and again; a sugi stands north of the line between them, clear of both walks. Each
+looker's cone is drawn on the ground in its colour, orange for the fox and pale blue for the hare,
+with a line to each thing it sees, solid up close and fainter with distance: from its start the
+fox sees the tree near and the hare beyond it less well, and loses each as its loop turns it away. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
 resumes. Escape opens the menu over the paused world (Settings / Resume / Quit, in the UI's
 font, in English or Japanese); Escape again, or Resume, resumes. Settings is a page with a
 pan-speed slider (a quarter speed to six times, in octaves, with a readout) and a language picker
@@ -44,6 +49,8 @@ crate, and reads the same way.
 | `murabito_hexcoords` | `crates/hexcoords` | `VoxelCoord` (cube in, axial stored, layer), `VoxelspacePos`, `Direction` (twelve, by compass point) with `neighbour`, `rotated`, `notches_to`, `heading`; `Offset` (one voxel relative to another, `b - a`), `distance` in steps, `ring`, `rings_covering`, `corners` | those, plus the errors `NotOnHexPlane`, `NotNearHexPlane` and `ON_PLANE_TOLERANCE` |
 | `murabito_placement` | `crates/placement` | `VoxelPosition` and `Facing`, the plain components any thing in the world carries, and `place`, the one system that writes a `Transform` from them | those, plus `PlacementPlugin` |
 | `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
+| `murabito_perception` | `crates/perception/perception` | `Occupancy`, which things stand in which voxel, rebuilt each tick; `PerceptionSet::{Gather, Sense}` in `FixedUpdate` after `MechanismSet` | `Occupancy`, `PerceptionSet`, `PerceptionPlugin` |
+| `murabito_vision` | `crates/perception/senses/vision` | `Vision` (a cone on `Facing`, three bands, `Vision::BLIND`), a member of `Sentient`; the cast, private; `Seen`, the tick's `Sighting`s (entity, offset, acuity) | `Vision`, `Band`, `Acuity`, `Seen`, `Sighting`, `VisionPlugin` |
 | `murabito_movement` | `crates/action/mechanisms/movement` | `Locomotion`; the `Step` and `Turn` intents and their tick systems, which write `murabito_placement`'s position and facing | those, plus `cost`, `can_step`, `MovementPlugin` |
 | `murabito_actions` | `crates/action/actions` | `ActionQueue` of `Action::{Go, Face}`; `issue`, where turn-then-step lives, after `AskingSet` | `Action`, `ActionQueue`, `AskingSet`, `ActionsPlugin` |
 
@@ -118,6 +125,19 @@ is still design. `TODO.md` is what's queued.
   which is how a scene says which way a fox faces and which sakura it wants.
 - **`AskingSet`**: pushes onto a queue run before `issue`. Found when a second walker made the
   fox land a tick late: the order had held by the scheduler's whim.
+- **Position and facing are `murabito_placement`'s**, below the movement mechanism that writes
+  them: a tree has a position and never moves, and the senses read where things are without
+  depending on what moves them.
+- **A sense is its own crate with its own list in its own shape; nothing merges them.** Lexa's
+  call: vision gives `(entity, offset, acuity)`, hearing will give a bearing and an intensity,
+  smell an intensity and a gradient. Merging across senses, if ever, is the AI's. The field of
+  cells the cast computes stays private, opened only if debugging needs it. Everything is
+  opaque for now; obscuring, heights and ambiguation (a 妖狐 in human form at `Mid` reads as a
+  humanoid) are facet debt, to land in `murabito_perception`, not the AI.
+- **Perceiving is simulation**: `PerceptionSet` in `FixedUpdate` after `MechanismSet`, every tick
+  for now, with gating on change written down as the next step. `Vision` is a member of
+  `Sentient` (yokai see too; a species can require `Vision::BLIND`), and the cone follows
+  `Facing`, so turning is what points the eyes.
 
 ## Bevy 0.19 things that cost time
 
@@ -151,6 +171,14 @@ is still design. `TODO.md` is what's queued.
 - `serde_yaml_ng` refuses nested enums (`serializing nested enums in YAML is not supported
   yet`). A YAML file of only comments parses as `null`, so read it as `Option<Map>`.
 - Turning on a Bevy feature (`serialize`) rebuilds most of the engine once: ~4 minutes.
+- `add_plugins` takes a tuple of at most sixteen; nest tuples (a nested tuple is a plugin list).
+- A workspace `members` glob that matches nothing is a hard error, so `crates/perception/senses/*`
+  could only go in with the first sense.
+- `Entity::from_bits` panics on bits it considers invalid; a test wanting ids spawns empties in a
+  scratch `World`.
+- `arc_3d(angle, radius, isometry, colour)` sweeps from the isometry's +X about its +Y, the same
+  sense as `Direction`'s index, so a cone's arc is `from_rotation_y(bearing − half_arc)` and a
+  sweep of the cone's width.
 
 ## How the work is done
 
@@ -164,15 +192,18 @@ is still design. `TODO.md` is what's queued.
 - A scripted edit that asserts on file text must gate everything after it on its exit code
   (`python … && cargo test && git commit`), never `;`: `cargo fmt` reformats what a script
   expects to find, and one such miss committed a scratch test before the mistake was seen.
-- The next work, in the order agreed: the keyboard gate and typed values, the rebind screen,
-  then the larger modules; all in `TODO.md`.
+- The next work, each its own design talk first: hearing, the second sense (a push from a
+  source, a bearing and an intensity, attenuated along the shortest unobstructed path over
+  `Occupancy`); facets, which unlock the senses' three debts; a debug module to take the
+  progress bar, cones and sightlines off the scene. Still queued from before: the keyboard
+  gate and typed values, the rebind screen. All in `TODO.md`.
 
 ## Where things are
 
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/cleanup-refactor`, parked at `main` between tasks; holds the warm `target/` (~170 GB, mostly `target/debug`) and is what the desktop shortcut runs |
-| `main` at handoff | `43b439a`, the merge of PR #36 (the villagers, an art session) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session) |
+| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `vision` until PR #41 merges, then parked at `main`; holds the warm `target/` (~170 GB, mostly `target/debug`) and is what the desktop shortcut runs |
+| `main` at handoff | `89842ed`, the merge of PR #40 (the camera starts further out, another session) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session) |
 | Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |

@@ -55,8 +55,9 @@
 //! reclassifying a thing later with `remove_with_requires`, which takes the whole chain.
 //!
 //! `Sentient` is where the members sit today: whatever takes いる faces somewhere, moves
-//! (`Locomotion`, at a placeholder pace a kind overrides) and takes orders; yokai move
-//! as much as beasts do. The tiers below it add nothing yet.
+//! (`Locomotion`, at a placeholder pace a kind overrides), looks where it faces
+//! (`Vision`, a placeholder cone a kind overrides, or `Vision::BLIND`) and takes orders;
+//! yokai move and see as much as beasts do. The tiers below it add nothing yet.
 //!
 //! A kind that is drawn names its file with `Model`, and `KindsPlugin`'s one observer
 //! loads it as the thing is spawned. A plant names its first version in summer; a
@@ -92,6 +93,7 @@ mod tests {
     use murabito_movement::Locomotion;
     use murabito_placement::Facing;
     use murabito_progress::Progress;
+    use murabito_vision::{Seen, Vision};
 
     fn has<C: Component>(world: &World, entity: Entity) -> bool {
         world.entity(entity).contains::<C>()
@@ -135,7 +137,24 @@ mod tests {
     }
 
     #[test]
-    fn a_tree_has_a_place_but_neither_walks_nor_takes_orders() {
+    fn a_sentient_thing_sees_and_has_somewhere_to_put_what_it_saw() {
+        let mut world = World::new();
+
+        let beast = world.spawn(Beast).id();
+
+        assert!(has::<Vision>(&world, beast));
+        assert!(has::<Seen>(&world, beast), "Vision brings its list");
+        assert!(
+            !world
+                .entity(beast)
+                .get::<Vision>()
+                .expect("eyes")
+                .is_blind()
+        );
+    }
+
+    #[test]
+    fn a_tree_has_a_place_but_neither_walks_nor_takes_orders_nor_sees() {
         let mut world = World::new();
 
         let tree = world.spawn(Tree).id();
@@ -146,6 +165,7 @@ mod tests {
         assert!(!has::<Sentient>(&world, tree));
         assert!(!has::<Locomotion>(&world, tree));
         assert!(!has::<ActionQueue>(&world, tree));
+        assert!(!has::<Vision>(&world, tree));
     }
 
     #[test]
@@ -195,6 +215,36 @@ mod tests {
             })
         );
         assert!(has::<Beast>(&world, one));
+    }
+
+    /// A kind with no eyes at all requires `Vision::BLIND`, the way some yokai will.
+    #[derive(Component, Default)]
+    #[require(Yokai, Vision = Vision::BLIND)]
+    struct SomeBlindYokai;
+
+    #[test]
+    fn a_species_can_be_blind_and_still_has_its_empty_list() {
+        let mut world = World::new();
+
+        let one = world.spawn(SomeBlindYokai).id();
+
+        assert!(world.entity(one).get::<Vision>().expect("eyes").is_blind());
+        assert!(has::<Seen>(&world, one));
+    }
+
+    #[test]
+    fn a_fox_and_a_hare_have_their_own_eyes_a_hunter_narrow_and_far_prey_wide_and_near() {
+        let mut world = World::new();
+
+        let fox = world.spawn(Fox).id();
+        let hare = world.spawn(Hare).id();
+
+        let fox_eyes = world.entity(fox).get::<Vision>().expect("eyes").clone();
+        let hare_eyes = world.entity(hare).get::<Vision>().expect("eyes").clone();
+        assert!(fox_eyes.arc < hare_eyes.arc);
+        assert!(fox_eyes.far_range() > hare_eyes.far_range());
+        assert_eq!((fox_eyes.arc, fox_eyes.far_range()), (120.0, 48));
+        assert_eq!((hare_eyes.arc, hare_eyes.far_range()), (240.0, 26));
     }
 
     #[test]
