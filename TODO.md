@@ -9,7 +9,9 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   twelve plants; the spiritual leaves (tsukumogami, yoko, bakedanuki, ningyo, kaika, hitodama),
   the humans, and the objects arrive as models and needs do. Facets (what a thing is *like*:
   age, trophic role, height, what it does to each sense) are the archive's second axis and are
-  not designed yet; they'd be members on tiers, or their own components, when senses come back.
+  not designed yet; they'd be members on tiers, or their own components. Sight is back and
+  runs without them (everything is opaque); what they unlock is listed under the senses' facet
+  debt below and in `Docs/perception_readme.md`.
 - **The scene's walks are placeholder AI.** The fox's loop and the hare's triangle, with the
   hare's rest between sides, are what an AI layer will do: decide, and push onto the queue, or
   not. A rest is not an action (Lexa, 2026-09-22): an idle body is an empty queue by the AI's

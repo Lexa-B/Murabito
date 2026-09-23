@@ -2,8 +2,10 @@
 
 Written 2026-09-22, after PR #25 (movement) merged; brought up to date the same day with the
 settings and i18n crates, then with app state, then with the overlays and the settings page,
-then with the kinds. Everything here is on `main`; nothing is outstanding. `AGENTS.md` is the
-authority on how to work; this is where things stand, for a session starting cold.
+then with the kinds; and on 2026-09-23 with placement, the hex additions, and perception and
+sight. Everything here is on `main` or in PR #41 (`vision`), which is open and reviewed by
+Lexa on screen. `AGENTS.md` is the authority on how to work; this is where things stand, for a
+session starting cold.
 
 ## What runs
 
@@ -190,15 +192,18 @@ is still design. `TODO.md` is what's queued.
 - A scripted edit that asserts on file text must gate everything after it on its exit code
   (`python … && cargo test && git commit`), never `;`: `cargo fmt` reformats what a script
   expects to find, and one such miss committed a scratch test before the mistake was seen.
-- The next work, in the order agreed: the keyboard gate and typed values, the rebind screen,
-  then the larger modules; all in `TODO.md`.
+- The next work, each its own design talk first: hearing, the second sense (a push from a
+  source, a bearing and an intensity, attenuated along the shortest unobstructed path over
+  `Occupancy`); facets, which unlock the senses' three debts; a debug module to take the
+  progress bar, cones and sightlines off the scene. Still queued from before: the keyboard
+  gate and typed values, the rebind screen. All in `TODO.md`.
 
 ## Where things are
 
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/cleanup-refactor`, parked at `main` between tasks; holds the warm `target/` (~170 GB, mostly `target/debug`) and is what the desktop shortcut runs |
+| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `vision` until PR #41 merges, then parked at `main`; holds the warm `target/` (~170 GB, mostly `target/debug`) and is what the desktop shortcut runs |
 | `main` at handoff | `89842ed`, the merge of PR #40 (the camera starts further out, another session) |
 | Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session) |
 | Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |
