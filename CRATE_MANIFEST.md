@@ -22,7 +22,9 @@ crates/
 │  ├─ navigation/         murabito_navigation
 │  ├─ menu/               murabito_menu
 │  └─ settings_page/      murabito_settings_page
-├─ kinds/                 murabito_kinds
+├─ all_things/            what things are: a group directory, not a crate
+│  ├─ identity/           murabito_identity
+│  └─ kinds/              murabito_kinds
 ├─ action/                the actions layer: a group directory, not a crate
 │  ├─ actions/            murabito_actions
 │  ├─ progress/           murabito_progress
@@ -90,6 +92,11 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 
 ## What things are
 
+- **`murabito_identity`** — which thing this is: `ThingId`, a serial number every thing
+  carries for life, minted from one counter, `NextThingId`, never reused, and kept by a
+  save. Bevy's `Entity` is the handle the engine acts through; this is what remembers a
+  thing across ticks and saves. Mints and nothing more; the kinds stamp one on every
+  thing at the root of their tree.
 - **`murabito_kinds`** — the tree of kinds: what a thing *is*. Every tier and every kind
   is a unit component whose `#[require]` is its parent and its members, so spawning a
   kind inserts the whole chain and the node itself says what it has. A species' numbers
