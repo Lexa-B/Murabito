@@ -4,11 +4,19 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[features]
+# The debug build: `Occupancy` on the wire, as a list of `[voxel, things]` pairs, since
+# JSON can't key an object by a struct. Off by default; the app's `debug` feature turns
+# it on.
+debug = ["dep:serde", "murabito_hexcoords/debug"]
+
 [dependencies]
 bevy.workspace = true
 murabito_hexcoords.workspace = true
 murabito_placement.workspace = true
 murabito_progress.workspace = true
+serde = { workspace = true, optional = true }
 
 [dev-dependencies]
 murabito_movement.workspace = true
+serde_json.workspace = true

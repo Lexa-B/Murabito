@@ -42,7 +42,7 @@ pub const ON_PLANE_TOLERANCE: f32 = 1e-4;
 /// can never drift out of true. The fields are private, so [`VoxelCoord::new`] is the
 /// only way to make one, and every `VoxelCoord` that exists is on the plane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "debug", derive(bevy::reflect::Reflect))]
+#[cfg_attr(feature = "debug", derive(bevy::reflect::Reflect, serde::Serialize))]
 pub struct VoxelCoord {
     q: i32,
     r: i32,

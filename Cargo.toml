@@ -61,6 +61,8 @@ murabito_settings_page = { path = "crates/ui/settings_page" }
 # Where the player's files go: the platform's config directory.
 dirs = "7"
 serde = { version = "1", features = ["derive"] }
+# Only for tests that pin what a type looks like on the debug wire.
+serde_json = "1"
 # YAML for everything hand-written. serde_yaml is unmaintained; this is the fork in use.
 serde_yaml_ng = "0.10"
 # Only for naming a backup after the moment it was taken.

@@ -3652,6 +3652,7 @@ name = "murabito_hexcoords"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "serde",
 ]
 
 [[package]]
@@ -3735,6 +3736,8 @@ dependencies = [
  "murabito_movement",
  "murabito_placement",
  "murabito_progress",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3818,6 +3821,7 @@ dependencies = [
  "murabito_perception",
  "murabito_placement",
  "murabito_progress",
+ "serde_json",
 ]
 
 [[package]]
