@@ -49,23 +49,24 @@
 //! first found depth-first through the parents in list order. So a species' numbers sit
 //! in the species' own `require`, and a tier's are the placeholder its children override.
 //!
-//! What a kind requires is what it *has*; what it is *at* (`murabito_placement`'s
-//! `VoxelPosition`) is given
-//! when it is spawned, beside the kind. That line also decides what survives
-//! reclassifying a thing later with `remove_with_requires`, which takes the whole chain.
+//! What a kind requires is what it *has*; where it *is* and which way it faces
+//! (`murabito_placement`'s `VoxelPosition` and `Facing`) is given when it is spawned,
+//! beside the kind. That line also decides what survives reclassifying a thing later
+//! with `remove_with_requires`, which takes the whole chain.
 //!
-//! `Sentient` is where the members sit today: whatever takes いる faces somewhere, moves
-//! (`Locomotion`, at a placeholder pace a kind overrides), looks where it faces
-//! (`Vision`, a placeholder cone a kind overrides, or `Vision::BLIND`) and takes orders;
-//! yokai move and see as much as beasts do. The tiers below it add nothing yet.
+//! `Sentient` is where the members sit today: whatever takes いる moves (`Locomotion`,
+//! at a placeholder pace a kind overrides), looks where it faces (`Vision`, a
+//! placeholder cone a kind overrides, or `Vision::BLIND`) and takes orders; yokai move
+//! and see as much as beasts do. The tiers below it add nothing yet.
 //!
 //! Every thing gets a `ThingId` as it is spawned, stamped by an observer on `AllThings`,
 //! the root, unless it was spawned with one. Every tangible thing must be spawned with a
 //! `VoxelPosition` and a `Facing`: the tree can't require either, since where a thing
 //! stands and which way it faces are the instance's and not the kind's, so an observer
 //! on `Tangible` checks and panics if one is missing. A kind that is drawn names its
-//! file with `Model`, and a third observer loads it as the thing is spawned. A plant names its first version in summer; a
-//! spawner that wants another version, colour or season gives its own `Model` beside
+//! file with `Model`, and a third observer loads it as the thing is spawned. A plant
+//! names its first version in summer; a spawner that wants another version, colour or
+//! season gives its own `Model` beside
 //! the kind, and what is given at spawn wins.
 //!
 //! This crate depends on the mechanism crates whose components the tiers require, and

@@ -101,8 +101,10 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   is a unit component whose `#[require]` is its parent and its members, so spawning a
   kind inserts the whole chain and the node itself says what it has. A species' numbers
   sit in its own `require` and win over its tiers'. One file per node, in folders that
-  mirror the tree. A kind that is drawn names its file with `Model`, and `KindsPlugin`'s
-  one observer loads it as the thing is spawned. Depends on the mechanism crates whose
+  mirror the tree. `KindsPlugin` is three observers: one stamps a `ThingId` on every
+  thing, one checks a tangible thing was spawned with its place and facing (the tree
+  can't require either: they are the instance's), and one loads the `Model` a drawn
+  kind names. Depends on the mechanism crates whose
   components the tiers require; only what spawns things depends on it.
 
 ## Doing things

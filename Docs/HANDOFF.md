@@ -36,7 +36,7 @@ crate, and reads the same way.
 | `murabito` | `crates/murabito` | the app: a plugin list | |
 | `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns a `Fox` and a `Hare` from the kinds with a position and a facing; refills the fox's queue with the twelve-direction loop and walks the hare's triangle with a rest at each corner (its own timer); draws the progress bar (placeholder until a UI module owns it) | `ScenePlugin` |
 | `murabito_identity` | `crates/all_things/identity` | `ThingId`, a serial number for life, never reused; `NextThingId`, the counter it comes from, the one thing here a save keeps | `ThingId`, `NextThingId`, `IdentityPlugin` |
-| `murabito_kinds` | `crates/all_things/kinds` | the tree of kinds: every tier and kind a unit component whose `#[require]` is its parent and members; one file per node in folders that mirror the tree; `Model`, the glTF path a kind names, loaded by the plugin's one observer; the tiers, seventeen animals and twelve plants | every kind, `Model`, `KindsPlugin` |
+| `murabito_kinds` | `crates/all_things/kinds` | the tree of kinds: every tier and kind a unit component whose `#[require]` is its parent and members; one file per node in folders that mirror the tree; `Model`, the glTF path a kind names; three observers: stamp the id, check a tangible thing was given its place and facing, load the model; the tiers, seventeen animals and twelve plants | every kind, `Model`, `KindsPlugin` |
 | `murabito_camera` | `crates/camera` | the overhead rig: focus, direction, zoom; eased pan and zoom, taking input only in `AppState::Playing`; settings | `CameraPlugin`, `CameraSettings` |
 | `murabito_keybinds` | `crates/keybinds` | `Binds`, up to three keys or mouse buttons for one action; `Inputs`, the system parameter; a `Bind` is one word in a file (`KeyW`, `Mouse7`) | `Bind`, `Binds`, `Held`, `Inputs`, `MAX_BINDS`, `UnknownBind` |
 | `murabito_user_data` | `crates/user_data` | the player's directory, `~/.config/murabito`; the only place that decides where it is | `UserData`, `UserDataPlugin` |
@@ -119,7 +119,8 @@ is still design. `TODO.md` is what's queued.
   otherwise depth-first in list order; a cycle panics at registration naming the loop (not a
   stack overflow, whatever the doc comment says). One node, one file, folders mirroring the
   tree: Lexa's call over one file for all. English keys, kanji beside them. `Sentient` carries
-  `Facing`, `Locomotion` and `ActionQueue`, Lexa's call ("yokai move too"). The AI's own reading
+  `Locomotion`, `Vision` and `ActionQueue`, Lexa's call ("yokai move too"); it carried `Facing`
+  with a default east until 2026-09-24 (below). The AI's own reading
   of the world is a separate, non-authoritative system and was kept out of every decision here.
 - **A require constructor has no world in reach**, so a kind names its model as a path
   (`Model`) and one observer loads it. What is given at spawn wins over a kind's `require`,
@@ -143,6 +144,16 @@ is still design. `TODO.md` is what's queued.
   engine acts through the handle, memory keys on the number. A positioned entity without an
   id makes `look` panic, agreed over leaving it silently unseen. `murabito_identity` and
   `murabito_kinds` sit together under `crates/all_things/`, a group directory.
+- **A tangible thing's place and facing are the instance's, and both are checked at spawn.**
+  Lexa, 2026-09-24: the tree can't require `VoxelPosition` (a `require` carries a value, and
+  no kind can say where an instance stands), so an observer on `Tangible` panics if a thing
+  is spawned without one. `Facing` went the same way, off `Sentient` and its default east
+  (never liked) and onto `Tangible` beside the place: "if something has a position, it also
+  has a facing". Found on the way: `place` needs both, and the sugi had no `Facing`, so its
+  model had stood at the world origin since PR #41 while its voxel, the cast and the
+  sightline's target all agreed on somewhere else; the scene's test checked the voxel, not
+  the screen. Now the tree is given a facing and a test pins its `Transform` to its voxel.
+  Lesson: a drawing that only agrees with itself proves nothing; pin the screen to the data.
 - **Perceiving is simulation**: `PerceptionSet` in `FixedUpdate` after `MechanismSet`, every tick
   for now, with gating on change written down as the next step. `Vision` is a member of
   `Sentient` (yokai see too; a species can require `Vision::BLIND`), and the cone follows

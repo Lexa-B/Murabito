@@ -59,7 +59,7 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 
 - `Action::Face` is in the enum and tested, but nothing uses it since the spin placeholder
   went. The first thing that wants to look somewhere without moving takes it up.
-- `Sentient` carries `Facing`, `Locomotion` (a placeholder pace) and `ActionQueue`; the
+- `Sentient` carries `Locomotion` (a placeholder pace), `Vision` and `ActionQueue`; the
   animals' paces are guesses at a walk, marked as such in each file, until someone who
   knows says otherwise. The fox's are the ones settled by eye in the first attempt.
 - `Progress` could record the intent's type name alongside its `TypeId`, exposed as
