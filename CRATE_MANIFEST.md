@@ -119,12 +119,15 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 ## Minds
 
 - **`murabito_brainstem`** — every sentient body's driver: in the seat, not in charge.
-  Owns the vocabulary a body can be told (`Short`: a stop, a turn, a step; sustained
-  intents to come), holds one intent per body in a `Brainstem` component, and is the
-  only thing that pushes onto the `ActionQueue`, one action at a time, every tick in
-  `AskingSet`. Records how the last intent ended (`Outcome`) for whoever gave it. With
-  nothing ordered a body stands still. The slower mind and the reflexes both speak to
-  it and both sit above it; it depends on actions, progress and hexcoords only.
+  Owns the vocabulary a body can be told: `Short`, a stop, a turn, a turn to face a
+  thing, a step, each over within a round of the slower mind; `Sustained`, a walk to a
+  cell, re-aimed at every step from where the body stands. Holds one intent per body in
+  a `Brainstem` component and is the only thing that pushes onto the `ActionQueue`, one
+  action at a time, every tick in `AskingSet`. Records how the last intent ended
+  (`Outcome`: done, stopped, superseded, cancelled by a named reflex, or lost when the
+  thing named was out of view) for whoever gave it. With nothing ordered a body stands
+  still. The slower mind and the reflexes both speak to it and both sit above it; it
+  depends on actions, progress, placement, identity, vision and hexcoords.
   Design: `docs/ai_readme.md`.
 
 ## Doing things

@@ -7,11 +7,13 @@
 //!
 //! - a [`Short`] finishes within a round of the slower mind: one turn, one step, a stop.
 //!   A reflex may only ever say one of these.
-//! - a `Sustained` outlives rounds, and drive re-aims it every step. (Next.)
+//! - a [`Sustained`] outlives rounds. Drive re-aims it every step from where the body
+//!   stands and what it sees now, so a moved target is followed without a new order.
 //!
 //! Anything may [`Brainstem::order`] an intent, and a reflex may [`Brainstem::preempt`]
 //! one; the systems here carry the current intent out and record how the last one ended
-//! in an [`Outcome`], which is how the mind that asked learns its order was dropped.
+//! in an [`Outcome`], which is how the mind that asked learns its order was dropped, or
+//! that the thing it named was no longer in view.
 //!
 //! The tick, inside `AskingSet`, in [`BrainstemSet`]'s order: **Orders** takes what
 //! arrived; **Reflexes** is the slot the reflexes crate fills, so a fright beats an order
@@ -21,8 +23,11 @@
 
 use bevy::prelude::*;
 use murabito_actions::{Action, ActionQueue, AskingSet};
-use murabito_hexcoords::Direction;
+use murabito_hexcoords::{Direction, VoxelCoord};
+use murabito_identity::ThingId;
+use murabito_placement::VoxelPosition;
 use murabito_progress::Progress;
+use murabito_vision::Seen;
 
 pub struct BrainstemPlugin;
 
@@ -76,14 +81,26 @@ pub enum Short {
     Stop,
     /// Turn to face that way.
     Face(Direction),
+    /// Turn to face that thing, where it is seen now. `Lost` if it isn't in view.
+    FaceThing(ThingId),
     /// Walk one cell that way, turning first if need be.
     Step(Direction),
+}
+
+/// What a body can be told that outlives rounds: drive keeps re-aiming it, one step at a
+/// time, until it is done or dropped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sustained {
+    /// Walk to that cell, each step the one that brings the body nearest. Done on
+    /// standing there; the layer is not walked, only the plane.
+    GoTo(VoxelCoord),
 }
 
 /// Everything a body can be told.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Intent {
     Short(Short),
+    Sustained(Sustained),
 }
 
 /// How the last intent ended, for whoever gave it.
@@ -100,6 +117,8 @@ pub enum Outcome {
     Superseded,
     /// A reflex, named, replaced it.
     Cancelled(&'static str),
+    /// The thing it named was not in view when the body went to act on it.
+    Lost(ThingId),
 }
 
 /// What the body is doing now, and since which tick.
@@ -205,21 +224,68 @@ impl Brainstem {
     }
 }
 
-/// The one action a short motion is: a stop is none, and never reaches here.
-fn action_for(short: Short) -> Option<Action> {
+/// What a short motion comes to, once the body's view is consulted: an action to push,
+/// or an end.
+#[derive(Debug, PartialEq, Eq)]
+enum Resolved {
+    Push(Action),
+    Finish(Outcome),
+}
+
+/// The one action a short is. A stop is none and never reaches here; facing a thing is a
+/// turn toward where it is seen, done already if it shares the cell, lost if it is not
+/// in view.
+fn resolve_short(short: Short, seen: Option<&Seen>) -> Resolved {
     match short {
-        Short::Stop => None,
-        Short::Face(direction) => Some(Action::Face(direction)),
-        Short::Step(direction) => Some(Action::Go(direction)),
+        Short::Stop => Resolved::Finish(Outcome::Done),
+        Short::Face(direction) => Resolved::Push(Action::Face(direction)),
+        Short::Step(direction) => Resolved::Push(Action::Go(direction)),
+        Short::FaceThing(id) => {
+            let sighting = seen.and_then(|seen| seen.iter().find(|sighting| sighting.id == id));
+            match sighting.map(|sighting| sighting.offset.bearing()) {
+                None => Resolved::Finish(Outcome::Lost(id)),
+                Some(None) => Resolved::Finish(Outcome::Done),
+                Some(Some(direction)) => Resolved::Push(Action::Face(direction)),
+            }
+        }
     }
+}
+
+/// The one step toward a cell that promises the shortest walk: the step's own cost in
+/// shaku plus the straight-line distance left from where it lands. A corner step is √3
+/// shaku, so it is taken when it truly cuts the corner and not to zig-zag. `None`
+/// standing there, on the plane; the layer is not walked.
+fn step_toward(from: VoxelCoord, to: VoxelCoord) -> Option<Direction> {
+    if from.q() == to.q() && from.r() == to.r() {
+        return None;
+    }
+    let ground = |cell: VoxelCoord| cell.to_world().xz();
+    let target = ground(to);
+    let walk = |direction: Direction| {
+        let landing = from.neighbour(direction);
+        ground(from).distance(ground(landing)) + ground(landing).distance(target)
+    };
+    Direction::ALL
+        .into_iter()
+        .min_by(|&a, &b| walk(a).total_cmp(&walk(b)))
 }
 
 /// Carries every body's current intent out, one push at a time. A new intent first
 /// clears the queue; what is already in flight lands, since the mechanism holds that, and
-/// the next action goes on only once the queue is empty. A short is done when its action
-/// has been pushed, the queue is empty again and nothing is in flight.
-fn drive(tick: Res<Tick>, mut bodies: Query<(&mut Brainstem, &mut ActionQueue, &Progress)>) {
-    for (mut body, mut queue, progress) in &mut bodies {
+/// the next action goes on only once the queue is empty and the bar is idle. A short is
+/// done when its one action has been pushed and the body is idle again; a sustained
+/// intent is re-aimed at every such moment until nothing is left to do.
+fn drive(
+    tick: Res<Tick>,
+    mut bodies: Query<(
+        &mut Brainstem,
+        &mut ActionQueue,
+        &Progress,
+        &VoxelPosition,
+        Option<&Seen>,
+    )>,
+) {
+    for (mut body, mut queue, progress, position, seen) in &mut bodies {
         if let Some(pending) = body.take_pending() {
             queue.clear();
             body.begin(pending, tick.0);
@@ -227,17 +293,24 @@ fn drive(tick: Res<Tick>, mut bodies: Query<(&mut Brainstem, &mut ActionQueue, &
         let Some(doing) = body.doing else {
             continue;
         };
+        let idle = queue.is_empty() && !progress.in_flight();
         match doing.intent {
-            Intent::Short(short) => {
-                if !body.pushed {
-                    if let Some(action) = action_for(short) {
-                        queue.push(action);
-                    }
-                    body.pushed = true;
-                } else if queue.is_empty() && !progress.in_flight() {
-                    body.finish(Outcome::Done);
+            Intent::Short(short) if !body.pushed => {
+                match resolve_short(short, seen) {
+                    Resolved::Push(action) => queue.push(action),
+                    Resolved::Finish(outcome) => body.finish(outcome),
+                }
+                body.pushed = true;
+            }
+            Intent::Short(_) if idle => body.finish(Outcome::Done),
+            Intent::Short(_) => {}
+            Intent::Sustained(Sustained::GoTo(target)) if idle => {
+                match step_toward(position.0, target) {
+                    Some(direction) => queue.push(Action::Go(direction)),
+                    None => body.finish(Outcome::Done),
                 }
             }
+            Intent::Sustained(_) => {}
         }
     }
 }
@@ -246,47 +319,100 @@ fn drive(tick: Res<Tick>, mut bodies: Query<(&mut Brainstem, &mut ActionQueue, &
 mod tests {
     use super::*;
     use murabito_actions::ActionsPlugin;
-    use murabito_hexcoords::VoxelCoord;
+    use murabito_identity::{IdentityPlugin, NextThingId};
     use murabito_movement::{Locomotion, MovementPlugin};
-    use murabito_placement::{Facing, VoxelPosition};
+    use murabito_perception::PerceptionPlugin;
+    use murabito_placement::Facing;
     use murabito_progress::ProgressPlugin;
+    use murabito_vision::{Band, Vision, VisionPlugin};
 
     const E: Direction = Direction::E;
     const N: Direction = Direction::N;
+    const ENE: Direction = Direction::ENE;
+
+    /// Eyes all round, sharp to 8 cells, then 16, then 24.
+    const ALL_ROUND: Vision = Vision {
+        arc: 360.0,
+        bands: [
+            Band {
+                range: 8,
+                sensitivity: 1.0,
+            },
+            Band {
+                range: 16,
+                sensitivity: 0.6,
+            },
+            Band {
+                range: 24,
+                sensitivity: 0.3,
+            },
+        ],
+    };
 
     fn voxel(q: i32, r: i32) -> VoxelCoord {
         VoxelCoord::new(q, r, -q - r, 0).expect("on the plane")
     }
 
-    /// A ticking app with one body at the origin, facing east, walking 4 shaku a second
-    /// and turning 180 degrees a second: a face neighbour is 16 ticks, a quarter turn 32.
-    fn body() -> (App, Entity) {
+    fn short(short: Short) -> Intent {
+        Intent::Short(short)
+    }
+
+    fn go_to(q: i32, r: i32) -> Intent {
+        Intent::Sustained(Sustained::GoTo(voxel(q, r)))
+    }
+
+    /// A ticking app with everything a body needs to look, be told, and move.
+    fn app() -> App {
         use bevy::time::TimeUpdateStrategy;
 
         let mut app = App::new();
         app.add_plugins((
             MinimalPlugins,
+            IdentityPlugin,
             ProgressPlugin,
             MovementPlugin,
             ActionsPlugin,
+            PerceptionPlugin,
+            VisionPlugin,
             BrainstemPlugin,
         ));
         app.insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
         app.update();
+        app
+    }
+
+    fn mint(app: &mut App) -> ThingId {
+        app.world_mut().resource_mut::<NextThingId>().mint()
+    }
+
+    /// A body at the origin facing east, walking 4 shaku a second and turning 180
+    /// degrees a second: a face neighbour is 16 ticks, a corner one 28, a quarter turn 32.
+    fn body() -> (App, Entity) {
+        let mut app = app();
+        let id = mint(&mut app);
         let body = app
             .world_mut()
             .spawn((
+                id,
                 VoxelPosition(voxel(0, 0)),
                 Facing(E),
                 Locomotion {
                     speed: 4.0,
                     turn_speed: 180.0,
                 },
+                ALL_ROUND,
                 ActionQueue::default(),
                 Brainstem::default(),
             ))
             .id();
         (app, body)
+    }
+
+    /// Something to look at, standing still.
+    fn thing_at(app: &mut App, cell: VoxelCoord) -> ThingId {
+        let id = mint(app);
+        app.world_mut().spawn((id, VoxelPosition(cell)));
+        id
     }
 
     fn tick(app: &mut App, times: usize) {
@@ -304,6 +430,10 @@ mod tests {
 
     fn brainstem(app: &App, body: Entity) -> Brainstem {
         app.world().get::<Brainstem>(body).unwrap().clone()
+    }
+
+    fn outcome(app: &App, body: Entity) -> Outcome {
+        brainstem(app, body).outcome()
     }
 
     fn facing(app: &App, body: Entity) -> Direction {
@@ -330,12 +460,12 @@ mod tests {
     #[test]
     fn an_order_begins_on_the_tick_drive_takes_it() {
         let mut body = Brainstem::default();
-        body.order(Intent::Short(Short::Face(N)));
+        body.order(short(Short::Face(N)));
         assert_eq!(body.doing(), None, "not until drive takes it");
         let pending = body.take_pending().unwrap();
         body.begin(pending, 7);
         let doing = body.doing().unwrap();
-        assert_eq!(doing.intent(), Intent::Short(Short::Face(N)));
+        assert_eq!(doing.intent(), short(Short::Face(N)));
         assert_eq!(doing.since(), 7);
         assert_eq!(body.outcome(), Outcome::Idle, "nothing ended");
     }
@@ -343,20 +473,17 @@ mod tests {
     #[test]
     fn a_newer_order_supersedes_and_a_stop_stops() {
         let mut body = Brainstem::default();
-        body.order(Intent::Short(Short::Step(E)));
+        body.order(short(Short::Step(E)));
         let pending = body.take_pending().unwrap();
         body.begin(pending, 1);
 
-        body.order(Intent::Short(Short::Face(N)));
+        body.order(short(Short::Face(N)));
         let pending = body.take_pending().unwrap();
         body.begin(pending, 2);
         assert_eq!(body.outcome(), Outcome::Superseded);
-        assert_eq!(
-            body.doing().unwrap().intent(),
-            Intent::Short(Short::Face(N))
-        );
+        assert_eq!(body.doing().unwrap().intent(), short(Short::Face(N)));
 
-        body.order(Intent::Short(Short::Stop));
+        body.order(short(Short::Stop));
         let pending = body.take_pending().unwrap();
         body.begin(pending, 3);
         assert_eq!(body.outcome(), Outcome::Stopped);
@@ -366,7 +493,7 @@ mod tests {
     #[test]
     fn a_reflex_cancels_by_name() {
         let mut body = Brainstem::default();
-        body.order(Intent::Short(Short::Step(E)));
+        body.order(short(Short::Step(E)));
         let pending = body.take_pending().unwrap();
         body.begin(pending, 1);
 
@@ -377,27 +504,75 @@ mod tests {
             body.outcome(),
             Outcome::Cancelled("startle_face_apparition")
         );
-        assert_eq!(
-            body.doing().unwrap().intent(),
-            Intent::Short(Short::Face(N))
-        );
+        assert_eq!(body.doing().unwrap().intent(), short(Short::Face(N)));
     }
 
     #[test]
     fn the_later_of_two_orders_in_one_tick_is_the_one_taken() {
         let mut body = Brainstem::default();
-        body.order(Intent::Short(Short::Face(N)));
-        body.order(Intent::Short(Short::Step(E)));
+        body.order(short(Short::Face(N)));
+        body.order(short(Short::Step(E)));
         let pending = body.take_pending().unwrap();
-        assert_eq!(pending.intent, Intent::Short(Short::Step(E)));
+        assert_eq!(pending.intent, short(Short::Step(E)));
         assert_eq!(body.take_pending(), None);
     }
 
+    // -- the pure parts -------------------------------------------------------------
+
     #[test]
-    fn a_face_is_a_face_a_step_a_go_and_a_stop_nothing() {
-        assert_eq!(action_for(Short::Face(N)), Some(Action::Face(N)));
-        assert_eq!(action_for(Short::Step(E)), Some(Action::Go(E)));
-        assert_eq!(action_for(Short::Stop), None);
+    fn a_face_is_a_face_and_a_step_a_go() {
+        assert_eq!(
+            resolve_short(Short::Face(N), None),
+            Resolved::Push(Action::Face(N))
+        );
+        assert_eq!(
+            resolve_short(Short::Step(E), None),
+            Resolved::Push(Action::Go(E))
+        );
+    }
+
+    #[test]
+    fn facing_a_thing_with_nothing_in_view_is_lost() {
+        let id = NextThingId::default().mint();
+        assert_eq!(
+            resolve_short(Short::FaceThing(id), None),
+            Resolved::Finish(Outcome::Lost(id))
+        );
+    }
+
+    #[test]
+    fn the_step_toward_a_cell_is_the_one_that_ends_nearest_on_the_ground() {
+        let origin = voxel(0, 0);
+        assert_eq!(
+            step_toward(origin, voxel(3, 0)),
+            Some(E),
+            "three cells east: east"
+        );
+        assert_eq!(
+            step_toward(origin, voxel(2, -1)),
+            Some(ENE),
+            "the corner neighbour, in one corner step"
+        );
+        assert_eq!(step_toward(origin, voxel(2, -4)), Some(N));
+        assert_eq!(step_toward(origin, origin), None, "standing there");
+        assert_eq!(
+            step_toward(origin, VoxelCoord::new(0, 0, 0, 2).unwrap()),
+            None,
+            "the layer is not walked"
+        );
+    }
+
+    #[test]
+    fn stepping_toward_a_cell_always_arrives() {
+        let target = voxel(5, -2);
+        let mut here = voxel(-3, 4);
+        let mut steps = 0;
+        while let Some(direction) = step_toward(here, target) {
+            here = here.neighbour(direction);
+            steps += 1;
+            assert!(steps < 30, "wandering");
+        }
+        assert_eq!(here, target);
     }
 
     // -- in the tick ----------------------------------------------------------------
@@ -420,13 +595,13 @@ mod tests {
         tick(&mut app, 10);
         assert_eq!(queued(&app, body), 0);
         assert_eq!(position(&app, body), voxel(0, 0));
-        assert_eq!(brainstem(&app, body).outcome(), Outcome::Idle);
+        assert_eq!(outcome(&app, body), Outcome::Idle);
     }
 
     #[test]
     fn a_face_order_is_pushed_on_its_tick_lands_on_tick_thirty_two_and_is_done_on_the_next() {
         let (mut app, body) = body();
-        order(&mut app, body, Intent::Short(Short::Face(N)));
+        order(&mut app, body, short(Short::Face(N)));
 
         tick(&mut app, 1);
         let doing = brainstem(&app, body).doing().expect("begun");
@@ -446,18 +621,18 @@ mod tests {
         );
         assert!(
             brainstem(&app, body).doing().is_some(),
-            "drive saw it still in flight"
+            "drive ran before the last notch landed"
         );
 
         tick(&mut app, 1);
         assert_eq!(brainstem(&app, body).doing(), None);
-        assert_eq!(brainstem(&app, body).outcome(), Outcome::Done);
+        assert_eq!(outcome(&app, body), Outcome::Done);
     }
 
     #[test]
     fn a_step_order_moves_the_body_one_cell_and_is_done() {
         let (mut app, body) = body();
-        order(&mut app, body, Intent::Short(Short::Step(E)));
+        order(&mut app, body, short(Short::Step(E)));
         tick(&mut app, 16);
         assert_eq!(
             position(&app, body),
@@ -465,7 +640,7 @@ mod tests {
             "one shaku at four a second is 16 ticks"
         );
         tick(&mut app, 1);
-        assert_eq!(brainstem(&app, body).outcome(), Outcome::Done);
+        assert_eq!(outcome(&app, body), Outcome::Done);
         tick(&mut app, 10);
         assert_eq!(position(&app, body), voxel(1, 0), "and then nothing more");
     }
@@ -473,14 +648,14 @@ mod tests {
     #[test]
     fn a_newer_order_supersedes_but_the_step_in_flight_still_lands() {
         let (mut app, body) = body();
-        order(&mut app, body, Intent::Short(Short::Step(E)));
+        order(&mut app, body, short(Short::Step(E)));
         tick(&mut app, 1);
-        order(&mut app, body, Intent::Short(Short::Face(N)));
+        order(&mut app, body, short(Short::Face(N)));
         tick(&mut app, 1);
-        assert_eq!(brainstem(&app, body).outcome(), Outcome::Superseded);
+        assert_eq!(outcome(&app, body), Outcome::Superseded);
         assert_eq!(
             brainstem(&app, body).doing().unwrap().intent(),
-            Intent::Short(Short::Face(N))
+            short(Short::Face(N))
         );
         assert_eq!(
             queued(&app, body),
@@ -492,18 +667,18 @@ mod tests {
         assert_eq!(position(&app, body), voxel(1, 0), "the step landed anyway");
         tick(&mut app, 33);
         assert_eq!(facing(&app, body), N);
-        assert_eq!(brainstem(&app, body).outcome(), Outcome::Done);
+        assert_eq!(outcome(&app, body), Outcome::Done);
     }
 
     #[test]
     fn a_stop_empties_the_body_and_says_so() {
         let (mut app, body) = body();
-        order(&mut app, body, Intent::Short(Short::Step(E)));
+        order(&mut app, body, short(Short::Step(E)));
         tick(&mut app, 1);
-        order(&mut app, body, Intent::Short(Short::Stop));
+        order(&mut app, body, short(Short::Stop));
         tick(&mut app, 1);
         assert_eq!(brainstem(&app, body).doing(), None);
-        assert_eq!(brainstem(&app, body).outcome(), Outcome::Stopped);
+        assert_eq!(outcome(&app, body), Outcome::Stopped);
         tick(&mut app, 40);
         assert_eq!(
             position(&app, body),
@@ -511,9 +686,112 @@ mod tests {
             "what was in flight landed"
         );
         assert_eq!(
-            brainstem(&app, body).outcome(),
+            outcome(&app, body),
             Outcome::Stopped,
             "and nothing else happened"
         );
+    }
+
+    #[test]
+    fn facing_a_thing_turns_toward_where_it_is_seen() {
+        let (mut app, body) = body();
+        let thing = thing_at(&mut app, voxel(2, -4));
+        tick(&mut app, 1); // a look, so the thing is in view
+        order(&mut app, body, short(Short::FaceThing(thing)));
+        tick(&mut app, 32);
+        assert_eq!(facing(&app, body), N, "two cells north of the eye");
+        tick(&mut app, 1);
+        assert_eq!(outcome(&app, body), Outcome::Done);
+    }
+
+    #[test]
+    fn facing_a_thing_that_is_not_in_view_is_lost_and_names_it() {
+        let (mut app, body) = body();
+        let unseen = thing_at(&mut app, voxel(30, 0));
+        tick(&mut app, 1);
+        order(&mut app, body, short(Short::FaceThing(unseen)));
+        tick(&mut app, 1);
+        assert_eq!(brainstem(&app, body).doing(), None);
+        assert_eq!(outcome(&app, body), Outcome::Lost(unseen));
+        assert_eq!(facing(&app, body), E, "and the body did not move");
+    }
+
+    #[test]
+    fn facing_a_thing_before_the_body_has_looked_is_lost_since_the_view_is_a_tick_old() {
+        let (mut app, body) = body();
+        let thing = thing_at(&mut app, voxel(2, -4));
+        order(&mut app, body, short(Short::FaceThing(thing)));
+        tick(&mut app, 1);
+        assert_eq!(outcome(&app, body), Outcome::Lost(thing));
+    }
+
+    #[test]
+    fn going_to_a_cell_three_east_is_three_steps_and_done_on_arrival() {
+        let (mut app, body) = body();
+        order(&mut app, body, go_to(3, 0));
+        tick(&mut app, 16);
+        assert_eq!(position(&app, body), voxel(1, 0));
+        assert!(brainstem(&app, body).doing().is_some(), "not there yet");
+        tick(&mut app, 32);
+        assert_eq!(position(&app, body), voxel(3, 0), "three steps of 16 ticks");
+        assert!(
+            brainstem(&app, body).doing().is_some(),
+            "drive ran before the last step landed"
+        );
+        tick(&mut app, 1);
+        assert_eq!(outcome(&app, body), Outcome::Done);
+        tick(&mut app, 10);
+        assert_eq!(position(&app, body), voxel(3, 0), "and stays");
+    }
+
+    #[test]
+    fn going_to_a_corner_neighbour_is_one_corner_step_of_twenty_eight_ticks() {
+        let (mut app, body) = body();
+        order(&mut app, body, go_to(2, -1));
+        tick(&mut app, 27);
+        assert_eq!(
+            position(&app, body),
+            voxel(0, 0),
+            "root three shaku at four a second is 27.7 ticks"
+        );
+        tick(&mut app, 1);
+        assert_eq!(position(&app, body), voxel(2, -1));
+        assert_eq!(facing(&app, body), ENE);
+    }
+
+    #[test]
+    fn going_to_the_cell_the_body_stands_on_is_done_at_once() {
+        let (mut app, body) = body();
+        order(&mut app, body, go_to(0, 0));
+        tick(&mut app, 1);
+        assert_eq!(outcome(&app, body), Outcome::Done);
+        assert_eq!(queued(&app, body), 0);
+    }
+
+    #[test]
+    fn a_go_to_is_re_aimed_from_wherever_the_body_stands_when_a_step_lands() {
+        // Four steps east are ordered. With two landed and the third in flight, the order
+        // becomes a cell a corner step off the third's landing: the third lands anyway,
+        // and the body aims afresh from there, one corner step, rather than from the start.
+        let (mut app, body) = body();
+        order(&mut app, body, go_to(4, 0));
+        tick(&mut app, 32);
+        assert_eq!(position(&app, body), voxel(2, 0), "two steps of 16 ticks");
+
+        order(&mut app, body, go_to(5, -1));
+        tick(&mut app, 16);
+        assert_eq!(
+            position(&app, body),
+            voxel(3, 0),
+            "the third step landed anyway"
+        );
+        tick(&mut app, 28);
+        assert_eq!(
+            position(&app, body),
+            voxel(5, -1),
+            "one corner step from there"
+        );
+        tick(&mut app, 1);
+        assert_eq!(outcome(&app, body), Outcome::Done);
     }
 }

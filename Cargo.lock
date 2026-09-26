@@ -3637,9 +3637,12 @@ dependencies = [
  "bevy",
  "murabito_actions",
  "murabito_hexcoords",
+ "murabito_identity",
  "murabito_movement",
+ "murabito_perception",
  "murabito_placement",
  "murabito_progress",
+ "murabito_vision",
 ]
 
 [[package]]
