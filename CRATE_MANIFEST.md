@@ -37,7 +37,8 @@ crates/
 │     └─ vision/          murabito_vision
 └─ ai/                    minds: a group directory, not a crate
    ├─ brainstem/          murabito_brainstem
-   └─ reflexes/           murabito_reflexes
+   ├─ reflexes/           murabito_reflexes
+   └─ bridge/             murabito_bridge
 ```
 
 Arrows in the dependency graph all point down, toward whoever owns a type. The app
@@ -142,6 +143,14 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   each repertoire against this tick's view and last tick's and preempts the brainstem
   with the highest-priority match, cancelling the body's intent by the reflex's name.
   First reflex: `startle_face_apparition`. Depends on brainstem, vision, identity.
+- **`murabito_bridge`** — the port's far ends, served on a socket, so a mind can run
+  outside the game in any language. A loopback TCP listener on port 15703, always on,
+  one thread per client, speaking the contract in `crates/ai/bridge/proto/murabito.proto`
+  as length-framed protobuf: a request for snapshots is answered with every body's,
+  an order is handed to the brainstem's channel and gets no reply. The `.proto`
+  compiles at build time with a compiler that is itself a crate (`protox`), and the
+  conversions between the brainstem's types and the messages live here and nowhere
+  else. Depends on brainstem, actions, hexcoords, identity, vision, and `prost`.
   Design: `docs/ai_readme.md`.
 
 ## Doing things

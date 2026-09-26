@@ -29,6 +29,7 @@ murabito_vision.workspace = true
 murabito_progress.workspace = true
 murabito_actions.workspace = true
 murabito_brainstem.workspace = true
+murabito_bridge.workspace = true
 murabito_reflexes.workspace = true
 murabito_user_data.workspace = true
 murabito_settings.workspace = true
