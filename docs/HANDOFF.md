@@ -3,24 +3,30 @@
 Written 2026-09-22, after PR #25 (movement) merged; brought up to date the same day with the
 settings and i18n crates, then with app state, then with the overlays and the settings page,
 then with the kinds; on 2026-09-23 with placement, the hex additions, and perception and
-sight; and on 2026-09-24 with identity (PR #42) and the debug feature (branch `debug-feature`,
-the PR this update describes). Everything here is on `main` or on that branch. `AGENTS.md` is the authority on how to work; this is where things stand, for a
-session starting cold.
+sight; on 2026-09-24 with identity (PR #42) and the debug feature (PR #43); and on 2026-09-27
+with the AI's I/O (branch `ai-io`, the PR this update describes): the kind label and the
+ontology, the brainstem, the reflexes, the port, the bridge and the Python midbrain's home.
+Everything here is on `main` or on that branch. `AGENTS.md` is the authority on how to work;
+this is where things stand, for a session starting cold.
 
 ## What runs
 
 `cargo run -p murabito`, or `scripts/run.sh` (what the desktop shortcut points at); add
 `--features debug` or `--debug` for the debug build, which also serves the world's data on
-`127.0.0.1:15702` for `scripts/probe.sh` to read. What runs: a green
-ground one cho square under a pale sky, lit by a sun, and a fox eight cells west of the origin
-walking a twelve-sided loop, facing the way it goes, corner steps visibly slower than edge steps,
-with a progress bar filling on the ground in front of it once per step. WASD/arrows pan, the wheel
-zooms, both eased; the camera's feel numbers are the ones settled by feel-testing in the first
-attempt. Six cells east of the origin, a hare walks a triangle: three steps, a second's rest, a
-third of a turn, and again; a sugi stands north of the line between them, clear of both walks. Each
-looker's cone is drawn on the ground in its colour, orange for the fox and pale blue for the hare,
-with a line to each thing it sees, solid up close and fainter with distance: from its start the
-fox sees the tree near and the hare beyond it less well, and loses each as its loop turns it away. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
+`127.0.0.1:15702` for `scripts/probe.sh` to read. The game always listens for a mind on
+`127.0.0.1:15703`; from `ai/midbrain/`, `uv run board` shows every body's snapshot live and
+`uv run order 3 goto 0 0` tells one what to want. What runs: a green ground one cho square
+under a pale sky, lit by a sun; a fox eight cells west of the origin, standing until something
+tells it otherwise, and a hare six cells east, which walks to wherever the ground is
+left-clicked (a bandaid in the scene, in place of its old triangle). Corner steps are visibly
+slower than edge steps, with a progress bar filling on the ground in front of a walker once
+per step. When the hare appears close and new in the fox's view, the fox startles and turns to
+face it, with no mind at all. WASD/arrows pan, the wheel zooms, both eased; the camera's feel
+numbers are the ones settled by feel-testing in the first attempt. A sugi stands north of the
+line between fox and hare. Each looker's cone is drawn on the ground in its colour, orange for
+the fox and pale blue for the hare, with a line to each thing it sees, solid up close and
+fainter with distance: from its start the fox sees the tree near and the hare beyond it less
+well. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
 resumes. Escape opens the menu over the paused world (Settings / Resume / Quit, in the UI's
 font, in English or Japanese); Escape again, or Resume, resumes. Settings is a page with a
 pan-speed slider (a quarter speed to six times, in octaves, with a readout) and a language picker
@@ -30,16 +36,20 @@ hand-editable.
 
 ## The crates
 
-Every arrow in the dependency graph points down; `crates/action/` is a group directory, not a
-crate, and reads the same way.
+Every arrow in the dependency graph points down; `crates/action/`, `crates/all_things/`,
+`crates/perception/` and `crates/ai/` are group directories, not crates, and read the same way.
+`ai/` at the repo root holds the Python side.
 
 | Crate | Directory | Job | Public |
 |---|---|---|---|
 | `murabito` | `crates/murabito` | the app: a plugin list; its `debug` feature turns on every crate's and the server | |
 | `murabito_debug` | `crates/debug` | Bevy's remote protocol on the loopback address, behind the `debug` feature; an empty plugin without it; registers nothing, depends on no module | `DebugPlugin`, `PORT` |
-| `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns a `Fox` and a `Hare` from the kinds with a position and a facing; refills the fox's queue with the twelve-direction loop and walks the hare's triangle with a rest at each corner (its own timer); draws the progress bar (placeholder until a UI module owns it) | `ScenePlugin` |
-| `murabito_identity` | `crates/all_things/identity` | `ThingId`, a serial number for life, never reused; `NextThingId`, the counter it comes from, the one thing here a save keeps | `ThingId`, `NextThingId`, `IdentityPlugin` |
-| `murabito_kinds` | `crates/all_things/kinds` | the tree of kinds: every tier and kind a unit component whose `#[require]` is its parent and members; one file per node in folders that mirror the tree; `Model`, the glTF path a kind names; three observers: stamp the id, check a tangible thing was given its place and facing, load the model; the tiers, seventeen animals and twelve plants | every kind, `Model`, `KindsPlugin` |
+| `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns a `Fox`, a `Hare` and a `Sugi` from the kinds with a position and a facing; a left-click on the ground orders the hare there through the brainstem (a bandaid); draws the progress bars, cones and sightlines (placeholders until a UI module owns them) | `ScenePlugin` |
+| `murabito_brainstem` | `crates/ai/brainstem` | the vocabulary (`Short`, `Sustained`, `Intent`, `Outcome`, `Previous`, `Doing`); `Brainstem`, one intent per body, the only thing that pushes onto a queue; `BrainstemSet::{Orders, Reflexes, Drive}` in `AskingSet`; the `Port`: a board of `Snapshot`s posted after the senses, a channel of `Order`s drained once a tick, far ends `Board` and `Orders` | those, plus `InView`, `BrainstemPlugin` |
+| `murabito_reflexes` | `crates/ai/reflexes` | the catalogue `Reflex` (so far `StartleFaceApparition { by: Kind }`), `Wired` (a reflex at a priority), `Reflexes` (a body's repertoire, tunable), `LastLook`; one system in the `Reflexes` slot that preempts the brainstem | `Reflex`, `Wired`, `Reflexes`, `LastLook`, `ReflexesPlugin` |
+| `murabito_bridge` | `crates/ai/bridge` | the port's far ends on a loopback TCP socket, port 15703, length-framed protobuf per `proto/murabito.proto`, compiled at build time by `protox`; `wire.rs` converts at the edge | `BridgePlugin`, `Bridge`, `PORT`, `proto` |
+| `murabito_identity` | `crates/all_things/identity` | `ThingId`, a serial number for life, never reused, `restored` from a number off a wire or a file; `NextThingId`, the counter it comes from, the one thing here a save keeps; `Kind`, a thing's node in the tree as its file's module path | `ThingId`, `NextThingId`, `Kind`, `IdentityPlugin` |
+| `murabito_kinds` | `crates/all_things/kinds` | the tree of kinds: every tier and kind a unit component whose `#[require]` is its parent and members, each labelling itself `Kind::at(module_path!())`; one file per node in folders that mirror the tree, and the nested roster (`roster.rs`) naming every node once; `Ontology`, the tree as the world has it, built from the roster and checked against the `require` chains; `Model`; three observers: stamp the id, check a tangible thing was given its place and facing, load the model | every kind, `Model`, `Ontology`, `KindNode`, `KindsPlugin`; `examples/tree.rs` |
 | `murabito_camera` | `crates/camera` | the overhead rig: focus, direction, zoom; eased pan and zoom, taking input only in `AppState::Playing`; settings | `CameraPlugin`, `CameraSettings` |
 | `murabito_keybinds` | `crates/keybinds` | `Binds`, up to three keys or mouse buttons for one action; `Inputs`, the system parameter; a `Bind` is one word in a file (`KeyW`, `Mouse7`) | `Bind`, `Binds`, `Held`, `Inputs`, `MAX_BINDS`, `UnknownBind` |
 | `murabito_user_data` | `crates/user_data` | the player's directory, `~/.config/murabito`; the only place that decides where it is | `UserData`, `UserDataPlugin` |
@@ -50,13 +60,13 @@ crate, and reads the same way.
 | `murabito_menu` | `crates/ui/menu` | Settings / Resume / Quit, built on entering `Overlay::Menu` and torn down on leaving it however it is left | `MenuPlugin` |
 | `murabito_settings_page` | `crates/ui/settings_page` | one row per setting and Back: the language picker (each language named in its own script, the one in force marked) and the pan-speed slider; edits go straight into `Language` and `CameraSettings`, and the file follows | `SettingsPagePlugin` |
 | `murabito_i18n` | `crates/i18n` | `Language` (a setting, persisted as `language: en`), `Localized` (the key a text entity carries), the compiled-in catalogues `assets/locales/{en,ja}.yaml`, live re-localising | `Language`, `Localized`, `I18nPlugin` |
-| `murabito_hexcoords` | `crates/hexcoords` | `VoxelCoord` (cube in, axial stored, layer), `VoxelspacePos`, `Direction` (twelve, by compass point) with `neighbour`, `rotated`, `notches_to`, `heading`; `Offset` (one voxel relative to another, `b - a`), `distance` in steps, `ring`, `rings_covering`, `corners` | those, plus the errors `NotOnHexPlane`, `NotNearHexPlane` and `ON_PLANE_TOLERANCE` |
+| `murabito_hexcoords` | `crates/hexcoords` | `VoxelCoord` (cube in, axial stored, layer), `VoxelspacePos`, `Direction` (twelve, by compass point) with `neighbour`, `rotated`, `notches_to`, `heading`; `Offset` (one voxel relative to another, `b - a`) with `steps` and `bearing`, the nearest direction it points; `distance` in steps, `ring`, `rings_covering`, `corners` | those, plus the errors `NotOnHexPlane`, `NotNearHexPlane` and `ON_PLANE_TOLERANCE` |
 | `murabito_placement` | `crates/placement` | `VoxelPosition` and `Facing`, the plain components any thing in the world carries, and `place`, the one system that writes a `Transform` from them | those, plus `PlacementPlugin` |
-| `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
+| `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity, `abandon`ed when a body is cut short; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
 | `murabito_perception` | `crates/perception/perception` | `Occupancy`, which things stand in which voxel, rebuilt each tick; `PerceptionSet::{Gather, Sense}` in `FixedUpdate` after `MechanismSet` | `Occupancy`, `PerceptionSet`, `PerceptionPlugin` |
 | `murabito_vision` | `crates/perception/senses/vision` | `Vision` (a cone on `Facing`, three bands, `Vision::BLIND`), a member of `Sentient`; the cast, private; `Seen`, the tick's `Sighting`s (entity, id, offset, acuity) | `Vision`, `Band`, `Acuity`, `Seen`, `Sighting`, `VisionPlugin` |
 | `murabito_movement` | `crates/action/mechanisms/movement` | `Locomotion`; the `Step` and `Turn` intents and their tick systems, which write `murabito_placement`'s position and facing | those, plus `cost`, `can_step`, `MovementPlugin` |
-| `murabito_actions` | `crates/action/actions` | `ActionQueue` of `Action::{Go, Face}`; `issue`, where turn-then-step lives, after `AskingSet` | `Action`, `ActionQueue`, `AskingSet`, `ActionsPlugin` |
+| `murabito_actions` | `crates/action/actions` | `ActionQueue` of `Action::{Go, Face}`, readable with `iter`; `issue`, where turn-then-step lives, after `AskingSet`; `CutShort`, the mark that drops what is in flight so the head of the queue is issued this tick | `Action`, `ActionQueue`, `AskingSet`, `CutShort`, `ActionsPlugin` |
 
 The design briefs in `docs/*_readme.md` mark, section by section, what is implemented and what
 is still design. `TODO.md` is what's queued.
@@ -173,6 +183,32 @@ is still design. `TODO.md` is what's queued.
   for now, with gating on change written down as the next step. `Vision` is a member of
   `Sentient` (yokai see too; a species can require `Vision::BLIND`), and the cone follows
   `Facing`, so turning is what points the eyes.
+- **Every thing names its own node, and the tree is written once as a tree.** Lexa,
+  2026-09-26. `Kind = Kind::at(module_path!())` in every node's `require`, owned by identity so
+  the brainstem can read it without depending on the kinds; the whole path, so "some animal"
+  is a prefix later. No macro for uniformity ("harder to learn"): a nested roster in one file,
+  and tests that hold the `require` chains (via the `Ontology`, built by spawning each node),
+  the labels and the folders to it. `module_path!()` in a node's file reports that file.
+- **The AI's I/O** (`docs/ai_readme.md`), Lexa's calls of 2026-09-26: define the I/O as plain
+  data first, in-process, with the wire a later driver (C over in-process only or wire from
+  day one); a brainstem that runs every tick, in the driver's seat but not in charge, dumb
+  without a mind; a midbrain that is its own thing on its own clock (~125 ms), outside the
+  process, in Python (65 percent sure, so start there), over a plain socket with protobuf
+  (schema as the contract) rather than gRPC (a second async runtime in the game); reflexes
+  as their own crate, a catalogue with per-reflex code, a kind picking its repertoire and
+  dials, priorities per instance ("Bob is a tad jumpy"), answering only a `Short` so a reflex
+  never outlives a round; one vocabulary in two tiers (`Short`, `Sustained`), a reflex and a
+  mind both speaking it; a reflex interrupts and drops, and the midbrain is told it was
+  cancelled (B′ over interrupt-and-resume); a new intent cuts short what is in flight ("a
+  reflex that waits half a second is no reflex; the smarter parts must not interrupt
+  themselves"); step at a time, no plan, for `GoTo`; a snapshot of flat facts for a utility
+  scorer, built at publish after `Sense`, pulled by the mind; `previous` says what was done
+  as well as how it ended, so it isn't read as the current intent's; a sighting names the
+  seen thing's kind by its whole path (a node, not the leaf, when perception gets fuzzy).
+  Found on the way: a wide turn's bar read idle between notches (fixed in movement); a
+  step choice by distance alone zig-zags (cost added); the first twitch ran before the first
+  look (skip a just-added `Seen`); the fox startled at the tree its own turning revealed
+  (a kind dial, and no firing on a tick the body turned).
 
 ## Bevy 0.19 things that cost time
 
@@ -225,6 +261,19 @@ is still design. `TODO.md` is what's queued.
 - `arc_3d(angle, radius, isometry, colour)` sweeps from the isometry's +X about its +Y, the same
   sense as `Direction`'s index, so a cone's arc is `from_rotation_y(bearing − half_arc)` and a
   sweep of the cone's width.
+- `module_path!()` inside a `#[require(T = expr)]` expression reports the module of the file
+  the attribute is written in, so every node can label itself with one identical line.
+- A `require`'s constructor need not be `const`: `Reflexes::new([…])` builds a `Vec` at spawn.
+- `Ref<T>` in a query gives `is_added()`, which is how a system tells "this component was just
+  spawned" from "it was written this tick"; `Changed<T>` alone can't.
+- Commands to insert a marker from a system in `AskingSet` are applied before a system ordered
+  `.after(AskingSet)` runs, so `CutShort` set by drive is acted on by actions on the same tick.
+- `protox::compile(files, includes)` + `prost_build::Config::new().compile_fds(fds)` in a
+  `build.rs` compiles a `.proto` with no `protoc` installed; the module lands in `OUT_DIR` and
+  `include!` brings it in. `prost` names a `oneof` field's enum `module::Kind`, and a proto
+  enum's variants in `CamelCase` (`Direction::Ene`).
+- A test that drives a real `TcpListener` should bind port 0 and read the address back; the
+  leaked accept thread is harmless in a test process.
 
 ## How the work is done
 
@@ -238,19 +287,20 @@ is still design. `TODO.md` is what's queued.
 - A scripted edit that asserts on file text must gate everything after it on its exit code
   (`python … && cargo test && git commit`), never `;`: `cargo fmt` reformats what a script
   expects to find, and one such miss committed a scratch test before the mistake was seen.
-- The next work, each its own design talk: a web page on the debug server, Lexa's stated
-  want; hearing (a push from a
-  source, a bearing and an intensity, attenuated along the shortest unobstructed path over
-  `Occupancy`); facets, which unlock the senses' three debts; a tick-by-tick view; a debug
-  module to take the progress bar, cones and sightlines off the scene. Still queued from
-  before: the keyboard gate and typed values, the rebind screen. All in `TODO.md`.
+- The next work, each its own design talk: the midbrain's first behaviour, a client on its
+  own clock that scores and orders (`docs/ai_readme.md`, design); a believed world; then a web
+  page on the debug server, Lexa's stated want; hearing (a push from a source, a bearing and
+  an intensity, attenuated along the shortest unobstructed path over `Occupancy`); facets,
+  which unlock the senses' three debts; a tick-by-tick view; a debug module to take the
+  progress bar, cones and sightlines off the scene. Still queued from before: the keyboard
+  gate and typed values, the rebind screen. All in `TODO.md`.
 
 ## Where things are
 
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/cleanup-refactor`, on `debug-feature`; holds the warm `target/` (~170 GB before the debug build, which adds a second engine build beside it) and is what the desktop shortcut runs |
-| `main` at handoff | `42c4ea1`, the merge of PR #42 (identity) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`) |
+| This session's worktree | `.claude/worktrees/ai-io`, on `ai-io`; its `target/` is a symlink to `cleanup-refactor`'s warm one, so the two share an engine build. `cleanup-refactor` (on `debug-feature`, merged) is what the desktop shortcut runs |
+| `main` at handoff | `e85e71b`, the merge of PR #43 (the debug feature) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`), #43 (the debug feature) |
 | Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |

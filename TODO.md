@@ -32,6 +32,16 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   left button. It goes when the midbrain drives the hare, or when a selection-and-command
   module lands, whichever comes first. A rest is still not an action (Lexa, 2026-09-22): an
   idle body is an empty queue by the mind's choice, so there is no `Action::Wait`.
+- **The midbrain's first behaviour.** The wire, the board and a hand-given order exist
+  (`ai/midbrain/`, `docs/ai_readme.md`); what doesn't is a mind: a client on its own 125 ms
+  clock that reads every snapshot, scores, and sends each body an intent, in the utility-AI
+  shape Lexa named. First target: send the fox somewhere and face it at the hare. Its own
+  design talk. With it, or after: `Walk`, `Follow`, `Flee` as `Sustained` variants; keys in
+  the board viewer if `uv run order` gets tiresome; a shared Python package for the wire once
+  a second consumer (the cortex) arrives.
+- **Running `Sense` every n ticks.** Lexa, 2026-09-26: evaluate casting every second tick
+  or so for cost, which still keeps within what animal eyes do; the recast-on-change item
+  under loose ends is the other lever.
 - **Picking a plant's version, colour and season.** A plant kind names its first version in
   summer; a spawner gives its own `Model` to say otherwise. Nothing yet picks at random, or
   reads a calendar.
@@ -77,8 +87,6 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 
 ## Loose ends in what's there
 
-- `Action::Face` is in the enum and tested, but nothing uses it since the spin placeholder
-  went. The first thing that wants to look somewhere without moving takes it up.
 - `Sentient` carries `Locomotion` (a placeholder pace), `Vision` and `ActionQueue`; the
   animals' paces are guesses at a walk, marked as such in each file, until someone who
   knows says otherwise. The fox's are the ones settled by eye in the first attempt.
@@ -104,6 +112,9 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 
 ## Housekeeping
 
+- The `ai-io` worktree's `target/` is a symlink to the `cleanup-refactor` worktree's, so two
+  sessions share one engine build; `cargo clean` in either wipes both. When that worktree
+  goes, the link goes with it.
 - The desktop shortcut and the warm `target/` (~170 GB) live in the `cleanup-refactor` worktree;
   when the rebuild gets a permanent home, repoint `scripts/run.sh`'s two paths in the `.desktop`
   entries and move `target/`.

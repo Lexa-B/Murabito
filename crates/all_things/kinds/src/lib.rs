@@ -42,6 +42,9 @@
 //! └─ Intangible  事
 //! ```
 //!
+//! Drawn by hand here; `scripts/tree.sh` prints the same tree from the running world, and
+//! the tests hold the two to each other through the roster.
+//!
 //! Every kind is re-exported here flat, so a caller writes `murabito_kinds::Beast` and
 //! the depth of the tree is the crate's business. English keys, the kanji beside them in
 //! each file; display names are the i18n catalogues' job.
