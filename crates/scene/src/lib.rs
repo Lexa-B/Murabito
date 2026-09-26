@@ -7,14 +7,17 @@
 //!
 //! This crate spawns no camera: seeing the world is another module's job.
 
+use bevy::math::Ray3d;
+use bevy::math::primitives::InfinitePlane3d;
 use bevy::prelude::*;
-use murabito_actions::{Action, ActionQueue, AskingSet};
+use bevy::window::PrimaryWindow;
+use murabito_app_state::AppState;
+use murabito_brainstem::{Brainstem, Intent, Sustained};
 use murabito_hexcoords::{Direction, VoxelCoord};
 use murabito_kinds::{Fox, Hare, Sugi};
 use murabito_placement::{Facing, VoxelPosition};
 use murabito_progress::Progress;
 use murabito_vision::{Acuity, Seen, Vision};
-use std::time::Duration;
 
 /// One 町 (cho): 360 shaku, about 109 m.
 const GROUND_SIDE: f32 = 360.0;
@@ -38,17 +41,10 @@ const SKY_GLOW: f32 = 200.0;
 const FOX_STARTS_AT: (i32, i32, i32) = (-8, 0, 8);
 const FOX_FACES: Direction = Direction::ESE;
 
-/// Where the hare starts: six cells east of the origin, on the fox's line and clear of
-/// both walks, facing east.
+/// Where the hare starts: six cells east of the origin, on the fox's line, facing east.
+/// It stands there until clicked somewhere.
 const HARE_STARTS_AT: (i32, i32, i32) = (6, 0, -6);
 const HARE_FACES: Direction = Direction::E;
-
-/// The hare walks a triangle: three edge steps a side, then a rest, then the next side,
-/// which is a third of a turn on. The three directions sum to nothing, so the triangle
-/// closes on the voxel it started from.
-const HARE_TRIANGLE: [Direction; 3] = [Direction::E, Direction::NNW, Direction::SSW];
-const HARE_SIDE_STEPS: usize = 3;
-const HARE_REST: Duration = Duration::from_secs(1);
 
 /// Where the tree stands: two corner steps north of the line from the fox's start to
 /// the hare's, clear of both walks, and in the fox's cone from where it starts.
@@ -100,8 +96,15 @@ impl Plugin for ScenePlugin {
                     thicken_bars,
                 ),
             )
-            .add_systems(FixedUpdate, walk_the_hare.in_set(AskingSet))
-            .add_systems(Update, (draw_progress_bars, draw_cones, draw_sightings));
+            .add_systems(
+                Update,
+                (
+                    command_the_hare.run_if(in_state(AppState::Playing)),
+                    draw_progress_bars,
+                    draw_cones,
+                    draw_sightings,
+                ),
+            );
     }
 }
 
@@ -155,23 +158,6 @@ fn spawn_fox(mut commands: Commands) {
     ));
 }
 
-/// Which corner of its triangle the hare heads for next, and how long it has rested at
-/// the last one. The scene's own bookkeeping for its placeholder walk.
-#[derive(Component)]
-struct TriangleWalk {
-    corner: usize,
-    rest: Timer,
-}
-
-impl Default for TriangleWalk {
-    fn default() -> Self {
-        Self {
-            corner: 0,
-            rest: Timer::new(HARE_REST, TimerMode::Once),
-        }
-    }
-}
-
 fn spawn_hare(mut commands: Commands) {
     let (q, r, s) = HARE_STARTS_AT;
     let start = VoxelCoord::new(q, r, s, 0).expect("the hare's start is on the plane");
@@ -180,8 +166,48 @@ fn spawn_hare(mut commands: Commands) {
         VoxelPosition(start),
         Facing(HARE_FACES),
         SightColour(HARE_SIGHT),
-        TriangleWalk::default(),
     ));
+}
+
+/// BANDAID, to go with the midbrain or a selection module, whichever comes first
+/// (`TODO.md`): a left-click on the ground sends the hare walking to the cell under the
+/// cursor, so the fox's reflex can be tried by hand. It reads the mouse directly rather
+/// than through `murabito_keybinds`, and it names the hare and the left button; a real
+/// command module would do neither. Only while the world runs, so a click on an overlay
+/// commands nothing.
+fn command_the_hare(
+    clicks: Res<ButtonInput<MouseButton>>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
+    mut hares: Query<&mut Brainstem, With<Hare>>,
+) {
+    if !clicks.just_pressed(MouseButton::Left) {
+        return;
+    }
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let Some(cursor) = window.cursor_position() else {
+        return;
+    };
+    let Ok((camera, camera_transform)) = cameras.single() else {
+        return;
+    };
+    let Ok(ray) = camera.viewport_to_world(camera_transform, cursor) else {
+        return;
+    };
+    let Some(cell) = ground_voxel(ray) else {
+        return;
+    };
+    for mut hare in &mut hares {
+        hare.order(Intent::Sustained(Sustained::GoTo(cell)));
+    }
+}
+
+/// The voxel where a ray meets the ground plane, if it does.
+fn ground_voxel(ray: Ray3d) -> Option<VoxelCoord> {
+    let distance = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::new(Vec3::Y))?;
+    Some(VoxelCoord::from_world(ray.get_point(distance)))
 }
 
 /// Something in the way. A tree is a thing with a place and nothing else: it neither
@@ -190,29 +216,6 @@ fn spawn_tree(mut commands: Commands) {
     let (q, r, s) = TREE_AT;
     let at = VoxelCoord::new(q, r, s, 0).expect("the tree's place is on the plane");
     commands.spawn((Sugi, VoxelPosition(at), Facing(TREE_FACES)));
-}
-
-/// The hare walks a side, rests once the last step has landed, and is then asked to
-/// walk the next side; the third of a turn between sides is `Go`'s own turn-then-step.
-/// A rest is not an action: it is an AI choosing not to ask for anything, and this timer
-/// stands in for that AI until there is one.
-fn walk_the_hare(
-    time: Res<Time>,
-    mut hares: Query<(&mut ActionQueue, &Progress, &mut TriangleWalk), With<Hare>>,
-) {
-    for (mut queue, progress, mut walk) in &mut hares {
-        if !queue.is_empty() || progress.in_flight() {
-            continue;
-        }
-        walk.rest.tick(time.delta());
-        if !walk.rest.is_finished() {
-            continue;
-        }
-        let side = HARE_TRIANGLE[walk.corner];
-        (0..HARE_SIDE_STEPS).for_each(|_| queue.push(Action::Go(side)));
-        walk.corner = (walk.corner + 1) % HARE_TRIANGLE.len();
-        walk.rest.reset();
-    }
 }
 
 /// Until a debug module owns it: the bare cone of every sighted body, drawn on the
@@ -297,6 +300,34 @@ fn draw_progress_bars(mut gizmos: Gizmos, bodies: Query<(&Transform, &Progress)>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::input::InputPlugin;
+    use bevy::math::Dir3;
+
+    #[test]
+    fn a_ray_straight_down_at_a_cells_centre_names_that_cell() {
+        let cell = VoxelCoord::new(3, -2, -1, 0).unwrap();
+        let from_above = Ray3d::new(cell.to_world() + Vec3::Y * 10.0, Dir3::NEG_Y);
+        assert_eq!(ground_voxel(from_above), Some(cell));
+    }
+
+    #[test]
+    fn a_ray_that_never_meets_the_ground_names_nothing() {
+        let skyward = Ray3d::new(Vec3::Y * 10.0, Dir3::Y);
+        assert_eq!(ground_voxel(skyward), None);
+    }
+
+    #[test]
+    fn the_tree_stands_where_the_scene_says() {
+        let mut app = app_after_startup();
+        let world = app.world_mut();
+        let tree = world
+            .query_filtered::<&VoxelPosition, With<Sugi>>()
+            .single(world)
+            .expect("exactly one tree")
+            .0;
+        let (q, r, s) = TREE_AT;
+        assert_eq!(tree, VoxelCoord::new(q, r, s, 0).expect("on the plane"));
+    }
 
     /// A headless app, run for one frame: no window, no GPU. `MinimalPlugins` brings the
     /// schedules; the asset stores are what the spawn systems ask for, and in the real
@@ -307,7 +338,7 @@ mod tests {
         use bevy::gizmos::AppGizmoBuilder;
 
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+        app.add_plugins((MinimalPlugins, InputPlugin, AssetPlugin::default()))
             .init_asset::<Mesh>()
             .init_asset::<StandardMaterial>()
             .init_asset::<WorldAsset>()
@@ -345,31 +376,6 @@ mod tests {
         assert_ne!(transform.translation, Vec3::ZERO);
     }
 
-    /// The tree stands where the scene says, and the hare's triangle never enters its
-    /// cell nor the ring of cells around it, which is about where the canopy ends.
-    #[test]
-    fn a_tree_stands_north_of_the_hare_clear_of_its_triangle() {
-        let mut app = app_after_startup();
-        let world = app.world_mut();
-
-        let tree = world
-            .query_filtered::<&VoxelPosition, With<Sugi>>()
-            .single(world)
-            .expect("exactly one tree")
-            .0;
-
-        let (q, r, s) = TREE_AT;
-        assert_eq!(tree, VoxelCoord::new(q, r, s, 0).expect("on the plane"));
-        let (hq, hr, hs) = HARE_STARTS_AT;
-        let mut here = VoxelCoord::new(hq, hr, hs, 0).expect("on the plane");
-        for side in HARE_TRIANGLE {
-            for _ in 0..HARE_SIDE_STEPS {
-                here = here.neighbour(side);
-                assert!(here.distance(tree) > 1, "the triangle passes {here:?}");
-            }
-        }
-    }
-
     /// The starting tableau, as a claim rather than a screenshot: the fox faces east
     /// across the ground and sees the tree, near, and the hare beyond it, less well; the
     /// hare faces away and sees neither.
@@ -382,7 +388,7 @@ mod tests {
         use murabito_vision::VisionPlugin;
 
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+        app.add_plugins((MinimalPlugins, InputPlugin, AssetPlugin::default()))
             .init_asset::<Mesh>()
             .init_asset::<StandardMaterial>()
             .init_asset::<WorldAsset>()
@@ -492,64 +498,5 @@ mod tests {
             .expect("exactly one sun");
 
         assert!(sun.forward().y < 0.0, "the sun points {:?}", sun.forward());
-    }
-
-    #[test]
-    fn the_hare_walks_a_triangle_resting_at_each_corner_and_comes_home() {
-        use bevy::gizmos::AppGizmoBuilder;
-        use bevy::time::TimeUpdateStrategy;
-        use murabito_actions::ActionsPlugin;
-        use murabito_movement::MovementPlugin;
-        use murabito_progress::ProgressPlugin;
-
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
-            .init_asset::<Mesh>()
-            .init_asset::<StandardMaterial>()
-            .init_asset::<WorldAsset>()
-            .init_asset::<bevy::gizmos::GizmoAsset>()
-            .init_gizmo_group::<DefaultGizmoConfigGroup>()
-            .add_plugins((ProgressPlugin, MovementPlugin, ActionsPlugin, ScenePlugin))
-            .insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
-        app.update();
-        let hare = |app: &mut App| {
-            let world = app.world_mut();
-            let (position, facing) = world
-                .query_filtered::<(&VoxelPosition, &Facing), With<Hare>>()
-                .single(world)
-                .expect("exactly one hare");
-            (position.0, facing.0)
-        };
-        let (home, _) = hare(&mut app);
-        let mut visited = std::collections::HashSet::from([home]);
-        let mut ticks_at_rest_at_home = 0;
-        let mut left_home = false;
-        let mut triangle = std::collections::HashSet::new();
-        let mut corner = home;
-        for side in HARE_TRIANGLE {
-            for _ in 0..HARE_SIDE_STEPS {
-                corner = corner.neighbour(side);
-                triangle.insert(corner);
-            }
-        }
-
-        // A side is 3 shaku at 5 shaku/s, 38.4 ticks; a corner is a third of a turn at
-        // 240°/s, 32 ticks; a rest is 64 ticks. A lap is well under 500 ticks, so by 600
-        // the hare has been home, rested, and set off again.
-        for _ in 1..=600 {
-            app.update();
-            let (here, _) = hare(&mut app);
-            visited.insert(here);
-            left_home |= here != home;
-            if left_home && here == home {
-                ticks_at_rest_at_home += 1;
-            }
-        }
-
-        assert_eq!(visited, triangle, "three sides of three, and nowhere else");
-        assert!(
-            ticks_at_rest_at_home >= 64,
-            "it came home and rested there a whole second, not {ticks_at_rest_at_home} ticks"
-        );
     }
 }

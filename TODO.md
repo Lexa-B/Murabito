@@ -12,11 +12,13 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   not designed yet; they'd be members on tiers, or their own components. Sight is back and
   runs without them (everything is opaque); what they unlock is listed under the senses' facet
   debt below and in `docs/perception_readme.md`.
-- **The scene's walks are placeholder AI.** The fox's loop and the hare's triangle, with the
-  hare's rest between sides, are what an AI layer will do: decide, and push onto the queue, or
-  not. A rest is not an action (Lexa, 2026-09-22): an idle body is an empty queue by the AI's
-  choice, so there is no `Action::Wait`; the walks and the `TriangleWalk` timer go when the AI
-  layer arrives.
+- **The scene's click-to-command is a bandaid.** The fox's loop and the hare's triangle are
+  gone (2026-09-26): the brainstem drives every queue now. In their place, a left-click on
+  the ground sends the hare walking there, so the fox's reflex can be tried by hand. It reads
+  the mouse directly rather than through `murabito_keybinds`, and names the hare and the
+  left button. It goes when the midbrain drives the hare, or when a selection-and-command
+  module lands, whichever comes first. A rest is still not an action (Lexa, 2026-09-22): an
+  idle body is an empty queue by the mind's choice, so there is no `Action::Wait`.
 - **Picking a plant's version, colour and season.** A plant kind names its first version in
   summer; a spawner gives its own `Model` to say otherwise. Nothing yet picks at random, or
   reads a calendar.

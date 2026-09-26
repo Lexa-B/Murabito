@@ -7,10 +7,10 @@ publish.workspace = true
 [dependencies]
 bevy.workspace = true
 murabito_hexcoords.workspace = true
-murabito_movement.workspace = true
 murabito_placement.workspace = true
 murabito_progress.workspace = true
-murabito_actions.workspace = true
+murabito_app_state.workspace = true
+murabito_brainstem.workspace = true
 murabito_kinds.workspace = true
 murabito_vision.workspace = true
 
