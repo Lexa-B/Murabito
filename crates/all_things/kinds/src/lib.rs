@@ -77,16 +77,20 @@
 
 pub mod all_things;
 mod model;
+mod ontology;
 mod placed;
+mod roster;
 mod thing_id;
 
 pub use all_things::*;
 pub use model::Model;
+pub use ontology::{KindNode, Ontology};
 
 /// Stamps an id on every thing, checks every tangible thing was given a place and a
-/// facing, and loads the model of anything spawned with one. The kinds themselves are
-/// types and need no plugin; these three observers are all the crate runs. The ids come from `murabito_identity`'s counter, so that plugin is
-/// added here if the app hasn't already.
+/// facing, loads the model of anything spawned with one, and puts the [`Ontology`], the
+/// tree as the types make it, in the world. The kinds themselves are types and need no
+/// plugin; three observers and one resource are all the crate runs. The ids come from
+/// `murabito_identity`'s counter, so that plugin is added here if the app hasn't already.
 pub struct KindsPlugin;
 
 impl bevy::app::Plugin for KindsPlugin {
@@ -97,73 +101,22 @@ impl bevy::app::Plugin for KindsPlugin {
         app.add_observer(thing_id::stamp_id)
             .add_observer(placed::check_placed)
             .add_observer(model::load_model);
+        let roster = roster::roster();
+        app.insert_resource(Ontology::build(&roster));
         #[cfg(feature = "debug")]
-        register_kinds(app);
+        register_kinds(app, &roster);
     }
 }
 
 /// Every node of the tree and `Model`, on the debug wire, so that listing a thing's
-/// components says what it is: its whole chain, by each node's full module path, which
-/// is the tree itself. One line per node; a node missing here is missing on the wire,
-/// and a test counts them.
+/// components says what it is: its whole chain, by each node's full module path. The
+/// nodes come from the roster, so a node on the tree is a node on the wire.
 #[cfg(feature = "debug")]
-fn register_kinds(app: &mut bevy::app::App) {
-    app.register_type::<Akuma>()
-        .register_type::<AllThings>()
-        .register_type::<Animal>()
-        .register_type::<Aoki>()
-        .register_type::<Azalea>()
-        .register_type::<Bamboo>()
-        .register_type::<Bear>()
-        .register_type::<Beast>()
-        .register_type::<Bird>()
-        .register_type::<Boar>()
-        .register_type::<Cat>()
-        .register_type::<Chicken>()
-        .register_type::<Crane>()
-        .register_type::<Critter>()
-        .register_type::<Deer>()
-        .register_type::<Dog>()
-        .register_type::<Fish>()
-        .register_type::<Fox>()
-        .register_type::<Furniture>()
-        .register_type::<Hare>()
-        .register_type::<Heron>()
-        .register_type::<Hinoki>()
-        .register_type::<Horse>()
-        .register_type::<Human>()
-        .register_type::<Intangible>()
-        .register_type::<Kami>()
-        .register_type::<Kusa>()
-        .register_type::<Kuzu>()
-        .register_type::<Living>()
-        .register_type::<Macaque>()
-        .register_type::<Madake>()
-        .register_type::<Maple>()
-        .register_type::<Model>()
-        .register_type::<NonSentient>()
-        .register_type::<Object>()
-        .register_type::<Ox>()
-        .register_type::<Pheasant>()
-        .register_type::<Plant>()
-        .register_type::<Rat>()
-        .register_type::<Redpine>()
-        .register_type::<Rei>()
-        .register_type::<Rock>()
-        .register_type::<Sakura>()
-        .register_type::<Sasa>()
-        .register_type::<Sentient>()
-        .register_type::<Shida>()
-        .register_type::<Shrub>()
-        .register_type::<Spiritual>()
-        .register_type::<Sugi>()
-        .register_type::<Tangible>()
-        .register_type::<Tanuki>()
-        .register_type::<Tool>()
-        .register_type::<Tree>()
-        .register_type::<Undergrowth>()
-        .register_type::<Wolf>()
-        .register_type::<Yokai>();
+fn register_kinds(app: &mut bevy::app::App, roster: &roster::Entry) {
+    for node in roster.walk() {
+        (node.entry.register_type)(app);
+    }
+    app.register_type::<Model>();
 }
 
 #[cfg(test)]
@@ -520,50 +473,12 @@ mod tests {
         assert!(!has::<VoxelPosition>(app.world(), happening));
     }
 
-    /// Every kind there is, spawned once. A loop in the requirements panics on the first
-    /// spawn of a kind in it, naming the loop; spawning the leaves registers every tier
-    /// above them, and the leafless tiers are spawned as themselves.
+    /// Every node there is, spawned once, from the roster. A loop in the requirements
+    /// panics on the first spawn of a node in it, naming the loop.
     fn spawn_every_kind(world: &mut World) {
-        world.spawn(Fox);
-        world.spawn(Wolf);
-        world.spawn(Hare);
-        world.spawn(Boar);
-        world.spawn(Deer);
-        world.spawn(Bear);
-        world.spawn(Macaque);
-        world.spawn(Cat);
-        world.spawn(Rat);
-        world.spawn(Dog);
-        world.spawn(Tanuki);
-        world.spawn(Horse);
-        world.spawn(Ox);
-        world.spawn(Crane);
-        world.spawn(Heron);
-        world.spawn(Chicken);
-        world.spawn(Pheasant);
-        world.spawn(Critter);
-        world.spawn(Fish);
-        world.spawn(Human);
-        world.spawn(Kami);
-        world.spawn(Yokai);
-        world.spawn(Akuma);
-        world.spawn(Rei);
-        world.spawn(Maple);
-        world.spawn(Sakura);
-        world.spawn(Hinoki);
-        world.spawn(Redpine);
-        world.spawn(Sugi);
-        world.spawn(Madake);
-        world.spawn(Sasa);
-        world.spawn(Azalea);
-        world.spawn(Aoki);
-        world.spawn(Kusa);
-        world.spawn(Kuzu);
-        world.spawn(Shida);
-        world.spawn(Tool);
-        world.spawn(Furniture);
-        world.spawn(Rock);
-        world.spawn(Intangible);
+        for node in roster::roster().walk() {
+            (node.entry.spawn)(world);
+        }
     }
 
     #[test]
@@ -576,7 +491,7 @@ mod tests {
             .query_filtered::<(), With<AllThings>>()
             .iter(&world)
             .count();
-        assert_eq!(things, 40, "one entity per spawn, each of them a thing");
+        assert_eq!(things, 55, "one entity per node, each of them a thing");
     }
 
     #[test]
@@ -597,112 +512,190 @@ mod tests {
             .iter(&world)
             .count();
 
-        assert_eq!((beasts, birds), (13, 4));
-        assert_eq!(animals, 13 + 4 + 2, "plus a bare critter and a bare fish");
+        assert_eq!(
+            (beasts, birds),
+            (13 + 1, 4 + 1),
+            "the species, and the tier itself"
+        );
+        assert_eq!(
+            animals,
+            14 + 5 + 3,
+            "plus a bare animal, a bare critter and a bare fish"
+        );
     }
 
-    /// The label a spawned node carries.
-    fn label<Node: Component + Default>(world: &mut World) -> Kind {
-        let node = world.spawn(Node::default()).id();
-        *world.get::<Kind>(node).unwrap_or_else(|| {
-            panic!(
-                "{} has no Kind: is the label line in its require?",
-                type_name::<Node>()
-            )
-        })
+    fn ontology() -> Ontology {
+        Ontology::build(&roster::roster())
+    }
+
+    #[test]
+    fn the_tree_is_fifty_five_nodes_under_one_root_all_things() {
+        let tree = ontology();
+        assert_eq!(tree.len(), 55);
+        let root = tree.root();
+        assert_eq!(root.name(), "all_things");
+        assert_eq!(
+            tree.get(root).unwrap().type_name(),
+            type_name::<AllThings>()
+        );
+        assert_eq!(tree.nodes().filter(|node| node.is_root()).count(), 1);
     }
 
     /// Where a node's file is, as the type's path minus the type itself:
     /// `…::beast::fox::Fox` is defined in `…::beast::fox`.
-    fn file_of<Node>() -> &'static str {
-        type_name::<Node>()
-            .rsplit_once("::")
-            .expect("a type has a module")
-            .0
+    fn file_of(type_name: &str) -> &str {
+        type_name.rsplit_once("::").expect("a type has a module").0
     }
 
-    /// Every node, root excepted, is labelled with its own file and lies under its
-    /// parent's label: a missing line, a file in the wrong folder or a `require` naming
-    /// the wrong parent all fail here, naming the node.
+    /// Every node is labelled with its own file, and sits in its parent's folder: the
+    /// label is the parent's label plus the node's name. The parent comes from the
+    /// `require` chain as Bevy resolved it, the label from the file, so a missing line,
+    /// a file in the wrong folder or a `require` naming the wrong parent all fail here,
+    /// naming the node.
     #[test]
     fn every_node_names_its_own_place_in_the_tree_under_its_parent() {
-        fn check<Child: Component + Default, Parent: Component + Default>(world: &mut World) {
-            let child = label::<Child>(world);
-            let parent = label::<Parent>(world);
-            assert_eq!(child.path(), file_of::<Child>(), "{}", type_name::<Child>());
-            assert!(child.is_under(parent), "{child} should lie under {parent}");
+        let tree = ontology();
+        for node in tree.nodes() {
+            let kind = node.kind();
+            assert_eq!(
+                kind.path(),
+                file_of(node.type_name()),
+                "{}",
+                node.type_name()
+            );
+            match node.parent() {
+                None => assert_eq!(kind, tree.root()),
+                Some(parent) => assert_eq!(
+                    kind.path(),
+                    format!("{}::{}", parent.path(), kind.name()),
+                    "{kind} should sit in its parent's folder, {parent}"
+                ),
+            }
         }
-        let mut world = World::new();
-        assert_eq!(
-            label::<AllThings>(&mut world).path(),
-            file_of::<AllThings>()
+    }
+
+    /// The roster is the files: every `.rs` under `src/` that defines a node is on it,
+    /// under the node whose folder it sits in, and nothing else is. Rust can't
+    /// enumerate types, so this is what keeps the one written tree honest.
+    #[test]
+    fn the_roster_is_the_tree_the_files_make() {
+        use std::collections::BTreeMap;
+        use std::path::Path;
+
+        /// Module path to node type name, for every file under `src/` with a node in it.
+        fn node_files(dir: &Path, module: &str, found: &mut BTreeMap<String, String>) {
+            for entry in std::fs::read_dir(dir).expect("src/ is readable") {
+                let path = entry.expect("an entry").path();
+                let stem = path.file_stem().unwrap().to_str().unwrap().to_owned();
+                let module = format!("{module}::{stem}");
+                if path.is_dir() {
+                    node_files(&path, &module, found);
+                } else if path.extension().is_some_and(|ext| ext == "rs") {
+                    let text = std::fs::read_to_string(&path).expect("a source file");
+                    let node = text
+                        .lines()
+                        .find_map(|line| line.strip_prefix("pub struct ")?.strip_suffix(';'));
+                    if let Some(node) = node {
+                        found.insert(module.clone(), format!("{module}::{node}"));
+                    }
+                }
+            }
+        }
+
+        // The tree is `all_things.rs` and the folder beside it; the crate's other files
+        // hold the plugin and the observers.
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut by_module = BTreeMap::new();
+        node_files(
+            &src.join("all_things"),
+            "murabito_kinds::all_things",
+            &mut by_module,
         );
-        check::<Akuma, Spiritual>(&mut world);
-        check::<Animal, Living>(&mut world);
-        check::<Aoki, Shrub>(&mut world);
-        check::<Azalea, Shrub>(&mut world);
-        check::<Bamboo, Plant>(&mut world);
-        check::<Bear, Beast>(&mut world);
-        check::<Beast, Animal>(&mut world);
-        check::<Bird, Animal>(&mut world);
-        check::<Boar, Beast>(&mut world);
-        check::<Cat, Beast>(&mut world);
-        check::<Chicken, Bird>(&mut world);
-        check::<Crane, Bird>(&mut world);
-        check::<Critter, Animal>(&mut world);
-        check::<Deer, Beast>(&mut world);
-        check::<Dog, Beast>(&mut world);
-        check::<Fish, Animal>(&mut world);
-        check::<Fox, Beast>(&mut world);
-        check::<Furniture, Object>(&mut world);
-        check::<Hare, Beast>(&mut world);
-        check::<Heron, Bird>(&mut world);
-        check::<Hinoki, Tree>(&mut world);
-        check::<Horse, Beast>(&mut world);
-        check::<Human, Living>(&mut world);
-        check::<Intangible, AllThings>(&mut world);
-        check::<Kami, Spiritual>(&mut world);
-        check::<Kusa, Undergrowth>(&mut world);
-        check::<Kuzu, Undergrowth>(&mut world);
-        check::<Living, Sentient>(&mut world);
-        check::<Macaque, Beast>(&mut world);
-        check::<Madake, Bamboo>(&mut world);
-        check::<Maple, Tree>(&mut world);
-        check::<NonSentient, Tangible>(&mut world);
-        check::<Object, NonSentient>(&mut world);
-        check::<Ox, Beast>(&mut world);
-        check::<Pheasant, Bird>(&mut world);
-        check::<Plant, NonSentient>(&mut world);
-        check::<Rat, Beast>(&mut world);
-        check::<Redpine, Tree>(&mut world);
-        check::<Rei, Spiritual>(&mut world);
-        check::<Rock, Object>(&mut world);
-        check::<Sakura, Tree>(&mut world);
-        check::<Sasa, Bamboo>(&mut world);
-        check::<Sentient, Tangible>(&mut world);
-        check::<Shida, Undergrowth>(&mut world);
-        check::<Shrub, Plant>(&mut world);
-        check::<Spiritual, Sentient>(&mut world);
-        check::<Sugi, Tree>(&mut world);
-        check::<Tangible, AllThings>(&mut world);
-        check::<Tanuki, Beast>(&mut world);
-        check::<Tool, Object>(&mut world);
-        check::<Tree, Plant>(&mut world);
-        check::<Undergrowth, Plant>(&mut world);
-        check::<Wolf, Beast>(&mut world);
-        check::<Yokai, Spiritual>(&mut world);
+        by_module.insert(
+            "murabito_kinds::all_things".to_owned(),
+            "murabito_kinds::all_things::AllThings".to_owned(),
+        );
+        // A node's parent is the node whose file its folder is named after.
+        let mut in_files: Vec<(String, Option<String>)> = by_module
+            .iter()
+            .map(|(module, node)| {
+                let folder = module.rsplit_once("::").unwrap().0;
+                (node.clone(), by_module.get(folder).cloned())
+            })
+            .collect();
+        in_files.sort();
+
+        let roster = roster::roster();
+        let walked = roster.walk();
+        let mut on_roster: Vec<(String, Option<String>)> = walked
+            .iter()
+            .map(|node| {
+                let parent = node.parent.map(|j| walked[j].entry.type_name.to_owned());
+                (node.entry.type_name.to_owned(), parent)
+            })
+            .collect();
+        on_roster.sort();
+
+        assert_eq!(
+            on_roster, in_files,
+            "left: the roster; right: the files under src/"
+        );
     }
 
     #[test]
-    fn a_things_label_is_its_leaf_not_a_tier_above_it() {
-        let mut world = World::new();
-        let fox = label::<Fox>(&mut world);
-        assert_eq!(fox.name(), "fox");
+    fn the_fox_descends_from_beast_animal_living_sentient_tangible_and_all_things() {
+        let tree = ontology();
+        let fox = tree
+            .nodes()
+            .find(|node| node.type_name() == type_name::<Fox>())
+            .expect("the fox is a node")
+            .kind();
+        let line: Vec<&str> = tree.ancestors(fox).iter().map(|kind| kind.name()).collect();
         assert_eq!(
-            fox.path(),
+            line,
+            [
+                "beast",
+                "animal",
+                "living",
+                "sentient",
+                "tangible",
+                "all_things"
+            ]
+        );
+        let beast = tree.parent(fox).unwrap();
+        assert!(tree.children(beast).any(|kind| kind == fox));
+        assert!(
+            tree.children(fox).next().is_none(),
+            "a species has no children"
+        );
+    }
+
+    #[test]
+    fn the_tree_renders_one_node_a_line_root_first_children_indented_in_name_order() {
+        let drawn = ontology().render();
+        let lines: Vec<&str> = drawn.lines().collect();
+        assert_eq!(lines.len(), 55);
+        assert_eq!(lines[0], "all_things");
+        assert_eq!(lines[1], "├─ intangible");
+        assert_eq!(lines[2], "└─ tangible");
+        assert!(drawn.contains("├─ fox\n"), "{drawn}");
+    }
+
+    #[test]
+    fn a_spawned_thing_carries_its_leafs_label_not_a_tiers() {
+        let mut world = World::new();
+        let fox = world.spawn(Fox).id();
+        let kind = *world.get::<Kind>(fox).expect("labelled");
+        assert_eq!(kind.name(), "fox");
+        assert_eq!(
+            kind.path(),
             "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox"
         );
-        assert!(fox.is_under(label::<Sentient>(&mut world)));
+        let tree = ontology();
+        assert_eq!(
+            tree.get(kind).map(KindNode::type_name),
+            Some(type_name::<Fox>())
+        );
     }
 
     fn how_many<Tier: Component>(world: &mut World) -> usize {
@@ -725,7 +718,11 @@ mod tests {
             .iter(&world)
             .count();
 
-        assert_eq!(tiers, (5, 2, 2, 3));
+        assert_eq!(
+            tiers,
+            (5 + 1, 2 + 1, 2 + 1, 3 + 1),
+            "the species, and each tier itself"
+        );
         assert_eq!(walking_plants, 0);
     }
 
