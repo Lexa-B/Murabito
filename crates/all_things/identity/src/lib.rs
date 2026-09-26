@@ -34,7 +34,8 @@ impl Plugin for IdentityPlugin {
 }
 
 /// A thing's number, for life. There is no unassigned value: an entity has one or it is
-/// not a thing. Made only by [`NextThingId::mint`]. Reads as `#7`.
+/// not a thing. Minted only by [`NextThingId::mint`]; [`ThingId::restored`] names a number
+/// already minted, arriving from a wire or a file. Reads as `#7`.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 pub struct ThingId(u64);
@@ -43,6 +44,12 @@ impl ThingId {
     /// The number itself, for a display or a file.
     pub fn number(self) -> u64 {
         self.0
+    }
+
+    /// A number already minted, coming back from a wire or a file. Mints nothing: a
+    /// number nothing has is a name for nothing, and whoever looks it up finds no thing.
+    pub fn restored(number: u64) -> Self {
+        Self(number)
     }
 }
 
@@ -168,6 +175,15 @@ mod tests {
             .get_with_type_path("murabito_identity::Kind")
             .expect("Kind");
         assert!(kind.data::<ReflectComponent>().is_some());
+    }
+
+    #[test]
+    fn a_restored_number_is_the_same_id_that_was_minted() {
+        let mut counter = NextThingId::default();
+        counter.mint();
+        let minted = counter.mint();
+        assert_eq!(ThingId::restored(minted.number()), minted);
+        assert_eq!(ThingId::restored(2).number(), 2);
     }
 
     #[test]
