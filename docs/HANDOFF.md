@@ -58,7 +58,7 @@ crate, and reads the same way.
 | `murabito_movement` | `crates/action/mechanisms/movement` | `Locomotion`; the `Step` and `Turn` intents and their tick systems, which write `murabito_placement`'s position and facing | those, plus `cost`, `can_step`, `MovementPlugin` |
 | `murabito_actions` | `crates/action/actions` | `ActionQueue` of `Action::{Go, Face}`; `issue`, where turn-then-step lives, after `AskingSet` | `Action`, `ActionQueue`, `AskingSet`, `ActionsPlugin` |
 
-The design briefs in `Docs/*_readme.md` mark, section by section, what is implemented and what
+The design briefs in `docs/*_readme.md` mark, section by section, what is implemented and what
 is still design. `TODO.md` is what's queued.
 
 ## Decisions worth not relitigating

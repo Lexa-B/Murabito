@@ -2,7 +2,7 @@
 //! Nothing here decides *what* to do; that is the actions layer above, which puts a
 //! `Step` or a `Turn` on an entity and this crate carries it out. Where the body is and
 //! which way it faces are `murabito_placement`'s `VoxelPosition` and `Facing`, which
-//! this is the one mechanism that writes to. `Docs/movement_readme.md` is the design
+//! this is the one mechanism that writes to. `docs/movement_readme.md` is the design
 //! this implements.
 //!
 //! Compass: **east is +X, north is −Z, up is +Y.** Facing is one of the twelve compass

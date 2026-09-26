@@ -11,7 +11,7 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   age, trophic role, height, what it does to each sense) are the archive's second axis and are
   not designed yet; they'd be members on tiers, or their own components. Sight is back and
   runs without them (everything is opaque); what they unlock is listed under the senses' facet
-  debt below and in `Docs/perception_readme.md`.
+  debt below and in `docs/perception_readme.md`.
 - **The scene's walks are placeholder AI.** The fox's loop and the hare's triangle, with the
   hare's rest between sides, are what an AI layer will do: decide, and push onto the queue, or
   not. A rest is not an action (Lexa, 2026-09-22): an idle body is an empty queue by the AI's
@@ -20,17 +20,17 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 - **Picking a plant's version, colour and season.** A plant kind names its first version in
   summer; a spawner gives its own `Model` to say otherwise. Nothing yet picks at random, or
   reads a calendar.
-- **Obstruction and stepping up.** The design-only parts of `Docs/movement_readme.md`: a corner
+- **Obstruction and stepping up.** The design-only parts of `docs/movement_readme.md`: a corner
   move only when both flanking faces are open, step-up by size, cost of climbing, and the A\*
   heuristic. `murabito_perception::Occupancy` is already the map of what stands where; the
   corner rule is a read of it.
-- **The senses' facet debt.** `Docs/perception_readme.md`: obscuring and heights (grass costs a
+- **The senses' facet debt.** `docs/perception_readme.md`: obscuring and heights (grass costs a
   band; knee-high grass hides a hare and not a person), and ambiguation (a 妖狐 in human form at
   `Mid` reads as a humanoid; the percept becomes something short of an `Entity`). Both in
   `murabito_perception`, when facets return, since they apply to every sense's list.
 - **Hearing and smell.** Each its own crate under `crates/perception/senses/`, its own list in
   its own shape: a bearing and an intensity; an intensity and a gradient. Design in
-  `Docs/perception_readme.md`.
+  `docs/perception_readme.md`.
 - **Seeing across layers.** The cast is planar on the eye's layer; `Offset` already carries
   `dlayer`.
 - **Selection and an overlay.** A selection module that turns clicks into a `Selected` marker,
@@ -47,18 +47,18 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
 - **The rebind screen.** The first thing to edit `Binds`: capture the next key or mouse button,
   three slots per action, show conflicts. Its own design conversation.
 - **The screenshot tool, and a debug overlay in the window.** From the archive. The debug
-  feature (`Docs/debug_readme.md`) reads the world from outside instead; what is still queued
+  feature (`docs/debug_readme.md`) reads the world from outside instead; what is still queued
   is an in-window home for the sightlines, cones and progress bar `murabito_scene` draws.
 - **A web page on the debug server.** Lexa's stated want after `scripts/probe.sh`: a page
   that polls or watches and draws things, `Seen` as lines and `Occupancy` as cells beside the
-  raw JSON. The CORS headers are already on. Design in `Docs/debug_readme.md`.
+  raw JSON. The CORS headers are already on. Design in `docs/debug_readme.md`.
 - **`Progress`, `ActionQueue` and the camera on the debug wire.** Two lines each when wanted.
 - **A tick-by-tick view.** Lexa, 2026-09-24: after the debug mode, something that shows
   every step of a tick in order (asking, issuing, mechanisms, sweep and gather, sensing) and
   what each wrote, to wrap one's head around the cycle. Design on the debug feature: the
   remote server sees a frame's end, so this needs either a step-one-tick control or a
   per-step trace the server can read. Its own design conversation.
-- **Hex: distance and the `units` module.** `Docs/hex_units_readme.md`'s build order, item 4.
+- **Hex: distance and the `units` module.** `docs/hex_units_readme.md`'s build order, item 4.
 
 ## Loose ends in what's there
 

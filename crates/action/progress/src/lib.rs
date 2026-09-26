@@ -1,6 +1,6 @@
 //! The one accumulation bar: how far along an entity is with whatever sustained thing it
 //! is doing. Stepping, turning, breaking a block, drawing a bow: every mechanism
-//! accumulates here, by the rules in `Docs/actions_readme.md`, and this crate knows none
+//! accumulates here, by the rules in `docs/actions_readme.md`, and this crate knows none
 //! of them.
 //!
 //! Units are the mechanism's, not time: shaku for a step, degrees for a turn. Time comes

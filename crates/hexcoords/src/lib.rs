@@ -2,7 +2,7 @@
 //!
 //! The world is hexagonal prisms, pointy-top, stacked in layers. A cell is addressed in
 //! cube coordinates `(q, r, s)`, which always satisfy `q + r + s = 0`, plus an integer
-//! layer. `Docs/hex_units_readme.md` is the design this implements.
+//! layer. `docs/hex_units_readme.md` is the design this implements.
 //!
 //! World space is Bevy's: `f32` shaku, Y up. A voxel is one shaku flat to flat and half a
 //! shaku (5 sun) tall, and its world position is the centre of its bottom face.

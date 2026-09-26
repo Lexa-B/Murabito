@@ -4,7 +4,7 @@
 //! keeps a model where they say: nothing in them says what the entity is, or whether it
 //! ever moves. A tree has a `VoxelPosition` and never leaves it; the movement mechanism
 //! writes to these, and the senses read them, and neither needs to know about the other.
-//! `Docs/movement_readme.md`'s first section is the design this implements.
+//! `docs/movement_readme.md`'s first section is the design this implements.
 //!
 //! Compass: **east is +X, north is −Z, up is +Y.** Facing is one of the twelve compass
 //! directions, never up or down.

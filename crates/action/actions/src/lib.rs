@@ -1,7 +1,7 @@
 //! The action queue: what a body has been asked to do, in what order. Anything may push
 //! onto it, an instinct, a social pull, a player's command, a planner, and nothing in it
 //! says who did or why. One system takes the action at the head when nothing is in
-//! flight and issues the mechanism's intent for it. `Docs/actions_readme.md` is the
+//! flight and issues the mechanism's intent for it. `docs/actions_readme.md` is the
 //! design this implements.
 //!
 //! Sequencing lives here and nowhere else: a mechanism carries out one intent, and this

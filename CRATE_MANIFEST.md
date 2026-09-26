@@ -2,7 +2,7 @@
 
 Every crate in the main project's workspace, and what each one is for. One crate per
 module: its `pub` items are its whole API and its `[dependencies]` its whole wiring, so
-this tree is also the map of what may know about what. `Docs/HANDOFF.md` lists each
+this tree is also the map of what may know about what. `docs/HANDOFF.md` lists each
 crate's public items; a crate's `src/lib.rs` doc comment is the authority on its design.
 
 ```
@@ -49,7 +49,7 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   protocol served on the loopback address, so that something outside the process can read
   the world's components and resources as they stand at the end of each frame. Behind the
   `debug` feature; an empty plugin without it. Registers nothing and depends on no module:
-  each crate puts its own types on the wire. Design: `Docs/debug_readme.md`.
+  each crate puts its own types on the wire. Design: `docs/debug_readme.md`.
 
 ## The app's state
 
@@ -91,7 +91,7 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   `VoxelspacePos`, the twelve compass `Direction`s with their neighbour and rotation
   maths, and `Offset`, one voxel relative to another, with distance in steps, rings
   outward and a cell's corners. Where a cell is, not what is in it. Design:
-  `Docs/hex_units_readme.md`.
+  `docs/hex_units_readme.md`.
 - **`murabito_placement`** — where a thing stands (`VoxelPosition`) and which way it
   faces (`Facing`), and `place`, the one system that keeps a model where they say. Plain
   components any entity in the world carries: a tree has a position and never moves.
@@ -119,13 +119,13 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 - **`murabito_actions`** — the `ActionQueue`: what a body has been asked to do, in
   order, with nothing in it saying who asked. The one system that takes the head of the
   queue and issues a mechanism's intent for it, after `AskingSet`, where whatever pushes
-  runs. Design: `Docs/actions_readme.md`.
+  runs. Design: `docs/actions_readme.md`.
 - **`murabito_progress`** — the one accumulation bar per entity that every sustained
   action fills, in the mechanism's own units (shaku, degrees), and the `MechanismSet`
   the mechanisms tick in. Knows no mechanism.
 - **`murabito_movement`** — the movement mechanism: how fast a body goes
   (`Locomotion`), and the `Step` and `Turn` intents it carries out on `FixedUpdate`,
-  writing `murabito_placement`'s position and facing. Design: `Docs/movement_readme.md`.
+  writing `murabito_placement`'s position and facing. Design: `docs/movement_readme.md`.
 
 ## Reading the world
 
@@ -133,7 +133,7 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   which things stand in which voxel, rebuilt every tick; and `PerceptionSet`, when the
   senses run in `FixedUpdate` (`Gather` the map after the mechanisms, then `Sense`).
   Where the facet debts land when facets return: obscuring, heights, ambiguation.
-  Design: `Docs/perception_readme.md`.
+  Design: `docs/perception_readme.md`.
 - **`murabito_vision`** — sight: `Vision`, a cone on `Facing` with acuity in three
   bands, a member of `Sentient`; the cast, shadowcasting over `Occupancy` with
   everything opaque, whose field of cells is private; and `Seen`, the per-tick list of

@@ -14,7 +14,7 @@
 //! Perceiving is simulation, so it ticks with the rest and freezes with it. The debts
 //! this layer will take up when facets return, obscuring and heights, and blurring a
 //! poorly seen thing into something vaguer, belong here too, since they apply to every
-//! sense's list alike. `Docs/perception_readme.md` is the design.
+//! sense's list alike. `docs/perception_readme.md` is the design.
 
 use std::collections::HashMap;
 
