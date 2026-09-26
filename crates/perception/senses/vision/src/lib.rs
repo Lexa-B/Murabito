@@ -148,6 +148,13 @@ pub struct Sighting {
     pub acuity: Acuity,
 }
 
+impl FromIterator<Sighting> for Seen {
+    /// A list of sightings as given, for whatever tests what reads one.
+    fn from_iter<I: IntoIterator<Item = Sighting>>(sightings: I) -> Self {
+        Self(sightings.into_iter().collect())
+    }
+}
+
 impl Seen {
     pub fn iter(&self) -> impl Iterator<Item = &Sighting> {
         self.0.iter()
