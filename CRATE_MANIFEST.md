@@ -140,7 +140,9 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 - **`murabito_actions`** — the `ActionQueue`: what a body has been asked to do, in
   order, with nothing in it saying who asked. The one system that takes the head of the
   queue and issues a mechanism's intent for it, after `AskingSet`, where whatever pushes
-  runs. Design: `docs/actions_readme.md`.
+  runs. Also `CutShort`, the mark that drops whatever a body has in flight so the head
+  of its queue is issued this tick: the one place that knows every mechanism.
+  Design: `docs/actions_readme.md`.
 - **`murabito_progress`** — the one accumulation bar per entity that every sustained
   action fills, in the mechanism's own units (shaku, degrees), and the `MechanismSet`
   the mechanisms tick in. Knows no mechanism.

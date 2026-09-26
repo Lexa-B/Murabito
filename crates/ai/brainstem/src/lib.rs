@@ -17,14 +17,14 @@
 //!
 //! The tick, inside `AskingSet`, in [`BrainstemSet`]'s order: **Orders** takes what
 //! arrived; **Reflexes** is the slot the reflexes crate fills, so a fright beats an order
-//! from the same tick; **Drive** clears the queue for a new intent and pushes the next
-//! action only when the queue is empty, so a step already in flight lands before anything
-//! new begins. After the senses, **publish** writes every body's [`Snapshot`] to the
+//! from the same tick; **Drive** takes the body for a new intent, clearing the queue and
+//! cutting short whatever is in flight, so the new one starts this tick; after that it
+//! pushes the next action only when the body is idle. After the senses, **publish** writes every body's [`Snapshot`] to the
 //! [`Port`]'s board, and orders arrive through the same port's channel: that is the
 //! whole seam between a body and its mind. Design: `docs/ai_readme.md`.
 
 use bevy::prelude::*;
-use murabito_actions::{Action, ActionQueue, AskingSet};
+use murabito_actions::{Action, ActionQueue, AskingSet, CutShort};
 use murabito_hexcoords::{Direction, VoxelCoord};
 use murabito_identity::ThingId;
 use murabito_perception::PerceptionSet;
@@ -281,24 +281,29 @@ fn step_toward(from: VoxelCoord, to: VoxelCoord) -> Option<Direction> {
         .min_by(|&a, &b| walk(a).total_cmp(&walk(b)))
 }
 
-/// Carries every body's current intent out, one push at a time. A new intent first
-/// clears the queue; what is already in flight lands, since the mechanism holds that, and
-/// the next action goes on only once the queue is empty and the bar is idle. A short is
-/// done when its one action has been pushed and the body is idle again; a sustained
-/// intent is re-aimed at every such moment until nothing is left to do.
-fn drive(
-    tick: Res<Tick>,
-    mut bodies: Query<(
-        &mut Brainstem,
-        &mut ActionQueue,
-        &Progress,
-        &VoxelPosition,
-        Option<&Seen>,
-    )>,
-) {
-    for (mut body, mut queue, progress, position, seen) in &mut bodies {
+/// Carries every body's current intent out, one push at a time. A new intent takes the
+/// body now: the queue is cleared and whatever is in flight is cut short, so the new
+/// intent's first action is issued this same tick. After that the next action goes on
+/// only once the queue is empty and the bar is idle. A short is done when its one action
+/// has been pushed and the body is idle again; a sustained intent is re-aimed at every
+/// such moment until nothing is left to do.
+/// Everything of a body that drive touches.
+type Driven<'a> = (
+    Entity,
+    &'a mut Brainstem,
+    &'a mut ActionQueue,
+    &'a Progress,
+    &'a VoxelPosition,
+    Option<&'a Seen>,
+);
+
+fn drive(tick: Res<Tick>, mut commands: Commands, mut bodies: Query<Driven>) {
+    for (entity, mut body, mut queue, progress, position, seen) in &mut bodies {
         if let Some(pending) = body.take_pending() {
             queue.clear();
+            if progress.in_flight() {
+                commands.entity(entity).insert(CutShort);
+            }
             body.begin(pending, tick.0);
         }
         let Some(doing) = body.doing else {
@@ -657,7 +662,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_newer_order_supersedes_but_the_step_in_flight_still_lands() {
+    fn a_newer_order_cuts_the_step_in_flight_and_begins_on_that_tick() {
         let (mut app, body) = body();
         order(&mut app, body, short(Short::Step(E)));
         tick(&mut app, 1);
@@ -668,16 +673,12 @@ pub(crate) mod tests {
             brainstem(&app, body).doing().unwrap().intent(),
             short(Short::Face(N))
         );
-        assert_eq!(
-            queued(&app, body),
-            1,
-            "the face waits behind the step in flight"
-        );
+        assert_eq!(queued(&app, body), 0, "the face was issued this tick");
 
-        tick(&mut app, 15);
-        assert_eq!(position(&app, body), voxel(1, 0), "the step landed anyway");
-        tick(&mut app, 33);
-        assert_eq!(facing(&app, body), N);
+        tick(&mut app, 31);
+        assert_eq!(facing(&app, body), N, "32 ticks from the order");
+        assert_eq!(position(&app, body), voxel(0, 0), "the step never landed");
+        tick(&mut app, 1);
         assert_eq!(previous_outcome(&app, body), Outcome::Done);
     }
 
@@ -693,8 +694,8 @@ pub(crate) mod tests {
         tick(&mut app, 40);
         assert_eq!(
             position(&app, body),
-            voxel(1, 0),
-            "what was in flight landed"
+            voxel(0, 0),
+            "stop means stop: the step was cut"
         );
         assert_eq!(
             previous_outcome(&app, body),
@@ -806,24 +807,24 @@ pub(crate) mod tests {
     #[test]
     fn a_go_to_is_re_aimed_from_wherever_the_body_stands_when_a_step_lands() {
         // Four steps east are ordered. With two landed and the third in flight, the order
-        // becomes a cell a corner step off the third's landing: the third lands anyway,
-        // and the body aims afresh from there, one corner step, rather than from the start.
+        // becomes a cell a corner step off where the body stands: the third step is cut,
+        // and the body aims afresh from where it is, one corner step.
         let (mut app, body) = body();
         order(&mut app, body, go_to(4, 0));
         tick(&mut app, 32);
         assert_eq!(position(&app, body), voxel(2, 0), "two steps of 16 ticks");
 
-        order(&mut app, body, go_to(5, -1));
-        tick(&mut app, 16);
+        order(&mut app, body, go_to(4, -1));
+        tick(&mut app, 27);
         assert_eq!(
             position(&app, body),
-            voxel(3, 0),
-            "the third step landed anyway"
+            voxel(2, 0),
+            "the third step was cut; a corner step is 28 ticks"
         );
-        tick(&mut app, 28);
+        tick(&mut app, 1);
         assert_eq!(
             position(&app, body),
-            voxel(5, -1),
+            voxel(4, -1),
             "one corner step from there"
         );
         tick(&mut app, 1);

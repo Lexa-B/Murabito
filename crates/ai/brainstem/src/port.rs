@@ -236,11 +236,11 @@ pub(crate) fn publish(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Short;
     use crate::tests::{
         ALL_ROUND, E, N, app, brainstem, facing, mint, order, position, previous_outcome, tick,
         voxel,
     };
-    use crate::{Short, Sustained};
     use murabito_movement::Locomotion;
 
     const BODY: Kind = Kind::at("test::bodies::body");
@@ -333,31 +333,25 @@ mod tests {
     }
 
     #[test]
-    fn a_body_at_work_shows_its_intent_its_queue_and_the_step_in_flight() {
+    fn a_body_at_work_shows_its_intent_its_queue_and_what_is_in_flight() {
+        // A step north from a body facing east is a turn first: the turn is in flight
+        // and the step waits behind it on the queue.
         let (mut app, body, id) = labelled_body();
-        order(
-            &mut app,
-            body,
-            Intent::Sustained(Sustained::GoTo(voxel(3, 0))),
-        );
-        tick(&mut app, 1);
-        order(&mut app, body, Intent::Short(Short::Face(N)));
-        tick(&mut app, 1);
-        // The step east is in flight; the face waits behind it on the queue.
-        tick(&mut app, 6);
+        order(&mut app, body, Intent::Short(Short::Step(N)));
+        tick(&mut app, 8);
 
         let card = board(&app).get(id).unwrap();
         assert_eq!(card.tick, 8);
-        let doing = card.doing.expect("facing north");
-        assert_eq!(doing.intent(), Intent::Short(Short::Face(N)));
-        assert_eq!(doing.since(), 2);
-        assert_eq!(card.queue, [Action::Face(N)]);
-        let fraction = card.in_flight.expect("a step in flight");
+        let doing = card.doing.expect("stepping north");
+        assert_eq!(doing.intent(), Intent::Short(Short::Step(N)));
+        assert_eq!(doing.since(), 1);
+        assert_eq!(card.queue, [Action::Go(N)]);
+        let fraction = card.in_flight.expect("a notch of turning in flight");
         assert!(
-            (fraction - 0.5).abs() < 1e-3,
-            "eight of sixteen ticks: {fraction}"
+            (fraction - 0.75).abs() < 1e-3,
+            "eight ticks of a 10.67-tick notch: {fraction}"
         );
-        assert_eq!(card.previous_outcome, Outcome::Superseded);
+        assert_eq!(card.previous_outcome, Outcome::Idle);
     }
 
     #[test]
