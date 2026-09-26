@@ -345,6 +345,25 @@ impl Offset {
             .max(self.dr.unsigned_abs())
             .max(self.ds().unsigned_abs())
     }
+
+    /// The compass direction this offset points, nearest of the twelve: the way to face
+    /// something that stands this far off. `None` for no displacement on the plane, which
+    /// points nowhere. The layer is not counted.
+    pub fn bearing(self) -> Option<Direction> {
+        if self.dq == 0 && self.dr == 0 {
+            return None;
+        }
+        let origin = VoxelCoord {
+            q: 0,
+            r: 0,
+            layer: 0,
+        };
+        let world = (origin + self).to_world();
+        // Anticlockwise from east, with north at -Z.
+        let degrees = (-world.z).atan2(world.x).to_degrees();
+        let notches = (degrees / 30.0).round() as i32;
+        Some(Direction::ALL[usize::try_from(notches.rem_euclid(12)).expect("0 to 11")])
+    }
 }
 
 impl Sub for VoxelCoord {
@@ -936,6 +955,36 @@ mod tests {
             (offset.dq(), offset.dr(), offset.ds(), offset.dlayer()),
             (2, -2, 0, 2)
         );
+    }
+
+    #[test]
+    fn a_one_step_offset_bears_its_own_direction() {
+        let origin = VoxelCoord::new(0, 0, 0, 0).unwrap();
+        for direction in Direction::ALL {
+            let offset = origin.neighbour(direction) - origin;
+            assert_eq!(offset.bearing(), Some(direction), "{direction:?}");
+        }
+    }
+
+    #[test]
+    fn a_far_offset_bears_the_nearest_direction() {
+        let three_east = Offset::new(3, 0, -3, 0).unwrap();
+        assert_eq!(three_east.bearing(), Some(Direction::E));
+        let two_north = Offset::new(2, -4, 2, 0).unwrap();
+        assert_eq!(two_north.bearing(), Some(Direction::N));
+        // Three east and one north-north-east: 3.5 shaku east, 0.87 north, some 14° up
+        // from east, nearer east than east-north-east.
+        let mostly_east = Offset::new(4, -1, -3, 0).unwrap();
+        assert_eq!(mostly_east.bearing(), Some(Direction::E));
+        // Up a layer changes nothing.
+        let above = Offset::new(1, 0, -1, 3).unwrap();
+        assert_eq!(above.bearing(), Some(Direction::E));
+    }
+
+    #[test]
+    fn no_displacement_on_the_plane_bears_nowhere() {
+        assert_eq!(Offset::ZERO.bearing(), None);
+        assert_eq!(Offset::new(0, 0, 0, 2).unwrap().bearing(), None);
     }
 
     #[test]
