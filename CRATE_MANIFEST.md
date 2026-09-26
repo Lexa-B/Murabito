@@ -31,10 +31,12 @@ crates/
 │  ├─ progress/           murabito_progress
 │  └─ mechanisms/         one crate per kind of thing a body can do
 │     └─ movement/        murabito_movement
-└─ perception/            the senses: a group directory, not a crate
-   ├─ perception/         murabito_perception
-   └─ senses/             one crate per sense, each with its own list in its own shape
-      └─ vision/          murabito_vision
+├─ perception/            the senses: a group directory, not a crate
+│  ├─ perception/         murabito_perception
+│  └─ senses/             one crate per sense, each with its own list in its own shape
+│     └─ vision/          murabito_vision
+└─ ai/                    minds: a group directory, not a crate
+   └─ brainstem/          murabito_brainstem
 ```
 
 Arrows in the dependency graph all point down, toward whoever owns a type. The app
@@ -113,6 +115,17 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   can't require either: they are the instance's), and one loads the `Model` a drawn
   kind names. Depends on the mechanism crates whose
   components the tiers require; only what spawns things depends on it.
+
+## Minds
+
+- **`murabito_brainstem`** — every sentient body's driver: in the seat, not in charge.
+  Owns the vocabulary a body can be told (`Short`: a stop, a turn, a step; sustained
+  intents to come), holds one intent per body in a `Brainstem` component, and is the
+  only thing that pushes onto the `ActionQueue`, one action at a time, every tick in
+  `AskingSet`. Records how the last intent ended (`Outcome`) for whoever gave it. With
+  nothing ordered a body stands still. The slower mind and the reflexes both speak to
+  it and both sit above it; it depends on actions, progress and hexcoords only.
+  Design: `Docs/ai_readme.md`.
 
 ## Doing things
 

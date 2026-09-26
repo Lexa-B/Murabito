@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 use murabito_actions::ActionQueue;
+use murabito_brainstem::Brainstem;
 use murabito_identity::Kind;
 use murabito_movement::Locomotion;
 use murabito_vision::{Band, Vision};
@@ -46,7 +47,8 @@ const SENTIENT_VISION: Vision = Vision {
 };
 
 /// 有情: whatever takes いる. It faces somewhere, it moves, it looks where it faces, and
-/// it can be asked to do things. Yokai move and see as much as beasts do. Which way it
+/// it can be asked to do things: a `Brainstem` holds what it is doing and drives the
+/// queue. Yokai move and see as much as beasts do. Which way it
 /// faces comes with its place, from `Tangible`: the instance's, given at spawn.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
@@ -55,6 +57,7 @@ const SENTIENT_VISION: Vision = Vision {
     Locomotion = SENTIENT_LOCOMOTION,
     Vision = SENTIENT_VISION,
     ActionQueue,
+    Brainstem,
     Kind = Kind::at(module_path!()),
 )]
 pub struct Sentient;

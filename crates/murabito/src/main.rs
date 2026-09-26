@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use murabito_actions::ActionsPlugin;
 use murabito_app_state::{AppStatePlugin, AppStateSettings};
+use murabito_brainstem::BrainstemPlugin;
 use murabito_camera::{CameraPlugin, CameraSettings};
 use murabito_debug::DebugPlugin;
 use murabito_i18n::{I18nPlugin, Language};
@@ -39,6 +40,7 @@ fn main() {
                 MovementPlugin,
                 ProgressPlugin,
                 ActionsPlugin,
+                BrainstemPlugin,
             ),
             (PerceptionPlugin, VisionPlugin),
             // Last, and nothing without the `debug` feature.

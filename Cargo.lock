@@ -3589,6 +3589,7 @@ dependencies = [
  "bevy",
  "murabito_actions",
  "murabito_app_state",
+ "murabito_brainstem",
  "murabito_camera",
  "murabito_debug",
  "murabito_i18n",
@@ -3627,6 +3628,18 @@ dependencies = [
  "murabito_keybinds",
  "serde",
  "serde_yaml_ng",
+]
+
+[[package]]
+name = "murabito_brainstem"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_actions",
+ "murabito_hexcoords",
+ "murabito_movement",
+ "murabito_placement",
+ "murabito_progress",
 ]
 
 [[package]]
@@ -3686,6 +3699,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "murabito_actions",
+ "murabito_brainstem",
  "murabito_hexcoords",
  "murabito_identity",
  "murabito_movement",

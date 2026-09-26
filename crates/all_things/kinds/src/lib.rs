@@ -158,6 +158,7 @@ mod tests {
 
     use bevy::prelude::*;
     use murabito_actions::ActionQueue;
+    use murabito_brainstem::Brainstem;
     use murabito_hexcoords::Direction;
     use murabito_hexcoords::VoxelCoord;
     use murabito_identity::Kind;
@@ -205,6 +206,10 @@ mod tests {
         assert!(has::<Locomotion>(&world, beast));
         assert!(has::<Progress>(&world, beast), "Locomotion brings its bar");
         assert!(has::<ActionQueue>(&world, beast));
+        assert!(
+            has::<Brainstem>(&world, beast),
+            "and a driver for the queue"
+        );
     }
 
     #[test]
@@ -236,6 +241,7 @@ mod tests {
         assert!(!has::<Sentient>(&world, tree));
         assert!(!has::<Locomotion>(&world, tree));
         assert!(!has::<ActionQueue>(&world, tree));
+        assert!(!has::<Brainstem>(&world, tree));
         assert!(!has::<Vision>(&world, tree));
     }
 

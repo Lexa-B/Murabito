@@ -13,6 +13,7 @@ debug = []
 [dependencies]
 bevy.workspace = true
 murabito_actions.workspace = true
+murabito_brainstem.workspace = true
 murabito_hexcoords.workspace = true
 murabito_identity.workspace = true
 murabito_movement.workspace = true
