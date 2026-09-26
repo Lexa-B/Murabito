@@ -28,7 +28,7 @@ use murabito_actions::{Action, ActionQueue, AskingSet, CutShort};
 use murabito_hexcoords::{Direction, VoxelCoord};
 use murabito_identity::ThingId;
 use murabito_perception::PerceptionSet;
-use murabito_placement::VoxelPosition;
+use murabito_placement::{Facing, VoxelPosition};
 use murabito_progress::Progress;
 use murabito_vision::Seen;
 
@@ -287,18 +287,21 @@ fn step_toward(from: VoxelCoord, to: VoxelCoord) -> Option<Direction> {
 /// only once the queue is empty and the bar is idle. A short is done when its one action
 /// has been pushed and the body is idle again; a sustained intent is re-aimed at every
 /// such moment until nothing is left to do.
-/// Everything of a body that drive touches.
+/// Everything of a body that drive touches. The id and facing are only for the trace.
 type Driven<'a> = (
     Entity,
+    Option<&'a ThingId>,
     &'a mut Brainstem,
     &'a mut ActionQueue,
     &'a Progress,
     &'a VoxelPosition,
+    &'a Facing,
     Option<&'a Seen>,
 );
 
 fn drive(tick: Res<Tick>, mut commands: Commands, mut bodies: Query<Driven>) {
-    for (entity, mut body, mut queue, progress, position, seen) in &mut bodies {
+    for (entity, id, mut body, mut queue, progress, position, facing, seen) in &mut bodies {
+        let who = id.map_or_else(|| "a body".to_owned(), ThingId::to_string);
         if let Some(pending) = body.take_pending() {
             queue.clear();
             if progress.in_flight() {
@@ -313,8 +316,17 @@ fn drive(tick: Res<Tick>, mut commands: Commands, mut bodies: Query<Driven>) {
         match doing.intent {
             Intent::Short(short) if !body.pushed => {
                 match resolve_short(short, seen) {
-                    Resolved::Push(action) => queue.push(action),
-                    Resolved::Finish(ended) => body.finish(ended),
+                    Resolved::Push(action) => {
+                        debug!(
+                            "tick {}: {who} facing {:?} at {:?} pushes {action:?} for {short:?}",
+                            tick.0, facing.0, position.0
+                        );
+                        queue.push(action);
+                    }
+                    Resolved::Finish(ended) => {
+                        debug!("tick {}: {who} ends {short:?} as {ended:?}", tick.0);
+                        body.finish(ended);
+                    }
                 }
                 body.pushed = true;
             }
@@ -322,7 +334,13 @@ fn drive(tick: Res<Tick>, mut commands: Commands, mut bodies: Query<Driven>) {
             Intent::Short(_) => {}
             Intent::Sustained(Sustained::GoTo(target)) if idle => {
                 match step_toward(position.0, target) {
-                    Some(direction) => queue.push(Action::Go(direction)),
+                    Some(direction) => {
+                        debug!(
+                            "tick {}: {who} at {:?} steps {direction:?} toward {target:?}",
+                            tick.0, position.0
+                        );
+                        queue.push(Action::Go(direction));
+                    }
                     None => body.finish(Outcome::Done),
                 }
             }

@@ -137,14 +137,25 @@ pub struct LastLook(Option<Vec<ThingId>>);
 /// brainstem with the winner, and remembers this view for next tick. A body whose eyes
 /// were only just added has not looked yet, so its empty view is not a look and is not
 /// remembered as one: nothing startles at the world's first sight of it.
-fn twitch(mut bodies: Query<(&Reflexes, Ref<Seen>, &mut LastLook, &mut Brainstem)>) {
-    for (reflexes, seen, mut last_look, mut brainstem) in &mut bodies {
+/// Everything of a body that twitch touches. The id is only for the trace.
+type Twitched<'a> = (
+    Option<&'a ThingId>,
+    &'a Reflexes,
+    Ref<'a, Seen>,
+    &'a mut LastLook,
+    &'a mut Brainstem,
+);
+
+fn twitch(mut bodies: Query<Twitched>) {
+    for (id, reflexes, seen, mut last_look, mut brainstem) in &mut bodies {
         if seen.is_added() {
             continue;
         }
         if let Some(before) = &last_look.0
             && let Some((reflex, short)) = reflexes.pick(&seen, before)
         {
+            let who = id.map_or_else(|| "a body".to_owned(), ThingId::to_string);
+            info!("{who}: {} → {short:?}", reflex.name());
             brainstem.preempt(short, reflex.name());
         }
         last_look.0 = Some(seen.iter().map(|sighting| sighting.id).collect());
