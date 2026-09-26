@@ -1,6 +1,7 @@
 //! 鹿 Deer
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 use murabito_movement::Locomotion;
 
 use crate::{Beast, Model};
@@ -13,5 +14,6 @@ use crate::{Beast, Model};
     Beast,
     Locomotion = Locomotion { speed: 5.0, turn_speed: 180.0 },
     Model = Model("entity_models/living/animals/deer.glb"),
+    Kind = Kind::at(module_path!()),
 )]
 pub struct Deer;

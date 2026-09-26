@@ -1,0 +1,168 @@
+// The contract between a body and its mind: what a mind is told, and what it may say.
+//
+// One message each way, framed on the socket as a four-byte big-endian length and then
+// the bytes. The game answers a `Request` carrying `snapshots` with a `Snapshots`; an
+// `Order` gets no reply, since what became of it shows in the body's next snapshot as
+// its `previous`. Shapes mirror the brainstem's own types in
+// crates/ai/brainstem: a voxel is axial, an enum's number is its index in memory.
+
+syntax = "proto3";
+
+package murabito.ai;
+
+// ---- client to game --------------------------------------------------------------
+
+message Request {
+  oneof kind {
+    SnapshotsRequest snapshots = 1;
+    Order order = 2;
+  }
+}
+
+// Every body's latest snapshot, please.
+message SnapshotsRequest {}
+
+// One intent for one body, by its number for life.
+message Order {
+  uint64 id = 1;
+  Intent intent = 2;
+}
+
+// ---- game to client --------------------------------------------------------------
+
+message Snapshots {
+  repeated Snapshot bodies = 1;
+}
+
+// One body's picture of one tick: everything a mind is told.
+message Snapshot {
+  uint64 id = 1;
+  // The body's place in the tree of kinds, its whole path.
+  string kind = 2;
+  uint64 tick = 3;
+  Voxel position = 4;
+  Direction facing = 5;
+  repeated InView in_view = 6;
+  // The current intent and the tick it began; absent when the body does nothing.
+  optional Doing doing = 7;
+  // Every action waiting on the queue, first to last.
+  repeated Action queue = 8;
+  // How far along the action in flight is, 0 to 1; absent when nothing is.
+  optional float in_flight = 9;
+  // What the body did last and how it ended: the one before `doing`, not `doing`
+  // itself. Absent until something has been asked.
+  optional Previous previous = 10;
+}
+
+// One thing in view, as the body sees it.
+message InView {
+  uint64 id = 1;
+  // Its place in the tree of kinds; absent if it carries no label.
+  optional string kind = 2;
+  // Where it is relative to the body: its voxel minus mine.
+  Offset offset = 3;
+  // How many steps across faces away it is.
+  uint32 distance = 4;
+  Acuity acuity = 5;
+}
+
+message Doing {
+  Intent intent = 1;
+  uint64 since = 2;
+}
+
+message Previous {
+  Intent intent = 1;
+  Outcome outcome = 2;
+}
+
+// ---- the vocabulary --------------------------------------------------------------
+
+message Intent {
+  oneof kind {
+    Short short = 1;
+    Sustained sustained = 2;
+  }
+}
+
+// Over within a round of the mind: a single motion, or none.
+message Short {
+  oneof kind {
+    Stop stop = 1;
+    Direction face = 2;
+    // Face that thing, by its number, where it is seen now.
+    uint64 face_thing = 3;
+    Direction step = 4;
+  }
+}
+
+message Stop {}
+
+// Outlives rounds; the brainstem re-aims it every step.
+message Sustained {
+  oneof kind {
+    Voxel go_to = 1;
+  }
+}
+
+// One thing on the queue the mechanisms know how to do.
+message Action {
+  oneof kind {
+    Direction go = 1;
+    Direction face = 2;
+  }
+}
+
+message Outcome {
+  oneof kind {
+    Done done = 1;
+    Stopped stopped = 2;
+    Superseded superseded = 3;
+    // The name of the reflex that took the body.
+    string cancelled = 4;
+    // The number of the thing that was not in view.
+    uint64 lost = 5;
+  }
+}
+
+message Done {}
+message Stopped {}
+message Superseded {}
+
+// ---- the ground ------------------------------------------------------------------
+
+// A voxel as it is in memory: axial, with s = -q - r left to be computed.
+message Voxel {
+  int32 q = 1;
+  int32 r = 2;
+  int32 layer = 3;
+}
+
+message Offset {
+  int32 dq = 1;
+  int32 dr = 2;
+  int32 dlayer = 3;
+}
+
+// The twelve directions across the plane, every 30 degrees anticlockwise from east;
+// the number is the index in memory.
+enum Direction {
+  E = 0;
+  ENE = 1;
+  NNE = 2;
+  N = 3;
+  NNW = 4;
+  WNW = 5;
+  W = 6;
+  WSW = 7;
+  SSW = 8;
+  S = 9;
+  SSE = 10;
+  ESE = 11;
+}
+
+enum Acuity {
+  NEAR = 0;
+  MID = 1;
+  FAR = 2;
+}

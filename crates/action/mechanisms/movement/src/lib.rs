@@ -2,7 +2,7 @@
 //! Nothing here decides *what* to do; that is the actions layer above, which puts a
 //! `Step` or a `Turn` on an entity and this crate carries it out. Where the body is and
 //! which way it faces are `murabito_placement`'s `VoxelPosition` and `Facing`, which
-//! this is the one mechanism that writes to. `Docs/movement_readme.md` is the design
+//! this is the one mechanism that writes to. `docs/movement_readme.md` is the design
 //! this implements.
 //!
 //! Compass: **east is +X, north is −Z, up is +Y.** Facing is one of the twelve compass
@@ -102,7 +102,9 @@ fn step(
 
 /// Carries out every `Turn` in flight, one tick's turning at a time: each notch is its
 /// own action on the bar, so a wide swing is a run of them and the leftover degrees carry
-/// from one to the next. At most one notch is taken per tick.
+/// from one to the next. At most one notch is taken per tick, and the next begins on the
+/// bar the moment one lands, so the bar reads in flight for the whole swing: whatever
+/// asks `Progress` whether the body is busy gets the truth between notches too.
 fn turn(
     time: Res<Time>,
     mut commands: Commands,
@@ -121,6 +123,8 @@ fn turn(
             progress.finish();
             if facing.0 == turn.0 {
                 commands.entity(body).remove::<Turn>();
+            } else {
+                progress.start::<Turn>(NOTCH);
             }
         }
     }
@@ -322,6 +326,21 @@ mod tests {
 
         assert_eq!(seen.len(), 128);
         assert_eq!(facing_of(&app, body), Direction::W);
+    }
+
+    #[test]
+    fn the_bar_stays_in_flight_from_the_first_notch_of_a_swing_to_the_last() {
+        let (mut app, body) = turner_facing(Direction::E, 90.0);
+        app.world_mut().entity_mut(body).insert(Turn(Direction::W));
+        let in_flight = |app: &App| app.world().get::<Progress>(body).unwrap().in_flight();
+
+        for tick in 1..128 {
+            app.update();
+            assert!(in_flight(&app), "idle between notches on tick {tick}");
+        }
+        app.update();
+        assert!(!in_flight(&app), "landed on tick 128");
+        assert!(!is_turning(&app, body));
     }
 
     #[test]

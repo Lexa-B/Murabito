@@ -3,6 +3,7 @@
 //! Its children are the files in `non_sentient/`, beside this one.
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 
 use crate::Tangible;
 
@@ -15,5 +16,5 @@ pub use plant::*;
 /// 非情: whatever takes ある.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
-#[require(Tangible)]
+#[require(Tangible, Kind = Kind::at(module_path!()))]
 pub struct NonSentient;

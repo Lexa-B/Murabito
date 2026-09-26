@@ -3,6 +3,7 @@
 //! Its children are the files in `living/`, beside this one.
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 
 use crate::Sentient;
 
@@ -15,5 +16,5 @@ pub use human::*;
 /// 生き物: a living thing.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
-#[require(Sentient)]
+#[require(Sentient, Kind = Kind::at(module_path!()))]
 pub struct Living;

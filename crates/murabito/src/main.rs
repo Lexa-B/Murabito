@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use murabito_actions::ActionsPlugin;
 use murabito_app_state::{AppStatePlugin, AppStateSettings};
+use murabito_brainstem::BrainstemPlugin;
+use murabito_bridge::BridgePlugin;
 use murabito_camera::{CameraPlugin, CameraSettings};
 use murabito_debug::DebugPlugin;
 use murabito_i18n::{I18nPlugin, Language};
@@ -12,6 +14,7 @@ use murabito_navigation::{NavigationPlugin, NavigationSettings};
 use murabito_perception::PerceptionPlugin;
 use murabito_placement::PlacementPlugin;
 use murabito_progress::ProgressPlugin;
+use murabito_reflexes::ReflexesPlugin;
 use murabito_scene::ScenePlugin;
 use murabito_settings::{Persist, SettingsPlugin};
 use murabito_settings_page::SettingsPagePlugin;
@@ -39,6 +42,9 @@ fn main() {
                 MovementPlugin,
                 ProgressPlugin,
                 ActionsPlugin,
+                BrainstemPlugin,
+                ReflexesPlugin,
+                BridgePlugin::default(),
             ),
             (PerceptionPlugin, VisionPlugin),
             // Last, and nothing without the `debug` feature.

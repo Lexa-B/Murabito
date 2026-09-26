@@ -1,6 +1,7 @@
 //! 真竹 Madake
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 
 use crate::{Bamboo, Model};
 
@@ -8,5 +9,5 @@ use crate::{Bamboo, Model};
 /// says which.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
-#[require(Bamboo, Model = Model("entity_models/flora/bamboo/bamboo-00-a-summer.glb"))]
+#[require(Bamboo, Model = Model("entity_models/flora/bamboo/bamboo-00-a-summer.glb"), Kind = Kind::at(module_path!()))]
 pub struct Madake;

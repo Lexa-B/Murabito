@@ -30,7 +30,7 @@ mkdir -p "$log_dir"
 exec > >(tee "$log_dir/run.log") 2>&1
 
 # `--debug` first is ours: the debug build, which also serves the world's data to
-# scripts/probe.sh (Docs/debug_readme.md). Everything else goes to the game.
+# scripts/probe.sh (docs/debug_readme.md). Everything else goes to the game.
 features=()
 if [[ "${1:-}" == "--debug" ]]; then
     features=(--features debug)

@@ -1,6 +1,7 @@
 //! 鷺 Heron
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 use murabito_movement::Locomotion;
 
 use crate::{Bird, Model};
@@ -13,5 +14,6 @@ use crate::{Bird, Model};
     Bird,
     Locomotion = Locomotion { speed: 2.0, turn_speed: 120.0 },
     Model = Model("entity_models/living/animals/heron.glb"),
+    Kind = Kind::at(module_path!()),
 )]
 pub struct Heron;

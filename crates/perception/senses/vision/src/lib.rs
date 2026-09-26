@@ -10,7 +10,7 @@
 //! Everything is opaque for now: any thing standing in a voxel stops sight through it, a
 //! fox as much as a tree. Obscuring, heights and the blurring of a poorly seen thing into
 //! something vaguer are facet debt, taken up in `murabito_perception` when facets return.
-//! `Docs/perception_readme.md` is the design.
+//! `docs/perception_readme.md` is the design.
 
 use std::f32::consts::{PI, TAU};
 
@@ -146,6 +146,13 @@ pub struct Sighting {
     /// Where it is relative to the looker: `its voxel - mine`.
     pub offset: Offset,
     pub acuity: Acuity,
+}
+
+impl FromIterator<Sighting> for Seen {
+    /// A list of sightings as given, for whatever tests what reads one.
+    fn from_iter<I: IntoIterator<Item = Sighting>>(sightings: I) -> Self {
+        Self(sightings.into_iter().collect())
+    }
 }
 
 impl Seen {

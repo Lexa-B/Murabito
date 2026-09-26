@@ -1,11 +1,13 @@
 //! The action queue: what a body has been asked to do, in what order. Anything may push
 //! onto it, an instinct, a social pull, a player's command, a planner, and nothing in it
 //! says who did or why. One system takes the action at the head when nothing is in
-//! flight and issues the mechanism's intent for it. `Docs/actions_readme.md` is the
+//! flight and issues the mechanism's intent for it. `docs/actions_readme.md` is the
 //! design this implements.
 //!
 //! Sequencing lives here and nowhere else: a mechanism carries out one intent, and this
-//! is what decides that a walk is a turn first and then a step.
+//! is what decides that a walk is a turn first and then a step. It is also the one place
+//! that knows every mechanism, so cutting a body short, dropping whatever is in flight
+//! so that something new can start this tick, lives here too: mark the body [`CutShort`].
 
 use std::collections::VecDeque;
 
@@ -23,7 +25,28 @@ impl Plugin for ActionsPlugin {
         // tick; issuing before the mechanisms, so an intent issued this tick starts this
         // tick. Without the first, when a push and the issue land on the same tick
         // which runs first is the scheduler's whim, and a walk is a tick late or not.
-        app.add_systems(FixedUpdate, issue.after(AskingSet).before(MechanismSet));
+        app.add_systems(
+            FixedUpdate,
+            (cut_short, issue)
+                .chain()
+                .after(AskingSet)
+                .before(MechanismSet),
+        );
+    }
+}
+
+/// Put this on a body to drop whatever it is doing, now: the intent in flight is
+/// removed, the bar is abandoned, and the head of the queue is issued on this same tick.
+/// A cut step never happened, since a body's place changes only on landing; a cut turn
+/// keeps the notches already made. Removed as it is acted on.
+#[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct CutShort;
+
+/// Cuts short every body marked for it, before the head of its queue is issued.
+fn cut_short(mut commands: Commands, mut bodies: Query<(Entity, &mut Progress), With<CutShort>>) {
+    for (body, mut progress) in &mut bodies {
+        progress.abandon();
+        commands.entity(body).remove::<(Step, Turn, CutShort)>();
     }
 }
 
@@ -60,8 +83,13 @@ impl ActionQueue {
         self.0.len()
     }
 
-    /// Drops everything queued. What is already in flight finishes: the mechanism holds
-    /// that, not the queue.
+    /// What is queued, first to last, for whoever shows or reports it.
+    pub fn iter(&self) -> impl Iterator<Item = Action> + '_ {
+        self.0.iter().copied()
+    }
+
+    /// Drops everything queued. What is already in flight finishes, since the mechanism
+    /// holds that, not the queue, unless the body is also marked [`CutShort`].
     pub fn clear(&mut self) {
         self.0.clear();
     }
@@ -129,6 +157,17 @@ fn issue(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_queue_reads_back_first_to_last() {
+        let mut queue = ActionQueue::default();
+        queue.push(Action::Go(Direction::E));
+        queue.push(Action::Face(Direction::N));
+        assert_eq!(
+            queue.iter().collect::<Vec<_>>(),
+            [Action::Go(Direction::E), Action::Face(Direction::N)]
+        );
+    }
     use murabito_hexcoords::VoxelCoord;
     use murabito_movement::{Locomotion, MovementPlugin};
     use murabito_placement::VoxelPosition;
@@ -226,6 +265,71 @@ mod tests {
             .get_mut::<ActionQueue>(body)
             .expect("a queue")
             .push(action);
+    }
+
+    #[test]
+    fn a_body_cut_short_mid_step_stays_where_it_was_and_starts_its_next_action_at_once() {
+        let (mut app, body) = body_facing(Direction::E);
+        push(&mut app, body, Action::Go(Direction::E));
+        for _ in 0..8 {
+            app.update();
+        }
+        assert!(
+            app.world().get::<Step>(body).is_some(),
+            "half way through the step"
+        );
+
+        push(&mut app, body, Action::Face(Direction::N));
+        app.world_mut().entity_mut(body).insert(CutShort);
+        app.update();
+        assert!(app.world().get::<Step>(body).is_none(), "the step is gone");
+        assert!(
+            app.world().get::<CutShort>(body).is_none(),
+            "the mark is spent"
+        );
+        assert!(
+            app.world().get::<Turn>(body).is_some(),
+            "the turn began this tick"
+        );
+        assert_eq!(
+            app.world().get::<VoxelPosition>(body).unwrap().0,
+            voxel(0, 0, 0),
+            "the body never arrived"
+        );
+
+        for _ in 0..31 {
+            app.update();
+        }
+        assert_eq!(app.world().get::<Facing>(body).unwrap().0, Direction::N);
+        for _ in 0..30 {
+            app.update();
+        }
+        assert_eq!(
+            app.world().get::<VoxelPosition>(body).unwrap().0,
+            voxel(0, 0, 0),
+            "and never does"
+        );
+    }
+
+    #[test]
+    fn a_turn_cut_short_keeps_the_notches_already_made() {
+        let (mut app, body) = body_facing(Direction::E);
+        push(&mut app, body, Action::Face(Direction::W));
+        for _ in 0..25 {
+            app.update();
+        }
+        let so_far = app.world().get::<Facing>(body).unwrap().0;
+        assert_eq!(
+            so_far,
+            Direction::NNE,
+            "two notches in 25 ticks at 180 degrees a second"
+        );
+
+        app.world_mut().entity_mut(body).insert(CutShort);
+        app.update();
+        assert!(app.world().get::<Turn>(body).is_none());
+        assert_eq!(app.world().get::<Facing>(body).unwrap().0, so_far);
+        assert!(!app.world().get::<Progress>(body).unwrap().in_flight());
     }
 
     fn position_of(app: &App, body: Entity) -> VoxelCoord {

@@ -3,6 +3,7 @@
 //! Its children are the files in `bird/`, beside this one.
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 
 use crate::Animal;
 
@@ -19,5 +20,5 @@ pub use pheasant::*;
 /// 鳥: crane, heron, chicken, pheasant.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
-#[require(Animal)]
+#[require(Animal, Kind = Kind::at(module_path!()))]
 pub struct Bird;

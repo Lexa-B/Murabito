@@ -3,6 +3,7 @@
 //! Its children are the files in `tangible/`, beside this one.
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 
 use crate::AllThings;
 
@@ -16,5 +17,5 @@ pub use sentient::*;
 /// given at spawn beside the kind and checked there; the tree names no place.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
-#[require(AllThings)]
+#[require(AllThings, Kind = Kind::at(module_path!()))]
 pub struct Tangible;

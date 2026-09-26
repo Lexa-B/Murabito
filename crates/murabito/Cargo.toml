@@ -14,6 +14,7 @@ debug = [
     "murabito_kinds/debug",
     "murabito_perception/debug",
     "murabito_vision/debug",
+    "murabito_reflexes/debug",
 ]
 
 [dependencies]
@@ -27,6 +28,9 @@ murabito_perception.workspace = true
 murabito_vision.workspace = true
 murabito_progress.workspace = true
 murabito_actions.workspace = true
+murabito_brainstem.workspace = true
+murabito_bridge.workspace = true
+murabito_reflexes.workspace = true
 murabito_user_data.workspace = true
 murabito_settings.workspace = true
 murabito_i18n.workspace = true

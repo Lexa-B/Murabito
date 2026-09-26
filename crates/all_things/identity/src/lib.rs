@@ -7,8 +7,13 @@
 //! across saves as long as the counter is saved with the world. The engine acts on
 //! things by `Entity`; whatever remembers things across ticks and saves keys on this.
 //!
-//! This crate mints ids and nothing more. Stamping one onto every thing is the kinds'
-//! business, at the root of their tree, so that lights, cameras and UI never get one.
+//! Beside the number, a thing carries its [`Kind`]: the name of its node in the kinds'
+//! tree, so that whatever thinks about a thing can ask what it is. This crate owns the
+//! name's type and knows no tree; each node names itself in its own file.
+//!
+//! This crate mints ids and holds names, nothing more. Stamping an id onto every thing
+//! is the kinds' business, at the root of their tree, so that lights, cameras and UI
+//! never get one.
 
 use std::fmt;
 
@@ -23,12 +28,14 @@ impl Plugin for IdentityPlugin {
         app.init_resource::<NextThingId>();
         #[cfg(feature = "debug")]
         app.register_type::<ThingId>()
-            .register_type::<NextThingId>();
+            .register_type::<NextThingId>()
+            .register_type::<Kind>();
     }
 }
 
 /// A thing's number, for life. There is no unassigned value: an entity has one or it is
-/// not a thing. Made only by [`NextThingId::mint`]. Reads as `#7`.
+/// not a thing. Minted only by [`NextThingId::mint`]; [`ThingId::restored`] names a number
+/// already minted, arriving from a wire or a file. Reads as `#7`.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
 pub struct ThingId(u64);
@@ -37,6 +44,12 @@ impl ThingId {
     /// The number itself, for a display or a file.
     pub fn number(self) -> u64 {
         self.0
+    }
+
+    /// A number already minted, coming back from a wire or a file. Mints nothing: a
+    /// number nothing has is a name for nothing, and whoever looks it up finds no thing.
+    pub fn restored(number: u64) -> Self {
+        Self(number)
     }
 }
 
@@ -69,9 +82,78 @@ impl NextThingId {
     }
 }
 
+/// Which kind of thing this is: its node's place in the kinds' tree, spelled as the path
+/// of the module that defines the node, `murabito_kinds::all_things::…::beast::fox`.
+/// Every node gives itself one, `Kind = Kind::at(module_path!())` in its own `require`,
+/// and a direct requirement wins over an inherited one, so a spawned fox is labelled
+/// `…::fox`, never `…::beast`. The path is the whole ancestry: match on the last
+/// segment for the leaf, or on a prefix for "some animal", "something sentient".
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
+pub struct Kind(&'static str);
+
+impl Kind {
+    /// The kind at that place in the tree. In a node's file this is
+    /// `Kind::at(module_path!())`, so the file's place under `src/` is the label.
+    pub const fn at(path: &'static str) -> Self {
+        Self(path)
+    }
+
+    /// The whole path, root to node.
+    pub fn path(self) -> &'static str {
+        self.0
+    }
+
+    /// The node's own name, the last segment: `fox`.
+    pub fn name(self) -> &'static str {
+        self.0.rsplit("::").next().unwrap_or(self.0)
+    }
+
+    /// Whether that kind is an ancestor of this one. `…::beast::fox` is under
+    /// `…::beast` and under `…::animal`; nothing is under itself.
+    pub fn is_under(self, ancestor: Kind) -> bool {
+        self.0
+            .strip_prefix(ancestor.0)
+            .is_some_and(|rest| rest.starts_with("::"))
+    }
+}
+
+impl fmt::Display for Kind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const BEAST: Kind = Kind::at("kinds::animal::beast");
+    const FOX: Kind = Kind::at("kinds::animal::beast::fox");
+
+    #[test]
+    fn a_kinds_name_is_the_last_segment_of_its_path() {
+        assert_eq!(FOX.name(), "fox");
+        assert_eq!(FOX.path(), "kinds::animal::beast::fox");
+        assert_eq!(Kind::at("kinds").name(), "kinds");
+    }
+
+    #[test]
+    fn a_kind_is_under_each_of_its_ancestors_and_nothing_else() {
+        assert!(FOX.is_under(BEAST));
+        assert!(FOX.is_under(Kind::at("kinds::animal")));
+        assert!(!FOX.is_under(FOX), "nothing is under itself");
+        assert!(!BEAST.is_under(FOX), "a parent is not under its child");
+        assert!(
+            !FOX.is_under(Kind::at("kinds::animal::bea")),
+            "a prefix of a name is not an ancestor"
+        );
+    }
+
+    #[test]
+    fn a_kind_reads_as_its_path() {
+        assert_eq!(FOX.to_string(), "kinds::animal::beast::fox");
+    }
 
     #[cfg(feature = "debug")]
     #[test]
@@ -89,6 +171,19 @@ mod tests {
             .get_with_type_path("murabito_identity::NextThingId")
             .expect("NextThingId");
         assert!(counter.data::<ReflectResource>().is_some());
+        let kind = registry
+            .get_with_type_path("murabito_identity::Kind")
+            .expect("Kind");
+        assert!(kind.data::<ReflectComponent>().is_some());
+    }
+
+    #[test]
+    fn a_restored_number_is_the_same_id_that_was_minted() {
+        let mut counter = NextThingId::default();
+        counter.mint();
+        let minted = counter.mint();
+        assert_eq!(ThingId::restored(minted.number()), minted);
+        assert_eq!(ThingId::restored(2).number(), 2);
     }
 
     #[test]

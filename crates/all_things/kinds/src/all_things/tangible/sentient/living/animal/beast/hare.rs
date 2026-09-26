@@ -1,6 +1,7 @@
 //! 兎 Hare
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 use murabito_movement::Locomotion;
 use murabito_vision::{Band, Vision};
 
@@ -36,5 +37,6 @@ const HARE_VISION: Vision = Vision {
     Locomotion = Locomotion { speed: 5.0, turn_speed: 240.0 },
     Vision = HARE_VISION,
     Model = Model("entity_models/living/animals/hare.glb"),
+    Kind = Kind::at(module_path!()),
 )]
 pub struct Hare;
