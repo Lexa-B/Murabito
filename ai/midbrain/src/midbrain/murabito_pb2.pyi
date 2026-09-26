@@ -70,7 +70,7 @@ class Snapshots(_message.Message):
     def __init__(self, bodies: _Optional[_Iterable[_Union[Snapshot, _Mapping]]] = ...) -> None: ...
 
 class Snapshot(_message.Message):
-    __slots__ = ("id", "kind", "tick", "position", "facing", "in_view", "doing", "queue", "in_flight", "previous_outcome")
+    __slots__ = ("id", "kind", "tick", "position", "facing", "in_view", "doing", "queue", "in_flight", "previous")
     ID_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
     TICK_FIELD_NUMBER: _ClassVar[int]
@@ -80,7 +80,7 @@ class Snapshot(_message.Message):
     DOING_FIELD_NUMBER: _ClassVar[int]
     QUEUE_FIELD_NUMBER: _ClassVar[int]
     IN_FLIGHT_FIELD_NUMBER: _ClassVar[int]
-    PREVIOUS_OUTCOME_FIELD_NUMBER: _ClassVar[int]
+    PREVIOUS_FIELD_NUMBER: _ClassVar[int]
     id: int
     kind: str
     tick: int
@@ -90,8 +90,8 @@ class Snapshot(_message.Message):
     doing: Doing
     queue: _containers.RepeatedCompositeFieldContainer[Action]
     in_flight: float
-    previous_outcome: Outcome
-    def __init__(self, id: _Optional[int] = ..., kind: _Optional[str] = ..., tick: _Optional[int] = ..., position: _Optional[_Union[Voxel, _Mapping]] = ..., facing: _Optional[_Union[Direction, str]] = ..., in_view: _Optional[_Iterable[_Union[InView, _Mapping]]] = ..., doing: _Optional[_Union[Doing, _Mapping]] = ..., queue: _Optional[_Iterable[_Union[Action, _Mapping]]] = ..., in_flight: _Optional[float] = ..., previous_outcome: _Optional[_Union[Outcome, _Mapping]] = ...) -> None: ...
+    previous: Previous
+    def __init__(self, id: _Optional[int] = ..., kind: _Optional[str] = ..., tick: _Optional[int] = ..., position: _Optional[_Union[Voxel, _Mapping]] = ..., facing: _Optional[_Union[Direction, str]] = ..., in_view: _Optional[_Iterable[_Union[InView, _Mapping]]] = ..., doing: _Optional[_Union[Doing, _Mapping]] = ..., queue: _Optional[_Iterable[_Union[Action, _Mapping]]] = ..., in_flight: _Optional[float] = ..., previous: _Optional[_Union[Previous, _Mapping]] = ...) -> None: ...
 
 class InView(_message.Message):
     __slots__ = ("id", "kind", "offset", "distance", "acuity")
@@ -114,6 +114,14 @@ class Doing(_message.Message):
     intent: Intent
     since: int
     def __init__(self, intent: _Optional[_Union[Intent, _Mapping]] = ..., since: _Optional[int] = ...) -> None: ...
+
+class Previous(_message.Message):
+    __slots__ = ("intent", "outcome")
+    INTENT_FIELD_NUMBER: _ClassVar[int]
+    OUTCOME_FIELD_NUMBER: _ClassVar[int]
+    intent: Intent
+    outcome: Outcome
+    def __init__(self, intent: _Optional[_Union[Intent, _Mapping]] = ..., outcome: _Optional[_Union[Outcome, _Mapping]] = ...) -> None: ...
 
 class Intent(_message.Message):
     __slots__ = ("short", "sustained")
@@ -154,24 +162,18 @@ class Action(_message.Message):
     def __init__(self, go: _Optional[_Union[Direction, str]] = ..., face: _Optional[_Union[Direction, str]] = ...) -> None: ...
 
 class Outcome(_message.Message):
-    __slots__ = ("idle", "done", "stopped", "superseded", "cancelled", "lost")
-    IDLE_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("done", "stopped", "superseded", "cancelled", "lost")
     DONE_FIELD_NUMBER: _ClassVar[int]
     STOPPED_FIELD_NUMBER: _ClassVar[int]
     SUPERSEDED_FIELD_NUMBER: _ClassVar[int]
     CANCELLED_FIELD_NUMBER: _ClassVar[int]
     LOST_FIELD_NUMBER: _ClassVar[int]
-    idle: Idle
     done: Done
     stopped: Stopped
     superseded: Superseded
     cancelled: str
     lost: int
-    def __init__(self, idle: _Optional[_Union[Idle, _Mapping]] = ..., done: _Optional[_Union[Done, _Mapping]] = ..., stopped: _Optional[_Union[Stopped, _Mapping]] = ..., superseded: _Optional[_Union[Superseded, _Mapping]] = ..., cancelled: _Optional[str] = ..., lost: _Optional[int] = ...) -> None: ...
-
-class Idle(_message.Message):
-    __slots__ = ()
-    def __init__(self) -> None: ...
+    def __init__(self, done: _Optional[_Union[Done, _Mapping]] = ..., stopped: _Optional[_Union[Stopped, _Mapping]] = ..., superseded: _Optional[_Union[Superseded, _Mapping]] = ..., cancelled: _Optional[str] = ..., lost: _Optional[int] = ...) -> None: ...
 
 class Done(_message.Message):
     __slots__ = ()

@@ -84,6 +84,13 @@ def outcome(ended: pb.Outcome) -> str:
             return kind.capitalize()
 
 
+def previous(snapshot: pb.Snapshot) -> str:
+    if not snapshot.HasField("previous"):
+        return "nothing yet"
+    last = snapshot.previous
+    return f"{intent(last.intent)}  →  {outcome(last.outcome)}"
+
+
 def doing(snapshot: pb.Snapshot) -> str:
     if not snapshot.HasField("doing"):
         return "nothing"
@@ -107,7 +114,7 @@ def body_panel(snapshot: pb.Snapshot) -> Panel:
     facts.add_row("doing", doing(snapshot))
     facts.add_row("queue", ", ".join(action(a) for a in snapshot.queue) or "empty")
     facts.add_row("in flight", in_flight(snapshot))
-    facts.add_row("last", outcome(snapshot.previous_outcome))
+    facts.add_row("last", previous(snapshot))
 
     seen = Table(box=None, pad_edge=False, show_header=True, header_style="dim")
     seen.add_column("in view")

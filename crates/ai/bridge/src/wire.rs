@@ -5,7 +5,7 @@
 //! wire, and a malformed one is refused with a word on what was missing, never guessed.
 
 use murabito_actions::Action;
-use murabito_brainstem::{Doing, InView, Intent, Outcome, Short, Snapshot, Sustained};
+use murabito_brainstem::{Doing, InView, Intent, Outcome, Previous, Short, Snapshot, Sustained};
 use murabito_hexcoords::{Direction, Offset, VoxelCoord};
 use murabito_identity::ThingId;
 use murabito_vision::Acuity;
@@ -108,7 +108,6 @@ impl From<Outcome> for proto::Outcome {
     fn from(outcome: Outcome) -> Self {
         use proto::outcome::Kind;
         let kind = match outcome {
-            Outcome::Idle => Kind::Idle(proto::Idle {}),
             Outcome::Done => Kind::Done(proto::Done {}),
             Outcome::Stopped => Kind::Stopped(proto::Stopped {}),
             Outcome::Superseded => Kind::Superseded(proto::Superseded {}),
@@ -124,6 +123,15 @@ impl From<Doing> for proto::Doing {
         Self {
             intent: Some(doing.intent().into()),
             since: doing.since(),
+        }
+    }
+}
+
+impl From<Previous> for proto::Previous {
+    fn from(previous: Previous) -> Self {
+        Self {
+            intent: Some(previous.intent().into()),
+            outcome: Some(previous.outcome().into()),
         }
     }
 }
@@ -152,7 +160,7 @@ impl From<Snapshot> for proto::Snapshot {
             doing: snapshot.doing.map(Into::into),
             queue: snapshot.queue.into_iter().map(Into::into).collect(),
             in_flight: snapshot.in_flight,
-            previous_outcome: Some(snapshot.previous_outcome.into()),
+            previous: snapshot.previous.map(Into::into),
         }
     }
 }
@@ -325,7 +333,10 @@ mod tests {
             doing: None,
             queue: vec![Action::Go(Direction::E), Action::Face(Direction::N)],
             in_flight: Some(0.25),
-            previous_outcome: Outcome::Cancelled("startle_face_apparition"),
+            previous: Some(Previous::new(
+                Intent::Sustained(Sustained::GoTo(voxel(0, 0))),
+                Outcome::Cancelled("startle_face_apparition"),
+            )),
         };
         let message: proto::Snapshot = snapshot.into();
         assert_eq!(message.id, 2);
@@ -355,11 +366,13 @@ mod tests {
         assert_eq!(message.queue.len(), 2);
         assert_eq!(message.queue[0].kind, Some(proto::action::Kind::Go(0)));
         assert_eq!(message.in_flight, Some(0.25));
+        let previous = message.previous.unwrap();
         assert_eq!(
-            message.previous_outcome.unwrap().kind,
+            previous.outcome.unwrap().kind,
             Some(proto::outcome::Kind::Cancelled(
                 "startle_face_apparition".to_owned()
             ))
         );
+        assert!(previous.intent.is_some(), "and what it was");
     }
 }

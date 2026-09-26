@@ -85,5 +85,5 @@ class Bridge:
 
     def order(self, thing: int, intent: pb.Intent) -> None:
         """Tell a body, by its number, what to want. No reply: the next snapshot's
-        ``previous_outcome`` says what became of it."""
+        ``previous`` says what became of it."""
         self.send(pb.Request(order=pb.Order(id=thing, intent=intent)))

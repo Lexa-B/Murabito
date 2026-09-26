@@ -51,7 +51,6 @@ def fake() -> FakeBridge:
         tick=40,
         position=pb.Voxel(q=-8, r=0, layer=0),
         facing=pb.Direction.ESE,
-        previous_outcome=pb.Outcome(idle=pb.Idle()),
     )
     return FakeBridge([fox])
 
@@ -63,7 +62,7 @@ def test_snapshots_come_back_as_the_bridge_sent_them(fake: FakeBridge) -> None:
     assert bodies[0].id == 2
     assert bodies[0].tick == 40
     assert pb.Direction.Name(bodies[0].facing) == "ESE"
-    assert bodies[0].previous_outcome.WhichOneof("kind") == "idle"
+    assert not bodies[0].HasField("previous")
 
 
 def test_an_order_is_framed_and_names_the_body(fake: FakeBridge) -> None:

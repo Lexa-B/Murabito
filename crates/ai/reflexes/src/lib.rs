@@ -481,8 +481,8 @@ mod tests {
         let apparition = creature_at(&mut app, voxel(2, -4)); // two cells north, near
         tick(&mut app, 1); // the body's look at the end of this tick sees it
         assert_eq!(
-            brainstem(&app, body).previous_outcome(),
-            Outcome::Idle,
+            brainstem(&app, body).previous(),
+            None,
             "the reflex reads last tick's look: not yet"
         );
         tick(&mut app, 1);
@@ -490,8 +490,8 @@ mod tests {
         assert_eq!(doing.intent(), Intent::Short(Short::FaceThing(apparition)));
         assert_eq!(doing.since(), 5);
         assert_eq!(
-            brainstem(&app, body).previous_outcome(),
-            Outcome::Cancelled("startle_face_apparition")
+            brainstem(&app, body).previous().map(|p| p.outcome()),
+            Some(Outcome::Cancelled("startle_face_apparition"))
         );
 
         tick(&mut app, 31);
@@ -501,11 +501,14 @@ mod tests {
             "a quarter turn, 32 ticks from the twitch"
         );
         tick(&mut app, 1);
-        assert_eq!(brainstem(&app, body).previous_outcome(), Outcome::Done);
+        assert_eq!(
+            brainstem(&app, body).previous().map(|p| p.outcome()),
+            Some(Outcome::Done)
+        );
         tick(&mut app, 20);
         assert_eq!(
-            brainstem(&app, body).previous_outcome(),
-            Outcome::Done,
+            brainstem(&app, body).previous().map(|p| p.outcome()),
+            Some(Outcome::Done),
             "the creature still standing there startles nobody"
         );
     }
@@ -548,8 +551,8 @@ mod tests {
         tick(&mut app, 40);
         assert_eq!(facing(&app, body), Direction::N);
         assert_eq!(
-            brainstem(&app, body).previous_outcome(),
-            Outcome::Done,
+            brainstem(&app, body).previous().map(|p| p.outcome()),
+            Some(Outcome::Done),
             "the turn ran to its end, untaken"
         );
         tick(&mut app, 5);
@@ -567,7 +570,7 @@ mod tests {
         creature_at(&mut app, voxel(2, -4));
         tick(&mut app, 3);
         assert_eq!(brainstem(&app, body).doing(), None);
-        assert_eq!(brainstem(&app, body).previous_outcome(), Outcome::Idle);
+        assert_eq!(brainstem(&app, body).previous(), None);
         assert_eq!(facing(&app, body), Direction::E);
     }
 

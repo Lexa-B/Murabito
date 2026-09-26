@@ -125,12 +125,13 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   thing, a step, each over within a round of the slower mind; `Sustained`, a walk to a
   cell, re-aimed at every step from where the body stands. Holds one intent per body in
   a `Brainstem` component and is the only thing that pushes onto the `ActionQueue`, one
-  action at a time, every tick in `AskingSet`. Records how the last intent ended
-  (`Outcome`: done, stopped, superseded, cancelled by a named reflex, or lost when the
-  thing named was out of view) for whoever gave it. With nothing ordered a body stands
+  action at a time, every tick in `AskingSet`. Records what the last intent was and how
+  it ended (`Previous`: the intent, and an `Outcome`: done, stopped, superseded,
+  cancelled by a named reflex, or lost when the thing named was out of view) for
+  whoever gave it. With nothing ordered a body stands
   still. Its `Port` is the seam to a mind: after the senses each tick it posts every
   body's `Snapshot` (place, facing, what is in view and how well, what it is doing, the
-  queue, the step in flight, the last outcome) to a board that is read at any moment,
+  queue, the step in flight, what was done last and how it ended) to a board that is read at any moment,
   and it drains a channel of `Order`s, intents addressed by `ThingId`, once a tick. Both
   far ends are plain `Send` handles, so a socket thread or a test can be the mind. The
   slower mind and the reflexes both sit above it; it depends on actions, progress,

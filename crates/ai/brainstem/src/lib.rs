@@ -114,12 +114,9 @@ pub enum Intent {
     Sustained(Sustained),
 }
 
-/// How the last intent ended, for whoever gave it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// How an intent ended, for whoever gave it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
-    /// Nothing has been asked yet.
-    #[default]
-    Idle,
     /// It was carried out.
     Done,
     /// A stop replaced it.
@@ -130,6 +127,28 @@ pub enum Outcome {
     Cancelled(&'static str),
     /// The thing it named was not in view when the body went to act on it.
     Lost(ThingId),
+}
+
+/// What the body did last, and how it ended: the record a mind reads to learn what
+/// became of its order, and of what was done in its place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Previous {
+    intent: Intent,
+    outcome: Outcome,
+}
+
+impl Previous {
+    pub fn new(intent: Intent, outcome: Outcome) -> Self {
+        Self { intent, outcome }
+    }
+
+    pub fn intent(&self) -> Intent {
+        self.intent
+    }
+
+    pub fn outcome(&self) -> Outcome {
+        self.outcome
+    }
 }
 
 /// What the body is doing now, and since which tick.
@@ -163,16 +182,17 @@ struct Pending {
     cause: Cause,
 }
 
-/// A body's driver: one intent at a time, and how the last one ended. Every sentient has
-/// one; anything may order it, a reflex may preempt it, and only the systems here read
-/// it out onto the queue.
+/// A body's driver: one intent at a time, and what the last one was and how it ended.
+/// Every sentient has one; anything may order it, a reflex may preempt it, and only the
+/// systems here read it out onto the queue.
 #[derive(Component, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Brainstem {
     /// Given, not yet begun. Drive takes it at the start of the next tick; two in one
     /// tick and the later wins.
     pending: Option<Pending>,
     doing: Option<Doing>,
-    previous_outcome: Outcome,
+    /// None until something has been asked.
+    previous: Option<Previous>,
     /// The current short's action is on the queue, or past it.
     pushed: bool,
 }
@@ -201,8 +221,9 @@ impl Brainstem {
         self.doing
     }
 
-    pub fn previous_outcome(&self) -> Outcome {
-        self.previous_outcome
+    /// What the body did last and how it ended; nothing until something has been asked.
+    pub fn previous(&self) -> Option<Previous> {
+        self.previous
     }
 
     /// Whether a new intent waits for drive to take it up.
@@ -214,12 +235,13 @@ impl Brainstem {
     /// bookkeeping: the queue is drive's to clear.
     fn begin(&mut self, pending: Pending, now: u64) {
         let is_stop = pending.intent == Intent::Short(Short::Stop);
-        if self.doing.is_some() {
-            self.previous_outcome = match (pending.cause, is_stop) {
+        if let Some(doing) = self.doing {
+            let outcome = match (pending.cause, is_stop) {
                 (Cause::Reflex(name), _) => Outcome::Cancelled(name),
                 (Cause::Order, true) => Outcome::Stopped,
                 (Cause::Order, false) => Outcome::Superseded,
             };
+            self.previous = Some(Previous::new(doing.intent, outcome));
         }
         self.doing = (!is_stop).then_some(Doing {
             intent: pending.intent,
@@ -229,8 +251,10 @@ impl Brainstem {
     }
 
     fn finish(&mut self, ended: Outcome) {
+        if let Some(doing) = self.doing {
+            self.previous = Some(Previous::new(doing.intent, ended));
+        }
         self.doing = None;
-        self.previous_outcome = ended;
         self.pushed = false;
     }
 }
@@ -466,8 +490,9 @@ pub(crate) mod tests {
         app.world().get::<Brainstem>(body).unwrap().clone()
     }
 
-    pub(crate) fn previous_outcome(app: &App, body: Entity) -> Outcome {
-        brainstem(app, body).previous_outcome()
+    /// How the body's last intent ended, if anything has been asked.
+    pub(crate) fn previous_outcome(app: &App, body: Entity) -> Option<Outcome> {
+        brainstem(app, body).previous().map(|p| p.outcome())
     }
 
     pub(crate) fn facing(app: &App, body: Entity) -> Direction {
@@ -488,7 +513,7 @@ pub(crate) mod tests {
     fn a_fresh_brainstem_does_nothing_and_has_no_outcome_yet() {
         let body = Brainstem::default();
         assert_eq!(body.doing(), None);
-        assert_eq!(body.previous_outcome(), Outcome::Idle);
+        assert_eq!(body.previous(), None);
     }
 
     #[test]
@@ -501,7 +526,7 @@ pub(crate) mod tests {
         let doing = body.doing().unwrap();
         assert_eq!(doing.intent(), short(Short::Face(N)));
         assert_eq!(doing.since(), 7);
-        assert_eq!(body.previous_outcome(), Outcome::Idle, "nothing ended");
+        assert_eq!(body.previous(), None, "nothing ended");
     }
 
     #[test]
@@ -514,13 +539,15 @@ pub(crate) mod tests {
         body.order(short(Short::Face(N)));
         let pending = body.take_pending().unwrap();
         body.begin(pending, 2);
-        assert_eq!(body.previous_outcome(), Outcome::Superseded);
+        let previous = body.previous().expect("something ended");
+        assert_eq!(previous.outcome(), Outcome::Superseded);
+        assert_eq!(previous.intent(), short(Short::Step(E)), "and it says what");
         assert_eq!(body.doing().unwrap().intent(), short(Short::Face(N)));
 
         body.order(short(Short::Stop));
         let pending = body.take_pending().unwrap();
         body.begin(pending, 3);
-        assert_eq!(body.previous_outcome(), Outcome::Stopped);
+        assert_eq!(body.previous().map(|p| p.outcome()), Some(Outcome::Stopped));
         assert_eq!(body.doing(), None);
     }
 
@@ -535,8 +562,8 @@ pub(crate) mod tests {
         let pending = body.take_pending().unwrap();
         body.begin(pending, 2);
         assert_eq!(
-            body.previous_outcome(),
-            Outcome::Cancelled("startle_face_apparition")
+            body.previous().map(|p| p.outcome()),
+            Some(Outcome::Cancelled("startle_face_apparition"))
         );
         assert_eq!(body.doing().unwrap().intent(), short(Short::Face(N)));
     }
@@ -629,7 +656,7 @@ pub(crate) mod tests {
         tick(&mut app, 10);
         assert_eq!(queued(&app, body), 0);
         assert_eq!(position(&app, body), voxel(0, 0));
-        assert_eq!(previous_outcome(&app, body), Outcome::Idle);
+        assert_eq!(previous_outcome(&app, body), None);
     }
 
     #[test]
@@ -660,7 +687,7 @@ pub(crate) mod tests {
 
         tick(&mut app, 1);
         assert_eq!(brainstem(&app, body).doing(), None);
-        assert_eq!(previous_outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
     }
 
     #[test]
@@ -674,7 +701,7 @@ pub(crate) mod tests {
             "one shaku at four a second is 16 ticks"
         );
         tick(&mut app, 1);
-        assert_eq!(previous_outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
         tick(&mut app, 10);
         assert_eq!(position(&app, body), voxel(1, 0), "and then nothing more");
     }
@@ -686,7 +713,7 @@ pub(crate) mod tests {
         tick(&mut app, 1);
         order(&mut app, body, short(Short::Face(N)));
         tick(&mut app, 1);
-        assert_eq!(previous_outcome(&app, body), Outcome::Superseded);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Superseded));
         assert_eq!(
             brainstem(&app, body).doing().unwrap().intent(),
             short(Short::Face(N))
@@ -697,7 +724,7 @@ pub(crate) mod tests {
         assert_eq!(facing(&app, body), N, "32 ticks from the order");
         assert_eq!(position(&app, body), voxel(0, 0), "the step never landed");
         tick(&mut app, 1);
-        assert_eq!(previous_outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
     }
 
     #[test]
@@ -708,7 +735,7 @@ pub(crate) mod tests {
         order(&mut app, body, short(Short::Stop));
         tick(&mut app, 1);
         assert_eq!(brainstem(&app, body).doing(), None);
-        assert_eq!(previous_outcome(&app, body), Outcome::Stopped);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Stopped));
         tick(&mut app, 40);
         assert_eq!(
             position(&app, body),
@@ -717,7 +744,7 @@ pub(crate) mod tests {
         );
         assert_eq!(
             previous_outcome(&app, body),
-            Outcome::Stopped,
+            Some(Outcome::Stopped),
             "and nothing else happened"
         );
     }
@@ -731,7 +758,7 @@ pub(crate) mod tests {
         tick(&mut app, 32);
         assert_eq!(facing(&app, body), N, "two cells north of the eye");
         tick(&mut app, 1);
-        assert_eq!(previous_outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
     }
 
     #[test]
@@ -742,7 +769,7 @@ pub(crate) mod tests {
         order(&mut app, body, short(Short::FaceThing(unseen)));
         tick(&mut app, 1);
         assert_eq!(brainstem(&app, body).doing(), None);
-        assert_eq!(previous_outcome(&app, body), Outcome::Lost(unseen));
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Lost(unseen)));
         assert_eq!(facing(&app, body), E, "and the body did not move");
     }
 
@@ -752,7 +779,7 @@ pub(crate) mod tests {
         let thing = thing_at(&mut app, voxel(2, -4));
         order(&mut app, body, short(Short::FaceThing(thing)));
         tick(&mut app, 1);
-        assert_eq!(previous_outcome(&app, body), Outcome::Lost(thing));
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Lost(thing)));
     }
 
     #[test]
@@ -769,7 +796,7 @@ pub(crate) mod tests {
             "drive ran before the last step landed"
         );
         tick(&mut app, 1);
-        assert_eq!(previous_outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
         tick(&mut app, 10);
         assert_eq!(position(&app, body), voxel(3, 0), "and stays");
     }
@@ -818,7 +845,7 @@ pub(crate) mod tests {
         let (mut app, body) = body();
         order(&mut app, body, go_to(0, 0));
         tick(&mut app, 1);
-        assert_eq!(previous_outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
         assert_eq!(queued(&app, body), 0);
     }
 
@@ -846,6 +873,6 @@ pub(crate) mod tests {
             "one corner step from there"
         );
         tick(&mut app, 1);
-        assert_eq!(previous_outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
     }
 }

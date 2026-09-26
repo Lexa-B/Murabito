@@ -24,7 +24,7 @@ use murabito_placement::{Facing, VoxelPosition};
 use murabito_progress::Progress;
 use murabito_vision::{Acuity, Seen};
 
-use crate::{Brainstem, Doing, Intent, Outcome, Tick};
+use crate::{Brainstem, Doing, Intent, Previous, Tick};
 
 /// One body's picture of one tick: everything a mind is told.
 #[derive(Clone, Debug, PartialEq)]
@@ -44,8 +44,9 @@ pub struct Snapshot {
     pub queue: Vec<Action>,
     /// How far along the action in flight is, 0 to 1, or nothing in flight.
     pub in_flight: Option<f32>,
-    /// How the last intent ended: the one before `doing`, not `doing` itself.
-    pub previous_outcome: Outcome,
+    /// What the body did last and how it ended: the one before `doing`, not `doing`
+    /// itself. Nothing until something has been asked.
+    pub previous: Option<Previous>,
 }
 
 /// One thing in view, as the body sees it.
@@ -199,7 +200,7 @@ fn snapshot(
         doing: body.doing(),
         queue: queue.iter().collect(),
         in_flight: progress.in_flight().then(|| progress.fraction()),
-        previous_outcome: body.previous_outcome(),
+        previous: body.previous(),
     }
 }
 
@@ -236,11 +237,11 @@ pub(crate) fn publish(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Short;
     use crate::tests::{
         ALL_ROUND, E, N, app, brainstem, facing, mint, order, position, previous_outcome, tick,
         voxel,
     };
+    use crate::{Outcome, Short};
     use murabito_movement::Locomotion;
 
     const BODY: Kind = Kind::at("test::bodies::body");
@@ -307,7 +308,7 @@ mod tests {
         assert_eq!(card.doing, None);
         assert_eq!(card.queue, Vec::<Action>::new());
         assert_eq!(card.in_flight, None);
-        assert_eq!(card.previous_outcome, Outcome::Idle);
+        assert_eq!(card.previous, None);
 
         let mut in_view = card.in_view.clone();
         in_view.sort_by_key(|seen| seen.id);
@@ -351,7 +352,7 @@ mod tests {
             (fraction - 0.75).abs() < 1e-3,
             "eight ticks of a 10.67-tick notch: {fraction}"
         );
-        assert_eq!(card.previous_outcome, Outcome::Idle);
+        assert_eq!(card.previous, None);
     }
 
     #[test]
@@ -378,7 +379,7 @@ mod tests {
         );
         tick(&mut app, 32);
         assert_eq!(facing(&app, body), N);
-        assert_eq!(previous_outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
     }
 
     #[test]
@@ -390,7 +391,7 @@ mod tests {
             .unwrap();
         tick(&mut app, 20);
         assert_eq!(position(&app, body), voxel(0, 0));
-        assert_eq!(previous_outcome(&app, body), Outcome::Idle);
+        assert_eq!(previous_outcome(&app, body), None);
     }
 
     #[test]
@@ -412,7 +413,7 @@ mod tests {
 
         tick(&mut app, 17);
         assert_eq!(position(&app, body), voxel(1, 0));
-        assert_eq!(previous_outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
         assert_eq!(board(&app).get(id).unwrap().position, voxel(1, 0));
     }
 

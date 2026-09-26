@@ -3,7 +3,7 @@
 // One message each way, framed on the socket as a four-byte big-endian length and then
 // the bytes. The game answers a `Request` carrying `snapshots` with a `Snapshots`; an
 // `Order` gets no reply, since what became of it shows in the body's next snapshot as
-// its `previous_outcome`. Shapes mirror the brainstem's own types in
+// its `previous`. Shapes mirror the brainstem's own types in
 // crates/ai/brainstem: a voxel is axial, an enum's number is its index in memory.
 
 syntax = "proto3";
@@ -49,8 +49,9 @@ message Snapshot {
   repeated Action queue = 8;
   // How far along the action in flight is, 0 to 1; absent when nothing is.
   optional float in_flight = 9;
-  // How the last intent ended: the one before `doing`, not `doing` itself.
-  Outcome previous_outcome = 10;
+  // What the body did last and how it ended: the one before `doing`, not `doing`
+  // itself. Absent until something has been asked.
+  optional Previous previous = 10;
 }
 
 // One thing in view, as the body sees it.
@@ -68,6 +69,11 @@ message InView {
 message Doing {
   Intent intent = 1;
   uint64 since = 2;
+}
+
+message Previous {
+  Intent intent = 1;
+  Outcome outcome = 2;
 }
 
 // ---- the vocabulary --------------------------------------------------------------
@@ -109,18 +115,16 @@ message Action {
 
 message Outcome {
   oneof kind {
-    Idle idle = 1;
-    Done done = 2;
-    Stopped stopped = 3;
-    Superseded superseded = 4;
+    Done done = 1;
+    Stopped stopped = 2;
+    Superseded superseded = 3;
     // The name of the reflex that took the body.
-    string cancelled = 5;
+    string cancelled = 4;
     // The number of the thing that was not in view.
-    uint64 lost = 6;
+    uint64 lost = 5;
   }
 }
 
-message Idle {}
 message Done {}
 message Stopped {}
 message Superseded {}

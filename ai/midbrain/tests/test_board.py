@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 
 from midbrain import murabito_pb2 as pb
-from midbrain.board import doing, in_flight, intent, name_of, outcome, render, voxel
+from midbrain.board import doing, in_flight, intent, name_of, outcome, previous, render, voxel
 
 FOX = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox"
 
@@ -33,7 +33,10 @@ def snapshot() -> pb.Snapshot:
         ),
         queue=[pb.Action(go=pb.Direction.E)],
         in_flight=0.5,
-        previous_outcome=pb.Outcome(cancelled="startle_face_apparition"),
+        previous=pb.Previous(
+            intent=pb.Intent(short=pb.Short(face=pb.Direction.N)),
+            outcome=pb.Outcome(cancelled="startle_face_apparition"),
+        ),
     )
 
 
@@ -45,16 +48,16 @@ def test_the_words_for_each_fact() -> None:
     assert intent(s.doing.intent) == "GoTo (0, 0, 0) L0"
     assert doing(s) == "GoTo (0, 0, 0) L0  since tick 40 (24 ticks)"
     assert in_flight(s) == "[##########..........] 50%"
-    assert outcome(s.previous_outcome) == "Cancelled by startle_face_apparition"
+    assert previous(s) == "Face N  →  Cancelled by startle_face_apparition"
     assert outcome(pb.Outcome(done=pb.Done())) == "Done"
     assert outcome(pb.Outcome(lost=7)) == "Lost #7"
 
 
 def test_a_body_with_nothing_going_on_reads_as_such() -> None:
-    bare = pb.Snapshot(id=5, kind=FOX, tick=1, previous_outcome=pb.Outcome(idle=pb.Idle()))
+    bare = pb.Snapshot(id=5, kind=FOX, tick=1)
     assert doing(bare) == "nothing"
     assert in_flight(bare) == "idle"
-    assert outcome(bare.previous_outcome) == "Idle"
+    assert previous(bare) == "nothing yet"
 
 
 def test_the_board_renders_every_body_with_its_facts() -> None:
@@ -67,4 +70,4 @@ def test_the_board_renders_every_body_with_its_facts() -> None:
     assert "Go E" in text
     assert "#4" in text and "near" in text
     assert "sugi" in text and "mid" in text
-    assert "Cancelled by startle_face_apparition" in text
+    assert "Face N  →  Cancelled by startle_face_apparition" in text

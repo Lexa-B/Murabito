@@ -6,7 +6,7 @@
 //! `proto/murabito.proto`: a `Request` in, framed as a four-byte big-endian length and
 //! then the bytes; a `Snapshots` out, framed the same way, in answer to a request for
 //! them. An order gets no reply; what became of it is the body's next
-//! `previous_outcome`. Several clients may connect; a visualizer that only asks for
+//! `previous`. Several clients may connect; a visualizer that only asks for
 //! snapshots is a client like the mind.
 //!
 //! Nothing behind this crate knows protobuf exists: `wire` converts at the edge, and a
@@ -342,10 +342,7 @@ mod tests {
             })
         );
         assert_eq!(body.facing, proto::Direction::E as i32);
-        assert_eq!(
-            body.previous_outcome.as_ref().unwrap().kind,
-            Some(proto::outcome::Kind::Idle(proto::Idle {}))
-        );
+        assert!(body.previous.is_none(), "nothing has been asked of it");
     }
 
     #[test]
@@ -376,16 +373,27 @@ mod tests {
             app.world()
                 .get::<Brainstem>(body)
                 .unwrap()
-                .previous_outcome(),
-            Outcome::Done
+                .previous()
+                .map(|p| p.outcome()),
+            Some(Outcome::Done)
         );
 
         ask(&mut client, snapshots_request());
         let snapshots = answer(&mut client);
         assert_eq!(snapshots.bodies[0].facing, proto::Direction::N as i32);
+        let previous = snapshots.bodies[0]
+            .previous
+            .as_ref()
+            .expect("something ended");
         assert_eq!(
-            snapshots.bodies[0].previous_outcome.as_ref().unwrap().kind,
+            previous.outcome.as_ref().unwrap().kind,
             Some(proto::outcome::Kind::Done(proto::Done {}))
+        );
+        assert_eq!(
+            previous.intent.as_ref().unwrap().kind,
+            Some(proto::intent::Kind::Short(proto::Short {
+                kind: Some(proto::short::Kind::Face(proto::Direction::N as i32)),
+            }))
         );
     }
 
