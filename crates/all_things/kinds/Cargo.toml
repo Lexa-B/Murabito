@@ -18,6 +18,7 @@ murabito_hexcoords.workspace = true
 murabito_identity.workspace = true
 murabito_movement.workspace = true
 murabito_placement.workspace = true
+murabito_reflexes.workspace = true
 murabito_vision.workspace = true
 
 [dev-dependencies]

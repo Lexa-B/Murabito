@@ -13,6 +13,7 @@ use murabito_navigation::{NavigationPlugin, NavigationSettings};
 use murabito_perception::PerceptionPlugin;
 use murabito_placement::PlacementPlugin;
 use murabito_progress::ProgressPlugin;
+use murabito_reflexes::ReflexesPlugin;
 use murabito_scene::ScenePlugin;
 use murabito_settings::{Persist, SettingsPlugin};
 use murabito_settings_page::SettingsPagePlugin;
@@ -41,6 +42,7 @@ fn main() {
                 ProgressPlugin,
                 ActionsPlugin,
                 BrainstemPlugin,
+                ReflexesPlugin,
             ),
             (PerceptionPlugin, VisionPlugin),
             // Last, and nothing without the `debug` feature.

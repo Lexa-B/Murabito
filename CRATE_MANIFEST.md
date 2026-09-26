@@ -36,7 +36,8 @@ crates/
 │  └─ senses/             one crate per sense, each with its own list in its own shape
 │     └─ vision/          murabito_vision
 └─ ai/                    minds: a group directory, not a crate
-   └─ brainstem/          murabito_brainstem
+   ├─ brainstem/          murabito_brainstem
+   └─ reflexes/           murabito_reflexes
 ```
 
 Arrows in the dependency graph all point down, toward whoever owns a type. The app
@@ -133,6 +134,14 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   far ends are plain `Send` handles, so a socket thread or a test can be the mind. The
   slower mind and the reflexes both sit above it; it depends on actions, progress,
   placement, identity, perception, vision and hexcoords.
+- **`murabito_reflexes`** — what a body does without thinking. The catalogue of every
+  reflex a sentient could have, each one trigger to one response with its own code,
+  named `category_reaction_trigger`, answering only a `Short`. A body's `Reflexes` is
+  its repertoire with a priority per entry: the kind's by its `require`, an
+  individual's if given at spawn. One system in the brainstem's `Reflexes` slot runs
+  each repertoire against this tick's view and last tick's and preempts the brainstem
+  with the highest-priority match, cancelling the body's intent by the reflex's name.
+  First reflex: `startle_face_apparition`. Depends on brainstem, vision, identity.
   Design: `docs/ai_readme.md`.
 
 ## Doing things

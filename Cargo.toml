@@ -27,6 +27,7 @@ members = [
     "crates/perception/perception",
     "crates/perception/senses/*",
     "crates/ai/brainstem",
+    "crates/ai/reflexes",
 ]
 
 [workspace.package]
@@ -51,6 +52,7 @@ murabito_kinds = { path = "crates/all_things/kinds" }
 murabito_perception = { path = "crates/perception/perception" }
 murabito_vision = { path = "crates/perception/senses/vision" }
 murabito_brainstem = { path = "crates/ai/brainstem" }
+murabito_reflexes = { path = "crates/ai/reflexes" }
 murabito_user_data = { path = "crates/user_data" }
 murabito_settings = { path = "crates/settings" }
 murabito_i18n = { path = "crates/i18n" }

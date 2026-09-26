@@ -166,6 +166,7 @@ mod tests {
     use murabito_movement::Locomotion;
     use murabito_placement::{Facing, VoxelPosition};
     use murabito_progress::Progress;
+    use murabito_reflexes::{Reflex, Reflexes};
     use murabito_vision::{Seen, Vision};
 
     fn has<C: Component>(world: &World, entity: Entity) -> bool {
@@ -195,6 +196,39 @@ mod tests {
         assert!(!has::<NonSentient>(&world, beast));
         assert!(!has::<Plant>(&world, beast));
         assert!(!has::<Intangible>(&world, beast));
+    }
+
+    #[test]
+    fn a_fox_startles_and_a_bare_beast_has_no_reflexes_and_a_given_repertoire_wins() {
+        let mut world = World::new();
+        let fox = world.spawn(Fox).id();
+        let beast = world.spawn(Beast).id();
+        let bob = world
+            .spawn((
+                Fox,
+                Reflexes::new([Reflex::StartleFaceApparition.at(10)])
+                    .tuned(Reflex::StartleFaceApparition, 200),
+            ))
+            .id();
+
+        let repertoire = |entity| {
+            world
+                .get::<Reflexes>(entity)
+                .expect("every sentient has one")
+        };
+        assert_eq!(
+            repertoire(fox)
+                .iter()
+                .map(|wired| wired.reflex)
+                .collect::<Vec<_>>(),
+            [Reflex::StartleFaceApparition]
+        );
+        assert!(repertoire(beast).is_empty(), "a tier names none");
+        assert_eq!(
+            repertoire(bob).iter().next().unwrap().priority,
+            200,
+            "Bob is jumpy"
+        );
     }
 
     #[test]

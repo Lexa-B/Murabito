@@ -3601,6 +3601,7 @@ dependencies = [
  "murabito_perception",
  "murabito_placement",
  "murabito_progress",
+ "murabito_reflexes",
  "murabito_scene",
  "murabito_settings",
  "murabito_settings_page",
@@ -3708,6 +3709,7 @@ dependencies = [
  "murabito_movement",
  "murabito_placement",
  "murabito_progress",
+ "murabito_reflexes",
  "murabito_vision",
 ]
 
@@ -3770,6 +3772,22 @@ name = "murabito_progress"
 version = "0.1.0"
 dependencies = [
  "bevy",
+]
+
+[[package]]
+name = "murabito_reflexes"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_actions",
+ "murabito_brainstem",
+ "murabito_hexcoords",
+ "murabito_identity",
+ "murabito_movement",
+ "murabito_perception",
+ "murabito_placement",
+ "murabito_progress",
+ "murabito_vision",
 ]
 
 [[package]]

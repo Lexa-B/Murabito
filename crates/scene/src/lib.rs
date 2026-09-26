@@ -31,10 +31,10 @@ const SKY_COLOUR: Color = Color::srgb(0.53, 0.81, 0.92);
 /// whatever faces away from the sun is pure black.
 const SKY_GLOW: f32 = 200.0;
 
-/// Where the fox starts: eight cells west of the origin, so that its loop, which runs
-/// five cells east and six north of its start, stays well west of the tree; and which
-/// way it starts off facing: toward the camera and to its right, which shows its face
-/// and its flank at once.
+/// Where the fox starts: eight cells west of the origin, well west of the tree; and
+/// which way it starts off facing: toward the camera and to its right, which shows its
+/// face and its flank at once. It stands there until something tells it otherwise: a
+/// reflex, or the mind to come.
 const FOX_STARTS_AT: (i32, i32, i32) = (-8, 0, 8);
 const FOX_FACES: Direction = Direction::ESE;
 
@@ -100,7 +100,7 @@ impl Plugin for ScenePlugin {
                     thicken_bars,
                 ),
             )
-            .add_systems(FixedUpdate, (walk_the_fox, walk_the_hare).in_set(AskingSet))
+            .add_systems(FixedUpdate, walk_the_hare.in_set(AskingSet))
             .add_systems(Update, (draw_progress_bars, draw_cones, draw_sightings));
     }
 }
@@ -190,21 +190,6 @@ fn spawn_tree(mut commands: Commands) {
     let (q, r, s) = TREE_AT;
     let at = VoxelCoord::new(q, r, s, 0).expect("the tree's place is on the plane");
     commands.spawn((Sugi, VoxelPosition(at), Facing(TREE_FACES)));
-}
-
-/// Until something decides for it, the fox walks a loop: whenever its queue runs dry it
-/// is asked to go each of the twelve directions in turn. Each is one notch on from the
-/// last, so no step needs a turn first, and the twelve sum to nothing, so the loop
-/// closes on the voxel it started from. The queue empties as the last step is issued,
-/// while it is still in flight, so the refill never leaves a tick at rest.
-fn walk_the_fox(mut foxes: Query<&mut ActionQueue, With<Fox>>) {
-    for mut queue in &mut foxes {
-        if queue.is_empty() {
-            Direction::ALL
-                .into_iter()
-                .for_each(|direction| queue.push(Action::Go(direction)));
-        }
-    }
 }
 
 /// The hare walks a side, rests once the last step has landed, and is then asked to
@@ -385,24 +370,6 @@ mod tests {
         }
     }
 
-    /// The fox's loop never enters the tree's cell, nor the ring of cells around it,
-    /// which is about where the canopy ends.
-    #[test]
-    fn the_foxs_loop_keeps_clear_of_the_tree() {
-        let (q, r, s) = TREE_AT;
-        let tree = VoxelCoord::new(q, r, s, 0).expect("on the plane");
-        let (fq, fr, fs) = FOX_STARTS_AT;
-        let mut here = VoxelCoord::new(fq, fr, fs, 0).expect("on the plane");
-
-        for direction in Direction::ALL {
-            here = here.neighbour(direction);
-            assert!(
-                here.distance(tree) > 1,
-                "the loop passes {here:?}, next to the tree"
-            );
-        }
-    }
-
     /// The starting tableau, as a claim rather than a screenshot: the fox faces east
     /// across the ground and sees the tree, near, and the hare beyond it, less well; the
     /// hare faces away and sees neither.
@@ -525,50 +492,6 @@ mod tests {
             .expect("exactly one sun");
 
         assert!(sun.forward().y < 0.0, "the sun points {:?}", sun.forward());
-    }
-
-    #[test]
-    fn the_fox_walks_a_twelve_sided_loop_and_comes_home() {
-        use bevy::gizmos::AppGizmoBuilder;
-        use bevy::time::TimeUpdateStrategy;
-        use murabito_actions::ActionsPlugin;
-        use murabito_movement::MovementPlugin;
-        use murabito_progress::ProgressPlugin;
-
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
-            .init_asset::<Mesh>()
-            .init_asset::<StandardMaterial>()
-            .init_asset::<WorldAsset>()
-            .init_asset::<bevy::gizmos::GizmoAsset>()
-            .init_gizmo_group::<DefaultGizmoConfigGroup>()
-            .add_plugins((ProgressPlugin, MovementPlugin, ActionsPlugin, ScenePlugin))
-            .insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
-        app.update();
-        let fox_at = |app: &mut App| {
-            let world = app.world_mut();
-            world
-                .query_filtered::<&VoxelPosition, With<Fox>>()
-                .single(world)
-                .expect("exactly one fox")
-                .0
-        };
-        let home = fox_at(&mut app);
-        let mut visited = std::collections::HashSet::from([home]);
-        let mut left_home = false;
-
-        // Six edges and six corners at 4 shaku/s: 6 + 6√3 = 16.39 shaku, 262.3 ticks of
-        // 1/16 shaku, so the last step lands on tick 263.
-        let came_home_on = (1..=400).find(|_| {
-            app.update();
-            let here = fox_at(&mut app);
-            visited.insert(here);
-            left_home |= here != home;
-            left_home && here == home
-        });
-
-        assert_eq!(came_home_on, Some(263));
-        assert_eq!(visited.len(), 12, "the fox visited only {visited:?}");
     }
 
     #[test]
