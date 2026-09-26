@@ -60,6 +60,11 @@ impl ActionQueue {
         self.0.len()
     }
 
+    /// What is queued, first to last, for whoever shows or reports it.
+    pub fn iter(&self) -> impl Iterator<Item = Action> + '_ {
+        self.0.iter().copied()
+    }
+
     /// Drops everything queued. What is already in flight finishes: the mechanism holds
     /// that, not the queue.
     pub fn clear(&mut self) {
@@ -129,6 +134,17 @@ fn issue(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_queue_reads_back_first_to_last() {
+        let mut queue = ActionQueue::default();
+        queue.push(Action::Go(Direction::E));
+        queue.push(Action::Face(Direction::N));
+        assert_eq!(
+            queue.iter().collect::<Vec<_>>(),
+            [Action::Go(Direction::E), Action::Face(Direction::N)]
+        );
+    }
     use murabito_hexcoords::VoxelCoord;
     use murabito_movement::{Locomotion, MovementPlugin};
     use murabito_placement::VoxelPosition;
