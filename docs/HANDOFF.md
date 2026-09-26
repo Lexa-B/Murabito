@@ -295,6 +295,84 @@ is still design. `TODO.md` is what's queued.
   progress bar, cones and sightlines off the scene. Still queued from before: the keyboard
   gate and typed values, the rebind screen. All in `TODO.md`.
 
+## Picking up: the midbrain
+
+Written 2026-09-27 for the session that starts the midbrain's first behaviour cold. PR #44
+(branch `ai-io`) holds everything below; if it has merged, branch afresh from `origin/main` in
+the `ai-io` worktree (`git -C <wt> fetch --prune && git -C <wt> switch -C <branch> --no-track
+origin/main`; its `target/` is a symlink to `cleanup-refactor`'s and stays). A plain-language
+walkthrough of the whole I/O, with diagrams, is a private page Lexa has the link to
+(claude.ai artifact `Ff85UQifrkfqY9TKUhboVv`); `docs/ai_readme.md` is the brief in the repo.
+
+**What is settled, and is not up for redesign:** everything in `docs/ai_readme.md` above its
+Design section, and every call listed under "The AI's I/O" in the decisions above. In one
+breath: the midbrain runs outside the game, in Python under `ai/midbrain/`, on its own clock
+(~125 ms, one round), pulls every body's `Snapshot` from the bridge on `127.0.0.1:15703`, and
+sends each body an `Intent`; the brainstem carries it out and reports back through `previous`.
+The shape Lexa named for the mind is a **utility AI in the Halo Infinite style**: a
+consideration reads a number off the snapshot, a score picks an option. Nothing about that
+mind has been designed yet: not its options, not its considerations, not how it remembers.
+
+**What a mind has to work with**, all already there:
+
+- `ai/midbrain/src/midbrain/client.py`: `Bridge(host, port).connect()`, `.snapshots()` (a
+  list of `pb.Snapshot`), `.order(id, pb.Intent)`. `murabito_pb2` (`pb`) is the contract as
+  Python; `pb.Direction.Name(n)`, `snapshot.HasField("doing")`, `outcome.WhichOneof("kind")`.
+- `order.py`'s `parse(words) -> pb.Intent` shows how each intent is built as a message; the
+  mind builds the same messages with its own words.
+- `board.py`'s `render` is the live view; run `uv run board` beside the game while working.
+- A snapshot's facts (`docs/ai_readme.md`, table): id, kind (path), tick, position (axial),
+  facing (index), in_view (id, kind or none, offset, distance in steps, acuity), doing (intent
+  + since), queue, in_flight (0..1 or none), previous (intent + outcome or none).
+- The vocabulary a mind may send: `Stop`, `Face(dir)`, `FaceThing(id)`, `Step(dir)`,
+  `GoTo(q, r, layer)`. New words are `Sustained` variants added in the brainstem when the
+  mind needs them (`Walk`, `Follow`, `Flee` are the ones named).
+- Numbers: 64 ticks a second; at 4 shaku/s an edge step is 16 ticks, a corner step 28, a
+  quarter turn 32; a round of 125 ms is 8 ticks. The fox starts at (-8, 0) facing ESE, the
+  hare at (6, 0) facing E, the sugi at (5, -4); the fox's near band is 12 cells.
+
+**One trap to design around first.** Every new intent cuts short what is in flight (Lexa's
+call: "the smarter parts must not interrupt themselves"). A mind that re-sends its want every
+round, even the same `GoTo`, will cut its own steps and the body will never arrive. So the
+mind must send only when its want *changes*, or the first design question is whether the
+brainstem should treat an intent identical to the one in hand as no order at all. Either is a
+few lines; which one is Lexa's call, and it comes before any scoring.
+
+**Questions to open with, one at a time**, in the order that seems to matter most:
+
+1. The re-send trap above: mind-side "send on change" or brainstem-side "same intent is no
+   order".
+2. Does the midbrain drive the hare as well as the fox from the start? If so the scene's
+   click-to-command goes (it is a bandaid, `TODO.md`); if not, the click stays as the way to
+   provoke the fox.
+3. What the first behaviour is. The stated target is "send the fox somewhere and face it at
+   the hare"; Lexa's earlier words for the fox were predator-shaped (hunt, sprint, fight) and
+   for the hare prey-shaped (flee), but nothing has been decided.
+4. Options and considerations: what the fox can want (stand, face the hare, go to the hare,
+   wander) and what numbers decide (distance to the hare, acuity, whether the last order was
+   cancelled, how long since). Per-kind scoring tables keyed on the snapshot's `kind` path.
+5. Memory: a mind that keys what it knows on `ThingId` (the design assumption throughout);
+   what it keeps between rounds, if anything, before the believed world exists in the game.
+6. How `previous` feeds back: what the mind does with `Cancelled(startle_face_apparition)`,
+   `Lost(id)`, `Done`.
+7. Where scoring lives in the Python package (`midbrain/mind.py`?) and what its pure,
+   pytest-able functions are; the client loop stays thin, like a Bevy system.
+
+**How to test against the game.** From the `ai-io` worktree, `scripts/run.sh` (the desktop
+shortcut runs the other worktree, which has no bridge until #44 merges); the log says "the
+bridge listens on 127.0.0.1:15703". A scripted run is `timeout 60 scripts/run.sh` in the
+background, then `uv run order 3 goto 0 0` or a Python snippet with `Bridge()`. `uv run
+pytest` in `ai/midbrain/` (18 tests; a fake bridge thread in `tests/test_client.py` is the
+pattern for testing a client without the game). `RUST_LOG=murabito_brainstem=debug` traces
+every aim and step in `~/.cache/murabito/run.log`; reflex fires are always logged.
+
+**How Lexa works, for this in particular:** design in chat first, one question at a time,
+options with costs and a recommendation, then wait for the yes; one small step per turn,
+explained before it is written; Lexa runs the game and the board and reports; commit locally,
+push and PR only on "send it". Python is `uv` only; Python 3.13 with the cached PyTorch 2.13
+if a model ever enters (RTX 5090, CUDA 12.9). Lexa asks conceptual questions mid-build and
+expects a plain-language answer before the go is re-asked.
+
 ## Where things are
 
 | | |
