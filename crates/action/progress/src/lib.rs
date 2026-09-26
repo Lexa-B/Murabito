@@ -68,6 +68,15 @@ impl Progress {
         self.touched = true;
     }
 
+    /// Drops the action in flight and everything done toward it: the body is cut short
+    /// and never got there. Nothing carries, into anything.
+    pub fn abandon(&mut self) {
+        self.done = 0.0;
+        self.of = 0.0;
+        self.kind = None;
+        self.touched = true;
+    }
+
     /// Whether an action is in flight.
     pub fn in_flight(&self) -> bool {
         self.of > 0.0
@@ -269,5 +278,25 @@ mod tests {
         app.update();
 
         assert!((progress_of(&app, entity).fraction() - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn abandoning_drops_the_flight_and_the_leftover_alike() {
+        struct Step;
+        let mut bar = Progress::default();
+        bar.start::<Step>(1.0);
+        bar.advance(0.7);
+        assert!(bar.in_flight());
+
+        bar.abandon();
+        assert!(!bar.in_flight());
+        assert_eq!(bar.fraction(), 0.0);
+        assert!(!bar.kind_is::<Step>(), "no kind is remembered");
+
+        bar.start::<Step>(1.0);
+        assert!(
+            !bar.advance(0.5),
+            "nothing carried: half of one is not done"
+        );
     }
 }
