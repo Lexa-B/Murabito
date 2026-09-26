@@ -18,7 +18,13 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   turned never fires, since it revealed what is new itself. The real judgement, newly
   *noticed* against newly *known*, wants the believed world from the Python experiments'
   fog of war (exp-02): a memory per body of what it has seen and where, keyed on `ThingId`,
-  that reflexes and the midbrain both read. Lexa, 2026-09-27. Its own design talk.
+  that reflexes and the midbrain both read. It is the body's own memory, so it sits below
+  the reflexes and the brainstem as its own crate, likely beside the senses that feed it
+  each tick; a reflex then asks "not in what I believe" rather than "not in last tick's
+  list", and the snapshot can carry beliefs beside sightings. Until then one gap stays open:
+  a body walking straight reveals things by its own motion too, and only turning is
+  suppressed, so a walker can still startle at what its walk brought into view. Lexa,
+  2026-09-27. Its own design talk.
 - **The scene's click-to-command is a bandaid.** The fox's loop and the hare's triangle are
   gone (2026-09-26): the brainstem drives every queue now. In their place, a left-click on
   the ground sends the hare walking there, so the fox's reflex can be tried by hand. It reads
