@@ -771,6 +771,30 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn the_overshoot_of_one_pushed_step_carries_into_the_next() {
+        // At five shaku a second a corner step is 22.17 ticks. Three of them, each pushed
+        // by drive only once the last has landed, still carry their leftovers: the third
+        // lands on tick 67, where three separate 23-tick steps would land on 69. The body
+        // faces north first, so no turn is in the count.
+        let (mut app, body) = body();
+        app.world_mut().get_mut::<Locomotion>(body).unwrap().speed = 5.0;
+        app.world_mut().get_mut::<Facing>(body).unwrap().0 = N;
+        order(&mut app, body, go_to(3, -6));
+        tick(&mut app, 66);
+        assert_eq!(
+            position(&app, body),
+            voxel(2, -4),
+            "two corner steps north, so far"
+        );
+        tick(&mut app, 1);
+        assert_eq!(
+            position(&app, body),
+            voxel(3, -6),
+            "the third lands on tick 67"
+        );
+    }
+
+    #[test]
     fn going_to_the_cell_the_body_stands_on_is_done_at_once() {
         let (mut app, body) = body();
         order(&mut app, body, go_to(0, 0));
