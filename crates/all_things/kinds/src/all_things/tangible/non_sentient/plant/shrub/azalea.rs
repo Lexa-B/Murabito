@@ -1,6 +1,7 @@
 //! 躑躅 Azalea
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 
 use crate::{Model, Shrub};
 
@@ -8,5 +9,5 @@ use crate::{Model, Shrub};
 /// says which.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
-#[require(Shrub, Model = Model("entity_models/flora/shrubs/azalea-00-a-summer.glb"))]
+#[require(Shrub, Model = Model("entity_models/flora/shrubs/azalea-00-a-summer.glb"), Kind = Kind::at(module_path!()))]
 pub struct Azalea;

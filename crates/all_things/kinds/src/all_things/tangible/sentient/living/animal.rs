@@ -3,6 +3,7 @@
 //! Its children are the files in `animal/`, beside this one.
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 
 use crate::Living;
 
@@ -19,5 +20,5 @@ pub use fish::*;
 /// 動物
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
-#[require(Living)]
+#[require(Living, Kind = Kind::at(module_path!()))]
 pub struct Animal;

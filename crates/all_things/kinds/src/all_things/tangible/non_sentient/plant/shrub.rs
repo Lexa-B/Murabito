@@ -3,6 +3,7 @@
 //! Its children are the files in `shrub/`, beside this one.
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 
 use crate::Plant;
 
@@ -15,5 +16,5 @@ pub use azalea::*;
 /// 茂み: azalea, aoki.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
-#[require(Plant)]
+#[require(Plant, Kind = Kind::at(module_path!()))]
 pub struct Shrub;

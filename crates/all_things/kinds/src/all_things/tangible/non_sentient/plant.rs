@@ -3,6 +3,7 @@
 //! Its children are the files in `plant/`, beside this one.
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 
 use crate::NonSentient;
 
@@ -19,5 +20,5 @@ pub use undergrowth::*;
 /// 植物: the tiers below match `assets/entity_models/flora/`.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
-#[require(NonSentient)]
+#[require(NonSentient, Kind = Kind::at(module_path!()))]
 pub struct Plant;

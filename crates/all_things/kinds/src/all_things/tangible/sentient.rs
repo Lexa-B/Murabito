@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 use murabito_actions::ActionQueue;
+use murabito_identity::Kind;
 use murabito_movement::Locomotion;
 use murabito_vision::{Band, Vision};
 
@@ -54,5 +55,6 @@ const SENTIENT_VISION: Vision = Vision {
     Locomotion = SENTIENT_LOCOMOTION,
     Vision = SENTIENT_VISION,
     ActionQueue,
+    Kind = Kind::at(module_path!()),
 )]
 pub struct Sentient;

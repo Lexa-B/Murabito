@@ -6,7 +6,9 @@
 //! is a unit component, and `#[require(...)]` is both *extends* and the members: a
 //! kind's parent comes first in its list, then what every thing of that kind has.
 //! Spawning a kind inserts the whole chain, so the node itself says what it has, and
-//! the compiler holds it to that.
+//! the compiler holds it to that. Every node also names itself: `Kind =
+//! Kind::at(module_path!())` in its `require`, so a spawned thing carries its place in
+//! the tree as a path, and a test walks the whole tree to hold every node to it.
 //!
 //! **One node, one file, and the folders are the tree.** A node with children is a
 //! file beside a folder of the same name holding them, so `src/` reads the same as this:
@@ -199,10 +201,13 @@ mod tests {
             .count();
         assert_eq!(ours, 56, "55 nodes and Model");
     }
+    use std::any::type_name;
+
     use bevy::prelude::*;
     use murabito_actions::ActionQueue;
     use murabito_hexcoords::Direction;
     use murabito_hexcoords::VoxelCoord;
+    use murabito_identity::Kind;
     use murabito_identity::{IdentityPlugin, NextThingId, ThingId};
     use murabito_movement::Locomotion;
     use murabito_placement::{Facing, VoxelPosition};
@@ -594,6 +599,110 @@ mod tests {
 
         assert_eq!((beasts, birds), (13, 4));
         assert_eq!(animals, 13 + 4 + 2, "plus a bare critter and a bare fish");
+    }
+
+    /// The label a spawned node carries.
+    fn label<Node: Component + Default>(world: &mut World) -> Kind {
+        let node = world.spawn(Node::default()).id();
+        *world.get::<Kind>(node).unwrap_or_else(|| {
+            panic!(
+                "{} has no Kind: is the label line in its require?",
+                type_name::<Node>()
+            )
+        })
+    }
+
+    /// Where a node's file is, as the type's path minus the type itself:
+    /// `…::beast::fox::Fox` is defined in `…::beast::fox`.
+    fn file_of<Node>() -> &'static str {
+        type_name::<Node>()
+            .rsplit_once("::")
+            .expect("a type has a module")
+            .0
+    }
+
+    /// Every node, root excepted, is labelled with its own file and lies under its
+    /// parent's label: a missing line, a file in the wrong folder or a `require` naming
+    /// the wrong parent all fail here, naming the node.
+    #[test]
+    fn every_node_names_its_own_place_in_the_tree_under_its_parent() {
+        fn check<Child: Component + Default, Parent: Component + Default>(world: &mut World) {
+            let child = label::<Child>(world);
+            let parent = label::<Parent>(world);
+            assert_eq!(child.path(), file_of::<Child>(), "{}", type_name::<Child>());
+            assert!(child.is_under(parent), "{child} should lie under {parent}");
+        }
+        let mut world = World::new();
+        assert_eq!(
+            label::<AllThings>(&mut world).path(),
+            file_of::<AllThings>()
+        );
+        check::<Akuma, Spiritual>(&mut world);
+        check::<Animal, Living>(&mut world);
+        check::<Aoki, Shrub>(&mut world);
+        check::<Azalea, Shrub>(&mut world);
+        check::<Bamboo, Plant>(&mut world);
+        check::<Bear, Beast>(&mut world);
+        check::<Beast, Animal>(&mut world);
+        check::<Bird, Animal>(&mut world);
+        check::<Boar, Beast>(&mut world);
+        check::<Cat, Beast>(&mut world);
+        check::<Chicken, Bird>(&mut world);
+        check::<Crane, Bird>(&mut world);
+        check::<Critter, Animal>(&mut world);
+        check::<Deer, Beast>(&mut world);
+        check::<Dog, Beast>(&mut world);
+        check::<Fish, Animal>(&mut world);
+        check::<Fox, Beast>(&mut world);
+        check::<Furniture, Object>(&mut world);
+        check::<Hare, Beast>(&mut world);
+        check::<Heron, Bird>(&mut world);
+        check::<Hinoki, Tree>(&mut world);
+        check::<Horse, Beast>(&mut world);
+        check::<Human, Living>(&mut world);
+        check::<Intangible, AllThings>(&mut world);
+        check::<Kami, Spiritual>(&mut world);
+        check::<Kusa, Undergrowth>(&mut world);
+        check::<Kuzu, Undergrowth>(&mut world);
+        check::<Living, Sentient>(&mut world);
+        check::<Macaque, Beast>(&mut world);
+        check::<Madake, Bamboo>(&mut world);
+        check::<Maple, Tree>(&mut world);
+        check::<NonSentient, Tangible>(&mut world);
+        check::<Object, NonSentient>(&mut world);
+        check::<Ox, Beast>(&mut world);
+        check::<Pheasant, Bird>(&mut world);
+        check::<Plant, NonSentient>(&mut world);
+        check::<Rat, Beast>(&mut world);
+        check::<Redpine, Tree>(&mut world);
+        check::<Rei, Spiritual>(&mut world);
+        check::<Rock, Object>(&mut world);
+        check::<Sakura, Tree>(&mut world);
+        check::<Sasa, Bamboo>(&mut world);
+        check::<Sentient, Tangible>(&mut world);
+        check::<Shida, Undergrowth>(&mut world);
+        check::<Shrub, Plant>(&mut world);
+        check::<Spiritual, Sentient>(&mut world);
+        check::<Sugi, Tree>(&mut world);
+        check::<Tangible, AllThings>(&mut world);
+        check::<Tanuki, Beast>(&mut world);
+        check::<Tool, Object>(&mut world);
+        check::<Tree, Plant>(&mut world);
+        check::<Undergrowth, Plant>(&mut world);
+        check::<Wolf, Beast>(&mut world);
+        check::<Yokai, Spiritual>(&mut world);
+    }
+
+    #[test]
+    fn a_things_label_is_its_leaf_not_a_tier_above_it() {
+        let mut world = World::new();
+        let fox = label::<Fox>(&mut world);
+        assert_eq!(fox.name(), "fox");
+        assert_eq!(
+            fox.path(),
+            "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox"
+        );
+        assert!(fox.is_under(label::<Sentient>(&mut world)));
     }
 
     fn how_many<Tier: Component>(world: &mut World) -> usize {

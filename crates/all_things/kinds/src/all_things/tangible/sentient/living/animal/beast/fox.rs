@@ -1,6 +1,7 @@
 //! 狐 Fox
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 use murabito_movement::Locomotion;
 use murabito_vision::{Band, Vision};
 
@@ -35,5 +36,6 @@ const FOX_VISION: Vision = Vision {
     Locomotion = Locomotion { speed: 4.0, turn_speed: 180.0 },
     Vision = FOX_VISION,
     Model = Model("entity_models/living/animals/fox.glb"),
+    Kind = Kind::at(module_path!()),
 )]
 pub struct Fox;

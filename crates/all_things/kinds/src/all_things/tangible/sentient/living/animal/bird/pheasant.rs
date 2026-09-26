@@ -1,6 +1,7 @@
 //! 雉 Pheasant
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 use murabito_movement::Locomotion;
 
 use crate::{Bird, Model};
@@ -13,5 +14,6 @@ use crate::{Bird, Model};
     Bird,
     Locomotion = Locomotion { speed: 2.5, turn_speed: 240.0 },
     Model = Model("entity_models/living/animals/pheasant.glb"),
+    Kind = Kind::at(module_path!()),
 )]
 pub struct Pheasant;

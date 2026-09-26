@@ -1,6 +1,7 @@
 //! 羊歯 Shida
 
 use bevy::prelude::*;
+use murabito_identity::Kind;
 
 use crate::{Model, Undergrowth};
 
@@ -8,5 +9,5 @@ use crate::{Model, Undergrowth};
 /// says which.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "debug", derive(Reflect), reflect(Component))]
-#[require(Undergrowth, Model = Model("entity_models/flora/ground/shida-00-a-summer.glb"))]
+#[require(Undergrowth, Model = Model("entity_models/flora/ground/shida-00-a-summer.glb"), Kind = Kind::at(module_path!()))]
 pub struct Shida;
