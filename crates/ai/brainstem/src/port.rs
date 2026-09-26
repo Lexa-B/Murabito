@@ -44,8 +44,8 @@ pub struct Snapshot {
     pub queue: Vec<Action>,
     /// How far along the action in flight is, 0 to 1, or nothing in flight.
     pub in_flight: Option<f32>,
-    /// How the last intent ended.
-    pub outcome: Outcome,
+    /// How the last intent ended: the one before `doing`, not `doing` itself.
+    pub previous_outcome: Outcome,
 }
 
 /// One thing in view, as the body sees it.
@@ -199,7 +199,7 @@ fn snapshot(
         doing: body.doing(),
         queue: queue.iter().collect(),
         in_flight: progress.in_flight().then(|| progress.fraction()),
-        outcome: body.outcome(),
+        previous_outcome: body.previous_outcome(),
     }
 }
 
@@ -237,7 +237,8 @@ pub(crate) fn publish(
 mod tests {
     use super::*;
     use crate::tests::{
-        ALL_ROUND, E, N, app, brainstem, facing, mint, order, outcome, position, tick, voxel,
+        ALL_ROUND, E, N, app, brainstem, facing, mint, order, position, previous_outcome, tick,
+        voxel,
     };
     use crate::{Short, Sustained};
     use murabito_movement::Locomotion;
@@ -306,7 +307,7 @@ mod tests {
         assert_eq!(card.doing, None);
         assert_eq!(card.queue, Vec::<Action>::new());
         assert_eq!(card.in_flight, None);
-        assert_eq!(card.outcome, Outcome::Idle);
+        assert_eq!(card.previous_outcome, Outcome::Idle);
 
         let mut in_view = card.in_view.clone();
         in_view.sort_by_key(|seen| seen.id);
@@ -356,7 +357,7 @@ mod tests {
             (fraction - 0.5).abs() < 1e-3,
             "eight of sixteen ticks: {fraction}"
         );
-        assert_eq!(card.outcome, Outcome::Superseded);
+        assert_eq!(card.previous_outcome, Outcome::Superseded);
     }
 
     #[test]
@@ -383,7 +384,7 @@ mod tests {
         );
         tick(&mut app, 32);
         assert_eq!(facing(&app, body), N);
-        assert_eq!(outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Outcome::Done);
     }
 
     #[test]
@@ -395,7 +396,7 @@ mod tests {
             .unwrap();
         tick(&mut app, 20);
         assert_eq!(position(&app, body), voxel(0, 0));
-        assert_eq!(outcome(&app, body), Outcome::Idle);
+        assert_eq!(previous_outcome(&app, body), Outcome::Idle);
     }
 
     #[test]
@@ -417,7 +418,7 @@ mod tests {
 
         tick(&mut app, 17);
         assert_eq!(position(&app, body), voxel(1, 0));
-        assert_eq!(outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Outcome::Done);
         assert_eq!(board(&app).get(id).unwrap().position, voxel(1, 0));
     }
 

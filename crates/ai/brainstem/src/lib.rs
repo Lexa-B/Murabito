@@ -172,7 +172,7 @@ pub struct Brainstem {
     /// tick and the later wins.
     pending: Option<Pending>,
     doing: Option<Doing>,
-    outcome: Outcome,
+    previous_outcome: Outcome,
     /// The current short's action is on the queue, or past it.
     pushed: bool,
 }
@@ -201,8 +201,8 @@ impl Brainstem {
         self.doing
     }
 
-    pub fn outcome(&self) -> Outcome {
-        self.outcome
+    pub fn previous_outcome(&self) -> Outcome {
+        self.previous_outcome
     }
 
     /// Whether a new intent waits for drive to take it up.
@@ -215,7 +215,7 @@ impl Brainstem {
     fn begin(&mut self, pending: Pending, now: u64) {
         let is_stop = pending.intent == Intent::Short(Short::Stop);
         if self.doing.is_some() {
-            self.outcome = match (pending.cause, is_stop) {
+            self.previous_outcome = match (pending.cause, is_stop) {
                 (Cause::Reflex(name), _) => Outcome::Cancelled(name),
                 (Cause::Order, true) => Outcome::Stopped,
                 (Cause::Order, false) => Outcome::Superseded,
@@ -228,9 +228,9 @@ impl Brainstem {
         self.pushed = false;
     }
 
-    fn finish(&mut self, outcome: Outcome) {
+    fn finish(&mut self, ended: Outcome) {
         self.doing = None;
-        self.outcome = outcome;
+        self.previous_outcome = ended;
         self.pushed = false;
     }
 }
@@ -309,7 +309,7 @@ fn drive(
             Intent::Short(short) if !body.pushed => {
                 match resolve_short(short, seen) {
                     Resolved::Push(action) => queue.push(action),
-                    Resolved::Finish(outcome) => body.finish(outcome),
+                    Resolved::Finish(ended) => body.finish(ended),
                 }
                 body.pushed = true;
             }
@@ -443,8 +443,8 @@ pub(crate) mod tests {
         app.world().get::<Brainstem>(body).unwrap().clone()
     }
 
-    pub(crate) fn outcome(app: &App, body: Entity) -> Outcome {
-        brainstem(app, body).outcome()
+    pub(crate) fn previous_outcome(app: &App, body: Entity) -> Outcome {
+        brainstem(app, body).previous_outcome()
     }
 
     pub(crate) fn facing(app: &App, body: Entity) -> Direction {
@@ -465,7 +465,7 @@ pub(crate) mod tests {
     fn a_fresh_brainstem_does_nothing_and_has_no_outcome_yet() {
         let body = Brainstem::default();
         assert_eq!(body.doing(), None);
-        assert_eq!(body.outcome(), Outcome::Idle);
+        assert_eq!(body.previous_outcome(), Outcome::Idle);
     }
 
     #[test]
@@ -478,7 +478,7 @@ pub(crate) mod tests {
         let doing = body.doing().unwrap();
         assert_eq!(doing.intent(), short(Short::Face(N)));
         assert_eq!(doing.since(), 7);
-        assert_eq!(body.outcome(), Outcome::Idle, "nothing ended");
+        assert_eq!(body.previous_outcome(), Outcome::Idle, "nothing ended");
     }
 
     #[test]
@@ -491,13 +491,13 @@ pub(crate) mod tests {
         body.order(short(Short::Face(N)));
         let pending = body.take_pending().unwrap();
         body.begin(pending, 2);
-        assert_eq!(body.outcome(), Outcome::Superseded);
+        assert_eq!(body.previous_outcome(), Outcome::Superseded);
         assert_eq!(body.doing().unwrap().intent(), short(Short::Face(N)));
 
         body.order(short(Short::Stop));
         let pending = body.take_pending().unwrap();
         body.begin(pending, 3);
-        assert_eq!(body.outcome(), Outcome::Stopped);
+        assert_eq!(body.previous_outcome(), Outcome::Stopped);
         assert_eq!(body.doing(), None);
     }
 
@@ -512,7 +512,7 @@ pub(crate) mod tests {
         let pending = body.take_pending().unwrap();
         body.begin(pending, 2);
         assert_eq!(
-            body.outcome(),
+            body.previous_outcome(),
             Outcome::Cancelled("startle_face_apparition")
         );
         assert_eq!(body.doing().unwrap().intent(), short(Short::Face(N)));
@@ -606,7 +606,7 @@ pub(crate) mod tests {
         tick(&mut app, 10);
         assert_eq!(queued(&app, body), 0);
         assert_eq!(position(&app, body), voxel(0, 0));
-        assert_eq!(outcome(&app, body), Outcome::Idle);
+        assert_eq!(previous_outcome(&app, body), Outcome::Idle);
     }
 
     #[test]
@@ -637,7 +637,7 @@ pub(crate) mod tests {
 
         tick(&mut app, 1);
         assert_eq!(brainstem(&app, body).doing(), None);
-        assert_eq!(outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Outcome::Done);
     }
 
     #[test]
@@ -651,7 +651,7 @@ pub(crate) mod tests {
             "one shaku at four a second is 16 ticks"
         );
         tick(&mut app, 1);
-        assert_eq!(outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Outcome::Done);
         tick(&mut app, 10);
         assert_eq!(position(&app, body), voxel(1, 0), "and then nothing more");
     }
@@ -663,7 +663,7 @@ pub(crate) mod tests {
         tick(&mut app, 1);
         order(&mut app, body, short(Short::Face(N)));
         tick(&mut app, 1);
-        assert_eq!(outcome(&app, body), Outcome::Superseded);
+        assert_eq!(previous_outcome(&app, body), Outcome::Superseded);
         assert_eq!(
             brainstem(&app, body).doing().unwrap().intent(),
             short(Short::Face(N))
@@ -678,7 +678,7 @@ pub(crate) mod tests {
         assert_eq!(position(&app, body), voxel(1, 0), "the step landed anyway");
         tick(&mut app, 33);
         assert_eq!(facing(&app, body), N);
-        assert_eq!(outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Outcome::Done);
     }
 
     #[test]
@@ -689,7 +689,7 @@ pub(crate) mod tests {
         order(&mut app, body, short(Short::Stop));
         tick(&mut app, 1);
         assert_eq!(brainstem(&app, body).doing(), None);
-        assert_eq!(outcome(&app, body), Outcome::Stopped);
+        assert_eq!(previous_outcome(&app, body), Outcome::Stopped);
         tick(&mut app, 40);
         assert_eq!(
             position(&app, body),
@@ -697,7 +697,7 @@ pub(crate) mod tests {
             "what was in flight landed"
         );
         assert_eq!(
-            outcome(&app, body),
+            previous_outcome(&app, body),
             Outcome::Stopped,
             "and nothing else happened"
         );
@@ -712,7 +712,7 @@ pub(crate) mod tests {
         tick(&mut app, 32);
         assert_eq!(facing(&app, body), N, "two cells north of the eye");
         tick(&mut app, 1);
-        assert_eq!(outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Outcome::Done);
     }
 
     #[test]
@@ -723,7 +723,7 @@ pub(crate) mod tests {
         order(&mut app, body, short(Short::FaceThing(unseen)));
         tick(&mut app, 1);
         assert_eq!(brainstem(&app, body).doing(), None);
-        assert_eq!(outcome(&app, body), Outcome::Lost(unseen));
+        assert_eq!(previous_outcome(&app, body), Outcome::Lost(unseen));
         assert_eq!(facing(&app, body), E, "and the body did not move");
     }
 
@@ -733,7 +733,7 @@ pub(crate) mod tests {
         let thing = thing_at(&mut app, voxel(2, -4));
         order(&mut app, body, short(Short::FaceThing(thing)));
         tick(&mut app, 1);
-        assert_eq!(outcome(&app, body), Outcome::Lost(thing));
+        assert_eq!(previous_outcome(&app, body), Outcome::Lost(thing));
     }
 
     #[test]
@@ -750,7 +750,7 @@ pub(crate) mod tests {
             "drive ran before the last step landed"
         );
         tick(&mut app, 1);
-        assert_eq!(outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Outcome::Done);
         tick(&mut app, 10);
         assert_eq!(position(&app, body), voxel(3, 0), "and stays");
     }
@@ -775,7 +775,7 @@ pub(crate) mod tests {
         let (mut app, body) = body();
         order(&mut app, body, go_to(0, 0));
         tick(&mut app, 1);
-        assert_eq!(outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Outcome::Done);
         assert_eq!(queued(&app, body), 0);
     }
 
@@ -803,6 +803,6 @@ pub(crate) mod tests {
             "one corner step from there"
         );
         tick(&mut app, 1);
-        assert_eq!(outcome(&app, body), Outcome::Done);
+        assert_eq!(previous_outcome(&app, body), Outcome::Done);
     }
 }
