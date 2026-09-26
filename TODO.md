@@ -12,6 +12,13 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   not designed yet; they'd be members on tiers, or their own components. Sight is back and
   runs without them (everything is opaque); what they unlock is listed under the senses' facet
   debt below and in `docs/perception_readme.md`.
+- **A believed world, so a body knows what it knows.** The startle reflex tells "newly in
+  view" from "already in view" by last tick's list alone, so it needed two patches: only
+  things of a kind that matters count (a tree can't startle), and a tick on which the body
+  turned never fires, since it revealed what is new itself. The real judgement, newly
+  *noticed* against newly *known*, wants the believed world from the Python experiments'
+  fog of war (exp-02): a memory per body of what it has seen and where, keyed on `ThingId`,
+  that reflexes and the midbrain both read. Lexa, 2026-09-27. Its own design talk.
 - **The scene's click-to-command is a bandaid.** The fox's loop and the hare's triangle are
   gone (2026-09-26): the brainstem drives every queue now. In their place, a left-click on
   the ground sends the hare walking there, so the fox's reflex can be tried by hand. It reads

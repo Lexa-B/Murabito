@@ -203,12 +203,9 @@ mod tests {
         let mut world = World::new();
         let fox = world.spawn(Fox).id();
         let beast = world.spawn(Beast).id();
+        let startle = Reflex::StartleFaceApparition { by: Sentient::KIND };
         let bob = world
-            .spawn((
-                Fox,
-                Reflexes::new([Reflex::StartleFaceApparition.at(10)])
-                    .tuned(Reflex::StartleFaceApparition, 200),
-            ))
+            .spawn((Fox, Reflexes::new([startle.at(10)]).tuned(startle, 200)))
             .id();
 
         let repertoire = |entity| {
@@ -221,8 +218,10 @@ mod tests {
                 .iter()
                 .map(|wired| wired.reflex)
                 .collect::<Vec<_>>(),
-            [Reflex::StartleFaceApparition]
+            [startle],
+            "startled by sentient things, and only them"
         );
+        assert_eq!(Sentient::KIND.name(), "sentient");
         assert!(repertoire(beast).is_empty(), "a tier names none");
         assert_eq!(
             repertoire(bob).iter().next().unwrap().priority,

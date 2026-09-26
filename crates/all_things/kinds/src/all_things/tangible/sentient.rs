@@ -63,3 +63,9 @@ const SENTIENT_VISION: Vision = Vision {
     Kind = Kind::at(module_path!()),
 )]
 pub struct Sentient;
+
+impl Sentient {
+    /// The label every sentient thing lies under: for whatever asks "is that alive?",
+    /// such as a reflex that startles at creatures and not at trees.
+    pub const KIND: Kind = Kind::at(module_path!());
+}
