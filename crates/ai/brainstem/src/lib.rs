@@ -17,7 +17,7 @@
 //! arrived; **Reflexes** is the slot the reflexes crate fills, so a fright beats an order
 //! from the same tick; **Drive** clears the queue for a new intent and pushes the next
 //! action only when the queue is empty, so a step already in flight lands before anything
-//! new begins. Design: `Docs/ai_readme.md`.
+//! new begins. Design: `docs/ai_readme.md`.
 
 use bevy::prelude::*;
 use murabito_actions::{Action, ActionQueue, AskingSet};

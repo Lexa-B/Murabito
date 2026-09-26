@@ -125,7 +125,7 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   `AskingSet`. Records how the last intent ended (`Outcome`) for whoever gave it. With
   nothing ordered a body stands still. The slower mind and the reflexes both speak to
   it and both sit above it; it depends on actions, progress and hexcoords only.
-  Design: `Docs/ai_readme.md`.
+  Design: `docs/ai_readme.md`.
 
 ## Doing things
 
