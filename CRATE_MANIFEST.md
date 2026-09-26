@@ -126,8 +126,13 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
   action at a time, every tick in `AskingSet`. Records how the last intent ended
   (`Outcome`: done, stopped, superseded, cancelled by a named reflex, or lost when the
   thing named was out of view) for whoever gave it. With nothing ordered a body stands
-  still. The slower mind and the reflexes both speak to it and both sit above it; it
-  depends on actions, progress, placement, identity, vision and hexcoords.
+  still. Its `Port` is the seam to a mind: after the senses each tick it posts every
+  body's `Snapshot` (place, facing, what is in view and how well, what it is doing, the
+  queue, the step in flight, the last outcome) to a board that is read at any moment,
+  and it drains a channel of `Order`s, intents addressed by `ThingId`, once a tick. Both
+  far ends are plain `Send` handles, so a socket thread or a test can be the mind. The
+  slower mind and the reflexes both sit above it; it depends on actions, progress,
+  placement, identity, perception, vision and hexcoords.
   Design: `docs/ai_readme.md`.
 
 ## Doing things

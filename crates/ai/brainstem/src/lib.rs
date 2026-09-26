@@ -19,21 +19,29 @@
 //! arrived; **Reflexes** is the slot the reflexes crate fills, so a fright beats an order
 //! from the same tick; **Drive** clears the queue for a new intent and pushes the next
 //! action only when the queue is empty, so a step already in flight lands before anything
-//! new begins. Design: `docs/ai_readme.md`.
+//! new begins. After the senses, **publish** writes every body's [`Snapshot`] to the
+//! [`Port`]'s board, and orders arrive through the same port's channel: that is the
+//! whole seam between a body and its mind. Design: `docs/ai_readme.md`.
 
 use bevy::prelude::*;
 use murabito_actions::{Action, ActionQueue, AskingSet};
 use murabito_hexcoords::{Direction, VoxelCoord};
 use murabito_identity::ThingId;
+use murabito_perception::PerceptionSet;
 use murabito_placement::VoxelPosition;
 use murabito_progress::Progress;
 use murabito_vision::Seen;
+
+mod port;
+
+pub use port::{Board, InView, Order, Orders, Port, Snapshot};
 
 pub struct BrainstemPlugin;
 
 impl Plugin for BrainstemPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Tick>()
+            .init_resource::<Port>()
             .configure_sets(
                 FixedUpdate,
                 (
@@ -47,8 +55,11 @@ impl Plugin for BrainstemPlugin {
             .add_systems(
                 FixedUpdate,
                 (
-                    count_tick.in_set(BrainstemSet::Orders),
+                    (count_tick, port::take_orders)
+                        .chain()
+                        .in_set(BrainstemSet::Orders),
                     drive.in_set(BrainstemSet::Drive),
+                    port::publish.after(PerceptionSet::Sense),
                 ),
             );
     }
@@ -316,7 +327,7 @@ fn drive(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use murabito_actions::ActionsPlugin;
     use murabito_identity::{IdentityPlugin, NextThingId};
@@ -326,12 +337,12 @@ mod tests {
     use murabito_progress::ProgressPlugin;
     use murabito_vision::{Band, Vision, VisionPlugin};
 
-    const E: Direction = Direction::E;
-    const N: Direction = Direction::N;
+    pub(crate) const E: Direction = Direction::E;
+    pub(crate) const N: Direction = Direction::N;
     const ENE: Direction = Direction::ENE;
 
     /// Eyes all round, sharp to 8 cells, then 16, then 24.
-    const ALL_ROUND: Vision = Vision {
+    pub(crate) const ALL_ROUND: Vision = Vision {
         arc: 360.0,
         bands: [
             Band {
@@ -349,7 +360,7 @@ mod tests {
         ],
     };
 
-    fn voxel(q: i32, r: i32) -> VoxelCoord {
+    pub(crate) fn voxel(q: i32, r: i32) -> VoxelCoord {
         VoxelCoord::new(q, r, -q - r, 0).expect("on the plane")
     }
 
@@ -362,7 +373,7 @@ mod tests {
     }
 
     /// A ticking app with everything a body needs to look, be told, and move.
-    fn app() -> App {
+    pub(crate) fn app() -> App {
         use bevy::time::TimeUpdateStrategy;
 
         let mut app = App::new();
@@ -381,7 +392,7 @@ mod tests {
         app
     }
 
-    fn mint(app: &mut App) -> ThingId {
+    pub(crate) fn mint(app: &mut App) -> ThingId {
         app.world_mut().resource_mut::<NextThingId>().mint()
     }
 
@@ -415,32 +426,32 @@ mod tests {
         id
     }
 
-    fn tick(app: &mut App, times: usize) {
+    pub(crate) fn tick(app: &mut App, times: usize) {
         for _ in 0..times {
             app.update();
         }
     }
 
-    fn order(app: &mut App, body: Entity, intent: Intent) {
+    pub(crate) fn order(app: &mut App, body: Entity, intent: Intent) {
         app.world_mut()
             .get_mut::<Brainstem>(body)
             .unwrap()
             .order(intent);
     }
 
-    fn brainstem(app: &App, body: Entity) -> Brainstem {
+    pub(crate) fn brainstem(app: &App, body: Entity) -> Brainstem {
         app.world().get::<Brainstem>(body).unwrap().clone()
     }
 
-    fn outcome(app: &App, body: Entity) -> Outcome {
+    pub(crate) fn outcome(app: &App, body: Entity) -> Outcome {
         brainstem(app, body).outcome()
     }
 
-    fn facing(app: &App, body: Entity) -> Direction {
+    pub(crate) fn facing(app: &App, body: Entity) -> Direction {
         app.world().get::<Facing>(body).unwrap().0
     }
 
-    fn position(app: &App, body: Entity) -> VoxelCoord {
+    pub(crate) fn position(app: &App, body: Entity) -> VoxelCoord {
         app.world().get::<VoxelPosition>(body).unwrap().0
     }
 
