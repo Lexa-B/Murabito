@@ -64,6 +64,8 @@ message InView {
   // How many steps across faces away it is.
   uint32 distance = 4;
   Acuity acuity = 5;
+  // The way it faces; absent if it has no facing.
+  optional Direction facing = 6;
 }
 
 message Doing {

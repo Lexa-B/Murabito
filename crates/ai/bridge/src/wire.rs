@@ -144,6 +144,7 @@ impl From<InView> for proto::InView {
             offset: Some(seen.offset.into()),
             distance: seen.distance,
             acuity: acuity_out(seen.acuity),
+            facing: seen.facing.map(direction_out),
         }
     }
 }
@@ -329,6 +330,7 @@ mod tests {
                 offset: voxel(2, -1) - voxel(0, 0),
                 distance: 2,
                 acuity: Acuity::Mid,
+                facing: Some(Direction::N),
             }],
             doing: None,
             queue: vec![Action::Go(Direction::E), Action::Face(Direction::N)],
@@ -362,6 +364,7 @@ mod tests {
             })
         );
         assert_eq!(message.in_view[0].acuity, proto::Acuity::Mid as i32);
+        assert_eq!(message.in_view[0].facing, Some(proto::Direction::N as i32));
         assert_eq!(message.doing, None);
         assert_eq!(message.queue.len(), 2);
         assert_eq!(message.queue[0].kind, Some(proto::action::Kind::Go(0)));

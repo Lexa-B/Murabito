@@ -94,18 +94,20 @@ class Snapshot(_message.Message):
     def __init__(self, id: _Optional[int] = ..., kind: _Optional[str] = ..., tick: _Optional[int] = ..., position: _Optional[_Union[Voxel, _Mapping]] = ..., facing: _Optional[_Union[Direction, str]] = ..., in_view: _Optional[_Iterable[_Union[InView, _Mapping]]] = ..., doing: _Optional[_Union[Doing, _Mapping]] = ..., queue: _Optional[_Iterable[_Union[Action, _Mapping]]] = ..., in_flight: _Optional[float] = ..., previous: _Optional[_Union[Previous, _Mapping]] = ...) -> None: ...
 
 class InView(_message.Message):
-    __slots__ = ("id", "kind", "offset", "distance", "acuity")
+    __slots__ = ("id", "kind", "offset", "distance", "acuity", "facing")
     ID_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
     OFFSET_FIELD_NUMBER: _ClassVar[int]
     DISTANCE_FIELD_NUMBER: _ClassVar[int]
     ACUITY_FIELD_NUMBER: _ClassVar[int]
+    FACING_FIELD_NUMBER: _ClassVar[int]
     id: int
     kind: str
     offset: Offset
     distance: int
     acuity: Acuity
-    def __init__(self, id: _Optional[int] = ..., kind: _Optional[str] = ..., offset: _Optional[_Union[Offset, _Mapping]] = ..., distance: _Optional[int] = ..., acuity: _Optional[_Union[Acuity, str]] = ...) -> None: ...
+    facing: Direction
+    def __init__(self, id: _Optional[int] = ..., kind: _Optional[str] = ..., offset: _Optional[_Union[Offset, _Mapping]] = ..., distance: _Optional[int] = ..., acuity: _Optional[_Union[Acuity, str]] = ..., facing: _Optional[_Union[Direction, str]] = ...) -> None: ...
 
 class Doing(_message.Message):
     __slots__ = ("intent", "since")

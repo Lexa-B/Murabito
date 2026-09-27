@@ -101,6 +101,8 @@ def draw(surface: pygame.Surface, mind: Mind, body: int, view: View, font: pygam
         pygame.draw.polygon(surface, colour_of(belief.kind), corners)
         if belief.id in seen_now:
             pygame.draw.polygon(surface, SEEN_NOW, corners, 2)
+        if belief.facing is not None:
+            pygame.draw.line(surface, LABEL, view.pixel(belief.cell), view.facing_end(belief.cell, belief.facing), 2)
         cx, cy = view.pixel(belief.cell)
         name = f"#{belief.id} {name_of(belief.kind) if belief.kind else '?'}"
         surface.blit(font.render(name, True, LABEL), (cx + view.scale * 0.6, cy - 14))

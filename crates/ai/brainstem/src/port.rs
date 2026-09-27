@@ -60,6 +60,8 @@ pub struct InView {
     /// How many steps across faces away it is.
     pub distance: u32,
     pub acuity: Acuity,
+    /// The way it faces, or nothing if it has no facing.
+    pub facing: Option<Direction>,
 }
 
 /// One intent for one body, as a mind sends it.
@@ -175,6 +177,7 @@ fn snapshot(
     facing: Direction,
     seen: Option<&Seen>,
     kind_of: impl Fn(Entity) -> Option<Kind>,
+    facing_of: impl Fn(Entity) -> Option<Direction>,
     body: &Brainstem,
     queue: &ActionQueue,
     progress: &Progress,
@@ -188,6 +191,7 @@ fn snapshot(
             offset: sighting.offset,
             distance: sighting.offset.steps(),
             acuity: sighting.acuity,
+            facing: facing_of(sighting.entity),
         })
         .collect();
     Snapshot {
@@ -222,13 +226,16 @@ pub(crate) fn publish(
     tick: Res<Tick>,
     port: Res<Port>,
     kinds: Query<&Kind>,
+    facings: Query<&Facing>,
     bodies: Query<BodyParts>,
 ) {
     let kind_of = |thing: Entity| kinds.get(thing).ok().copied();
+    let facing_of = |thing: Entity| facings.get(thing).ok().map(|facing| facing.0);
     port.post(bodies.iter().map(
         |(id, kind, position, facing, seen, body, queue, progress)| {
             snapshot(
-                *id, *kind, tick.0, position.0, facing.0, seen, kind_of, body, queue, progress,
+                *id, *kind, tick.0, position.0, facing.0, seen, kind_of, facing_of, body, queue,
+                progress,
             )
         },
     ));
@@ -293,8 +300,12 @@ mod tests {
     fn a_snapshot_is_the_bodys_picture_of_that_tick() {
         let (mut app, _, id) = labelled_body();
         let thing = mint(&mut app);
-        app.world_mut()
-            .spawn((thing, THING, VoxelPosition(voxel(2, -4))));
+        app.world_mut().spawn((
+            thing,
+            THING,
+            VoxelPosition(voxel(2, -4)),
+            Facing(Direction::N),
+        ));
         let unlabelled = mint(&mut app);
         app.world_mut()
             .spawn((unlabelled, VoxelPosition(voxel(3, 0))));
@@ -321,6 +332,7 @@ mod tests {
                     offset: voxel(2, -4) - voxel(0, 0),
                     distance: 4,
                     acuity: Acuity::Near,
+                    facing: Some(Direction::N),
                 },
                 InView {
                     id: unlabelled,
@@ -328,6 +340,7 @@ mod tests {
                     offset: voxel(3, 0) - voxel(0, 0),
                     distance: 3,
                     acuity: Acuity::Near,
+                    facing: None,
                 },
             ]
         );

@@ -12,10 +12,14 @@ HARE = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::h
 SUGI = "murabito_kinds::all_things::tangible::non_sentient::plant::tree::sugi"
 
 
-def sighting(id: int, dq: int, dr: int, kind: str | None = None, acuity: int = pb.Acuity.NEAR) -> pb.InView:
+def sighting(
+    id: int, dq: int, dr: int, kind: str | None = None, acuity: int = pb.Acuity.NEAR, facing: int | None = None
+) -> pb.InView:
     seen = pb.InView(id=id, offset=pb.Offset(dq=dq, dr=dr), distance=max(abs(dq), abs(dr)), acuity=acuity)
     if kind is not None:
         seen.kind = kind
+    if facing is not None:
+        seen.facing = facing
     return seen
 
 
@@ -33,7 +37,18 @@ def test_a_sighting_becomes_a_belief_at_the_cell_the_thing_stood_in() -> None:
     assert sugi.kind == SUGI
     assert sugi.seen_at == 64
     assert sugi.acuity == pb.Acuity.MID
+    assert sugi.facing is None
     assert sugi.age(now=100) == 36
+
+
+def test_the_way_a_thing_faced_is_remembered_and_refreshed() -> None:
+    world = BelievedWorld(body=1)
+    world.observe(fox_sees(64, sighting(3, 14, 0, HARE, facing=pb.Direction.E)))
+    assert world.get(3).facing == pb.Direction.E
+    world.observe(fox_sees(72, sighting(3, 14, 0, HARE, facing=pb.Direction.W)))
+    assert world.get(3).facing == pb.Direction.W
+    world.observe(fox_sees(80))
+    assert world.get(3).facing == pb.Direction.W
 
 
 def test_a_thing_without_a_label_is_believed_with_no_kind() -> None:

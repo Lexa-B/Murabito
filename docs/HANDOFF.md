@@ -343,13 +343,14 @@ mind has been designed yet: not its options, not its considerations, not how it 
   mind builds the same messages with its own words.
 - `board.py`'s `render` is the live view; run `uv run board` beside the game while working.
 - `beliefs.py`: `BelievedWorld(body).observe(snapshot)`, then iterate `Belief`s (`id`, `kind`,
-  `cell: Cell(q, r, layer)`, `seen_at`, `acuity`, `age(now)`). `mind.py`: `Mind.round(snapshots)`
+  `cell: Cell(q, r, layer)`, `facing`, `seen_at`, `acuity`, `age(now)`). `mind.py`: `Mind.round(snapshots)`
   keeps one world per body plus `latest[body]`, the snapshot; `uv run mind` shows it and
   `--visualize` draws it (`visualize.py`: `View.pixel/corners/facing_end`, `draw`). The
   scorer reads the believed world, not the snapshot's `in_view`, except for what is in view
   *now*, which the snapshot still says.
 - A snapshot's facts (`docs/ai_readme.md`, table): id, kind (path), tick, position (axial),
-  facing (index), in_view (id, kind or none, offset, distance in steps, acuity), doing (intent
+  facing (index), in_view (id, kind or none, offset, distance in steps, acuity, the seen
+  thing's facing or none), doing (intent
   + since), queue, in_flight (0..1 or none), previous (intent + outcome or none).
 - The vocabulary a mind may send: `Stop`, `Face(dir)`, `FaceThing(id)`, `Step(dir)`,
   `GoTo(q, r, layer)`. New words are `Sustained` variants added in the brainstem when the

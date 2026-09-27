@@ -57,6 +57,7 @@ def body_panel(mind: Mind, body: int) -> Panel:
     beliefs.add_column("believes")
     beliefs.add_column("kind")
     beliefs.add_column("at")
+    beliefs.add_column("facing")
     beliefs.add_column("seen", justify="right")
     beliefs.add_column("acuity")
     for belief in world:
@@ -64,11 +65,12 @@ def body_panel(mind: Mind, body: int) -> Panel:
             f"#{belief.id}",
             name_of(belief.kind) if belief.kind else "?",
             str(belief.cell),
+            direction(belief.facing) if belief.facing is not None else "-",
             ago(belief.age(snapshot.tick)),
             pb.Acuity.Name(belief.acuity).lower(),
         )
     if not len(world):
-        beliefs.add_row(Text("nothing yet", style="dim"), "", "", "", "")
+        beliefs.add_row(Text("nothing yet", style="dim"), "", "", "", "", "")
     title = f"#{body} {name_of(snapshot.kind)}"
     return Panel(Group(header, beliefs), title=title, title_align="left")
 

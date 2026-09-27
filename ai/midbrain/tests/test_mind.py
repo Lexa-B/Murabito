@@ -22,7 +22,10 @@ def hare(tick: int, *in_view: pb.InView) -> pb.Snapshot:
 
 
 def seen(id: int, dq: int, dr: int, kind: str) -> pb.InView:
-    return pb.InView(id=id, kind=kind, offset=pb.Offset(dq=dq, dr=dr), distance=max(abs(dq), abs(dr)), acuity=pb.Acuity.MID)
+    return pb.InView(
+        id=id, kind=kind, offset=pb.Offset(dq=dq, dr=dr), distance=max(abs(dq), abs(dr)), acuity=pb.Acuity.MID,
+        facing=pb.Direction.NNW,
+    )
 
 
 def test_a_round_gives_every_body_a_world_and_fills_it() -> None:
@@ -52,6 +55,6 @@ def test_the_view_names_each_belief_and_how_long_ago() -> None:
     text = console.export_text()
     assert "tick 80   2 minds" in text
     assert "#1 fox" in text and "#3 hare" in text
-    assert "sugi" in text and "(5, -4, -1) L0" in text and "16 ticks ago" in text
+    assert "sugi" in text and "(5, -4, -1) L0" in text and "16 ticks ago" in text and "NNW" in text
     assert "nothing yet" in text
     assert ago(0) == "now"

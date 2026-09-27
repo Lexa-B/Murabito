@@ -154,7 +154,7 @@ A snapshot is flat facts with names, built for a scorer to read:
 | `id`, `kind` | the body's number and its path in the tree of kinds |
 | `tick` | which tick this is a picture of |
 | `position`, `facing` | the voxel as in memory, `{q, r, layer}`, and the compass direction |
-| `in_view` | per sighting: `id`, `kind` (or none if the thing carries no label), `offset`, `distance` in steps, `acuity` |
+| `in_view` | per sighting: `id`, `kind` (or none if the thing carries no label), `offset`, `distance` in steps, `acuity`, `facing` (the way the seen thing faces, or none) |
 | `doing` | the intent and the tick it began, or nothing |
 | `queue` | every action waiting, first to last |
 | `in_flight` | the fraction of the current step, or nothing |
@@ -207,7 +207,7 @@ A mind does not act on what a body sees; it acts on what the body *believes*, an
 ways the moment the body looks away. `beliefs.py` is that layer, in its smallest form. Each body
 on the board has a `BelievedWorld`, and in it a `Belief` per thing the body has ever seen, keyed
 on the thing's id: its kind path (or none, if the sighting carried no label), the cell it stood
-in, the tick it was last seen, and the acuity then. The cell is absolute, the body's own voxel
+in, the way it faced, the tick it was last seen, and the acuity then. The cell is absolute, the body's own voxel
 plus the sighting's offset, so "four steps south of me" is remembered as "at (-8, 4)" and still
 means something once the body has walked on. One verb, `observe(snapshot)`, writes every
 sighting in over what was there; a snapshot from another body is refused.

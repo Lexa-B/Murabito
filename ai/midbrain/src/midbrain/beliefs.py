@@ -53,6 +53,8 @@ class Belief:
     """The tick of that sighting."""
     acuity: int
     """How well it was seen then: a ``pb.Acuity`` value."""
+    facing: int | None
+    """The way it faced then, a ``pb.Direction`` value, or None if it has no facing."""
 
     def age(self, now: int) -> int:
         """Ticks since the last sighting."""
@@ -79,6 +81,7 @@ class BelievedWorld:
                 cell=here.plus(sighting.offset),
                 seen_at=snapshot.tick,
                 acuity=sighting.acuity,
+                facing=sighting.facing if sighting.HasField("facing") else None,
             )
 
     def __iter__(self):
