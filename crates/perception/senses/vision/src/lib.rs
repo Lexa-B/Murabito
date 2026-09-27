@@ -794,7 +794,7 @@ mod tests {
                     speed: 4.0,
                     turn_speed: 180.0,
                 },
-                Step(Direction::NNW),
+                Step::walk(Direction::NNW),
             ))
             .id();
 

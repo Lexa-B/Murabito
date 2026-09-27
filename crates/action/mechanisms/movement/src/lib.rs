@@ -39,13 +39,49 @@ pub struct Locomotion {
     pub turn_speed: f32,
 }
 
-/// The intent to step one voxel in a direction. Put it on a body with a `Locomotion` and
-/// `step` carries it out over ticks, then removes it. Refused, and removed with a
-/// warning, unless the body already faces within one notch of the way it is to go: a
-/// wider turn is its own action first. One at a time: the actions layer never issues
-/// another while one is in flight.
+/// How fast a body goes on a step, as a multiple of its walking speed. A property of the
+/// step, not of the body: a fox sneaks up and then sprints with nothing on it changing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Gait {
+    Sneak,
+    #[default]
+    Walk,
+    Jog,
+    Sprint,
+}
+
+impl Gait {
+    /// The multiple of `Locomotion::speed` this gait moves at.
+    pub fn factor(self) -> f32 {
+        match self {
+            Gait::Sneak => 0.5,
+            Gait::Walk => 1.0,
+            Gait::Jog => 2.0,
+            Gait::Sprint => 3.0,
+        }
+    }
+}
+
+/// The intent to step one voxel in a direction, at a gait. Put it on a body with a
+/// `Locomotion` and `step` carries it out over ticks, then removes it. Refused, and
+/// removed with a warning, unless the body already faces within one notch of the way it
+/// is to go: a wider turn is its own action first. One at a time: the actions layer never
+/// issues another while one is in flight.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Step(pub Direction);
+pub struct Step {
+    pub direction: Direction,
+    pub gait: Gait,
+}
+
+impl Step {
+    /// A step at walking pace.
+    pub fn walk(direction: Direction) -> Self {
+        Step {
+            direction,
+            gait: Gait::Walk,
+        }
+    }
+}
 
 /// The intent to turn to face a direction. Put it on a body with a `Locomotion` and
 /// `turn` carries it out a notch of 30° at a time, the short way round, passing through
@@ -81,19 +117,20 @@ fn step(
 ) {
     for (body, step, locomotion, mut position, mut facing, mut progress) in &mut bodies {
         if !progress.in_flight() {
-            if !can_step(facing.0, step.0) {
+            if !can_step(facing.0, step.direction) {
                 warn!(
                     "{body}: a step {:?} while facing {:?} needs a turn first",
-                    step.0, facing.0
+                    step.direction, facing.0
                 );
                 commands.entity(body).remove::<Step>();
                 continue;
             }
-            progress.start::<Step>(cost(step.0));
+            progress.start::<Step>(cost(step.direction));
         }
-        if progress.advance(locomotion.speed * time.delta_secs()) {
-            position.0 = position.0.neighbour(step.0);
-            facing.0 = step.0;
+        let pace = locomotion.speed * step.gait.factor();
+        if progress.advance(pace * time.delta_secs()) {
+            position.0 = position.0.neighbour(step.direction);
+            facing.0 = step.direction;
             progress.finish();
             commands.entity(body).remove::<Step>();
         }
@@ -178,9 +215,12 @@ mod tests {
         app.world().get::<Step>(body).is_some()
     }
 
-    /// Issues a step and counts the ticks until it lands, giving up after too many.
-    fn ticks_to_step(app: &mut App, body: Entity, direction: Direction) -> u32 {
-        app.world_mut().entity_mut(body).insert(Step(direction));
+    /// Issues a step at a gait and counts the ticks until it lands, giving up after too
+    /// many.
+    fn ticks_to_step_at(app: &mut App, body: Entity, direction: Direction, gait: Gait) -> u32 {
+        app.world_mut()
+            .entity_mut(body)
+            .insert(Step { direction, gait });
         for tick in 1..=200 {
             app.update();
             if !is_stepping(app, body) {
@@ -188,6 +228,11 @@ mod tests {
             }
         }
         panic!("the step never landed");
+    }
+
+    /// Issues a walking step and counts the ticks until it lands.
+    fn ticks_to_step(app: &mut App, body: Entity, direction: Direction) -> u32 {
+        ticks_to_step_at(app, body, direction, Gait::Walk)
     }
 
     fn is_turning(app: &App, body: Entity) -> bool {
@@ -245,6 +290,58 @@ mod tests {
     }
 
     #[test]
+    fn a_gait_is_a_multiple_of_the_walking_speed() {
+        assert_eq!(Gait::Sneak.factor(), 0.5);
+        assert_eq!(Gait::Walk.factor(), 1.0);
+        assert_eq!(Gait::Jog.factor(), 2.0);
+        assert_eq!(Gait::Sprint.factor(), 3.0);
+        assert_eq!(Gait::default(), Gait::Walk);
+    }
+
+    #[test]
+    fn a_walk_step_and_a_bare_step_are_the_same_thing() {
+        assert_eq!(
+            Step::walk(Direction::E),
+            Step {
+                direction: Direction::E,
+                gait: Gait::Walk
+            }
+        );
+    }
+
+    #[test]
+    fn the_gaits_take_the_ticks_their_multiple_says_for_an_edge_step() {
+        // At 4 shaku/s an edge step walks in 16 ticks: a sneak is 32, a jog 8, a sprint
+        // 5.33 and so 6.
+        let expected = [
+            (Gait::Sneak, 32),
+            (Gait::Walk, 16),
+            (Gait::Jog, 8),
+            (Gait::Sprint, 6),
+        ];
+        for (gait, ticks) in expected {
+            let (mut app, body) = body_at(voxel(0, 0, 0), Direction::E, 4.0);
+
+            assert_eq!(
+                ticks_to_step_at(&mut app, body, Direction::E, gait),
+                ticks,
+                "{gait:?}"
+            );
+            assert_eq!(position_of(&app, body), voxel(1, 0, 0));
+        }
+    }
+
+    #[test]
+    fn a_change_of_gait_keeps_the_head_start_since_the_bar_is_in_shaku() {
+        // A sprinting edge step at 4 shaku/s passes 1 shaku on tick 6 with 0.125 to
+        // spare; the walk after it starts that far in, and lands on tick 14 not 16.
+        let (mut app, body) = body_at(voxel(0, 0, 0), Direction::E, 4.0);
+        ticks_to_step_at(&mut app, body, Direction::E, Gait::Sprint);
+
+        assert_eq!(ticks_to_step(&mut app, body, Direction::E), 14);
+    }
+
+    #[test]
     fn landing_faces_the_body_the_way_it_went() {
         let (mut app, body) = body_at(voxel(0, 0, 0), Direction::ENE, 4.0);
 
@@ -289,7 +386,7 @@ mod tests {
         let (mut app, body) = body_at(voxel(0, 0, 0), Direction::E, 4.0);
         app.world_mut()
             .entity_mut(body)
-            .insert(Step(Direction::NNE));
+            .insert(Step::walk(Direction::NNE));
 
         app.update();
 
@@ -301,7 +398,9 @@ mod tests {
     #[test]
     fn a_body_mid_step_is_still_in_the_voxel_it_left_from() {
         let (mut app, body) = body_at(voxel(0, 0, 0), Direction::E, 4.0);
-        app.world_mut().entity_mut(body).insert(Step(Direction::E));
+        app.world_mut()
+            .entity_mut(body)
+            .insert(Step::walk(Direction::E));
 
         (0..15).for_each(|_| app.update());
 

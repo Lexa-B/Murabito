@@ -145,7 +145,7 @@ fn issue(
         };
         let (intent, last) = next_intent(action, facing.0);
         match intent {
-            Intent::Step(direction) => commands.entity(body).insert(Step(direction)),
+            Intent::Step(direction) => commands.entity(body).insert(Step::walk(direction)),
             Intent::Turn(direction) => commands.entity(body).insert(Turn(direction)),
         };
         if last {
@@ -445,7 +445,9 @@ mod tests {
     #[test]
     fn nothing_is_issued_while_something_is_in_flight() {
         let (mut app, body) = body_facing(Direction::E);
-        app.world_mut().entity_mut(body).insert(Step(Direction::E));
+        app.world_mut()
+            .entity_mut(body)
+            .insert(Step::walk(Direction::E));
         push(&mut app, body, Action::Face(Direction::W));
 
         app.update();
