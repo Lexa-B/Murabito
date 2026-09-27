@@ -7,6 +7,13 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class Gait(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    SNEAK: _ClassVar[Gait]
+    WALK: _ClassVar[Gait]
+    JOG: _ClassVar[Gait]
+    SPRINT: _ClassVar[Gait]
+
 class Direction(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     E: _ClassVar[Direction]
@@ -27,6 +34,10 @@ class Acuity(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     NEAR: _ClassVar[Acuity]
     MID: _ClassVar[Acuity]
     FAR: _ClassVar[Acuity]
+SNEAK: Gait
+WALK: Gait
+JOG: Gait
+SPRINT: Gait
 E: Direction
 ENE: Direction
 NNE: Direction
@@ -156,12 +167,28 @@ class Sustained(_message.Message):
     def __init__(self, go_to: _Optional[_Union[Voxel, _Mapping]] = ...) -> None: ...
 
 class Action(_message.Message):
-    __slots__ = ("go", "face")
+    __slots__ = ("go", "face", "sidestep", "backstep", "recoil", "lunge")
     GO_FIELD_NUMBER: _ClassVar[int]
     FACE_FIELD_NUMBER: _ClassVar[int]
-    go: Direction
+    SIDESTEP_FIELD_NUMBER: _ClassVar[int]
+    BACKSTEP_FIELD_NUMBER: _ClassVar[int]
+    RECOIL_FIELD_NUMBER: _ClassVar[int]
+    LUNGE_FIELD_NUMBER: _ClassVar[int]
+    go: Go
     face: Direction
-    def __init__(self, go: _Optional[_Union[Direction, str]] = ..., face: _Optional[_Union[Direction, str]] = ...) -> None: ...
+    sidestep: Direction
+    backstep: Direction
+    recoil: Direction
+    lunge: Direction
+    def __init__(self, go: _Optional[_Union[Go, _Mapping]] = ..., face: _Optional[_Union[Direction, str]] = ..., sidestep: _Optional[_Union[Direction, str]] = ..., backstep: _Optional[_Union[Direction, str]] = ..., recoil: _Optional[_Union[Direction, str]] = ..., lunge: _Optional[_Union[Direction, str]] = ...) -> None: ...
+
+class Go(_message.Message):
+    __slots__ = ("direction", "gait")
+    DIRECTION_FIELD_NUMBER: _ClassVar[int]
+    GAIT_FIELD_NUMBER: _ClassVar[int]
+    direction: Direction
+    gait: Gait
+    def __init__(self, direction: _Optional[_Union[Direction, str]] = ..., gait: _Optional[_Union[Gait, str]] = ...) -> None: ...
 
 class Outcome(_message.Message):
     __slots__ = ("done", "stopped", "superseded", "cancelled", "lost")

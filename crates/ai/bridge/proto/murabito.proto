@@ -108,11 +108,32 @@ message Sustained {
 }
 
 // One thing on the queue the mechanisms know how to do.
+// One thing a body has been asked to do, as `murabito_actions::Action`. The words that
+// name a way, sidestep, backstep, recoil and lunge, are only that way relative to the
+// body's facing; the game refuses one that is not.
 message Action {
   oneof kind {
-    Direction go = 1;
+    Go go = 1;
     Direction face = 2;
+    Direction sidestep = 3;
+    Direction backstep = 4;
+    Direction recoil = 5;
+    Direction lunge = 6;
   }
+}
+
+// One voxel that way at a gait, turning first if need be.
+message Go {
+  Direction direction = 1;
+  Gait gait = 2;
+}
+
+// How fast a step goes, as a multiple of the walking speed: 0.5, 1, 2 and 3.
+enum Gait {
+  SNEAK = 0;
+  WALK = 1;
+  JOG = 2;
+  SPRINT = 3;
 }
 
 message Outcome {

@@ -5,7 +5,17 @@ from __future__ import annotations
 from rich.console import Console
 
 from midbrain import murabito_pb2 as pb
-from midbrain.board import doing, in_flight, intent, name_of, outcome, previous, render, voxel
+from midbrain.board import (
+    action,
+    doing,
+    in_flight,
+    intent,
+    name_of,
+    outcome,
+    previous,
+    render,
+    voxel,
+)
 
 FOX = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox"
 
@@ -32,7 +42,7 @@ def snapshot() -> pb.Snapshot:
             intent=pb.Intent(sustained=pb.Sustained(go_to=pb.Voxel(q=0, r=0, layer=0))),
             since=40,
         ),
-        queue=[pb.Action(go=pb.Direction.E)],
+        queue=[pb.Action(go=pb.Go(direction=pb.Direction.E, gait=pb.Gait.WALK))],
         in_flight=0.5,
         previous=pb.Previous(
             intent=pb.Intent(short=pb.Short(face=pb.Direction.N)),
@@ -61,6 +71,15 @@ def test_a_body_with_nothing_going_on_reads_as_such() -> None:
     assert previous(bare) == "nothing yet"
 
 
+def test_every_action_word_reads_as_itself() -> None:
+    assert action(pb.Action(go=pb.Go(direction=pb.Direction.N, gait=pb.Gait.SPRINT))) == "Go N at a sprint"
+    assert action(pb.Action(face=pb.Direction.W)) == "Face W"
+    assert action(pb.Action(sidestep=pb.Direction.N)) == "Sidestep N"
+    assert action(pb.Action(backstep=pb.Direction.W)) == "Backstep W"
+    assert action(pb.Action(recoil=pb.Direction.WNW)) == "Recoil WNW"
+    assert action(pb.Action(lunge=pb.Direction.E)) == "Lunge E"
+
+
 def test_the_board_renders_every_body_with_its_facts() -> None:
     console = Console(width=100, record=True, force_terminal=False)
     console.print(render([snapshot()]))
@@ -68,7 +87,7 @@ def test_the_board_renders_every_body_with_its_facts() -> None:
     assert "tick 64" in text and "1 bodies" in text
     assert "#2 fox" in text
     assert "facing ESE" in text
-    assert "Go E" in text
+    assert "Go E at a walk" in text
     assert "#4" in text and "near" in text
     assert "sugi" in text and "mid" in text
     assert "Face N  →  Cancelled by startle_face_apparition" in text

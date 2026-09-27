@@ -13,7 +13,7 @@ use std::collections::VecDeque;
 
 use bevy::prelude::*;
 use murabito_hexcoords::Direction;
-use murabito_movement::{Step, Turn, Way};
+use murabito_movement::{Gait, Step, Turn, Way};
 use murabito_placement::Facing;
 use murabito_progress::{MechanismSet, Progress};
 
@@ -57,13 +57,24 @@ fn cut_short(mut commands: Commands, mut bodies: Query<(Entity, &mut Progress), 
 pub struct AskingSet;
 
 /// One thing a body can be asked to do. A variant per kind; the mechanism that does it
-/// is below this crate, and the queue never changes when one is added.
+/// is below this crate, and the queue never changes when one is added. The words that
+/// name a way, sidestep, backstep, recoil and lunge, are only that way: one whose
+/// direction is not lateral, rear or forward of the body's facing is refused, dropped
+/// with a warning, since whoever asked has it wrong and should hear so.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
-    /// Walk one voxel that way, turning first if need be.
-    Go(Direction),
+    /// One voxel that way at a gait, turning first if need be.
+    Go(Direction, Gait),
     /// Turn to face that way, without moving.
     Face(Direction),
+    /// One voxel sideways at a walk, without turning; lands facing orthogonal to the way.
+    Sidestep(Direction),
+    /// One voxel back at a walk, without turning; lands facing away from the way.
+    Backstep(Direction),
+    /// A backstep at a jog.
+    Recoil(Direction),
+    /// Two voxels forward at a sprint, landed in one go.
+    Lunge(Direction),
 }
 
 /// The actions a body has been asked to do, first to last.
@@ -104,36 +115,76 @@ impl ActionQueue {
 }
 
 /// Which intent the action at the head needs next, given the way the body faces, and
-/// whether that intent is the action's last. Pure, so the rule is testable on its own.
-fn next_intent(action: Action, facing: Direction) -> (Intent, bool) {
+/// whether that intent is the action's last; or why the action is refused. Pure, so the
+/// rule is testable on its own.
+fn next_intent(action: Action, facing: Direction) -> Result<(Intent, bool), WrongWay> {
     match action {
-        Action::Face(direction) => (Intent::Turn(direction), true),
-        Action::Go(direction) if Way::of(facing, direction) == Way::Forward => {
-            (Intent::Step(direction), true)
+        Action::Face(direction) => Ok((Intent::Turn(direction), true)),
+        Action::Go(direction, gait) if Way::of(facing, direction) == Way::Forward => {
+            let step = Step {
+                gait,
+                ..Step::walk(direction)
+            };
+            Ok((Intent::Step(step), true))
         }
         // Too far off to step: turn until one notch short, and let the step take the last
         // notch for free on landing.
-        Action::Go(direction) => {
+        Action::Go(direction, _) => {
             let notches = facing.notches_to(direction);
-            (
+            Ok((
                 Intent::Turn(facing.rotated(notches - notches.signum())),
                 false,
-            )
+            ))
         }
+        Action::Sidestep(direction) => only(Way::Lateral, Step::walk(direction), facing),
+        Action::Backstep(direction) => only(Way::Rear, Step::walk(direction), facing),
+        Action::Recoil(direction) => {
+            let step = Step {
+                gait: Gait::Jog,
+                ..Step::walk(direction)
+            };
+            only(Way::Rear, step, facing)
+        }
+        Action::Lunge(direction) => {
+            let step = Step {
+                gait: Gait::Sprint,
+                reach: 2,
+                ..Step::walk(direction)
+            };
+            only(Way::Forward, step, facing)
+        }
+    }
+}
+
+/// The step, and done, if it goes the way the word needs; refused otherwise.
+fn only(needs: Way, step: Step, facing: Direction) -> Result<(Intent, bool), WrongWay> {
+    let way = Way::of(facing, step.direction);
+    if way == needs {
+        Ok((Intent::Step(step), true))
+    } else {
+        Err(WrongWay { needs, way })
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum Intent {
-    Step(Direction),
+    Step(Step),
     Turn(Direction),
+}
+
+/// Why an action is refused: its word is only for one way, and its direction is another.
+#[derive(Debug, PartialEq, Eq)]
+struct WrongWay {
+    needs: Way,
+    way: Way,
 }
 
 /// A body doing nothing, so far as movement knows.
 type Idle = (Without<Step>, Without<Turn>);
 
 /// Issues, for every body with nothing in flight, the intent its head action needs, and
-/// drops the action once its last intent is out.
+/// drops the action once its last intent is out. An action refused is dropped with a
+/// warning, and the next is looked at on the next tick.
 fn issue(
     mut commands: Commands,
     mut bodies: Query<(Entity, &mut ActionQueue, &Facing, &Progress), Idle>,
@@ -145,9 +196,20 @@ fn issue(
         let Some(action) = queue.head() else {
             continue;
         };
-        let (intent, last) = next_intent(action, facing.0);
+        let (intent, last) = match next_intent(action, facing.0) {
+            Ok(next) => next,
+            Err(WrongWay { needs, way }) => {
+                warn!(
+                    "{body}: {action:?} while facing {:?} is {way:?}, and the word is only \
+                     {needs:?}: refused",
+                    facing.0
+                );
+                queue.done_with_head();
+                continue;
+            }
+        };
         match intent {
-            Intent::Step(direction) => commands.entity(body).insert(Step::walk(direction)),
+            Intent::Step(step) => commands.entity(body).insert(step),
             Intent::Turn(direction) => commands.entity(body).insert(Turn(direction)),
         };
         if last {
@@ -163,11 +225,14 @@ mod tests {
     #[test]
     fn a_queue_reads_back_first_to_last() {
         let mut queue = ActionQueue::default();
-        queue.push(Action::Go(Direction::E));
+        queue.push(Action::Go(Direction::E, Gait::Walk));
         queue.push(Action::Face(Direction::N));
         assert_eq!(
             queue.iter().collect::<Vec<_>>(),
-            [Action::Go(Direction::E), Action::Face(Direction::N)]
+            [
+                Action::Go(Direction::E, Gait::Walk),
+                Action::Face(Direction::N)
+            ]
         );
     }
     use murabito_hexcoords::VoxelCoord;
@@ -179,31 +244,43 @@ mod tests {
         VoxelCoord::new(q, r, -q - r, layer).expect("on the plane")
     }
 
+    fn step(direction: Direction, gait: Gait, reach: u8) -> Step {
+        Step {
+            direction,
+            gait,
+            reach,
+        }
+    }
+
     #[test]
-    fn facing_the_way_to_go_is_a_step_and_done() {
+    fn facing_the_way_to_go_is_a_step_at_the_gait_and_done() {
         assert_eq!(
-            next_intent(Action::Go(Direction::E), Direction::E),
-            (Intent::Step(Direction::E), true)
+            next_intent(Action::Go(Direction::E, Gait::Walk), Direction::E),
+            Ok((Intent::Step(step(Direction::E, Gait::Walk, 1)), true))
+        );
+        assert_eq!(
+            next_intent(Action::Go(Direction::E, Gait::Sprint), Direction::E),
+            Ok((Intent::Step(step(Direction::E, Gait::Sprint, 1)), true))
         );
     }
 
     #[test]
     fn one_notch_off_is_still_a_step_the_landing_turns_for_free() {
         assert_eq!(
-            next_intent(Action::Go(Direction::E), Direction::ESE),
-            (Intent::Step(Direction::E), true)
+            next_intent(Action::Go(Direction::E, Gait::Walk), Direction::ESE),
+            Ok((Intent::Step(step(Direction::E, Gait::Walk, 1)), true))
         );
     }
 
     #[test]
     fn further_off_is_a_turn_to_one_notch_short_and_the_action_stays() {
         assert_eq!(
-            next_intent(Action::Go(Direction::E), Direction::NNW),
-            (Intent::Turn(Direction::ENE), false)
+            next_intent(Action::Go(Direction::E, Gait::Walk), Direction::NNW),
+            Ok((Intent::Turn(Direction::ENE), false))
         );
         assert_eq!(
-            next_intent(Action::Go(Direction::E), Direction::W),
-            (Intent::Turn(Direction::ESE), false)
+            next_intent(Action::Go(Direction::E, Gait::Walk), Direction::W),
+            Ok((Intent::Turn(Direction::ESE), false))
         );
     }
 
@@ -211,7 +288,50 @@ mod tests {
     fn facing_is_a_turn_all_the_way_and_done() {
         assert_eq!(
             next_intent(Action::Face(Direction::W), Direction::E),
-            (Intent::Turn(Direction::W), true)
+            Ok((Intent::Turn(Direction::W), true))
+        );
+    }
+
+    #[test]
+    fn each_way_word_is_one_step_at_its_gait_and_reach() {
+        use Direction::*;
+        assert_eq!(
+            next_intent(Action::Sidestep(N), E),
+            Ok((Intent::Step(step(N, Gait::Walk, 1)), true))
+        );
+        assert_eq!(
+            next_intent(Action::Backstep(W), E),
+            Ok((Intent::Step(step(W, Gait::Walk, 1)), true))
+        );
+        assert_eq!(
+            next_intent(Action::Recoil(WNW), E),
+            Ok((Intent::Step(step(WNW, Gait::Jog, 1)), true))
+        );
+        assert_eq!(
+            next_intent(Action::Lunge(ENE), E),
+            Ok((Intent::Step(step(ENE, Gait::Sprint, 2)), true))
+        );
+    }
+
+    #[test]
+    fn a_way_word_the_wrong_way_is_refused() {
+        use Direction::*;
+        let wrong = |needs, way| Err(WrongWay { needs, way });
+        assert_eq!(
+            next_intent(Action::Sidestep(E), E),
+            wrong(Way::Lateral, Way::Forward)
+        );
+        assert_eq!(
+            next_intent(Action::Backstep(N), E),
+            wrong(Way::Rear, Way::Lateral)
+        );
+        assert_eq!(
+            next_intent(Action::Recoil(E), E),
+            wrong(Way::Rear, Way::Forward)
+        );
+        assert_eq!(
+            next_intent(Action::Lunge(W), E),
+            wrong(Way::Forward, Way::Rear)
         );
     }
 
@@ -220,10 +340,10 @@ mod tests {
         let mut queue = ActionQueue::default();
         assert!(queue.is_empty());
 
-        queue.push(Action::Go(Direction::E));
+        queue.push(Action::Go(Direction::E, Gait::Walk));
         queue.push(Action::Face(Direction::N));
         assert_eq!(queue.len(), 2);
-        assert_eq!(queue.head(), Some(Action::Go(Direction::E)));
+        assert_eq!(queue.head(), Some(Action::Go(Direction::E, Gait::Walk)));
 
         queue.done_with_head();
         assert_eq!(queue.head(), Some(Action::Face(Direction::N)));
@@ -272,7 +392,7 @@ mod tests {
     #[test]
     fn a_body_cut_short_mid_step_stays_where_it_was_and_starts_its_next_action_at_once() {
         let (mut app, body) = body_facing(Direction::E);
-        push(&mut app, body, Action::Go(Direction::E));
+        push(&mut app, body, Action::Go(Direction::E, Gait::Walk));
         for _ in 0..8 {
             app.update();
         }
@@ -381,7 +501,7 @@ mod tests {
         // Issued before the mechanisms run, the step walks its first tick's worth on the
         // same tick, so it lands on tick 16 as a bare step would.
         let (mut app, body) = body_facing(Direction::E);
-        push(&mut app, body, Action::Go(Direction::E));
+        push(&mut app, body, Action::Go(Direction::E, Gait::Walk));
 
         let ticks = ticks_until_idle(&mut app, body);
 
@@ -392,7 +512,7 @@ mod tests {
     #[test]
     fn a_go_action_one_notch_off_never_turns_first() {
         let (mut app, body) = body_facing(Direction::ENE);
-        push(&mut app, body, Action::Go(Direction::E));
+        push(&mut app, body, Action::Go(Direction::E, Gait::Walk));
 
         let mut turned = false;
         for _ in 0..16 {
@@ -411,7 +531,7 @@ mod tests {
         // 180 degrees/s is 53.3 ticks, so 54; the step is issued on tick 55 and lands 16
         // ticks later, on tick 70.
         let (mut app, body) = body_facing(Direction::W);
-        push(&mut app, body, Action::Go(Direction::E));
+        push(&mut app, body, Action::Go(Direction::E, Gait::Walk));
 
         app.update();
         assert_eq!(
@@ -432,10 +552,55 @@ mod tests {
     }
 
     #[test]
+    fn a_sidestep_never_turns_first_and_lands_facing_the_way_it_was() {
+        let (mut app, body) = body_facing(Direction::E);
+        push(&mut app, body, Action::Sidestep(Direction::N));
+
+        for tick in 1..=28 {
+            app.update();
+            assert!(!has::<Turn>(&app, body), "turning on tick {tick}");
+        }
+
+        assert!(!has::<Step>(&app, body), "a corner step lands on tick 28");
+        assert_eq!(position_of(&app, body), voxel(1, -2, 0));
+        assert_eq!(facing_of(&app, body), Direction::E);
+    }
+
+    #[test]
+    fn a_recoil_is_a_step_back_in_half_the_ticks_still_facing_forward() {
+        let (mut app, body) = body_facing(Direction::E);
+        push(&mut app, body, Action::Recoil(Direction::W));
+
+        assert_eq!(ticks_until_idle(&mut app, body), 8);
+        assert_eq!(position_of(&app, body), voxel(-1, 0, 0));
+        assert_eq!(facing_of(&app, body), Direction::E);
+    }
+
+    #[test]
+    fn a_lunge_lands_two_cells_on() {
+        let (mut app, body) = body_facing(Direction::E);
+        push(&mut app, body, Action::Lunge(Direction::E));
+
+        assert_eq!(ticks_until_idle(&mut app, body), 11);
+        assert_eq!(position_of(&app, body), voxel(2, 0, 0));
+    }
+
+    #[test]
+    fn a_refused_action_is_dropped_and_the_one_after_it_is_done() {
+        let (mut app, body) = body_facing(Direction::E);
+        push(&mut app, body, Action::Sidestep(Direction::E));
+        push(&mut app, body, Action::Go(Direction::E, Gait::Walk));
+
+        // Refused on tick 1, the walk issued on tick 2, landing 16 ticks later.
+        assert_eq!(ticks_until_idle(&mut app, body), 17);
+        assert_eq!(position_of(&app, body), voxel(1, 0, 0));
+    }
+
+    #[test]
     fn actions_are_done_in_the_order_they_were_pushed() {
         let (mut app, body) = body_facing(Direction::E);
-        push(&mut app, body, Action::Go(Direction::E));
-        push(&mut app, body, Action::Go(Direction::E));
+        push(&mut app, body, Action::Go(Direction::E, Gait::Walk));
+        push(&mut app, body, Action::Go(Direction::E, Gait::Walk));
         push(&mut app, body, Action::Face(Direction::N));
 
         ticks_until_idle(&mut app, body);

@@ -63,12 +63,24 @@ def intent(what: pb.Intent) -> str:
     return "?"
 
 
+def gait(n: int) -> str:
+    return pb.Gait.Name(n).lower()
+
+
 def action(what: pb.Action) -> str:
     match what.WhichOneof("kind"):
         case "go":
-            return f"Go {direction(what.go)}"
+            return f"Go {direction(what.go.direction)} at a {gait(what.go.gait)}"
         case "face":
             return f"Face {direction(what.face)}"
+        case "sidestep":
+            return f"Sidestep {direction(what.sidestep)}"
+        case "backstep":
+            return f"Backstep {direction(what.backstep)}"
+        case "recoil":
+            return f"Recoil {direction(what.recoil)}"
+        case "lunge":
+            return f"Lunge {direction(what.lunge)}"
     return "?"
 
 
