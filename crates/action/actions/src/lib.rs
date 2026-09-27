@@ -13,7 +13,7 @@ use std::collections::VecDeque;
 
 use bevy::prelude::*;
 use murabito_hexcoords::Direction;
-use murabito_movement::{Step, Turn, can_step};
+use murabito_movement::{Step, Turn, Way};
 use murabito_placement::Facing;
 use murabito_progress::{MechanismSet, Progress};
 
@@ -108,7 +108,9 @@ impl ActionQueue {
 fn next_intent(action: Action, facing: Direction) -> (Intent, bool) {
     match action {
         Action::Face(direction) => (Intent::Turn(direction), true),
-        Action::Go(direction) if can_step(facing, direction) => (Intent::Step(direction), true),
+        Action::Go(direction) if Way::of(facing, direction) == Way::Forward => {
+            (Intent::Step(direction), true)
+        }
         // Too far off to step: turn until one notch short, and let the step take the last
         // notch for free on landing.
         Action::Go(direction) => {

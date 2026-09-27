@@ -63,10 +63,10 @@ impl Gait {
 }
 
 /// The intent to step one voxel in a direction, at a gait. Put it on a body with a
-/// `Locomotion` and `step` carries it out over ticks, then removes it. Refused, and
-/// removed with a warning, unless the body already faces within one notch of the way it
-/// is to go: a wider turn is its own action first. One at a time: the actions layer never
-/// issues another while one is in flight.
+/// `Locomotion` and `step` carries it out over ticks, then removes it. Any of the twelve
+/// directions is a legal step: which [`Way`] it goes relative to the facing decides how
+/// the body faces on landing, and the landing turns it at most one notch. One at a time:
+/// the actions layer never issues another while one is in flight.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Step {
     pub direction: Direction,
@@ -94,15 +94,47 @@ pub fn cost(direction: Direction) -> f32 {
     if direction.is_edge() { 1.0 } else { SQRT_3 }
 }
 
-/// Whether a body facing `facing` may step `direction` without turning first: the same
-/// way, or one notch of 30° either side. The one-notch turn is free, taken on landing.
-pub fn can_step(facing: Direction, direction: Direction) -> bool {
-    facing.notches_to(direction).abs() <= 1
+/// Which way a step goes, relative to the way the body faces. Forward is the way faced
+/// or a notch either side; rear is the way behind or a notch either side; lateral is the
+/// six between.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Way {
+    Forward,
+    Lateral,
+    Rear,
+}
+
+impl Way {
+    pub fn of(facing: Direction, direction: Direction) -> Self {
+        match facing.notches_to(direction).abs() {
+            0 | 1 => Way::Forward,
+            2..=4 => Way::Lateral,
+            _ => Way::Rear,
+        }
+    }
+
+    /// How many notches the way gone is turned back toward the old facing on landing.
+    fn notches_back(self) -> i8 {
+        match self {
+            Way::Forward => 0,
+            Way::Lateral => 3,
+            Way::Rear => 6,
+        }
+    }
+}
+
+/// The way a body facing `facing` faces after stepping `direction`: a forward step lands
+/// facing the way it went, a lateral one orthogonal to it and a rear one opposite, each on
+/// the side of the old facing. The landing never turns the body more than one notch, so
+/// that one notch is the free adjustment every step gets.
+pub fn landing(facing: Direction, direction: Direction) -> Direction {
+    let notches = facing.notches_to(direction);
+    direction.rotated(-Way::of(facing, direction).notches_back() * notches.signum())
 }
 
 /// Carries out every `Step` in flight, one tick's walk at a time, and lands it once the
-/// distance is walked: the body is in the neighbour, facing the way it went. Inside
-/// `FixedUpdate`, `Time` is the fixed clock, so `delta_secs` is the tick.
+/// distance is walked: the body is in the neighbour, facing as the [`landing`] rule says.
+/// Inside `FixedUpdate`, `Time` is the fixed clock, so `delta_secs` is the tick.
 fn step(
     time: Res<Time>,
     mut commands: Commands,
@@ -117,20 +149,12 @@ fn step(
 ) {
     for (body, step, locomotion, mut position, mut facing, mut progress) in &mut bodies {
         if !progress.in_flight() {
-            if !can_step(facing.0, step.direction) {
-                warn!(
-                    "{body}: a step {:?} while facing {:?} needs a turn first",
-                    step.direction, facing.0
-                );
-                commands.entity(body).remove::<Step>();
-                continue;
-            }
             progress.start::<Step>(cost(step.direction));
         }
         let pace = locomotion.speed * step.gait.factor();
         if progress.advance(pace * time.delta_secs()) {
             position.0 = position.0.neighbour(step.direction);
-            facing.0 = step.direction;
+            facing.0 = landing(facing.0, step.direction);
             progress.finish();
             commands.entity(body).remove::<Step>();
         }
@@ -261,12 +285,62 @@ mod tests {
     }
 
     #[test]
-    fn a_step_needs_the_body_facing_within_one_notch() {
-        assert!(can_step(Direction::E, Direction::E));
-        assert!(can_step(Direction::E, Direction::ENE));
-        assert!(can_step(Direction::E, Direction::ESE));
-        assert!(!can_step(Direction::E, Direction::NNE));
-        assert!(!can_step(Direction::E, Direction::W));
+    fn three_forward_six_lateral_and_three_rear_make_the_twelve() {
+        use Direction::*;
+        let ways: Vec<_> = Direction::ALL
+            .iter()
+            .map(|&direction| Way::of(E, direction))
+            .collect();
+        assert_eq!(&ways[..2], [Way::Forward, Way::Forward]);
+        assert_eq!(&ways[2..5], [Way::Lateral; 3]);
+        assert_eq!(&ways[5..8], [Way::Rear; 3]);
+        assert_eq!(&ways[8..11], [Way::Lateral; 3]);
+        assert_eq!(ways[11], Way::Forward);
+        assert_eq!(Way::of(N, NNE), Way::Forward);
+        assert_eq!(Way::of(N, S), Way::Rear);
+    }
+
+    #[test]
+    fn a_forward_step_lands_facing_the_way_it_went() {
+        use Direction::*;
+        assert_eq!(landing(E, E), E);
+        assert_eq!(landing(E, ENE), ENE);
+        assert_eq!(landing(E, ESE), ESE);
+    }
+
+    #[test]
+    fn a_lateral_step_lands_orthogonal_to_the_way_it_went_on_the_side_faced() {
+        use Direction::*;
+        // Facing east, a step due north keeps the facing; two notches off turns the body
+        // one notch toward the step, four notches off one notch away from it.
+        assert_eq!(landing(E, N), E);
+        assert_eq!(landing(E, NNE), ESE);
+        assert_eq!(landing(E, NNW), ENE);
+        assert_eq!(landing(E, S), E);
+        assert_eq!(landing(E, SSE), ENE);
+        assert_eq!(landing(E, SSW), ESE);
+    }
+
+    #[test]
+    fn a_rear_step_lands_facing_opposite_the_way_it_went() {
+        use Direction::*;
+        assert_eq!(landing(E, W), E);
+        assert_eq!(landing(E, WNW), ESE);
+        assert_eq!(landing(E, WSW), ENE);
+        assert_eq!(landing(N, S), N);
+    }
+
+    #[test]
+    fn no_landing_turns_the_body_more_than_one_notch() {
+        for &facing in &Direction::ALL {
+            for &direction in &Direction::ALL {
+                let landed = landing(facing, direction);
+                assert!(
+                    facing.notches_to(landed).abs() <= 1,
+                    "facing {facing:?}, stepping {direction:?}, landed {landed:?}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -382,16 +456,24 @@ mod tests {
     }
 
     #[test]
-    fn a_step_two_notches_off_the_facing_is_refused_and_the_body_stays_put() {
+    fn a_sidestep_moves_the_body_and_keeps_it_facing_the_way_it_was() {
         let (mut app, body) = body_at(voxel(0, 0, 0), Direction::E, 4.0);
-        app.world_mut()
-            .entity_mut(body)
-            .insert(Step::walk(Direction::NNE));
 
-        app.update();
+        let ticks = ticks_to_step(&mut app, body, Direction::N);
 
-        assert!(!is_stepping(&app, body));
-        assert_eq!(position_of(&app, body), voxel(0, 0, 0));
+        assert_eq!(ticks, 28);
+        assert_eq!(position_of(&app, body), voxel(1, -2, 0));
+        assert_eq!(facing_of(&app, body), Direction::E);
+    }
+
+    #[test]
+    fn a_step_backward_lands_the_body_still_facing_forward() {
+        let (mut app, body) = body_at(voxel(0, 0, 0), Direction::E, 4.0);
+
+        let ticks = ticks_to_step(&mut app, body, Direction::W);
+
+        assert_eq!(ticks, 16);
+        assert_eq!(position_of(&app, body), voxel(-1, 0, 0));
         assert_eq!(facing_of(&app, body), Direction::E);
     }
 
