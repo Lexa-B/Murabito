@@ -200,7 +200,7 @@ fn command_the_hare(
         return;
     };
     for mut hare in &mut hares {
-        hare.order(Intent::Sustained(Sustained::GoTo(cell)));
+        hare.order(Intent::Sustained(Sustained::WalkTo(cell)));
     }
 }
 

@@ -110,10 +110,13 @@ message Short {
 
 message Stop {}
 
-// Outlives rounds; the brainstem re-aims it every step.
+// Outlives rounds; the brainstem re-aims it every step: to a cell, at a pace.
 message Sustained {
   oneof kind {
-    Voxel go_to = 1;
+    Voxel walk_to = 1;
+    Voxel jog_to = 2;
+    Voxel sprint_to = 3;
+    Voxel sneak_to = 4;
   }
 }
 

@@ -6,7 +6,7 @@
     uv run order 3 walk ESE            or jog, sprint, sneak: turning first if need be
     uv run order 3 sidestep N          or backstep, recoil, lunge: only that way of the facing
     uv run order 3 bite
-    uv run order 3 goto 0 0            a cell, axial q r, and a layer if not 0
+    uv run order 3 walkto 0 0          or jogto, sprintto, sneakto: a cell, axial q r, and a layer if not 0
 
 Sends it, waits a round, and says what the body is doing then. What a mind would say,
 said once; the board (``uv run board``) shows the rest.
@@ -28,13 +28,16 @@ DIRECTIONS = [name for name, _ in sorted(pb.Direction.items(), key=lambda item: 
 WORDS = ["walk", "jog", "sprint", "sneak", "sidestep", "backstep", "recoil", "lunge"]
 """The action words that take a direction, as the contract spells them."""
 
+PACES = {"walkto": "walk_to", "jogto": "jog_to", "sprintto": "sprint_to", "sneakto": "sneak_to"}
+"""The sustained words, to a cell at a pace: the verb, and the field it is on the wire."""
+
 TAKES = {
     "stop": "nothing",
     "face": "a direction",
     "face-thing": "a thing's number",
     **{word: "a direction" for word in WORDS},
     "bite": "nothing",
-    "goto": "q r [layer]",
+    **{pace: "q r [layer]" for pace in PACES},
 }
 """What each verb wants after it."""
 
@@ -79,11 +82,11 @@ def parse(words: list[str]) -> pb.Intent:
             return pb.Intent(short=pb.Short(**{word: direction(rest[0])}))
         case "bite", 0:
             return pb.Intent(short=pb.Short(bite=pb.Bite()))
-        case "goto", 2 | 3:
+        case pace, 2 | 3 if pace in PACES:
             q, r = integer(rest[0], "q"), integer(rest[1], "r")
             layer = integer(rest[2], "the layer") if len(rest) == 3 else 0
             cell = pb.Voxel(q=q, r=r, layer=layer)
-            return pb.Intent(sustained=pb.Sustained(go_to=cell))
+            return pb.Intent(sustained=pb.Sustained(**{PACES[pace]: cell}))
     if verb in TAKES:
         raise Unparseable(f"{verb} takes {TAKES[verb]}, not {' '.join(rest) or 'nothing'}")
     raise Unparseable(f"no such order {verb!r}: one of {' '.join(TAKES)}")
@@ -112,7 +115,7 @@ def main() -> None:
     parser.add_argument(
         "what",
         nargs="+",
-        help="stop | face DIR | face-thing N | WORD DIR | bite | goto Q R [LAYER]",
+        help="stop | face DIR | face-thing N | WORD DIR | bite | PACEto Q R [LAYER]",
     )
     args = parser.parse_args()
     try:

@@ -84,7 +84,10 @@ impl From<Sustained> for proto::Sustained {
     fn from(sustained: Sustained) -> Self {
         use proto::sustained::Kind;
         let kind = match sustained {
-            Sustained::GoTo(voxel) => Kind::GoTo(voxel.into()),
+            Sustained::WalkTo(voxel) => Kind::WalkTo(voxel.into()),
+            Sustained::JogTo(voxel) => Kind::JogTo(voxel.into()),
+            Sustained::SprintTo(voxel) => Kind::SprintTo(voxel.into()),
+            Sustained::SneakTo(voxel) => Kind::SneakTo(voxel.into()),
         };
         Self { kind: Some(kind) }
     }
@@ -246,7 +249,10 @@ impl TryFrom<proto::Sustained> for Sustained {
                 .kind
                 .ok_or(Malformed("a sustained intent with no kind"))?
             {
-                Kind::GoTo(voxel) => Sustained::GoTo(voxel.try_into()?),
+                Kind::WalkTo(voxel) => Sustained::WalkTo(voxel.try_into()?),
+                Kind::JogTo(voxel) => Sustained::JogTo(voxel.try_into()?),
+                Kind::SprintTo(voxel) => Sustained::SprintTo(voxel.try_into()?),
+                Kind::SneakTo(voxel) => Sustained::SneakTo(voxel.try_into()?),
             },
         )
     }
@@ -307,7 +313,10 @@ mod tests {
             Intent::Short(Short::Recoil(Direction::W)),
             Intent::Short(Short::Lunge(Direction::E)),
             Intent::Short(Short::Bite),
-            Intent::Sustained(Sustained::GoTo(voxel(3, -5))),
+            Intent::Sustained(Sustained::WalkTo(voxel(3, -5))),
+            Intent::Sustained(Sustained::JogTo(voxel(3, -5))),
+            Intent::Sustained(Sustained::SprintTo(voxel(3, -5))),
+            Intent::Sustained(Sustained::SneakTo(voxel(3, -5))),
         ];
         for intent in intents {
             let message: proto::Intent = intent.into();
@@ -369,7 +378,7 @@ mod tests {
             queue: vec![Action::Walk(Direction::E), Action::Face(Direction::N)],
             in_flight: Some(0.25),
             previous: Some(Previous::new(
-                Intent::Sustained(Sustained::GoTo(voxel(0, 0))),
+                Intent::Sustained(Sustained::WalkTo(voxel(0, 0))),
                 Outcome::Cancelled("startle_face_apparition"),
             )),
         };

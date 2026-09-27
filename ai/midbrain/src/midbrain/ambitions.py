@@ -23,8 +23,33 @@ from midbrain.hexes import along, angle_of, apart, bearing, nearest_direction, o
 STOP = pb.Intent(short=pb.Short(stop=pb.Stop()))
 
 
-def go_to(cell: Cell) -> pb.Intent:
-    return pb.Intent(sustained=pb.Sustained(go_to=pb.Voxel(q=cell.q, r=cell.r, layer=cell.layer)))
+def _to(pace: str, cell: Cell) -> pb.Intent:
+    voxel = pb.Voxel(q=cell.q, r=cell.r, layer=cell.layer)
+    return pb.Intent(sustained=pb.Sustained(**{pace: voxel}))
+
+
+def walk_to(cell: Cell) -> pb.Intent:
+    return _to("walk_to", cell)
+
+
+def jog_to(cell: Cell) -> pb.Intent:
+    return _to("jog_to", cell)
+
+
+def sprint_to(cell: Cell) -> pb.Intent:
+    return _to("sprint_to", cell)
+
+
+def sneak_to(cell: Cell) -> pb.Intent:
+    return _to("sneak_to", cell)
+
+
+def bound_for(intent: pb.Intent) -> Cell | None:
+    """The cell a sustained intent is bound for, whatever its pace; None for a short."""
+    if intent.WhichOneof("kind") != "sustained":
+        return None
+    pace = intent.sustained.WhichOneof("kind")
+    return Cell.of(getattr(intent.sustained, pace)) if pace else None
 
 
 def face(direction: int) -> pb.Intent:
@@ -93,9 +118,9 @@ class Stalk:
         ├─ check      we have walked ``check_after``   → face where we believe it is; hold
         │             cells without seeing it            once facing (revise then forgets it
         │                                                 if it isn't there)
-        ├─ circle     we are off its rear line         → GoTo a cell one notch round toward
+        ├─ circle     we are off its rear line         → SneakTo a cell one notch round toward
         │                                                 its rear, spiralling in by ``spiral``
-        ├─ approach   on the rear line, farther than   → GoTo the cell ``distance`` behind it
+        ├─ approach   on the rear line, farther than   → SneakTo the cell ``distance`` behind it
         │             ``distance``
         └─ watch                                       → face it, or hold if we already do
 
@@ -160,7 +185,7 @@ class Stalk:
         rear = angle_of(opposite(target.facing))
         swing = 30.0 if turn_between(toward_us, rear) > 0 else -30.0
         cell = rotated(ctx.here, target.cell, swing, pitch=self.spiral, floor=self.distance)
-        return go_to(cell) if cell != ctx.here else None
+        return sneak_to(cell) if cell != ctx.here else None
 
     def farther_than_distance(self, ctx: Context) -> bool:
         target = self.target(ctx)
@@ -169,9 +194,9 @@ class Stalk:
     def close_in(self, ctx: Context) -> pb.Intent | None:
         target = self.target(ctx)
         if target.facing is not None:
-            return go_to(along(target.cell, opposite(target.facing), self.distance))
+            return sneak_to(along(target.cell, opposite(target.facing), self.distance))
         toward_us = bearing(target.cell, ctx.here)
-        return go_to(along(target.cell, nearest_direction(toward_us), self.distance))
+        return sneak_to(along(target.cell, nearest_direction(toward_us), self.distance))
 
     def watch(self, ctx: Context) -> pb.Intent | None:
         target = self.target(ctx)
@@ -247,9 +272,10 @@ def differs(want: pb.Intent | None, snapshot: pb.Snapshot, slack: int = 2) -> bo
 
     A new intent cuts short whatever is in flight, so a mind must not re-send what is in
     hand. Nothing wanted is never sent. A Stop is sent only if something is in hand. A
-    GoTo is sent only if nothing is in hand, or the target in hand is ``slack`` or more
-    cells from the one wanted, so a target creeping a cell at a time doesn't cut every
-    step. Anything else is sent when it isn't exactly what is in hand.
+    sustained pace is sent only if nothing is in hand, or the one in hand is another pace,
+    or its target is ``slack`` or more cells from the one wanted, so a target creeping a
+    cell at a time doesn't cut every step. Anything else is sent when it isn't exactly what
+    is in hand.
     """
     if want is None:
         return False
@@ -258,7 +284,8 @@ def differs(want: pb.Intent | None, snapshot: pb.Snapshot, slack: int = 2) -> bo
         return doing is not None
     if doing is None:
         return True
-    if want.WhichOneof("kind") == "sustained" and doing.WhichOneof("kind") == "sustained":
-        wanted, in_hand = Cell.of(want.sustained.go_to), Cell.of(doing.sustained.go_to)
-        return steps(wanted, in_hand) >= slack
+    wanted, in_hand = bound_for(want), bound_for(doing)
+    if wanted is not None and in_hand is not None:
+        same_pace = want.sustained.WhichOneof("kind") == doing.sustained.WhichOneof("kind")
+        return not same_pace or steps(wanted, in_hand) >= slack
     return want != doing

@@ -37,10 +37,10 @@ def hare_facing(facing: int) -> pb.InView:
 def test_the_fox_stalks_what_it_believes_and_the_hare_only_idles() -> None:
     mind = Mind()
     orders = mind.round([fox(64, hare_facing(pb.Direction.E)), hare(64)])
-    assert orders == [(1, pb.Intent(sustained=pb.Sustained(go_to=pb.Voxel(q=3, r=0))))]
+    assert orders == [(1, pb.Intent(sustained=pb.Sustained(sneak_to=pb.Voxel(q=3, r=0))))]
     assert mind.decisions[1].path == ("stalk", "approach", "close in") and mind.decisions[1].sent
     assert mind.decisions[3].path == ("idle",) and not mind.decisions[3].sent
-    assert str(mind.decisions[1]) == "stalk › approach › close in  →  GoTo (3, 0, -3) L0  (sent)"
+    assert str(mind.decisions[1]) == "stalk › approach › close in  →  SneakTo (3, 0, -3) L0  (sent)"
     assert str(mind.decisions[3]) == "idle  →  hold"
 
 
@@ -48,7 +48,7 @@ def test_an_order_in_hand_is_not_sent_again_and_a_stop_is_when_the_hare_looks() 
     mind = Mind()
     mind.round([fox(64, hare_facing(pb.Direction.E))])
     going = fox(72, hare_facing(pb.Direction.E))
-    going.doing.CopyFrom(pb.Doing(intent=pb.Intent(sustained=pb.Sustained(go_to=pb.Voxel(q=3, r=0))), since=65))
+    going.doing.CopyFrom(pb.Doing(intent=pb.Intent(sustained=pb.Sustained(sneak_to=pb.Voxel(q=3, r=0))), since=65))
     assert mind.round([going]) == []
     looking = fox(80, hare_facing(pb.Direction.W))
     looking.doing.CopyFrom(going.doing)
