@@ -166,10 +166,16 @@ class Stop(_message.Message):
     def __init__(self) -> None: ...
 
 class Sustained(_message.Message):
-    __slots__ = ("go_to",)
-    GO_TO_FIELD_NUMBER: _ClassVar[int]
-    go_to: Voxel
-    def __init__(self, go_to: _Optional[_Union[Voxel, _Mapping]] = ...) -> None: ...
+    __slots__ = ("walk_to", "jog_to", "sprint_to", "sneak_to")
+    WALK_TO_FIELD_NUMBER: _ClassVar[int]
+    JOG_TO_FIELD_NUMBER: _ClassVar[int]
+    SPRINT_TO_FIELD_NUMBER: _ClassVar[int]
+    SNEAK_TO_FIELD_NUMBER: _ClassVar[int]
+    walk_to: Voxel
+    jog_to: Voxel
+    sprint_to: Voxel
+    sneak_to: Voxel
+    def __init__(self, walk_to: _Optional[_Union[Voxel, _Mapping]] = ..., jog_to: _Optional[_Union[Voxel, _Mapping]] = ..., sprint_to: _Optional[_Union[Voxel, _Mapping]] = ..., sneak_to: _Optional[_Union[Voxel, _Mapping]] = ...) -> None: ...
 
 class Action(_message.Message):
     __slots__ = ("walk", "jog", "sprint", "sneak", "face", "sidestep", "backstep", "recoil", "lunge", "bite")

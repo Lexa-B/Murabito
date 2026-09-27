@@ -22,6 +22,7 @@ from dataclasses import dataclass
 import pygame
 
 from midbrain import murabito_pb2 as pb
+from midbrain.ambitions import bound_for
 from midbrain.beliefs import Cell
 from midbrain.board import name_of
 from midbrain.client import Bridge
@@ -110,8 +111,9 @@ def draw(surface: pygame.Surface, mind: Mind, body: int, view: View, font: pygam
         surface.blit(font.render(ago(belief.age(snapshot.tick)), True, LABEL), (cx + view.scale * 0.6, cy + 1))
 
     decision = mind.decisions.get(body)
-    if decision is not None and decision.want is not None and decision.want.WhichOneof("kind") == "sustained":
-        pygame.draw.polygon(surface, SELF, view.corners(Cell.of(decision.want.sustained.go_to)), 2)
+    target = bound_for(decision.want) if decision is not None and decision.want is not None else None
+    if target is not None:
+        pygame.draw.polygon(surface, SELF, view.corners(target), 2)
     here = Cell.of(snapshot.position)
     pygame.draw.polygon(surface, SELF, view.corners(here))
     pygame.draw.line(surface, SELF, view.pixel(here), view.facing_end(here, snapshot.facing), 3)

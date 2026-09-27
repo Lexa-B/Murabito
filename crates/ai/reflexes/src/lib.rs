@@ -475,7 +475,7 @@ mod tests {
         app.world_mut()
             .get_mut::<Brainstem>(body)
             .unwrap()
-            .order(Intent::Sustained(Sustained::GoTo(voxel(6, 0))));
+            .order(Intent::Sustained(Sustained::WalkTo(voxel(6, 0))));
         tick(&mut app, 3);
 
         let apparition = creature_at(&mut app, voxel(2, -4)); // two cells north, near

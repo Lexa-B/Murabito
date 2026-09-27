@@ -59,8 +59,10 @@ def intent(what: pb.Intent) -> str:
         case "short":
             return short(what.short)
         case "sustained":
-            if what.sustained.WhichOneof("kind") == "go_to":
-                return f"GoTo {voxel(what.sustained.go_to)}"
+            pace = what.sustained.WhichOneof("kind")
+            if pace is not None:
+                word = "".join(part.capitalize() for part in pace.split("_"))
+                return f"{word} {voxel(getattr(what.sustained, pace))}"
     return "?"
 
 

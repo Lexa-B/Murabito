@@ -39,7 +39,7 @@ def snapshot() -> pb.Snapshot:
             pb.InView(id=4, offset=pb.Offset(dq=2, dr=0, dlayer=0), distance=2, acuity=pb.Acuity.NEAR),
         ],
         doing=pb.Doing(
-            intent=pb.Intent(sustained=pb.Sustained(go_to=pb.Voxel(q=0, r=0, layer=0))),
+            intent=pb.Intent(sustained=pb.Sustained(walk_to=pb.Voxel(q=0, r=0, layer=0))),
             since=40,
         ),
         queue=[pb.Action(walk=pb.Direction.E)],
@@ -56,11 +56,12 @@ def test_the_words_for_each_fact() -> None:
     assert name_of(FOX) == "fox"
     assert name_of("") == "?"
     assert voxel(s.position) == "(-8, 0, 8) L0"
-    assert intent(s.doing.intent) == "GoTo (0, 0, 0) L0"
+    assert intent(s.doing.intent) == "WalkTo (0, 0, 0) L0"
+    assert intent(pb.Intent(sustained=pb.Sustained(sneak_to=pb.Voxel(q=1, r=2)))) == "SneakTo (1, 2, -3) L0"
     assert intent(pb.Intent(short=pb.Short(sneak=pb.Direction.N))) == "Sneak N"
     assert intent(pb.Intent(short=pb.Short(bite=pb.Bite()))) == "Bite"
     assert intent(pb.Intent(short=pb.Short(face_thing=3))) == "FaceThing #3"
-    assert doing(s) == "GoTo (0, 0, 0) L0  since tick 40 (24 ticks)"
+    assert doing(s) == "WalkTo (0, 0, 0) L0  since tick 40 (24 ticks)"
     assert in_flight(s) == "[##########..........] 50%"
     assert previous(s) == "Face N  →  Cancelled by startle_face_apparition"
     assert outcome(pb.Outcome(done=pb.Done())) == "Done"

@@ -120,7 +120,35 @@ pub enum Short {
 pub enum Sustained {
     /// Walk to that cell, each step the one that brings the body nearest. Done on
     /// standing there; the layer is not walked, only the plane.
-    GoTo(VoxelCoord),
+    WalkTo(VoxelCoord),
+    /// The same at a jog.
+    JogTo(VoxelCoord),
+    /// The same at a sprint.
+    SprintTo(VoxelCoord),
+    /// The same at a sneak.
+    SneakTo(VoxelCoord),
+}
+
+impl Sustained {
+    /// The cell it is bound for.
+    pub fn target(self) -> VoxelCoord {
+        match self {
+            Sustained::WalkTo(cell)
+            | Sustained::JogTo(cell)
+            | Sustained::SprintTo(cell)
+            | Sustained::SneakTo(cell) => cell,
+        }
+    }
+
+    /// The word each of its steps is.
+    fn step(self) -> fn(Direction) -> Action {
+        match self {
+            Sustained::WalkTo(_) => Action::Walk,
+            Sustained::JogTo(_) => Action::Jog,
+            Sustained::SprintTo(_) => Action::Sprint,
+            Sustained::SneakTo(_) => Action::Sneak,
+        }
+    }
 }
 
 /// Everything a body can be told.
@@ -387,14 +415,16 @@ fn drive(tick: Res<Tick>, mut commands: Commands, mut bodies: Query<Driven>) {
             }
             Intent::Short(_) if idle => body.finish(Outcome::Done),
             Intent::Short(_) => {}
-            Intent::Sustained(Sustained::GoTo(target)) if idle => {
+            Intent::Sustained(sustained) if idle => {
+                let target = sustained.target();
                 match step_toward(position.0, target) {
                     Some(direction) => {
+                        let action = sustained.step()(direction);
                         debug!(
-                            "tick {}: {who} at {:?} steps {direction:?} toward {target:?}",
+                            "tick {}: {who} at {:?} pushes {action:?} toward {target:?}",
                             tick.0, position.0
                         );
-                        queue.push(Action::Walk(direction));
+                        queue.push(action);
                     }
                     None => body.finish(Outcome::Done),
                 }
@@ -447,8 +477,8 @@ pub(crate) mod tests {
         Intent::Short(short)
     }
 
-    fn go_to(q: i32, r: i32) -> Intent {
-        Intent::Sustained(Sustained::GoTo(voxel(q, r)))
+    fn walk_to(q: i32, r: i32) -> Intent {
+        Intent::Sustained(Sustained::WalkTo(voxel(q, r)))
     }
 
     /// A ticking app with everything a body needs to look, be told, and move.
@@ -877,7 +907,7 @@ pub(crate) mod tests {
     #[test]
     fn going_to_a_cell_three_east_is_three_steps_and_done_on_arrival() {
         let (mut app, body) = body();
-        order(&mut app, body, go_to(3, 0));
+        order(&mut app, body, walk_to(3, 0));
         tick(&mut app, 16);
         assert_eq!(position(&app, body), voxel(1, 0));
         assert!(brainstem(&app, body).doing().is_some(), "not there yet");
@@ -896,7 +926,7 @@ pub(crate) mod tests {
     #[test]
     fn going_to_a_corner_neighbour_is_one_corner_step_of_twenty_eight_ticks() {
         let (mut app, body) = body();
-        order(&mut app, body, go_to(2, -1));
+        order(&mut app, body, walk_to(2, -1));
         tick(&mut app, 27);
         assert_eq!(
             position(&app, body),
@@ -917,7 +947,7 @@ pub(crate) mod tests {
         let (mut app, body) = body();
         app.world_mut().get_mut::<Locomotion>(body).unwrap().speed = 5.0;
         app.world_mut().get_mut::<Facing>(body).unwrap().0 = N;
-        order(&mut app, body, go_to(3, -6));
+        order(&mut app, body, walk_to(3, -6));
         tick(&mut app, 66);
         assert_eq!(
             position(&app, body),
@@ -935,23 +965,60 @@ pub(crate) mod tests {
     #[test]
     fn going_to_the_cell_the_body_stands_on_is_done_at_once() {
         let (mut app, body) = body();
-        order(&mut app, body, go_to(0, 0));
+        order(&mut app, body, walk_to(0, 0));
         tick(&mut app, 1);
         assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
         assert_eq!(queued(&app, body), 0);
     }
 
     #[test]
-    fn a_go_to_is_re_aimed_from_wherever_the_body_stands_when_a_step_lands() {
+    fn each_pace_to_a_cell_is_bound_for_it_and_steps_in_its_word() {
+        let cell = voxel(3, 0);
+        let paces = [
+            (Sustained::WalkTo(cell), Action::Walk(E)),
+            (Sustained::JogTo(cell), Action::Jog(E)),
+            (Sustained::SprintTo(cell), Action::Sprint(E)),
+            (Sustained::SneakTo(cell), Action::Sneak(E)),
+        ];
+        for (sustained, action) in paces {
+            assert_eq!(sustained.target(), cell);
+            assert_eq!(sustained.step()(E), action, "{sustained:?}");
+        }
+    }
+
+    #[test]
+    fn a_sneak_to_creeps_there_at_half_pace_and_is_done() {
+        // Two edge steps east at a sneak: 32 ticks each, 64 to stand there, done the tick after.
+        let (mut app, body) = body();
+        order(
+            &mut app,
+            body,
+            Intent::Sustained(Sustained::SneakTo(voxel(2, 0))),
+        );
+
+        tick(&mut app, 32);
+        assert_eq!(
+            position(&app, body),
+            voxel(1, 0),
+            "one sneaking step in 32 ticks"
+        );
+        tick(&mut app, 32);
+        assert_eq!(position(&app, body), voxel(2, 0));
+        tick(&mut app, 1);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
+    }
+
+    #[test]
+    fn a_walk_to_is_re_aimed_from_wherever_the_body_stands_when_a_step_lands() {
         // Four steps east are ordered. With two landed and the third in flight, the order
         // becomes a cell a corner step off where the body stands: the third step is cut,
         // and the body aims afresh from where it is, one corner step.
         let (mut app, body) = body();
-        order(&mut app, body, go_to(4, 0));
+        order(&mut app, body, walk_to(4, 0));
         tick(&mut app, 32);
         assert_eq!(position(&app, body), voxel(2, 0), "two steps of 16 ticks");
 
-        order(&mut app, body, go_to(4, -1));
+        order(&mut app, body, walk_to(4, -1));
         tick(&mut app, 27);
         assert_eq!(
             position(&app, body),

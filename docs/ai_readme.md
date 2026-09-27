@@ -53,8 +53,11 @@ pub enum Short {            // over within one round of the mind: a single motio
     Bite,
 }
 
-pub enum Sustained {        // outlives rounds; drive re-aims it every step
-    GoTo(VoxelCoord),       // on the plane; the layer is not walked
+pub enum Sustained {        // outlives rounds; drive re-aims it every step: a cell, at a pace
+    WalkTo(VoxelCoord),     // on the plane; the layer is not walked
+    JogTo(VoxelCoord),      // each step the pace's word: Jog, Sprint, Sneak
+    SprintTo(VoxelCoord),
+    SneakTo(VoxelCoord),
 }
 
 pub enum Intent { Short(Short), Sustained(Sustained) }
@@ -63,7 +66,7 @@ pub enum Intent { Short(Short), Sustained(Sustained) }
 A reflex's code returns an `Option<Short>`, by type, so a reflex can never hold a body for
 longer than one round; the rule is structural. A `Sustained` intent has no plan: at every
 landing, drive picks the next step afresh from where the body stands and what it sees, so a
-moved target or a superseded order needs no replanning. `GoTo` picks the step that promises the
+moved target or a superseded order needs no replanning. A pace to a cell picks the step that promises the
 shortest walk, the step's own cost in shaku plus the straight line left from where it lands,
 so a corner step (√3 shaku) is taken when it truly cuts the corner and never to zig-zag.
 
@@ -199,7 +202,8 @@ A `uv` project on Python 3.13, the first client of the bridge.
 
 ```
 uv run board                 # every body's snapshot, live, redrawn every 125 ms
-uv run order 3 goto 0 0      # one order by hand: stop | face DIR | face-thing N | goto Q R [LAYER]
+uv run order 3 walkto 0 0    # one order by hand: stop | face DIR | face-thing N | walkto Q R [LAYER]
+                             #   or jogto, sprintto, sneakto
 uv run order 1 recoil W      # or walk, jog, sprint, sneak, sidestep, backstep, lunge DIR; bite
 uv run mind                  # what every body believes, live, in the terminal
 uv run mind --visualize      # one body's believed world drawn in a window; --body N, Tab cycles
@@ -251,8 +255,8 @@ near tie doesn't flip every round. The winner then ticks its **behaviour tree**
 (`behaviour.py`: `Condition`, `Act`, `Selector`, `Sequence`, ticked afresh from the root each
 round, no memory of its own) for the intent it wants, and the loop sends that only if it
 **differs** from what the body is doing: a hold is never sent, a `Stop` only when something is
-in hand, a `GoTo` only when nothing is in hand or the target has moved two or more cells, so
-the mind never cuts its own steps. Before bidding, `revise` drops a belief the body's own eyes
+in hand, a pace to a cell only when nothing is in hand, the pace in hand is another, or the
+target has moved two or more cells, so the mind never cuts its own steps. Before bidding, `revise` drops a belief the body's own eyes
 contradict: a thing that should be within a cell and isn't in view, or one on the notch the
 body faces within its near reach (18 cells, the fox's near band, copied) and not in view.
 
@@ -265,9 +269,9 @@ stalk
 ├─ freeze     the hare is looking at us (its last-seen facing, within the arc)   → Stop
 ├─ check      we have walked `check_after` cells without seeing it               → face where we believe it is;
 │                                                                                  hold once facing
-├─ circle     we are off its rear line                                          → GoTo a cell one notch round toward
+├─ circle     we are off its rear line                                          → SneakTo a cell one notch round toward
 │                                                                                  its rear, spiralling in by `spiral`
-├─ approach   on the rear line, farther than `distance`                         → GoTo the cell `distance` behind it
+├─ approach   on the rear line, farther than `distance`                         → SneakTo the cell `distance` behind it
 └─ watch                                                                        → face it, or hold if we already do
 ```
 
