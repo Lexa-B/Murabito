@@ -12,12 +12,12 @@ Four layers, each a crate, each depending only downward:
 |---|---|---|---|
 | AI | later | | what an entity wants: decides, and issues actions |
 | Actions | `murabito_actions` | `crates/action/actions/` | what it has been asked to do, in what order, and whether something is in flight |
-| Mechanisms | `murabito_movement`, later block-breaking, archery, … | `crates/action/mechanisms/*/` | how one kind of thing is physically done: the intent, the effect, the cost |
+| Mechanisms | `murabito_movement`, `murabito_attacks`, later block-breaking, archery, … | `crates/action/mechanisms/*/` | how one kind of thing is physically done: the intent, the effect, the cost |
 | Progress | `murabito_progress` | `crates/action/progress/` | how far along a sustained action is, whatever it is |
 
 The three below AI live together under `crates/action/`, a group directory rather than a crate.
 
-A mechanism never sequences: it carries out one intent put on an entity (`Step`, `Turn`) and
+A mechanism never sequences: it carries out one intent put on an entity (`Step`, `Turn`, `Bite`) and
 removes it when done. The actions layer never accumulates: it reads whether something is in
 flight and issues the next intent. Physical accumulation sits below AI, in one place.
 
@@ -67,43 +67,74 @@ rounded to whole ticks up front, which is the corner-step error above with no wa
 
 ## Intents
 
-Implemented, in `murabito_movement`. A mechanism exposes its actions as **intent components**: put a `Step(Direction)` or a
-`Turn(Direction)` on an entity and the matching `FixedUpdate` system carries it out over ticks,
-through `Progress`, then removes it. One intent at a time; the mechanism enforces its own physical
-rules (a step must be within one notch of the facing; a turn goes a notch at a time, the short
-way round) and refuses what breaks them, removing the intent with a warning. `murabito_movement`
-is the first mechanism; its rules are in `movement_readme.md`.
+Implemented, in `murabito_movement` and `murabito_attacks`. A mechanism exposes its actions as
+**intent components**: put a `Step { direction, gait, reach }`, a `Turn(Direction)` or a `Bite`
+on an entity and the matching `FixedUpdate` system carries it out over ticks, through
+`Progress`, then removes it. One intent at a time; the mechanism enforces its own physical rules
+(a step lands facing by its way, at most one notch from where it was; a turn goes a notch at a
+time, the short way round). `murabito_movement` is the first mechanism; its rules are in
+`movement_readme.md`. `murabito_attacks` is the second, a stub: a `Bite` takes a quarter of a
+second on the bar and bites nothing, holding the word's place until there are jaws, targets and
+hurt.
 
-## The queue
+An intent is the mechanism's own shape, with every knob a body can physically vary: a step's
+gait and reach. Nothing above the mechanism sees those knobs. The layer above speaks in
+**words**, and each word fixes its knobs under the hood.
+
+## The queue, and the words
 
 Implemented, in `murabito_actions`. `ActionQueue` is a component holding a queue of `Action`s,
-`Go(Direction)` and `Face(Direction)` so far, first to last. It is a queue of actions and nothing
-more: anything may push onto it, an instinct, a social pull, a player's command, a planner, and
-nothing in it says who did or why.
+first to last. It is a queue of actions and nothing more: anything may push onto it, an
+instinct, a social pull, a player's command, a planner, and nothing in it says who did or why.
+
+`Action` is the vocabulary of everything above this crate. Ten words, each with a direction
+except the last:
+
+| Word | Under the hood | Only |
+|---|---|---|
+| `Walk(d)` | one voxel at walking pace, turning first if need be | any way |
+| `Jog(d)` | a walk at twice the pace | any way |
+| `Sprint(d)` | a walk at three times the pace | any way |
+| `Sneak(d)` | a walk at half the pace | any way |
+| `Face(d)` | a turn, without moving | |
+| `Sidestep(d)` | one voxel at a walk, without turning; lands facing orthogonal to the way | lateral |
+| `Backstep(d)` | one voxel at a walk, without turning; lands facing away from the way | rear |
+| `Recoil(d)` | a backstep at a jog | rear |
+| `Lunge(d)` | two voxels at a sprint, landed in one go | forward |
+| `Bite` | a bite at whatever is in the cell faced (nothing yet) | |
+
+A word that names a way is only that way of the body's facing (`Way::of`, in
+`movement_readme.md`). One asked the wrong way is **refused**: dropped from the queue with a
+warning, never bent into something else, since whoever asked has it wrong and should hear so.
+`Action::check(facing)` is the same rule, askable before pushing, so the brainstem can end a
+wrong word as `Refused` and tell the mind rather than the log.
 
 One `FixedUpdate` system, `issue`, runs before the mechanisms. For a body with nothing in flight
-(no `Step` or `Turn` on it, and `Progress` idle) it takes the action at the head and issues the
-intent it needs next; the action is dropped once its last intent is out. That is where sequencing
-lives:
+(no intent on it, and `Progress` idle) it takes the action at the head and issues the intent it
+needs next; the action is dropped once its last intent is out. That is where sequencing lives:
 
 - `Face(d)` issues a `Turn(d)`, and is done.
-- `Go(d)`, when the body faces within one notch of `d`, issues a `Step(d)`, and is done: the
-  landing takes the last notch for free.
-- `Go(d)` otherwise issues a `Turn` to one notch short of `d` on the near side, and stays at the
-  head; on the tick after that turn ends it is looked at again, and is now a step. That is the
-  turn-then-step rule, in one place.
+- A pace word, when the body faces within one notch of `d`, issues a `Step` at its gait, and is
+  done: the landing takes the last notch for free.
+- A pace word otherwise issues a `Turn` to one notch short of `d` on the near side, and stays
+  at the head; on the tick after that turn ends it is looked at again, and is now a step. That
+  is the turn-then-step rule, in one place.
+- A way word issues its `Step` and is done, or is refused; it never turns first.
+- `Bite` issues a `Bite`, and is done.
 - Nothing is issued while something is in flight, whatever kind it is.
 
 Whatever pushes onto a queue runs in `AskingSet`, which `issue` follows, so an action asked
 for on a tick is looked at on that tick rather than the next depending on which system the
-scheduler happened to run first. Running before the mechanisms means an intent issued on a tick starts on that tick, so a `Go` that
+scheduler happened to run first. Running before the mechanisms means an intent issued on a tick starts on that tick, so a `Walk` that
 needs no turn lands exactly when a bare `Step` would. The state machine is implicit: the state is
 the action at the head plus what is in flight, read from the components rather than kept in an
-enum. When a new kind of action arrives it is a new `Action` variant here and a new mechanism crate
-below; the queue does not change.
+enum. A new word is a new `Action` variant here, fixing its knobs on an intent that exists; a
+new kind of physics is a new mechanism crate below as well. The queue does not change either
+way.
 
 ## Open questions
 
-- **Interrupting:** can an order in flight be cancelled, and what happens to its progress?
 - **Cost of a turn while stepping:** the free one-notch turn on landing is a movement rule; does
   any other action get a free adjustment like it?
+- **The cell a lunge skips:** a body is never in it. Whether it must be free is the same
+  question as the corner-obstruction rule for ordinary steps, still open in `movement_readme.md`.

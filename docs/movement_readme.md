@@ -29,14 +29,25 @@ Implemented, in `murabito_movement`, on the one accumulation bar of `actions_rea
 
 - `Locomotion { speed, turn_speed }`: shaku per second and degrees per second. A body's physical
   properties, so they live here; it requires a `Progress`.
-- `Step(Direction)` is the intent. Put it on a body and the `step` system, in `FixedUpdate`,
-  carries it out: `Progress::start::<Step>(cost)`, then `advance(speed × tick)` each tick, and on
-  reaching the cost the body is in the neighbour, faces the way it went, and the `Step` is gone.
-  Movement is by whole voxels: mid-step the body is still in the voxel it left from.
-- `cost(direction)` is 1 for an edge, √3 for a corner: the shaku walked.
-- `can_step(facing, direction)`: a step is allowed only when the body faces the way it is to go
-  or one notch either side. That one-notch turn is free, taken on landing. Anything wider is a
-  turn first, and a `Step` that breaks this is refused: removed with a warning.
+- `Step { direction, gait, reach }` is the intent; `Step::walk(direction)` is one voxel at
+  walking pace. Put it on a body and the `step` system, in `FixedUpdate`, carries it out:
+  `Progress::start::<Step>(cost)`, then `advance(speed × gait × tick)` each tick, and on
+  reaching the cost the body is `reach` neighbours along the way, faces as the landing rule
+  says, and the `Step` is gone. Movement is by whole voxels: mid-step the body is still in the
+  voxel it left from, and a lunge (reach 2) is never in the cell between.
+- `cost(direction)` is 1 for an edge, √3 for a corner: the shaku walked; `Step::cost` is that
+  times the reach.
+- `Gait` is a multiple of `Locomotion::speed`: `Sneak` ½, `Walk` 1, `Jog` 2, `Sprint` 3. A
+  property of the step, not the body, and seen by nothing above this crate: the words in
+  `actions_readme.md` fix it.
+- Any of the twelve directions is a legal step. `Way::of(facing, direction)` says which way it
+  goes: `Forward` is the way faced or a notch either side, `Rear` the way behind or a notch
+  either side, `Lateral` the six between. `landing(facing, direction)` is the facing after: the
+  way gone turned back toward the old facing by 0, 3 or 6 notches, so a forward step lands
+  facing the way it went, a lateral one orthogonal to it and a rear one opposite, each on the
+  side of the old facing. No landing turns the body more than one notch: that notch is the free
+  adjustment every step gets. Whether a *word* may go a way is the actions layer's rule, not
+  this one's.
 - Since progress is in shaku and carries between steps of the same kind, a run of steps lands when
   the total distance says, not each step rounded up to a tick; a tick spent standing still
   forgets the head start.
