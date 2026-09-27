@@ -50,6 +50,8 @@ class Mind:
     latest: dict[int, pb.Snapshot] = field(default_factory=dict)
     current: dict[int, str] = field(default_factory=dict)
     """The ambition each body has in hand, boosted when its bids are next compared."""
+    scratches: dict[int, dict[str, object]] = field(default_factory=dict)
+    """Each body's scratch: what its ambitions remember between rounds."""
     decisions: dict[int, Decision] = field(default_factory=dict)
     repertoire: Callable[[str], list[Ambition]] = repertoire_for
 
@@ -60,7 +62,7 @@ class Mind:
             world = self.worlds.setdefault(snapshot.id, BelievedWorld(snapshot.id))
             world.observe(snapshot)
             self.latest[snapshot.id] = snapshot
-            ctx = Context(world, snapshot)
+            ctx = Context(world, snapshot, self.scratches.setdefault(snapshot.id, {}))
             revise(ctx)
             ambition = choose(self.repertoire(snapshot.kind), ctx, self.current.get(snapshot.id))
             self.current[snapshot.id] = ambition.name
