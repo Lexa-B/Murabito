@@ -134,16 +134,32 @@ class Intent(_message.Message):
     def __init__(self, short: _Optional[_Union[Short, _Mapping]] = ..., sustained: _Optional[_Union[Sustained, _Mapping]] = ...) -> None: ...
 
 class Short(_message.Message):
-    __slots__ = ("stop", "face", "face_thing", "step")
+    __slots__ = ("stop", "face", "face_thing", "walk", "jog", "sprint", "sneak", "sidestep", "backstep", "recoil", "lunge", "bite")
     STOP_FIELD_NUMBER: _ClassVar[int]
     FACE_FIELD_NUMBER: _ClassVar[int]
     FACE_THING_FIELD_NUMBER: _ClassVar[int]
-    STEP_FIELD_NUMBER: _ClassVar[int]
+    WALK_FIELD_NUMBER: _ClassVar[int]
+    JOG_FIELD_NUMBER: _ClassVar[int]
+    SPRINT_FIELD_NUMBER: _ClassVar[int]
+    SNEAK_FIELD_NUMBER: _ClassVar[int]
+    SIDESTEP_FIELD_NUMBER: _ClassVar[int]
+    BACKSTEP_FIELD_NUMBER: _ClassVar[int]
+    RECOIL_FIELD_NUMBER: _ClassVar[int]
+    LUNGE_FIELD_NUMBER: _ClassVar[int]
+    BITE_FIELD_NUMBER: _ClassVar[int]
     stop: Stop
     face: Direction
     face_thing: int
-    step: Direction
-    def __init__(self, stop: _Optional[_Union[Stop, _Mapping]] = ..., face: _Optional[_Union[Direction, str]] = ..., face_thing: _Optional[int] = ..., step: _Optional[_Union[Direction, str]] = ...) -> None: ...
+    walk: Direction
+    jog: Direction
+    sprint: Direction
+    sneak: Direction
+    sidestep: Direction
+    backstep: Direction
+    recoil: Direction
+    lunge: Direction
+    bite: Bite
+    def __init__(self, stop: _Optional[_Union[Stop, _Mapping]] = ..., face: _Optional[_Union[Direction, str]] = ..., face_thing: _Optional[int] = ..., walk: _Optional[_Union[Direction, str]] = ..., jog: _Optional[_Union[Direction, str]] = ..., sprint: _Optional[_Union[Direction, str]] = ..., sneak: _Optional[_Union[Direction, str]] = ..., sidestep: _Optional[_Union[Direction, str]] = ..., backstep: _Optional[_Union[Direction, str]] = ..., recoil: _Optional[_Union[Direction, str]] = ..., lunge: _Optional[_Union[Direction, str]] = ..., bite: _Optional[_Union[Bite, _Mapping]] = ...) -> None: ...
 
 class Stop(_message.Message):
     __slots__ = ()
@@ -184,18 +200,20 @@ class Bite(_message.Message):
     def __init__(self) -> None: ...
 
 class Outcome(_message.Message):
-    __slots__ = ("done", "stopped", "superseded", "cancelled", "lost")
+    __slots__ = ("done", "stopped", "superseded", "cancelled", "lost", "refused")
     DONE_FIELD_NUMBER: _ClassVar[int]
     STOPPED_FIELD_NUMBER: _ClassVar[int]
     SUPERSEDED_FIELD_NUMBER: _ClassVar[int]
     CANCELLED_FIELD_NUMBER: _ClassVar[int]
     LOST_FIELD_NUMBER: _ClassVar[int]
+    REFUSED_FIELD_NUMBER: _ClassVar[int]
     done: Done
     stopped: Stopped
     superseded: Superseded
     cancelled: str
     lost: int
-    def __init__(self, done: _Optional[_Union[Done, _Mapping]] = ..., stopped: _Optional[_Union[Stopped, _Mapping]] = ..., superseded: _Optional[_Union[Superseded, _Mapping]] = ..., cancelled: _Optional[str] = ..., lost: _Optional[int] = ...) -> None: ...
+    refused: str
+    def __init__(self, done: _Optional[_Union[Done, _Mapping]] = ..., stopped: _Optional[_Union[Stopped, _Mapping]] = ..., superseded: _Optional[_Union[Superseded, _Mapping]] = ..., cancelled: _Optional[str] = ..., lost: _Optional[int] = ..., refused: _Optional[str] = ...) -> None: ...
 
 class Done(_message.Message):
     __slots__ = ()

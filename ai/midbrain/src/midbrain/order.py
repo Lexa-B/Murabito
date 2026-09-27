@@ -3,7 +3,9 @@
     uv run order 3 stop
     uv run order 3 face N              a direction: E ENE NNE N NNW WNW W WSW SSW S SSE ESE
     uv run order 3 face-thing 1        a thing, by its number
-    uv run order 3 step ESE
+    uv run order 3 walk ESE            or jog, sprint, sneak: turning first if need be
+    uv run order 3 sidestep N          or backstep, recoil, lunge: only that way of the facing
+    uv run order 3 bite
     uv run order 3 goto 0 0            a cell, axial q r, and a layer if not 0
 
 Sends it, waits a round, and says what the body is doing then. What a mind would say,
@@ -23,11 +25,15 @@ DIRECTIONS = [name for name, _ in sorted(pb.Direction.items(), key=lambda item: 
 """The twelve, in index order, as the contract spells them."""
 
 
+WORDS = ["walk", "jog", "sprint", "sneak", "sidestep", "backstep", "recoil", "lunge"]
+"""The action words that take a direction, as the contract spells them."""
+
 TAKES = {
     "stop": "nothing",
     "face": "a direction",
     "face-thing": "a thing's number",
-    "step": "a direction",
+    **{word: "a direction" for word in WORDS},
+    "bite": "nothing",
     "goto": "q r [layer]",
 }
 """What each verb wants after it."""
@@ -60,7 +66,7 @@ def integer(word: str, what: str) -> int:
 def parse(words: list[str]) -> pb.Intent:
     """The intent the words mean, or ``Unparseable`` saying what they should have been."""
     if not words:
-        raise Unparseable("say what: stop, face, face-thing, step or goto")
+        raise Unparseable(f"say what: one of {' '.join(TAKES)}")
     verb, rest = words[0].lower(), words[1:]
     match verb, len(rest):
         case "stop", 0:
@@ -69,8 +75,10 @@ def parse(words: list[str]) -> pb.Intent:
             return pb.Intent(short=pb.Short(face=direction(rest[0])))
         case "face-thing", 1:
             return pb.Intent(short=pb.Short(face_thing=number(rest[0], "a thing")))
-        case "step", 1:
-            return pb.Intent(short=pb.Short(step=direction(rest[0])))
+        case word, 1 if word in WORDS:
+            return pb.Intent(short=pb.Short(**{word: direction(rest[0])}))
+        case "bite", 0:
+            return pb.Intent(short=pb.Short(bite=pb.Bite()))
         case "goto", 2 | 3:
             q, r = integer(rest[0], "q"), integer(rest[1], "r")
             layer = integer(rest[2], "the layer") if len(rest) == 3 else 0
@@ -101,7 +109,11 @@ def main() -> None:
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("body", type=int, help="the body's number, as the board shows it")
-    parser.add_argument("what", nargs="+", help="stop | face DIR | face-thing N | step DIR | goto Q R [LAYER]")
+    parser.add_argument(
+        "what",
+        nargs="+",
+        help="stop | face DIR | face-thing N | WORD DIR | bite | goto Q R [LAYER]",
+    )
     args = parser.parse_args()
     try:
         intent = parse(args.what)

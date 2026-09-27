@@ -89,6 +89,15 @@ pub enum Action {
     Bite,
 }
 
+impl Action {
+    /// Whether the body, facing `facing`, may be asked this: `Err` says why not. The same
+    /// rule `issue` refuses by, so whoever pushes can ask first and hear the answer
+    /// rather than find a warning in the log.
+    pub fn check(self, facing: Direction) -> Result<(), WrongWay> {
+        next_intent(self, facing).map(|_| ())
+    }
+}
+
 /// The actions a body has been asked to do, first to last.
 #[derive(Component, Debug, Default)]
 pub struct ActionQueue(VecDeque<Action>);
@@ -186,10 +195,21 @@ enum Intent {
 }
 
 /// Why an action is refused: its word is only for one way, and its direction is another.
-#[derive(Debug, PartialEq, Eq)]
-struct WrongWay {
-    needs: Way,
-    way: Way,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WrongWay {
+    pub needs: Way,
+    pub way: Way,
+}
+
+impl WrongWay {
+    /// The refusal in three words, for an outcome.
+    pub fn reason(self) -> &'static str {
+        match self.needs {
+            Way::Forward => "not forward",
+            Way::Lateral => "not lateral",
+            Way::Rear => "not rear",
+        }
+    }
 }
 
 /// A body with no intent on it, so far as every mechanism knows.
@@ -349,6 +369,24 @@ mod tests {
         assert_eq!(
             next_intent(Action::Bite, Direction::E),
             Ok((Intent::Bite, true))
+        );
+    }
+
+    #[test]
+    fn a_check_is_the_same_answer_issue_gives_without_issuing() {
+        assert_eq!(Action::Sidestep(Direction::N).check(Direction::E), Ok(()));
+        assert_eq!(Action::Walk(Direction::W).check(Direction::E), Ok(()));
+        assert_eq!(
+            Action::Sidestep(Direction::E)
+                .check(Direction::E)
+                .map_err(WrongWay::reason),
+            Err("not lateral")
+        );
+        assert_eq!(
+            Action::Lunge(Direction::W)
+                .check(Direction::E)
+                .map_err(WrongWay::reason),
+            Err("not forward")
         );
     }
 

@@ -66,7 +66,15 @@ impl From<Short> for proto::Short {
             Short::Stop => Kind::Stop(proto::Stop {}),
             Short::Face(direction) => Kind::Face(direction_out(direction)),
             Short::FaceThing(id) => Kind::FaceThing(id.number()),
-            Short::Step(direction) => Kind::Step(direction_out(direction)),
+            Short::Walk(direction) => Kind::Walk(direction_out(direction)),
+            Short::Jog(direction) => Kind::Jog(direction_out(direction)),
+            Short::Sprint(direction) => Kind::Sprint(direction_out(direction)),
+            Short::Sneak(direction) => Kind::Sneak(direction_out(direction)),
+            Short::Sidestep(direction) => Kind::Sidestep(direction_out(direction)),
+            Short::Backstep(direction) => Kind::Backstep(direction_out(direction)),
+            Short::Recoil(direction) => Kind::Recoil(direction_out(direction)),
+            Short::Lunge(direction) => Kind::Lunge(direction_out(direction)),
+            Short::Bite => Kind::Bite(proto::Bite {}),
         };
         Self { kind: Some(kind) }
     }
@@ -121,6 +129,7 @@ impl From<Outcome> for proto::Outcome {
             Outcome::Superseded => Kind::Superseded(proto::Superseded {}),
             Outcome::Cancelled(reflex) => Kind::Cancelled(reflex.to_owned()),
             Outcome::Lost(id) => Kind::Lost(id.number()),
+            Outcome::Refused(why) => Kind::Refused(why.to_owned()),
         };
         Self { kind: Some(kind) }
     }
@@ -214,7 +223,15 @@ impl TryFrom<proto::Short> for Short {
             Kind::Stop(_) => Short::Stop,
             Kind::Face(direction) => Short::Face(direction_in(direction)?),
             Kind::FaceThing(id) => Short::FaceThing(ThingId::restored(id)),
-            Kind::Step(direction) => Short::Step(direction_in(direction)?),
+            Kind::Walk(direction) => Short::Walk(direction_in(direction)?),
+            Kind::Jog(direction) => Short::Jog(direction_in(direction)?),
+            Kind::Sprint(direction) => Short::Sprint(direction_in(direction)?),
+            Kind::Sneak(direction) => Short::Sneak(direction_in(direction)?),
+            Kind::Sidestep(direction) => Short::Sidestep(direction_in(direction)?),
+            Kind::Backstep(direction) => Short::Backstep(direction_in(direction)?),
+            Kind::Recoil(direction) => Short::Recoil(direction_in(direction)?),
+            Kind::Lunge(direction) => Short::Lunge(direction_in(direction)?),
+            Kind::Bite(_) => Short::Bite,
         })
     }
 }
@@ -281,7 +298,15 @@ mod tests {
             Intent::Short(Short::Stop),
             Intent::Short(Short::Face(Direction::N)),
             Intent::Short(Short::FaceThing(ThingId::restored(7))),
-            Intent::Short(Short::Step(Direction::WSW)),
+            Intent::Short(Short::Walk(Direction::WSW)),
+            Intent::Short(Short::Jog(Direction::E)),
+            Intent::Short(Short::Sprint(Direction::E)),
+            Intent::Short(Short::Sneak(Direction::E)),
+            Intent::Short(Short::Sidestep(Direction::N)),
+            Intent::Short(Short::Backstep(Direction::W)),
+            Intent::Short(Short::Recoil(Direction::W)),
+            Intent::Short(Short::Lunge(Direction::E)),
+            Intent::Short(Short::Bite),
             Intent::Sustained(Sustained::GoTo(voxel(3, -5))),
         ];
         for intent in intents {

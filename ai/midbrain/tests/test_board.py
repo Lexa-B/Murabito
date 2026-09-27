@@ -57,11 +57,15 @@ def test_the_words_for_each_fact() -> None:
     assert name_of("") == "?"
     assert voxel(s.position) == "(-8, 0, 8) L0"
     assert intent(s.doing.intent) == "GoTo (0, 0, 0) L0"
+    assert intent(pb.Intent(short=pb.Short(sneak=pb.Direction.N))) == "Sneak N"
+    assert intent(pb.Intent(short=pb.Short(bite=pb.Bite()))) == "Bite"
+    assert intent(pb.Intent(short=pb.Short(face_thing=3))) == "FaceThing #3"
     assert doing(s) == "GoTo (0, 0, 0) L0  since tick 40 (24 ticks)"
     assert in_flight(s) == "[##########..........] 50%"
     assert previous(s) == "Face N  →  Cancelled by startle_face_apparition"
     assert outcome(pb.Outcome(done=pb.Done())) == "Done"
     assert outcome(pb.Outcome(lost=7)) == "Lost #7"
+    assert outcome(pb.Outcome(refused="not lateral")) == "Refused, not lateral"
 
 
 def test_a_body_with_nothing_going_on_reads_as_such() -> None:
