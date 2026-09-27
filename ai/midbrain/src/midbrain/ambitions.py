@@ -239,16 +239,24 @@ class Stalk:
         cell = rotated(ctx.here, target.cell, swing, pitch=self.spiral, floor=self.distance)
         return sneak_to(cell) if cell != ctx.here else None
 
+    def settle_cell(self, ctx: Context, target: Belief) -> Cell:
+        """The cell ``distance`` offsets behind it along its rear line, or, if its facing
+        was never seen, ``distance`` offsets from it on the notch toward us."""
+        if target.facing is not None:
+            return along(target.cell, opposite(target.facing), self.distance)
+        return along(target.cell, nearest_direction(bearing(target.cell, ctx.here)), self.distance)
+
     def farther_than_distance(self, ctx: Context) -> bool:
+        """Farther from it than the settle cell is: in steps, since along a corner
+        direction ``distance`` offsets is twice as many steps, and a fox standing on its
+        settle cell must not be told it is still too far."""
         target = self.target(ctx)
-        return target is not None and steps(ctx.here, target.cell) > self.distance
+        if target is None:
+            return False
+        return steps(ctx.here, target.cell) > steps(self.settle_cell(ctx, target), target.cell)
 
     def close_in(self, ctx: Context) -> pb.Intent | None:
-        target = self.target(ctx)
-        if target.facing is not None:
-            return sneak_to(along(target.cell, opposite(target.facing), self.distance))
-        toward_us = bearing(target.cell, ctx.here)
-        return sneak_to(along(target.cell, nearest_direction(toward_us), self.distance))
+        return sneak_to(self.settle_cell(ctx, self.target(ctx)))
 
     def watch(self, ctx: Context) -> pb.Intent | None:
         target = self.target(ctx)

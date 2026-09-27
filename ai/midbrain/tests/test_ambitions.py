@@ -155,6 +155,30 @@ def test_after_walking_three_cells_unseen_the_fox_pivots_to_check_then_goes_on()
     assert two.want(ctx).path[1] == "circle"
 
 
+def test_at_the_settle_cell_off_a_corner_direction_the_fox_watches_rather_than_approaching_itself() -> None:
+    # The hare faces WNW, a corner direction: three offsets behind it is six steps away.
+    at_settle = fox_believing(hare_at=(0, -140), hare_facing=pb.Direction.WNW, fox_at=(3, -137), fox_facing=pb.Direction.WNW)
+    result = STALK.want(at_settle)
+    assert result.path == ("stalk", "watch") and result.intent is None, "facing it from its settle cell: hold"
+    one_short = fox_believing(hare_at=(0, -140), hare_facing=pb.Direction.WNW, fox_at=(4, -136), fox_facing=pb.Direction.WNW)
+    assert STALK.want(one_short).path == ("stalk", "approach", "close in")
+    assert STALK.want(one_short).intent == sneak_to(Cell(3, -137))
+
+
+def test_a_ghost_reached_and_not_seen_is_forgotten_and_the_fox_wanders() -> None:
+    from midbrain.mind import Mind
+
+    mind = Mind()
+    mind.round([fox_snapshot((-8, 0), pb.Direction.ESE, 64, [hare_seen((-8, 0), (0, -140), pb.Direction.WNW)])])
+    assert mind.decisions[1].ambition == "stalk"
+    # The fox arrives at the settle cell facing the way its last step went, the hare gone.
+    mind.round([fox_snapshot((3, -137), pb.Direction.NNW, 6400)])
+    assert mind.decisions[1].path[1] in ("check", "watch") and mind.decisions[1].want == face(pb.Direction.WNW), "turn to look"
+    mind.round([fox_snapshot((3, -137), pb.Direction.WNW, 6440)])
+    assert mind.world(1).get(3) is None, "looked straight at where it should be, saw nothing: forgotten"
+    assert mind.decisions[1].ambition == "wander"
+
+
 def test_looking_straight_at_where_the_hare_should_be_and_seeing_nothing_forgets_it() -> None:
     world = BelievedWorld(body=1)
     world.observe(fox_snapshot((-8, 0), pb.Direction.ESE, 64, [hare_seen((-8, 0), (6, 0), pb.Direction.N)]))
