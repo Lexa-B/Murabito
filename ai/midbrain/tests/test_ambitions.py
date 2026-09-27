@@ -136,7 +136,7 @@ def test_a_hare_looking_at_us_freezes_us_even_beside_it() -> None:
     assert frozen.path == ("stalk", "freeze", "stop")
 
 
-def test_after_walking_three_cells_unseen_the_fox_pivots_to_check_then_holds() -> None:
+def test_after_walking_three_cells_unseen_the_fox_pivots_to_check_then_goes_on() -> None:
     world = BelievedWorld(body=1)
     world.observe(fox_snapshot((-8, 0), pb.Direction.ESE, 64, [hare_seen((-8, 0), (6, 0), pb.Direction.N)]))
     world.observe(fox_snapshot((-8, 2), pb.Direction.SSE, 96))
@@ -147,7 +147,10 @@ def test_after_walking_three_cells_unseen_the_fox_pivots_to_check_then_holds() -
     assert result.path == ("stalk", "check", "look")
     assert result.intent == face(pb.Direction.E), "twelve degrees off the line to the hare rounds to E"
     facing_it = Context(world, fox_snapshot((-8, 3), pb.Direction.E, 120))
-    assert STALK.want(facing_it).path == ("stalk", "check", "look") and STALK.want(facing_it).intent is None
+    looked = STALK.want(facing_it)
+    assert looked.path == ("stalk", "check", "look") and looked.intent is None
+    assert world.get(3).walked_since == 0, "having looked, the check is done"
+    assert STALK.want(facing_it).path[1] == "circle", "next round the stalk goes on; a ghost beyond reach is walked toward until it can be proven gone"
     two = Stalk(prey=HARE, check_after=4)
     assert two.want(ctx).path[1] == "circle"
 

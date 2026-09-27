@@ -140,9 +140,11 @@ class Stalk:
         ├─ bite       beside it, facing it             → Bite
         ├─ pounce     behind it, facing it, and a      → Lunge that way
         │             lunge lands beside it
-        ├─ check      we have walked ``check_after``   → face where we believe it is; hold
-        │             cells without seeing it            once facing (revise then forgets it
-        │                                                 if it isn't there)
+        ├─ check      we have walked ``check_after``   → face where we believe it is; once
+        │             cells without seeing it            facing, hold a round and count afresh
+        │                                                 (revise forgets it if it isn't there
+        │                                                 and is within reach; else we go on,
+        │                                                 and closer)
         ├─ circle     we are off its rear line         → SneakTo a cell one notch round toward
         │                                                 its rear, spiralling in by ``spiral``
         ├─ approach   on the rear line, farther than   → SneakTo the cell ``distance`` behind it
@@ -194,8 +196,13 @@ class Stalk:
         return target is not None and target.id not in ctx.seen_now and target.walked_since >= self.check_after
 
     def look_at_it(self, ctx: Context) -> pb.Intent | None:
-        toward_it = bearing(ctx.here, self.target(ctx).cell)
+        """Turn to face where it is believed; once facing it and still not seeing it, the
+        check is done: the count starts again, so next round the stalk moves on (and closer,
+        if it is beyond the reach within which ``revise`` would have forgotten it)."""
+        target = self.target(ctx)
+        toward_it = bearing(ctx.here, target.cell)
         if toward_it is None or nearest_direction(toward_it) == ctx.facing:
+            target.walked_since = 0
             return None
         return face(nearest_direction(toward_it))
 
