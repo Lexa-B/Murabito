@@ -90,14 +90,16 @@ class Stalk:
 
         stalk
         ├─ freeze     it is looking at us              → Stop
-        ├─ circle     we are off its rear line         → GoTo a cell at our distance, one
-        │                                                 notch round toward its rear
+        ├─ circle     we are off its rear line         → GoTo a cell one notch round toward
+        │                                                 its rear, spiralling in by ``spiral``
         ├─ approach   on the rear line, farther than   → GoTo the cell ``distance`` behind it
         │             ``distance``
         └─ watch                                       → face it, or hold if we already do
 
     "Looking at us" is within ``looking_arc`` centred on the way it was last seen facing;
-    "on the rear line" is within ``rear_tolerance`` of dead behind it. A thing whose facing
+    "on the rear line" is within ``rear_tolerance`` of dead behind it. ``spiral`` is the
+    circle's pitch: 0 keeps our distance, a pure arc; a positive angle tilts each swing that
+    far inward, so we close in as we come round, never nearer than ``distance``. A thing whose facing
     was never seen is taken as not looking and approached straight.
     """
 
@@ -110,6 +112,8 @@ class Stalk:
     rear_tolerance: float = 15.0
     """Degrees either side of dead behind that count as on its rear line: half a notch, so
     the fox keeps circling until it is on the notch dead behind."""
+    spiral: float = 15.0
+    """Degrees the circling path tilts inward, off the tangent; 0 is a pure arc."""
     name: str = "stalk"
 
     def target(self, ctx: Context) -> Belief | None:
@@ -140,7 +144,7 @@ class Stalk:
         toward_us = bearing(target.cell, ctx.here)
         rear = angle_of(opposite(target.facing))
         swing = 30.0 if turn_between(toward_us, rear) > 0 else -30.0
-        cell = rotated(ctx.here, target.cell, swing)
+        cell = rotated(ctx.here, target.cell, swing, pitch=self.spiral, floor=self.distance)
         return go_to(cell) if cell != ctx.here else None
 
     def farther_than_distance(self, ctx: Context) -> bool:
@@ -173,6 +177,8 @@ class Stalk:
         ))
 
     def want(self, ctx: Context) -> Result:
+        if self.target(ctx) is None:
+            return Result(False, None, (self.name, "no prey"))
         return self.tree.tick(ctx)
 
 
@@ -199,10 +205,12 @@ def revise(ctx: Context) -> list[int]:
 
 
 def choose(ambitions: list[Ambition], ctx: Context, current: str | None, boost: float = 0.15) -> Ambition:
-    """The ambition that scores highest, the one in hand boosted so a near tie holds."""
+    """The ambition that scores highest, the one in hand boosted so a near tie holds. An
+    ambition bidding nothing at all gets no boost: what has lost its reason to run is let go."""
 
     def score(ambition: Ambition) -> float:
-        return ambition.utility(ctx) + (boost if ambition.name == current else 0.0)
+        utility = ambition.utility(ctx)
+        return utility + (boost if utility > 0 and ambition.name == current else 0.0)
 
     return max(ambitions, key=score)
 

@@ -60,3 +60,15 @@ def test_along_walks_a_direction_and_rotated_swings_about_a_cell() -> None:
     assert rotated(Cell(3, 0), Cell(0, 0), 90) == from_world(0, -3)
     assert rotated(Cell(3, 0), Cell(0, 0), 180) == Cell(-3, 0)
     assert rotated(Cell(3, 0), Cell(0, 0), 0) == Cell(3, 0)
+
+
+def test_a_pitched_swing_spirals_in_and_stops_at_the_floor() -> None:
+    far = Cell(-14, 0)  # fourteen west of the origin
+    assert rotated(far, Cell(0, 0), 30, pitch=0) == rotated(far, Cell(0, 0), 30)
+    swung = rotated(far, Cell(0, 0), 30, pitch=15)
+    x, z = to_world(swung)
+    assert 11.5 <= math.hypot(x, z) <= 12.5, "about 13% nearer per 30 degrees at a 15 degree pitch"
+    assert z > 0, "still swung to the south side"
+    near = rotated(Cell(3, 0), Cell(0, 0), 30, pitch=60, floor=3.0)
+    x, z = to_world(near)
+    assert 2.5 <= math.hypot(x, z) <= 3.5, "never inside the floor"

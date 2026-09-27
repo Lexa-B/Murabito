@@ -77,9 +77,13 @@ def along(cell: Cell, direction: int, count: int) -> Cell:
     return Cell(cell.q + dq * count, cell.r + dr * count, cell.layer)
 
 
-def rotated(cell: Cell, around: Cell, degrees: float) -> Cell:
+def rotated(cell: Cell, around: Cell, degrees: float, pitch: float = 0.0, floor: float = 0.0) -> Cell:
     """The cell reached by swinging ``cell`` about ``around`` by ``degrees``, anticlockwise
-    seen from above, keeping its distance."""
+    seen from above.
+
+    With ``pitch`` 0 the distance is kept: a circle. A positive pitch tilts the path that
+    many degrees inward, off the tangent, so the swing spirals in: the distance shrinks by
+    ``exp(-sweep · tan(pitch))`` per swing, never below ``floor`` shaku."""
     ax, az = to_world(around)
     x, z = to_world(cell)
     dx, dz = x - ax, z - az
@@ -87,4 +91,8 @@ def rotated(cell: Cell, around: Cell, degrees: float) -> Cell:
     # World z points south, so an anticlockwise turn seen from above is clockwise in (x, z).
     rx = dx * math.cos(angle) + dz * math.sin(angle)
     rz = -dx * math.sin(angle) + dz * math.cos(angle)
+    radius = math.hypot(rx, rz)
+    if pitch and radius > 0:
+        shrunk = max(radius * math.exp(-abs(angle) * math.tan(math.radians(pitch))), floor)
+        rx, rz = rx * shrunk / radius, rz * shrunk / radius
     return from_world(ax + rx, az + rz, cell.layer)

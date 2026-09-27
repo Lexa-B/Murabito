@@ -49,6 +49,12 @@ def test_with_no_prey_believed_the_stalk_wants_nothing_and_idle_wins() -> None:
     assert choose([Idle(), STALK], ctx, current=None).name == "idle"
 
 
+def test_a_stalk_in_hand_is_let_go_once_the_prey_is_forgotten() -> None:
+    ctx = Context(BelievedWorld(body=1), fox_snapshot())
+    assert choose([Idle(), STALK], ctx, current="stalk").name == "idle"
+    assert STALK.want(ctx).ok is False and STALK.want(ctx).intent is None
+
+
 def test_with_prey_believed_the_stalk_wins_and_is_kept_over_a_near_tie() -> None:
     ctx = fox_believing()
     assert STALK.utility(ctx) == 1.0
@@ -72,13 +78,22 @@ def test_a_hare_looking_our_way_freezes_us() -> None:
     assert Stalk(prey=HARE, looking_arc=200).want(fox_believing(hare_facing=pb.Direction.N)).path[1] == "freeze"
 
 
-def test_a_hare_facing_across_us_is_circled_toward_its_rear_at_our_distance() -> None:
-    # The hare faces north; its rear is south; we are due west of it, so we swing anticlockwise.
+def test_a_hare_facing_across_us_is_circled_toward_its_rear_spiralling_in() -> None:
+    # The hare faces north; its rear is south; we are due west of it, so we swing anticlockwise,
+    # and at the default 15 degree pitch each swing brings us about 13% nearer.
     result = STALK.want(fox_believing(hare_facing=pb.Direction.N))
     assert result.path == ("stalk", "circle", "round")
     target = Cell.of(result.intent.sustained.go_to)
-    assert target == Cell(-10, 8)
+    assert target == Cell(-8, 7)
     assert target.r > 0, "toward the south side"
+    (hx, hz), (tx, tz) = to_world(Cell(6, 0)), to_world(target)
+    assert 11.5 <= ((tx - hx) ** 2 + (tz - hz) ** 2) ** 0.5 <= 12.5, "nearer than the fourteen we started at"
+
+
+def test_with_no_pitch_the_circle_keeps_our_distance() -> None:
+    arc = Stalk(prey=HARE, spiral=0.0).want(fox_believing(hare_facing=pb.Direction.N))
+    target = Cell.of(arc.intent.sustained.go_to)
+    assert target == Cell(-10, 8)
     (hx, hz), (tx, tz) = to_world(Cell(6, 0)), to_world(target)
     assert 13 <= ((tx - hx) ** 2 + (tz - hz) ** 2) ** 0.5 <= 15, "still about fourteen shaku from the hare"
 

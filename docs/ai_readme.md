@@ -242,19 +242,23 @@ the mind never cuts its own steps. Before bidding, `revise` drops a belief in a 
 should be within a cell of the body and isn't in view.
 
 The fox's repertoire is `Idle` and `Stalk(prey=hare, distance=3, looking_arc=180,
-rear_tolerance=15)`, which bids 1 while it believes in a hare and runs this tree:
+rear_tolerance=15, spiral=15)`, which bids 1 while it believes in a hare and runs this tree:
 
 ```
 stalk
 ├─ freeze     the hare is looking at us (its last-seen facing, within the arc)   → Stop
-├─ circle     we are off its rear line                                          → GoTo a cell at our distance,
-│                                                                                  one notch round toward its rear
+├─ circle     we are off its rear line                                          → GoTo a cell one notch round toward
+│                                                                                  its rear, spiralling in by `spiral`
 ├─ approach   on the rear line, farther than `distance`                         → GoTo the cell `distance` behind it
 └─ watch                                                                        → face it, or hold if we already do
 ```
 
-All of it reads beliefs, so a hare that walked out of view is still stalked to where it was
-last seen and, once the fox stands there and sees nothing, forgotten. `hexes.py` is the mind's
+`spiral` is the circle's pitch, Lexa's dial: 0 is a pure arc at the fox's current distance; a
+positive angle tilts each swing that far inward off the tangent, so the fox closes as it
+comes round (about 13% nearer per 30° swing at 15°), never nearer than `distance`. An
+ambition that has lost its reason to run bids 0 and gets no boost, so a stalk whose prey was
+forgotten is let go. All of it reads beliefs, so a hare that walked out of view is still
+stalked to where it was last seen and, once the fox stands there and sees nothing, forgotten. `hexes.py` is the mind's
 copy of the plane for the geometry: bearings, rotations, the twelve offsets. Watched live on
 2026-09-27: the fox approached to three behind the hare and held; froze when the hare turned to
 look; circled to the hare's new rear when it faced across; settled and faced it. Every decision
