@@ -90,6 +90,9 @@ class Stalk:
 
         stalk
         ├─ freeze     it is looking at us              → Stop
+        ├─ check      we have walked ``check_after``   → face where we believe it is; hold
+        │             cells without seeing it            once facing (revise then forgets it
+        │                                                 if it isn't there)
         ├─ circle     we are off its rear line         → GoTo a cell one notch round toward
         │                                                 its rear, spiralling in by ``spiral``
         ├─ approach   on the rear line, farther than   → GoTo the cell ``distance`` behind it
@@ -114,6 +117,8 @@ class Stalk:
     the fox keeps circling until it is on the notch dead behind."""
     spiral: float = 15.0
     """Degrees the circling path tilts inward, off the tangent; 0 is a pure arc."""
+    check_after: int = 3
+    """Cells to walk without a sighting before pivoting to check it is where we left it."""
     name: str = "stalk"
 
     def target(self, ctx: Context) -> Belief | None:
@@ -131,6 +136,16 @@ class Stalk:
             return False
         toward_us = bearing(target.cell, ctx.here)
         return toward_us is not None and apart(angle_of(target.facing), toward_us) < self.looking_arc / 2
+
+    def unseen_too_long(self, ctx: Context) -> bool:
+        target = self.target(ctx)
+        return target is not None and target.id not in ctx.seen_now and target.walked_since >= self.check_after
+
+    def look_at_it(self, ctx: Context) -> pb.Intent | None:
+        toward_it = bearing(ctx.here, self.target(ctx).cell)
+        if toward_it is None or nearest_direction(toward_it) == ctx.facing:
+            return None
+        return face(nearest_direction(toward_it))
 
     def off_rear_line(self, ctx: Context) -> bool:
         target = self.target(ctx)
@@ -171,6 +186,7 @@ class Stalk:
     def tree(self) -> Selector:
         return Selector(self.name, (
             Sequence("freeze", (Condition("looking at us", self.looking_at_us), Act("stop", lambda ctx: STOP))),
+            Sequence("check", (Condition("unseen too long", self.unseen_too_long), Act("look", self.look_at_it))),
             Sequence("circle", (Condition("off its rear line", self.off_rear_line), Act("round", self.round_toward_rear))),
             Sequence("approach", (Condition("farther than distance", self.farther_than_distance), Act("close in", self.close_in))),
             Act("watch", self.watch),
@@ -195,10 +211,21 @@ def repertoire_for(kind: str) -> list[Ambition]:
     return REPERTOIRE.get(kind, [Idle()])
 
 
-def revise(ctx: Context) -> list[int]:
-    """Drops any belief in a thing right here, or next door, that is not in view: if I am
-    standing where I believe it is and it isn't there, it is gone. Returns what was dropped."""
-    gone = [b.id for b in ctx.world if steps(ctx.here, b.cell) <= 1 and b.id not in ctx.seen_now]
+def revise(ctx: Context, reach: int = 12) -> list[int]:
+    """Drops a belief the body's own eyes contradict, and returns what was dropped: a thing
+    believed right here or next door that is not in view; and a thing believed within
+    ``reach`` cells, on the notch the body is facing, that is not in view. Standing on it or
+    looking straight at it and seeing nothing means it is gone."""
+
+    def contradicted(belief: Belief) -> bool:
+        if belief.id in ctx.seen_now:
+            return False
+        if steps(ctx.here, belief.cell) <= 1:
+            return True
+        toward_it = bearing(ctx.here, belief.cell)
+        return steps(ctx.here, belief.cell) <= reach and nearest_direction(toward_it) == ctx.facing
+
+    gone = [belief.id for belief in ctx.world if contradicted(belief)]
     for thing in gone:
         ctx.world.forget(thing)
     return gone

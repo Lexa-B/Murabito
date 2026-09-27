@@ -49,8 +49,7 @@ def from_world(x: float, z: float, layer: int = 0) -> Cell:
 
 def steps(a: Cell, b: Cell) -> int:
     """Cells apart across faces, layer ignored."""
-    dq, dr = b.q - a.q, b.r - a.r
-    return max(abs(dq), abs(dr), abs(dq + dr))
+    return a.steps_to(b)
 
 
 def bearing(a: Cell, b: Cell) -> float | None:

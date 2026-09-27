@@ -207,7 +207,8 @@ A mind does not act on what a body sees; it acts on what the body *believes*, an
 ways the moment the body looks away. `beliefs.py` is that layer, in its smallest form. Each body
 on the board has a `BelievedWorld`, and in it a `Belief` per thing the body has ever seen, keyed
 on the thing's id: its kind path (or none, if the sighting carried no label), the cell it stood
-in, the way it faced, the tick it was last seen, and the acuity then. The cell is absolute, the body's own voxel
+in, the way it faced, the tick it was last seen, the acuity then, and how many cells the body
+has walked since (`walked_since`, the seed of uncertainty later). The cell is absolute, the body's own voxel
 plus the sighting's offset, so "four steps south of me" is remembered as "at (-8, 4)" and still
 means something once the body has walked on. One verb, `observe(snapshot)`, writes every
 sighting in over what was there; a snapshot from another body is refused.
@@ -238,22 +239,30 @@ near tie doesn't flip every round. The winner then ticks its **behaviour tree**
 round, no memory of its own) for the intent it wants, and the loop sends that only if it
 **differs** from what the body is doing: a hold is never sent, a `Stop` only when something is
 in hand, a `GoTo` only when nothing is in hand or the target has moved two or more cells, so
-the mind never cuts its own steps. Before bidding, `revise` drops a belief in a thing that
-should be within a cell of the body and isn't in view.
+the mind never cuts its own steps. Before bidding, `revise` drops a belief the body's own eyes
+contradict: a thing that should be within a cell and isn't in view, or one on the notch the
+body faces within its near reach (12 cells, the fox's near band, copied) and not in view.
 
 The fox's repertoire is `Idle` and `Stalk(prey=hare, distance=3, looking_arc=180,
-rear_tolerance=15, spiral=15)`, which bids 1 while it believes in a hare and runs this tree:
+rear_tolerance=15, spiral=15, check_after=3)`, which bids 1 while it believes in a hare and
+runs this tree:
 
 ```
 stalk
 ├─ freeze     the hare is looking at us (its last-seen facing, within the arc)   → Stop
+├─ check      we have walked `check_after` cells without seeing it               → face where we believe it is;
+│                                                                                  hold once facing
 ├─ circle     we are off its rear line                                          → GoTo a cell one notch round toward
 │                                                                                  its rear, spiralling in by `spiral`
 ├─ approach   on the rear line, farther than `distance`                         → GoTo the cell `distance` behind it
 └─ watch                                                                        → face it, or hold if we already do
 ```
 
-`spiral` is the circle's pitch, Lexa's dial: 0 is a pure arc at the fox's current distance; a
+The check is Lexa's: a circling fox faces the way it walks, so every few cells it pivots to
+see the hare is where it left it. If it is, the sighting resets the count and circling resumes;
+if the fox looks straight at the believed cell within its near reach and sees nothing, `revise`
+forgets the hare (the second of its two rules, beside standing on the cell), the stalk bids 0,
+and the fox idles. `spiral` is the circle's pitch, Lexa's dial: 0 is a pure arc at the fox's current distance; a
 positive angle tilts each swing that far inward off the tangent, so the fox closes as it
 comes round (about 13% nearer per 30° swing at 15°), never nearer than `distance`. An
 ambition that has lost its reason to run bids 0 and gets no boost, so a stalk whose prey was

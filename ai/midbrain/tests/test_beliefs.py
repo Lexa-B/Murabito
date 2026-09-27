@@ -41,6 +41,18 @@ def test_a_sighting_becomes_a_belief_at_the_cell_the_thing_stood_in() -> None:
     assert sugi.age(now=100) == 36
 
 
+def test_walking_is_charged_to_every_belief_not_refreshed_and_a_sighting_resets_it() -> None:
+    world = BelievedWorld(body=1)
+    world.observe(fox_sees(64, sighting(3, 14, 0, HARE), sighting(2, 13, -4, SUGI), at=(-8, 0)))
+    world.observe(fox_sees(80, sighting(2, 12, -4, SUGI), at=(-7, 0)))
+    world.observe(fox_sees(96, at=(-5, 0)))
+    assert world.get(3).walked_since == 3
+    assert world.get(2).walked_since == 2
+    world.observe(fox_sees(112, sighting(3, 11, 0, HARE), at=(-5, 0)))
+    assert world.get(3).walked_since == 0
+    assert world.get(2).walked_since == 2
+
+
 def test_the_way_a_thing_faced_is_remembered_and_refreshed() -> None:
     world = BelievedWorld(body=1)
     world.observe(fox_sees(64, sighting(3, 14, 0, HARE, facing=pb.Direction.E)))

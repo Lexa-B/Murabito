@@ -113,6 +113,35 @@ def test_three_behind_and_facing_it_we_hold_and_off_facing_we_turn() -> None:
     assert unseen.intent == face(pb.Direction.E)
 
 
+def test_after_walking_three_cells_unseen_the_fox_pivots_to_check_then_holds() -> None:
+    world = BelievedWorld(body=1)
+    world.observe(fox_snapshot((-8, 0), pb.Direction.ESE, 64, [hare_seen((-8, 0), (6, 0), pb.Direction.N)]))
+    world.observe(fox_snapshot((-8, 2), pb.Direction.SSE, 96))
+    world.observe(fox_snapshot((-8, 3), pb.Direction.SSE, 112))
+    ctx = Context(world, fox_snapshot((-8, 3), pb.Direction.SSE, 112))
+    assert world.get(3).walked_since == 3
+    result = STALK.want(ctx)
+    assert result.path == ("stalk", "check", "look")
+    assert result.intent == face(pb.Direction.E), "twelve degrees off the line to the hare rounds to E"
+    facing_it = Context(world, fox_snapshot((-8, 3), pb.Direction.E, 120))
+    assert STALK.want(facing_it).path == ("stalk", "check", "look") and STALK.want(facing_it).intent is None
+    two = Stalk(prey=HARE, check_after=4)
+    assert two.want(ctx).path[1] == "circle"
+
+
+def test_looking_straight_at_where_the_hare_should_be_and_seeing_nothing_forgets_it() -> None:
+    world = BelievedWorld(body=1)
+    world.observe(fox_snapshot((-8, 0), pb.Direction.ESE, 64, [hare_seen((-8, 0), (6, 0), pb.Direction.N)]))
+    looking_away = Context(world, fox_snapshot((-5, 0), pb.Direction.S, 96))
+    assert revise(looking_away) == []
+    looking_at_it = Context(world, fox_snapshot((-5, 0), pb.Direction.E, 104))
+    assert revise(looking_at_it) == [3]
+    assert world.get(3) is None
+    far = BelievedWorld(body=1)
+    far.observe(fox_snapshot((-8, 0), pb.Direction.E, 64, [hare_seen((-8, 0), (20, 0), pb.Direction.N)]))
+    assert revise(Context(far, fox_snapshot((-8, 0), pb.Direction.E, 72))) == [], "beyond reach, nothing is proven"
+
+
 def test_standing_where_the_hare_was_believed_and_not_seeing_it_forgets_it() -> None:
     ctx = fox_believing(fox_at=(5, 0), sees_hare=False)
     assert revise(ctx) == [3]
