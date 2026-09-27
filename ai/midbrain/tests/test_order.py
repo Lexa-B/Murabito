@@ -7,7 +7,9 @@ import re
 import pytest
 
 from midbrain import murabito_pb2 as pb
+from midbrain.beliefs import Cell
 from midbrain.order import DIRECTIONS, Unparseable, parse
+from midbrain.paths import landing
 
 
 def test_the_twelve_directions_in_index_order() -> None:
@@ -22,12 +24,16 @@ def test_each_verb_makes_its_intent() -> None:
     assert parse(["sprint", "e"]).short.sprint == pb.Direction.E
     assert parse(["recoil", "W"]).short.recoil == pb.Direction.W
     assert parse(["bite"]).short.WhichOneof("kind") == "bite"
-    cell = parse(["walkto", "3", "-5"]).sustained.walk_to
-    assert (cell.q, cell.r, cell.layer) == (3, -5, 0)
-    assert parse(["walkto", "0", "0", "2"]).sustained.walk_to.layer == 2
-    assert parse(["sneakto", "1", "1"]).sustained.WhichOneof("kind") == "sneak_to"
-    assert parse(["jogto", "1", "1"]).sustained.WhichOneof("kind") == "jog_to"
-    assert parse(["sprintto", "1", "1"]).sustained.WhichOneof("kind") == "sprint_to"
+    here = Cell(0, 0)
+    route = parse(["walkto", "3", "-5"], here).path
+    assert route.keep == 0 and {step.WhichOneof("kind") for step in route.steps} == {"walk"}
+    assert landing(here, [step.walk for step in route.steps]) == Cell(3, -5)
+    aloft = parse(["walkto", "1", "0", "2"], Cell(0, 0, layer=2)).path
+    assert landing(Cell(0, 0, layer=2), [step.walk for step in aloft.steps]) == Cell(1, 0, layer=2)
+    assert parse(["sneakto", "1", "1"], here).path.steps[0].WhichOneof("kind") == "sneak"
+    assert parse(["jogto", "1", "1"], here).path.steps[0].WhichOneof("kind") == "jog"
+    assert parse(["sprintto", "1", "1"], here).path.steps[0].WhichOneof("kind") == "sprint"
+    assert len(parse(["walkto", "0", "0"], here).path.steps) == 0, "standing there: a path of no steps"
 
 
 @pytest.mark.parametrize(
@@ -42,6 +48,7 @@ def test_each_verb_makes_its_intent() -> None:
         (["bite", "hard"], "bite takes nothing"),
         (["walkto", "1"], "walkto takes q r [layer]"),
         (["sneakto", "one", "2"], "q must be a whole number"),
+        (["sneakto", "1", "2"], "sneakto needs to know where the body stands"),
         (["goto", "1", "2"], "no such order 'goto'"),
         (["face-thing", "hare"], "a thing must be a number"),
     ],

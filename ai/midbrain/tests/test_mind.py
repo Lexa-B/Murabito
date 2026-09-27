@@ -5,6 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 
 from midbrain import murabito_pb2 as pb
+from midbrain.ambitions import path
 from midbrain.beliefs import Cell
 from midbrain.mind import Mind, ago, render
 
@@ -37,18 +38,23 @@ def hare_facing(facing: int) -> pb.InView:
 def test_the_fox_stalks_what_it_believes_and_the_hare_only_idles() -> None:
     mind = Mind()
     orders = mind.round([fox(64, hare_facing(pb.Direction.E)), hare(64)])
-    assert orders == [(1, pb.Intent(sustained=pb.Sustained(sneak_to=pb.Voxel(q=3, r=0))))]
+    assert orders == [(1, path("sneak", [pb.Direction.E] * 11))], "eleven sneaking steps to three behind"
     assert mind.decisions[1].path == ("stalk", "approach", "close in") and mind.decisions[1].sent
     assert mind.decisions[3].path == ("idle",) and not mind.decisions[3].sent
-    assert str(mind.decisions[1]) == "stalk › approach › close in  →  SneakTo (3, 0, -3) L0  (sent)"
+    assert str(mind.decisions[1]) == "stalk › approach › close in  →  Path keep 0, 11 steps: Sneak E, Sneak E, Sneak E, Sneak E, +7  (sent)"
     assert str(mind.decisions[3]) == "idle  →  hold"
 
 
 def test_an_order_in_hand_is_not_sent_again_and_a_stop_is_when_the_hare_looks() -> None:
     mind = Mind()
     mind.round([fox(64, hare_facing(pb.Direction.E))])
+    # The first step is underway and the other ten wait: what the mind wants from where
+    # that step lands is exactly what waits, so nothing is sent.
     going = fox(72, hare_facing(pb.Direction.E))
-    going.doing.CopyFrom(pb.Doing(intent=pb.Intent(sustained=pb.Sustained(sneak_to=pb.Voxel(q=3, r=0))), since=65))
+    going.doing.CopyFrom(pb.Doing(intent=path("sneak", [pb.Direction.E] * 11), since=65))
+    going.queue.extend([pb.Action(sneak=pb.Direction.E)] * 10)
+    going.underway.CopyFrom(pb.Action(sneak=pb.Direction.E))
+    going.in_flight = 0.25
     assert mind.round([going]) == []
     looking = fox(80, hare_facing(pb.Direction.W))
     looking.doing.CopyFrom(going.doing)

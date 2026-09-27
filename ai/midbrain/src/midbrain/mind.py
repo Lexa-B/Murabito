@@ -21,7 +21,7 @@ from rich.text import Text
 
 from collections.abc import Callable
 from midbrain import murabito_pb2 as pb
-from midbrain.ambitions import Ambition, Context, choose, differs, repertoire_for, revise
+from midbrain.ambitions import Ambition, Context, choose, repertoire_for, revise, to_send
 from midbrain.beliefs import BelievedWorld
 from midbrain.board import ROUND, direction, intent as intent_words, name_of, voxel
 from midbrain.client import HOST, PORT, Bridge
@@ -67,10 +67,10 @@ class Mind:
             ambition = choose(self.repertoire(snapshot.kind), ctx, self.current.get(snapshot.id))
             self.current[snapshot.id] = ambition.name
             result = ambition.want(ctx)
-            sent = differs(result.intent, snapshot)
-            self.decisions[snapshot.id] = Decision(ambition.name, result.path, result.intent, sent)
-            if sent:
-                orders.append((snapshot.id, result.intent))
+            order = to_send(result.intent, snapshot)
+            self.decisions[snapshot.id] = Decision(ambition.name, result.path, result.intent, order is not None)
+            if order is not None:
+                orders.append((snapshot.id, order))
         return orders
 
     def world(self, body: int) -> BelievedWorld | None:

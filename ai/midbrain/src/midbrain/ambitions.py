@@ -21,38 +21,59 @@ from midbrain import murabito_pb2 as pb
 from midbrain.behaviour import Act, Condition, Result, Selector, Sequence
 from midbrain.beliefs import Belief, BelievedWorld, Cell
 from midbrain.hexes import along, angle_of, apart, bearing, from_world, nearest_direction, opposite, rotated, steps, to_world, turn_between
+from midbrain.paths import cells_along, landing, neighbour, plan
 
 STOP = pb.Intent(short=pb.Short(stop=pb.Stop()))
 TICKS_PER_SECOND = 64
 
-
-def _to(pace: str, cell: Cell) -> pb.Intent:
-    voxel = pb.Voxel(q=cell.q, r=cell.r, layer=cell.layer)
-    return pb.Intent(sustained=pb.Sustained(**{pace: voxel}))
+PACES = ("walk", "jog", "sprint", "sneak")
+"""The words a path may step in, as the contract spells them."""
 
 
-def walk_to(cell: Cell) -> pb.Intent:
-    return _to("walk_to", cell)
+def path(word: str, steps: list[int], keep: int = 0) -> pb.Intent:
+    """A path of steps all in one pace word, or a turn each if the word is ``face``."""
+    return pb.Intent(path=pb.Path(keep=keep, steps=[pb.Action(**{word: step}) for step in steps]))
 
 
-def jog_to(cell: Cell) -> pb.Intent:
-    return _to("jog_to", cell)
+def landing_of(cell: Cell, action: pb.Action) -> Cell:
+    """Where an action leaves the body that starts it here: a step's neighbour, a lunge
+    two cells on, a turn or a bite where it stands."""
+    match action.WhichOneof("kind"):
+        case "lunge":
+            return neighbour(neighbour(cell, action.lunge), action.lunge)
+        case "face" | "bite" | None:
+            return cell
+        case word:
+            return neighbour(cell, getattr(action, word))
 
 
-def sprint_to(cell: Cell) -> pb.Intent:
-    return _to("sprint_to", cell)
-
-
-def sneak_to(cell: Cell) -> pb.Intent:
-    return _to("sneak_to", cell)
-
-
-def bound_for(intent: pb.Intent) -> Cell | None:
-    """The cell a sustained intent is bound for, whatever its pace; None for a short."""
-    if intent.WhichOneof("kind") != "sustained":
+def steps_of(intent: pb.Intent) -> list[int] | None:
+    """The directions a path intent steps in; None for anything else."""
+    if intent.WhichOneof("kind") != "path":
         return None
-    pace = intent.sustained.WhichOneof("kind")
-    return Cell.of(getattr(intent.sustained, pace)) if pace else None
+    return [getattr(action, action.WhichOneof("kind")) for action in intent.path.steps]
+
+
+def route_of(intent: pb.Intent | None, snapshot: pb.Snapshot) -> list[Cell]:
+    """The cells a wanted path walks, from where the body will be when it starts; empty
+    for anything but a path."""
+    if intent is None:
+        return []
+    steps = steps_of(intent)
+    return cells_along(origin_of(snapshot), steps) if steps is not None else []
+
+
+def bound_for(intent: pb.Intent | None, snapshot: pb.Snapshot) -> Cell | None:
+    """The cell a wanted path ends on; None for anything else, or a path of no steps."""
+    route = route_of(intent, snapshot)
+    return route[-1] if route else None
+
+
+def origin_of(snapshot: pb.Snapshot) -> Cell:
+    """Where the body will be when the next queued action starts: where the action
+    underway lands, or where it stands."""
+    here = Cell.of(snapshot.position)
+    return landing_of(here, snapshot.underway) if snapshot.HasField("underway") else here
 
 
 def face(direction: int) -> pb.Intent:
@@ -105,6 +126,35 @@ class Context:
     @property
     def seen_now(self) -> set[int]:
         return {sighting.id for sighting in self.snapshot.in_view}
+
+    @property
+    def origin(self) -> Cell:
+        """Where a path wanted this round starts: where the step underway lands."""
+        return origin_of(self.snapshot)
+
+    @property
+    def blocked(self) -> set[Cell]:
+        """Every cell the body believes something stands in: what a path walks round."""
+        return {belief.cell for belief in self.world}
+
+    def pace_to(self, word: str, cell: Cell) -> pb.Intent | None:
+        """A path at that pace from the origin to the cell, planned round what is
+        believed to stand in the way; None if no way is found, or something is believed
+        to stand on the cell itself."""
+        steps = plan(self.origin, cell, self.blocked)
+        return path(word, steps) if steps is not None else None
+
+    def walk_to(self, cell: Cell) -> pb.Intent | None:
+        return self.pace_to("walk", cell)
+
+    def jog_to(self, cell: Cell) -> pb.Intent | None:
+        return self.pace_to("jog", cell)
+
+    def sprint_to(self, cell: Cell) -> pb.Intent | None:
+        return self.pace_to("sprint", cell)
+
+    def sneak_to(self, cell: Cell) -> pb.Intent | None:
+        return self.pace_to("sneak", cell)
 
 
 class Ambition(Protocol):
@@ -237,7 +287,7 @@ class Stalk:
         rear = angle_of(opposite(target.facing))
         swing = 30.0 if turn_between(toward_us, rear) > 0 else -30.0
         cell = rotated(ctx.here, target.cell, swing, pitch=self.spiral, floor=self.distance)
-        return sneak_to(cell) if cell != ctx.here else None
+        return ctx.sneak_to(cell) if cell != ctx.here else None
 
     def settle_cell(self, ctx: Context, target: Belief) -> Cell:
         """The cell ``distance`` offsets behind it along its rear line, or, if its facing
@@ -256,7 +306,7 @@ class Stalk:
         return steps(ctx.here, target.cell) > steps(self.settle_cell(ctx, target), target.cell)
 
     def close_in(self, ctx: Context) -> pb.Intent | None:
-        return sneak_to(self.settle_cell(ctx, self.target(ctx)))
+        return ctx.sneak_to(self.settle_cell(ctx, self.target(ctx)))
 
     def watch(self, ctx: Context) -> pb.Intent | None:
         target = self.target(ctx)
@@ -293,7 +343,7 @@ class Wander:
     The tree, first branch to succeed wins:
 
         wander
-        ├─ walking   a pace is in hand                → hold, let it land
+        ├─ walking   a path is in hand                → hold, let it land
         ├─ resting   the rest drawn has not ended     → hold
         ├─ arrived   nothing in hand, no rest drawn   → draw a rest of ``rest`` seconds,
         │                                                remember when it ends; hold
@@ -324,8 +374,8 @@ class Wander:
 
     # --- the tree's tests and wants ---
 
-    def a_pace_in_hand(self, ctx: Context) -> bool:
-        return ctx.in_hand is not None and bound_for(ctx.in_hand) is not None
+    def a_path_in_hand(self, ctx: Context) -> bool:
+        return ctx.in_hand is not None and ctx.in_hand.WhichOneof("kind") == "path"
 
     def rest_not_over(self, ctx: Context) -> bool:
         until = ctx.scratch.get(self.REST_UNTIL)
@@ -346,12 +396,12 @@ class Wander:
         x, z = to_world(ctx.here)
         theta = math.radians(degrees)
         cell = from_world(x + length * math.cos(theta), z - length * math.sin(theta), ctx.here.layer)
-        return walk_to(cell) if cell != ctx.here else None
+        return ctx.walk_to(cell) if cell != ctx.here else None
 
     @property
     def tree(self) -> Selector:
         return Selector(self.name, (
-            Sequence("walking", (Condition("a pace in hand", self.a_pace_in_hand), Act("keep on", lambda ctx: None))),
+            Sequence("walking", (Condition("a path in hand", self.a_path_in_hand), Act("keep on", lambda ctx: None))),
             Sequence("resting", (Condition("rest not over", self.rest_not_over), Act("wait", lambda ctx: None))),
             Sequence("arrived", (Condition("no rest drawn", self.no_rest_drawn), Act("rest", self.draw_a_rest))),
             Act("set off", self.set_off),
@@ -405,25 +455,31 @@ def choose(ambitions: list[Ambition], ctx: Context, current: str | None, boost: 
     return max(ambitions, key=score)
 
 
-def differs(want: pb.Intent | None, snapshot: pb.Snapshot, slack: int = 2) -> bool:
-    """Whether a want is worth sending, given what the body is doing.
+def to_send(want: pb.Intent | None, snapshot: pb.Snapshot) -> pb.Intent | None:
+    """What to send for a want, given what the body is doing: the want, an amendment of
+    the path in hand, or nothing.
 
-    A new intent cuts short whatever is in flight, so a mind must not re-send what is in
-    hand. Nothing wanted is never sent. A Stop is sent only if something is in hand. A
-    sustained pace is sent only if nothing is in hand, or the one in hand is another pace,
-    or its target is ``slack`` or more cells from the one wanted, so a target creeping a
-    cell at a time doesn't cut every step. Anything else is sent when it isn't exactly what
-    is in hand.
+    A new short cuts whatever is in flight, so a mind must not re-send what is in hand.
+    Nothing wanted is never sent. A Stop is sent only if something is in hand. A path
+    wanted while a path is in hand is compared with what still waits on the queue: the
+    steps that match from the front are kept, and only the rest is sent, as an
+    amendment, so a target on the move re-plans the tail of the walk and never cuts the
+    step in flight; a path that matches the queue whole is not sent. Anything else is
+    sent when it isn't exactly what is in hand.
     """
     if want is None:
-        return False
+        return None
     doing = snapshot.doing.intent if snapshot.HasField("doing") else None
     if want == STOP:
-        return doing is not None
+        return STOP if doing is not None else None
     if doing is None:
-        return True
-    wanted, in_hand = bound_for(want), bound_for(doing)
-    if wanted is not None and in_hand is not None:
-        same_pace = want.sustained.WhichOneof("kind") == doing.sustained.WhichOneof("kind")
-        return not same_pace or steps(wanted, in_hand) >= slack
-    return want != doing
+        return want
+    if want.WhichOneof("kind") == "path" and doing.WhichOneof("kind") == "path":
+        wanted, queued = list(want.path.steps), list(snapshot.queue)
+        keep = 0
+        while keep < len(wanted) and keep < len(queued) and wanted[keep] == queued[keep]:
+            keep += 1
+        if keep == len(wanted) == len(queued):
+            return None
+        return pb.Intent(path=pb.Path(keep=keep, steps=wanted[keep:]))
+    return want if want != doing else None

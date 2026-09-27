@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from midbrain import murabito_pb2 as pb
-from midbrain.ambitions import BITE, STOP, Context, Idle, Stalk, choose, differs, face, face_thing, is_under, lunge, revise, sneak_to, walk_to
+from midbrain.ambitions import BITE, STOP, Context, Idle, Stalk, bound_for, choose, face, face_thing, is_under, lunge, path, revise, to_send
 from midbrain.beliefs import BelievedWorld, Cell
 from midbrain.hexes import to_world
 
@@ -64,9 +64,11 @@ def test_with_prey_believed_the_stalk_wins_and_is_kept_over_a_near_tie() -> None
 
 
 def test_a_hare_facing_away_on_the_rear_line_is_approached_to_three_behind() -> None:
-    result = STALK.want(fox_believing(hare_facing=pb.Direction.E))
+    ctx = fox_believing(hare_facing=pb.Direction.E)
+    result = STALK.want(ctx)
     assert result.path == ("stalk", "approach", "close in")
-    assert result.intent == sneak_to(Cell(3, 0))
+    assert bound_for(result.intent, ctx.snapshot) == Cell(3, 0)
+    assert result.intent == path("sneak", [pb.Direction.E] * 11), "a sneaking path straight there"
 
 
 def test_a_hare_looking_our_way_freezes_us() -> None:
@@ -81,9 +83,10 @@ def test_a_hare_looking_our_way_freezes_us() -> None:
 def test_a_hare_facing_across_us_is_circled_toward_its_rear_spiralling_in() -> None:
     # The hare faces north; its rear is south; we are due west of it, so we swing anticlockwise,
     # and at the default 15 degree pitch each swing brings us about 13% nearer.
-    result = STALK.want(fox_believing(hare_facing=pb.Direction.N))
+    ctx = fox_believing(hare_facing=pb.Direction.N)
+    result = STALK.want(ctx)
     assert result.path == ("stalk", "circle", "round")
-    target = Cell.of(result.intent.sustained.sneak_to)
+    target = bound_for(result.intent, ctx.snapshot)
     assert target == Cell(-8, 7)
     assert target.r > 0, "toward the south side"
     (hx, hz), (tx, tz) = to_world(Cell(6, 0)), to_world(target)
@@ -91,17 +94,19 @@ def test_a_hare_facing_across_us_is_circled_toward_its_rear_spiralling_in() -> N
 
 
 def test_with_no_pitch_the_circle_keeps_our_distance() -> None:
-    arc = Stalk(prey=HARE, spiral=0.0).want(fox_believing(hare_facing=pb.Direction.N))
-    target = Cell.of(arc.intent.sustained.sneak_to)
+    ctx = fox_believing(hare_facing=pb.Direction.N)
+    arc = Stalk(prey=HARE, spiral=0.0).want(ctx)
+    target = bound_for(arc.intent, ctx.snapshot)
     assert target == Cell(-10, 8)
     (hx, hz), (tx, tz) = to_world(Cell(6, 0)), to_world(target)
     assert 13 <= ((tx - hx) ** 2 + (tz - hz) ** 2) ** 0.5 <= 15, "still about fourteen shaku from the hare"
 
 
 def test_a_hare_whose_facing_was_never_seen_is_approached_straight() -> None:
-    result = STALK.want(fox_believing(hare_facing=None))
+    ctx = fox_believing(hare_facing=None)
+    result = STALK.want(ctx)
     assert result.path == ("stalk", "approach", "close in")
-    assert result.intent == sneak_to(Cell(3, 0))
+    assert bound_for(result.intent, ctx.snapshot) == Cell(3, 0)
 
 
 def test_three_behind_and_facing_it_we_pounce_and_off_facing_we_turn() -> None:
@@ -162,7 +167,7 @@ def test_at_the_settle_cell_off_a_corner_direction_the_fox_watches_rather_than_a
     assert result.path == ("stalk", "watch") and result.intent is None, "facing it from its settle cell: hold"
     one_short = fox_believing(hare_at=(0, -140), hare_facing=pb.Direction.WNW, fox_at=(4, -136), fox_facing=pb.Direction.WNW)
     assert STALK.want(one_short).path == ("stalk", "approach", "close in")
-    assert STALK.want(one_short).intent == sneak_to(Cell(3, -137))
+    assert bound_for(STALK.want(one_short).intent, one_short.snapshot) == Cell(3, -137)
 
 
 def test_a_ghost_reached_and_not_seen_is_forgotten_and_the_fox_wanders() -> None:
@@ -200,14 +205,32 @@ def test_standing_where_the_hare_was_believed_and_not_seeing_it_forgets_it() -> 
     assert revise(still) == []
 
 
-def test_what_is_worth_sending() -> None:
+def test_what_is_sent_for_a_want() -> None:
+    E, N = pb.Direction.E, pb.Direction.N
     idle = fox_snapshot()
-    going = fox_snapshot(doing=walk_to(Cell(3, 0)))
-    assert not differs(None, idle) and not differs(None, going)
-    assert not differs(STOP, idle) and differs(STOP, going)
-    assert differs(walk_to(Cell(3, 0)), idle)
-    assert not differs(walk_to(Cell(3, 0)), going) and not differs(walk_to(Cell(4, 0)), going)
-    assert differs(walk_to(Cell(5, 0)), going)
-    assert differs(sneak_to(Cell(3, 0)), going), "another pace to the same cell is a change"
-    assert differs(face(pb.Direction.N), idle) and differs(face(pb.Direction.N), going)
-    assert not differs(face(pb.Direction.N), fox_snapshot(doing=face(pb.Direction.N)))
+    # On a path of three steps east: the first is underway, two still wait on the queue.
+    going = fox_snapshot(doing=path("walk", [E, E, E]))
+    going.queue.extend([pb.Action(walk=E), pb.Action(walk=E)])
+    going.underway.CopyFrom(pb.Action(walk=E))
+    assert to_send(None, idle) is None and to_send(None, going) is None
+    assert to_send(STOP, idle) is None and to_send(STOP, going) == STOP
+    assert to_send(path("walk", [E, E, E]), idle) == path("walk", [E, E, E]), "nothing in hand: the whole path"
+    assert to_send(path("walk", [E, E]), going) is None, "what waits already"
+    assert to_send(path("walk", [E, E, E]), going) == path("walk", [E], keep=2), "keep what matches, send the rest"
+    assert to_send(path("walk", [E, N]), going) == path("walk", [N], keep=1)
+    assert to_send(path("sneak", [E, E]), going) == path("sneak", [E, E], keep=0), "another pace: nothing matches"
+    assert to_send(path("walk", []), going) == path("walk", [], keep=0), "already there: drop what waits"
+    assert to_send(face(N), idle) == face(N) and to_send(face(N), going) == face(N)
+    assert to_send(face(N), fox_snapshot(doing=face(N))) is None
+
+
+def test_a_path_is_planned_from_where_the_step_underway_lands() -> None:
+    E = pb.Direction.E
+    ctx = fox_believing(hare_facing=E)
+    assert ctx.origin == Cell(-8, 0)
+    mid_step = fox_believing(hare_facing=E)
+    mid_step.snapshot.underway.CopyFrom(pb.Action(sneak=E))
+    mid_step.snapshot.in_flight = 0.5
+    assert mid_step.origin == Cell(-7, 0)
+    assert STALK.want(mid_step).intent == path("sneak", [E] * 10), "ten from where the step lands"
+    assert ctx.sneak_to(Cell(6, 0)) is None, "the hare's own cell is blocked"

@@ -12,7 +12,7 @@ import pygame
 from midbrain import murabito_pb2 as pb
 from midbrain.beliefs import Cell
 from midbrain.mind import Mind
-from midbrain.ambitions import bound_for
+from midbrain.ambitions import route_of
 from midbrain.visualize import SELF, View, draw, next_body
 
 FOX = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox"
@@ -110,6 +110,6 @@ def test_a_frame_with_no_view_fits_itself_round_the_beliefs_and_the_wanted_cell(
     )])
     surface = pygame.Surface((900, 900))
     draw(surface, mind, 1, None, font, max_scale=28.0)
-    view = View.fitting([Cell(-8, 0), Cell(52, -4)] + ([bound_for(mind.decisions[1].want)] if mind.decisions[1].want else []), 900, 900, 28.0)
+    view = View.fitting([Cell(-8, 0), Cell(52, -4)] + route_of(mind.decisions[1].want, mind.latest[1]), 900, 900, 28.0)
     x, y = view.pixel(Cell(52, -4))
     assert surface.get_at((int(x), int(y)))[:3] == (70, 140, 90), "the sugi, sixty cells off, is on screen"

@@ -54,16 +54,22 @@ def short(motion: pb.Short) -> str:
             return f"{word.capitalize()} {direction(getattr(motion, word))}"
 
 
-def intent(what: pb.Intent) -> str:
+def intent(what: pb.Intent, show: int = 4) -> str:
     match what.WhichOneof("kind"):
         case "short":
             return short(what.short)
-        case "sustained":
-            pace = what.sustained.WhichOneof("kind")
-            if pace is not None:
-                word = "".join(part.capitalize() for part in pace.split("_"))
-                return f"{word} {voxel(getattr(what.sustained, pace))}"
+        case "path":
+            return path(what.path, show)
     return "?"
+
+
+def path(route: pb.Path, show: int = 4) -> str:
+    """`Path keep 2, 7 steps: Sneak E, Sneak E, Sneak ENE, Sneak ENE, +3`: the first few
+    steps and how many more."""
+    steps = [action(step) for step in route.steps]
+    shown = ", ".join(steps[:show]) + (f", +{len(steps) - show}" if len(steps) > show else "")
+    count = f"{len(steps)} step{'s' if len(steps) != 1 else ''}"
+    return f"Path keep {route.keep}, {count}" + (f": {shown}" if steps else "")
 
 
 def action(what: pb.Action) -> str:
@@ -106,10 +112,12 @@ def doing(snapshot: pb.Snapshot) -> str:
 
 
 def in_flight(snapshot: pb.Snapshot) -> str:
+    """The bar, and the action underway if one has left the queue."""
     if not snapshot.HasField("in_flight"):
         return "idle"
     filled = round(snapshot.in_flight * 20)
-    return f"[{'#' * filled}{'.' * (20 - filled)}] {snapshot.in_flight:.0%}"
+    bar = f"[{'#' * filled}{'.' * (20 - filled)}] {snapshot.in_flight:.0%}"
+    return f"{bar}  {action(snapshot.underway)}" if snapshot.HasField("underway") else bar
 
 
 def body_panel(snapshot: pb.Snapshot) -> Panel:

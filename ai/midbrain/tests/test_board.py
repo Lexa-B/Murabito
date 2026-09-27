@@ -39,11 +39,12 @@ def snapshot() -> pb.Snapshot:
             pb.InView(id=4, offset=pb.Offset(dq=2, dr=0, dlayer=0), distance=2, acuity=pb.Acuity.NEAR),
         ],
         doing=pb.Doing(
-            intent=pb.Intent(sustained=pb.Sustained(walk_to=pb.Voxel(q=0, r=0, layer=0))),
+            intent=pb.Intent(path=pb.Path(keep=0, steps=[pb.Action(walk=pb.Direction.E)] * 2)),
             since=40,
         ),
         queue=[pb.Action(walk=pb.Direction.E)],
         in_flight=0.5,
+        underway=pb.Action(walk=pb.Direction.E),
         previous=pb.Previous(
             intent=pb.Intent(short=pb.Short(face=pb.Direction.N)),
             outcome=pb.Outcome(cancelled="startle_face_apparition"),
@@ -56,13 +57,18 @@ def test_the_words_for_each_fact() -> None:
     assert name_of(FOX) == "fox"
     assert name_of("") == "?"
     assert voxel(s.position) == "(-8, 0, 8) L0"
-    assert intent(s.doing.intent) == "WalkTo (0, 0, 0) L0"
-    assert intent(pb.Intent(sustained=pb.Sustained(sneak_to=pb.Voxel(q=1, r=2)))) == "SneakTo (1, 2, -3) L0"
+    assert intent(s.doing.intent) == "Path keep 0, 2 steps: Walk E, Walk E"
+    long = pb.Intent(path=pb.Path(keep=2, steps=[pb.Action(sneak=pb.Direction.E)] * 6))
+    assert intent(long) == "Path keep 2, 6 steps: Sneak E, Sneak E, Sneak E, Sneak E, +2"
+    assert intent(pb.Intent(path=pb.Path())) == "Path keep 0, 0 steps"
+    assert intent(pb.Intent(path=pb.Path(steps=[pb.Action(face=pb.Direction.N)]))) == "Path keep 0, 1 step: Face N"
     assert intent(pb.Intent(short=pb.Short(sneak=pb.Direction.N))) == "Sneak N"
     assert intent(pb.Intent(short=pb.Short(bite=pb.Bite()))) == "Bite"
     assert intent(pb.Intent(short=pb.Short(face_thing=3))) == "FaceThing #3"
-    assert doing(s) == "WalkTo (0, 0, 0) L0  since tick 40 (24 ticks)"
-    assert in_flight(s) == "[##########..........] 50%"
+    assert doing(s) == "Path keep 0, 2 steps: Walk E, Walk E  since tick 40 (24 ticks)"
+    assert in_flight(s) == "[##########..........] 50%  Walk E"
+    s.ClearField("underway")
+    assert in_flight(s) == "[##########..........] 50%", "the head still waits on its turn"
     assert previous(s) == "Face N  →  Cancelled by startle_face_apparition"
     assert outcome(pb.Outcome(done=pb.Done())) == "Done"
     assert outcome(pb.Outcome(lost=7)) == "Lost #7"

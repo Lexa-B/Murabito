@@ -6,7 +6,8 @@
     uv run order 3 walk ESE            or jog, sprint, sneak: turning first if need be
     uv run order 3 sidestep N          or backstep, recoil, lunge: only that way of the facing
     uv run order 3 bite
-    uv run order 3 walkto 0 0          or jogto, sprintto, sneakto: a cell, axial q r, and a layer if not 0
+    uv run order 3 walkto 0 0          or jogto, sprintto, sneakto: a cell, axial q r, and a layer if not
+                                       0, as a path of steps straight there from where the body stands
 
 Sends it, waits a round, and says what the body is doing then. What a mind would say,
 said once; the board (``uv run board``) shows the rest.
@@ -18,8 +19,10 @@ import argparse
 import time
 
 from midbrain import murabito_pb2 as pb
+from midbrain.beliefs import Cell
 from midbrain.board import ROUND, doing, previous
 from midbrain.client import HOST, PORT, Bridge
+from midbrain.paths import plan
 
 DIRECTIONS = [name for name, _ in sorted(pb.Direction.items(), key=lambda item: item[1])]
 """The twelve, in index order, as the contract spells them."""
@@ -28,8 +31,8 @@ DIRECTIONS = [name for name, _ in sorted(pb.Direction.items(), key=lambda item: 
 WORDS = ["walk", "jog", "sprint", "sneak", "sidestep", "backstep", "recoil", "lunge"]
 """The action words that take a direction, as the contract spells them."""
 
-PACES = {"walkto": "walk_to", "jogto": "jog_to", "sprintto": "sprint_to", "sneakto": "sneak_to"}
-"""The sustained words, to a cell at a pace: the verb, and the field it is on the wire."""
+PACES = {"walkto": "walk", "jogto": "jog", "sprintto": "sprint", "sneakto": "sneak"}
+"""The verbs that plan a path to a cell, and the word each step is on the wire."""
 
 TAKES = {
     "stop": "nothing",
@@ -66,8 +69,10 @@ def integer(word: str, what: str) -> int:
         raise Unparseable(f"{what} must be a whole number, not {word!r}") from None
 
 
-def parse(words: list[str]) -> pb.Intent:
-    """The intent the words mean, or ``Unparseable`` saying what they should have been."""
+def parse(words: list[str], here: Cell | None = None) -> pb.Intent:
+    """The intent the words mean, or ``Unparseable`` saying what they should have been.
+    A pace to a cell is planned as a path from ``here``, so it needs to know where the
+    body stands."""
     if not words:
         raise Unparseable(f"say what: one of {' '.join(TAKES)}")
     verb, rest = words[0].lower(), words[1:]
@@ -85,21 +90,29 @@ def parse(words: list[str]) -> pb.Intent:
         case pace, 2 | 3 if pace in PACES:
             q, r = integer(rest[0], "q"), integer(rest[1], "r")
             layer = integer(rest[2], "the layer") if len(rest) == 3 else 0
-            cell = pb.Voxel(q=q, r=r, layer=layer)
-            return pb.Intent(sustained=pb.Sustained(**{PACES[pace]: cell}))
+            if here is None:
+                raise Unparseable(f"{pace} needs to know where the body stands")
+            steps = plan(here, Cell(q, r, layer))
+            if steps is None:
+                raise Unparseable(f"no way from {here} to ({q}, {r})")
+            return pb.Intent(path=pb.Path(steps=[pb.Action(**{PACES[pace]: step}) for step in steps]))
     if verb in TAKES:
         raise Unparseable(f"{verb} takes {TAKES[verb]}, not {' '.join(rest) or 'nothing'}")
     raise Unparseable(f"no such order {verb!r}: one of {' '.join(TAKES)}")
 
 
-def send(host: str, port: int, body: int, intent: pb.Intent) -> str:
-    """Sends the order and, a round later, reports what the body is doing."""
+def send(host: str, port: int, body: int, words: list[str]) -> str:
+    """Looks the body up, makes the words its intent from where it stands, sends it and,
+    a round later, reports what the body is doing."""
     with Bridge(host, port) as bridge:
-        bridge.order(body, intent)
+        standing = next((s for s in bridge.snapshots() if s.id == body), None)
+        if standing is None:
+            return f"no body #{body} is on the board"
+        bridge.order(body, parse(words, Cell.of(standing.position)))
         time.sleep(ROUND)
         snapshot = next((s for s in bridge.snapshots() if s.id == body), None)
     if snapshot is None:
-        return f"sent to #{body}, but no such body is on the board: the order was dropped"
+        return f"sent to #{body}, but it left the board: the order was dropped"
     return f"#{body}: doing {doing(snapshot)}; last {previous(snapshot)}"
 
 
@@ -119,10 +132,9 @@ def main() -> None:
     )
     args = parser.parse_args()
     try:
-        intent = parse(args.what)
+        parse(args.what, Cell(0, 0))  # the words alone, before anything is sent
+        print(send(args.host, args.port, args.body, args.what))
     except Unparseable as why:
         parser.error(str(why))
-    try:
-        print(send(args.host, args.port, args.body, intent))
     except ConnectionRefusedError:
         raise SystemExit(f"no game listening on {args.host}:{args.port}: is it running?")

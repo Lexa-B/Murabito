@@ -3,8 +3,8 @@
 A pygame window beside the game. The game is the truth; this window is what one body
 believes: a hex grid, north up, the body at its true cell with a line for its facing, and
 every thing it has ever seen as a filled hex where it last saw it, labelled with what it
-is and how long ago that was; what it decided this round, and the cell it wants to reach
-as an outlined hex. Nothing here moves or fades on its own; it redraws each
+is and how long ago that was; what it decided this round, and the path it wants to walk
+as outlined hexes, the last one bold. Nothing here moves or fades on its own; it redraws each
 round from the mind. The view has no fixed centre: each frame it zooms and pans to contain
 the body, everything it believes and the cell it wants, up to ``--scale`` pixels per shaku.
 Tab cycles which body's world is shown; Escape or closing quits.
@@ -24,7 +24,7 @@ from dataclasses import dataclass
 import pygame
 
 from midbrain import murabito_pb2 as pb
-from midbrain.ambitions import bound_for
+from midbrain.ambitions import route_of
 from midbrain.beliefs import Cell
 from midbrain.board import name_of
 from midbrain.client import Bridge
@@ -109,8 +109,7 @@ def cells_to_show(mind: Mind, body: int) -> list[Cell]:
         return []
     cells = [Cell.of(snapshot.position)] + [belief.cell for belief in world]
     decision = mind.decisions.get(body)
-    target = bound_for(decision.want) if decision is not None and decision.want is not None else None
-    return cells + ([target] if target is not None else [])
+    return cells + (route_of(decision.want, snapshot) if decision is not None else [])
 
 
 def draw(surface: pygame.Surface, mind: Mind, body: int, view: View | None, font: pygame.font.Font, max_scale: float = 28.0) -> None:
@@ -141,9 +140,11 @@ def draw(surface: pygame.Surface, mind: Mind, body: int, view: View | None, font
         surface.blit(font.render(ago(belief.age(snapshot.tick)), True, LABEL), (cx + view.scale * 0.6, cy + 1))
 
     decision = mind.decisions.get(body)
-    target = bound_for(decision.want) if decision is not None and decision.want is not None else None
-    if target is not None:
-        pygame.draw.polygon(surface, SELF, view.corners(target), 2)
+    route = route_of(decision.want, snapshot) if decision is not None else []
+    for cell in route[:-1]:
+        pygame.draw.polygon(surface, SELF, view.corners(cell), 1)
+    if route:
+        pygame.draw.polygon(surface, SELF, view.corners(route[-1]), 2)
     here = Cell.of(snapshot.position)
     pygame.draw.polygon(surface, SELF, view.corners(here))
     pygame.draw.line(surface, SELF, view.pixel(here), view.facing_end(here, snapshot.facing), 3)
