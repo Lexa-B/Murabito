@@ -31,7 +31,7 @@ def test_with_nothing_in_hand_and_no_rest_drawn_it_draws_one_and_holds() -> None
     result = wander().want(ctx)
     assert result.path == ("wander", "arrived", "rest") and result.intent is None
     until = ctx.scratch[Wander.REST_UNTIL]
-    assert 64 + 3 * 64 <= until <= 64 + 10 * 64, "three to ten seconds at 64 ticks a second"
+    assert 64 + 2 * 64 <= until <= 64 + 8 * 64, "two to eight seconds at 64 ticks a second"
 
 
 def test_while_the_rest_runs_it_holds() -> None:

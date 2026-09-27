@@ -293,7 +293,7 @@ class Wander:
 
     leg: tuple[float, float] = (4.0, 8.0)
     """Shortest and longest leg, in shaku."""
-    rest: tuple[float, float] = (3.0, 10.0)
+    rest: tuple[float, float] = (2.0, 8.0)
     """Shortest and longest rest between legs, in seconds."""
     arc: float = 180.0
     """Degrees centred on the way we face within which a leg's bearing is drawn."""
