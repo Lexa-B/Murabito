@@ -443,7 +443,10 @@ beside it freezes it (Lexa has not said otherwise).
 (name, "why"))` when it has nothing to want, else `self.tree.tick(ctx)`); the tree is a
 `Selector` of `Sequence(Condition, Act)` branches ticked afresh each round, each test and want
 a method that reads the target afresh from the believed world; its dials are dataclass fields
-with docstrings; it goes in `REPERTOIRE[kind path]` beside `Idle`. Tests in
+with docstrings; it goes in `REPERTOIRE[kind path]` beside `Idle`. What it must remember
+between rounds that the board cannot show goes in `ctx.scratch`, the body's own dict, under
+keys of its own name (`Wander` and its `wander.rest_until` are the pattern; the mind's tests
+for it are in `tests/test_wander.py`, which imports the helpers from `test_ambitions`). Tests in
 `tests/test_ambitions.py` build a `Context` with `fox_believing(...)` (a belief from one
 sighting, then a snapshot a round later) and assert `result.path` and `result.intent`; compute
 the hex geometry before asserting, since three of this stretch's test failures were the

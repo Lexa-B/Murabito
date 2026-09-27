@@ -245,7 +245,7 @@ is and how long ago, outlined if in view this round. The game window beside it i
 nothing of the truth is drawn here. Layers are tracked in the model and shown in the terminal
 view, and flattened in the window until something stands on one.
 
-### Ambitions, and the stalk
+### Ambitions, the stalk, and the wander
 
 The mind decides the way Halo Infinite's bots do, with the Sims' half left as a hook. Every
 round, each **ambition** in a body's repertoire (`ambitions.py`, `REPERTOIRE`, keyed on the
@@ -260,7 +260,7 @@ target has moved two or more cells, so the mind never cuts its own steps. Before
 contradict: a thing that should be within a cell and isn't in view, or one on the notch the
 body faces within its near reach (18 cells, the fox's near band, copied) and not in view.
 
-The fox's repertoire is `Idle` and `Stalk(prey=hare, distance=3, looking_arc=180,
+The fox's repertoire is `Idle`, `Wander` and `Stalk(prey=hare, distance=3, looking_arc=180,
 rear_tolerance=15, spiral=15, check_after=3)`, which bids 1 while it believes in a hare and
 runs this tree:
 
@@ -292,6 +292,26 @@ copy of the plane for the geometry: bearings, rotations, the twelve offsets. Wat
 look; circled to the hare's new rear when it faced across; settled and faced it. Every decision
 shows in the terminal view and the window as the path through the tree, `stalk › circle ›
 round`, and the cell it wants as an outlined hex.
+
+`Wander(leg=(4, 12), rest=(2, 8), arc=180)` is what the fox does with nowhere to be: it bids
+a flat 0.3, above `Idle`'s 0.1 and below any ambition with a reason, so it runs whenever the
+fox believes in no hare (Lexa's word, 2026-09-27: this is also what fires when the fox
+*loses* a hare, until an internal ontology with entity persistence gives it a proper search).
+Its tree: a pace in hand, hold and let it land; a rest not yet over, hold; nothing in hand and
+no rest drawn, draw one of `rest` seconds and hold; otherwise forget the rest and `WalkTo` a
+cell `leg` shaku away on a bearing drawn within `arc` of the way it faces, so each leg swings
+its cone somewhere new. The bearing and the length come from a `random.Random` the ambition
+carries; tests hand in a seeded one.
+
+The rest's end is the first thing an ambition has needed to remember that the board cannot
+show it, and it lives in the body's **scratch**: a plain dict per body that `Mind` keeps
+beside its believed worlds and hands to every ambition on its `Context`, where an ambition
+reads and writes keys of its own name (`wander.rest_until`). It is the body's alone, an
+internal memory, nothing like Halo's shared `BotManager` blackboard; Lexa's call, and a
+shared one, when it comes, will be made "very different from Halo". Watched live on
+2026-09-27 with the hare sprinted beyond the fox's far band: rests of five to nine seconds,
+legs of about six cells drifting north, and the stalk taking over mid-leg the moment the hare
+came back within 120 cells.
 
 ## Design
 
