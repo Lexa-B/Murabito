@@ -8,21 +8,22 @@ use murabito_vision::{Band, Vision};
 
 use crate::{Beast, Model, Sentient};
 
-/// A hunter's eyes: a narrow cone reaching a long way, sharp to 12 shaku, then 30,
-/// then 48. Placeholder tuning from the first attempt.
+/// A hunter's eyes: a narrow cone reaching a long way, sharp to 18 shaku, then 60,
+/// then 120. The first attempt's placeholder tuning (12, 30, 48) stretched on
+/// 2026-09-27 by 1.5, 2 and 2.5 so a stalk has room.
 const FOX_VISION: Vision = Vision {
     arc: 120.0,
     bands: [
         Band {
-            range: 12,
+            range: 18,
             sensitivity: 1.0,
         },
         Band {
-            range: 30,
+            range: 60,
             sensitivity: 0.6,
         },
         Band {
-            range: 48,
+            range: 120,
             sensitivity: 0.3,
         },
     ],

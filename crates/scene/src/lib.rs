@@ -420,8 +420,8 @@ mod tests {
         );
         assert_eq!(
             fox_sees.sees(hare),
-            Some(Acuity::Mid),
-            "the hare is fourteen shaku off"
+            Some(Acuity::Near),
+            "the hare is fourteen shaku off, inside the near band's eighteen"
         );
         let hare_sees = world.get::<Seen>(hare).expect("the hare has eyes");
         assert!(hare_sees.is_empty(), "the hare faces east, away from both");

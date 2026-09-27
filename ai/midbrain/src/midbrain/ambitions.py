@@ -211,11 +211,11 @@ def repertoire_for(kind: str) -> list[Ambition]:
     return REPERTOIRE.get(kind, [Idle()])
 
 
-def revise(ctx: Context, reach: int = 12) -> list[int]:
+def revise(ctx: Context, reach: int = 18) -> list[int]:
     """Drops a belief the body's own eyes contradict, and returns what was dropped: a thing
     believed right here or next door that is not in view; and a thing believed within
-    ``reach`` cells, on the notch the body is facing, that is not in view. Standing on it or
-    looking straight at it and seeing nothing means it is gone."""
+    ``reach`` cells (the fox's near band, 18), on the notch the body is facing, that is not
+    in view. Standing on it or looking straight at it and seeing nothing means it is gone."""
 
     def contradicted(belief: Belief) -> bool:
         if belief.id in ctx.seen_now:

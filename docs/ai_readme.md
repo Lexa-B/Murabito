@@ -241,7 +241,7 @@ round, no memory of its own) for the intent it wants, and the loop sends that on
 in hand, a `GoTo` only when nothing is in hand or the target has moved two or more cells, so
 the mind never cuts its own steps. Before bidding, `revise` drops a belief the body's own eyes
 contradict: a thing that should be within a cell and isn't in view, or one on the notch the
-body faces within its near reach (12 cells, the fox's near band, copied) and not in view.
+body faces within its near reach (18 cells, the fox's near band, copied) and not in view.
 
 The fox's repertoire is `Idle` and `Stalk(prey=hare, distance=3, looking_arc=180,
 rear_tolerance=15, spiral=15, check_after=3)`, which bids 1 while it believes in a hare and

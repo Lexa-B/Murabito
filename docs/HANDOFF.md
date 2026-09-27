@@ -28,8 +28,9 @@ face it, with no mind at all. WASD/arrows pan, the wheel zooms, both eased; the 
 numbers are the ones settled by feel-testing in the first attempt. A sugi stands north of the
 line between fox and hare. Each looker's cone is drawn on the ground in its colour, orange for
 the fox and pale blue for the hare, with a line to each thing it sees, solid up close and
-fainter with distance: from its start the fox sees the tree near and the hare beyond it less
-well. Space pauses: the fox freezes mid-step and the camera stops taking input; Space again
+fainter with distance: from its start the fox sees the tree and the hare beyond it both near,
+since 2026-09-27 when both animals' bands were stretched (fox 18/60/120, hare 12/36/65). Space
+pauses: the fox freezes mid-step and the camera stops taking input; Space again
 resumes. Escape opens the menu over the paused world (Settings / Resume / Quit, in the UI's
 font, in English or Japanese); Escape again, or Resume, resumes. Settings is a page with a
 pan-speed slider (a quarter speed to six times, in octaves, with a readout) and a language picker
@@ -357,7 +358,8 @@ mind has been designed yet: not its options, not its considerations, not how it 
   mind needs them (`Walk`, `Follow`, `Flee` are the ones named).
 - Numbers: 64 ticks a second; at 4 shaku/s an edge step is 16 ticks, a corner step 28, a
   quarter turn 32; a round of 125 ms is 8 ticks. The fox starts at (-8, 0) facing ESE, the
-  hare at (6, 0) facing E, the sugi at (5, -4); the fox's near band is 12 cells.
+  hare at (6, 0) facing E, the sugi at (5, -4); the fox's bands are 18/60/120 cells and the
+  hare's 12/36/65 (stretched 1.5/2/2.5 from the first attempt's on 2026-09-27).
 
 **One trap, settled.** Every new intent cuts short what is in flight (Lexa's call: "the
 smarter parts must not interrupt themselves"), so a mind that re-sent its want every round,

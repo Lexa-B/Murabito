@@ -52,8 +52,9 @@ Implemented.
 - **`Vision`** is a member of `Sentient`: a cone centred on `Facing`, `arc` degrees wide, with three
   **bands** (`Near`, `Mid`, `Far`), each a `range` in whole shaku and a `sensitivity` for tuning.
   A species puts its own cone in its own `require`, or `Vision::BLIND` if it has none; the tier's
-  cone is a placeholder. The fox's is a hunter's (120°, to 12/30/48 shaku), the hare's is prey's
-  (240°, to 8/18/26): the first attempt's placeholder tuning.
+  cone is a placeholder. The fox's is a hunter's (120°, to 18/60/120 shaku), the hare's is prey's
+  (240°, to 12/36/65): the first attempt's placeholder tuning (12/30/48 and 8/18/26), stretched
+  by 1.5, 2 and 2.5 per band on 2026-09-27 so a stalk has room.
 - **The cast** is shadowcasting, ring by ring outward from the eye's voxel, on the eye's layer.
   Every occupied cell other than the eye's own is a blocker: it casts a shadow across the angle its
   six corners subtend, and shadows raised at one ring darken only the rings beyond, which keeps the
