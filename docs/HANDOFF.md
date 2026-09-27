@@ -6,9 +6,9 @@ then with the kinds; on 2026-09-23 with placement, the hex additions, and percep
 sight; on 2026-09-24 with identity (PR #42) and the debug feature (PR #43); and on 2026-09-27
 with the AI's I/O (PR #44): the kind label and the ontology, the brainstem, the reflexes, the
 port, the bridge and the Python midbrain's home; and the same day with the mind's believed
-world (branch `midbrain`, the PR this update describes). Everything here is on `main` or on
-that branch. `AGENTS.md` is the authority on how to work;
-this is where things stand, for a session starting cold.
+world (PR #46) and the fox's stalk (PR #47), then checked over for a fresh session (the docs
+PR this update is). Everything here is on `main`. `AGENTS.md` is the authority on how to
+work; this is where things stand, for a session starting cold.
 
 ## What runs
 
@@ -23,8 +23,8 @@ one cho square under a pale sky, lit by a sun; a fox eight cells west of the ori
 until something tells it otherwise, and a hare six cells east, which walks to wherever the
 ground is left-clicked (a bandaid in the scene, in place of its old triangle). Corner steps
 are visibly slower than edge steps, with a progress bar filling on the ground in front of a
-walker once per step. When the hare appears close and new in the fox's view, the fox startles and turns to
-face it, with no mind at all. WASD/arrows pan, the wheel zooms, both eased; the camera's feel
+walker once per step. When the hare appears close and new in the fox's view, the fox startles
+and turns to face it, with no mind at all. WASD/arrows pan, the wheel zooms, both eased; the camera's feel
 numbers are the ones settled by feel-testing in the first attempt. A sugi stands north of the
 line between fox and hare. Each looker's cone is drawn on the ground in its colour, orange for
 the fox and pale blue for the hare, with a line to each thing it sees, solid up close and
@@ -49,7 +49,7 @@ Every arrow in the dependency graph points down; `crates/action/`, `crates/all_t
 | `murabito` | `crates/murabito` | the app: a plugin list; its `debug` feature turns on every crate's and the server | |
 | `murabito_debug` | `crates/debug` | Bevy's remote protocol on the loopback address, behind the `debug` feature; an empty plugin without it; registers nothing, depends on no module | `DebugPlugin`, `PORT` |
 | `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns a `Fox`, a `Hare` and a `Sugi` from the kinds with a position and a facing; a left-click on the ground orders the hare there through the brainstem (a bandaid); draws the progress bars, cones and sightlines (placeholders until a UI module owns them) | `ScenePlugin` |
-| `murabito_brainstem` | `crates/ai/brainstem` | the vocabulary (`Short`, `Sustained`, `Intent`, `Outcome`, `Previous`, `Doing`); `Brainstem`, one intent per body, the only thing that pushes onto a queue; `BrainstemSet::{Orders, Reflexes, Drive}` in `AskingSet`; the `Port`: a board of `Snapshot`s posted after the senses, a channel of `Order`s drained once a tick, far ends `Board` and `Orders` | those, plus `InView`, `BrainstemPlugin` |
+| `murabito_brainstem` | `crates/ai/brainstem` | the vocabulary (`Short`, `Sustained`, `Intent`, `Outcome`, `Previous`, `Doing`); `Brainstem`, one intent per body, the only thing that pushes onto a queue; `BrainstemSet::{Orders, Reflexes, Drive}` in `AskingSet`; the `Port`: a board of `Snapshot`s posted after the senses (each sighting an `InView` with the seen thing's kind and facing), a channel of `Order`s drained once a tick, far ends `Board` and `Orders` | those, plus `InView`, `BrainstemPlugin` |
 | `murabito_reflexes` | `crates/ai/reflexes` | the catalogue `Reflex` (so far `StartleFaceApparition { by: Kind }`), `Wired` (a reflex at a priority), `Reflexes` (a body's repertoire, tunable), `LastLook`; one system in the `Reflexes` slot that preempts the brainstem | `Reflex`, `Wired`, `Reflexes`, `LastLook`, `ReflexesPlugin` |
 | `murabito_bridge` | `crates/ai/bridge` | the port's far ends on a loopback TCP socket, port 15703, length-framed protobuf per `proto/murabito.proto`, compiled at build time by `protox`; `wire.rs` converts at the edge | `BridgePlugin`, `Bridge`, `PORT`, `proto` |
 | `murabito_identity` | `crates/all_things/identity` | `ThingId`, a serial number for life, never reused, `restored` from a number off a wire or a file; `NextThingId`, the counter it comes from, the one thing here a save keeps; `Kind`, a thing's node in the tree as its file's module path | `ThingId`, `NextThingId`, `Kind`, `IdentityPlugin` |
@@ -306,11 +306,11 @@ is still design. `TODO.md` is what's queued.
 - A scripted edit that asserts on file text must gate everything after it on its exit code
   (`python … && cargo test && git commit`), never `;`: `cargo fmt` reformats what a script
   expects to find, and one such miss committed a scratch test before the mistake was seen.
-- The next work, each its own design talk: the believed world's next rule (forgetting on an
-  empty view, then ageing); the midbrain's first behaviour, the scorer above it that orders
-  (`docs/ai_readme.md`, design); then a web
-  page on the debug server, Lexa's stated want; hearing (a push from a source, a bearing and
-  an intensity, attenuated along the shortest unobstructed path over `Occupancy`); facets,
+- The next work, each its own design talk: the mind's queue ("Picking up: the midbrain"
+  below and `TODO.md`: the hare's ambitions, a search, the Sims' half, `previous` feedback,
+  the believed world's next rule); then a web page on the debug server, Lexa's stated want;
+  hearing (a push from a source, a bearing and an intensity, attenuated along the shortest
+  unobstructed path over `Occupancy`); facets,
   which unlock the senses' three debts; a tick-by-tick view; a debug module to take the
   progress bar, cones and sightlines off the scene. Still queued from before: the keyboard
   gate and typed values, the rebind screen. All in `TODO.md`.
@@ -318,22 +318,24 @@ is still design. `TODO.md` is what's queued.
 ## Picking up: the midbrain
 
 Written 2026-09-27 for the session that starts the midbrain's first behaviour cold, and
-brought current the same day once the believed world was begun (branch `midbrain`). PRs #44
-and #45 are merged; branch afresh from `origin/main` in the `ai-io` worktree (`git -C <wt>
-fetch --prune && git -C <wt> switch -C <branch> --no-track origin/main`; its `target/` is a
-symlink to `cleanup-refactor`'s and stays). A plain-language walkthrough of the I/O, with
+brought current the same day as the believed world (PR #46) and the stalk (PR #47) landed.
+Everything is on `main`; branch afresh from `origin/main` in the `ai-io` worktree (`git -C
+<wt> fetch --prune && git -C <wt> switch -C <branch> --no-track origin/main`; its `target/` is
+a symlink to `cleanup-refactor`'s and stays). A plain-language walkthrough of the I/O, with
 diagrams, is a private page Lexa has the link to (claude.ai artifact
-`Ff85UQifrkfqY9TKUhboVv`); `docs/ai_readme.md` is the brief in the repo, believed world
-included.
+`Ff85UQifrkfqY9TKUhboVv`; it stops at the port and knows nothing of the mind);
+`docs/ai_readme.md` is the brief in the repo, believed world and stalk included.
 
 **What is settled, and is not up for redesign:** everything in `docs/ai_readme.md` above its
-Design section, and every call listed under "The AI's I/O" in the decisions above. In one
-breath: the midbrain runs outside the game, in Python under `ai/midbrain/`, on its own clock
-(~125 ms, one round), pulls every body's `Snapshot` from the bridge on `127.0.0.1:15703`, and
-sends each body an `Intent`; the brainstem carries it out and reports back through `previous`.
-The shape Lexa named for the mind is a **utility AI in the Halo Infinite style**: a
-consideration reads a number off the snapshot, a score picks an option. Nothing about that
-mind has been designed yet: not its options, not its considerations, not how it remembers.
+Design section, and every call listed under "The AI's I/O", "The believed world lives in the
+mind" and "The stalk" in the decisions above. In one breath: the midbrain runs outside the
+game, in Python under `ai/midbrain/`, on its own clock (~125 ms, one round), pulls every
+body's `Snapshot` from the bridge on `127.0.0.1:15703`, keeps a believed world per body, lets
+the body's ambitions bid, ticks the winner's behaviour tree, and sends the intent it wants
+when that differs from what the body is doing; the brainstem carries it out and reports back
+through `previous`. All of the mind is **proof of concept** by Lexa's word, to be fleshed out
+later: the shape is meant to stay (Halo's ambitions and trees, the Sims' advertisements off
+the believed world), the numbers and the one ambition are placeholders.
 
 **What a mind has to work with**, all already there:
 
@@ -344,11 +346,15 @@ mind has been designed yet: not its options, not its considerations, not how it 
   mind builds the same messages with its own words.
 - `board.py`'s `render` is the live view; run `uv run board` beside the game while working.
 - `beliefs.py`: `BelievedWorld(body).observe(snapshot)`, then iterate `Belief`s (`id`, `kind`,
-  `cell: Cell(q, r, layer)`, `facing`, `seen_at`, `acuity`, `age(now)`). `mind.py`: `Mind.round(snapshots)`
-  keeps one world per body plus `latest[body]`, the snapshot; `uv run mind` shows it and
-  `--visualize` draws it (`visualize.py`: `View.pixel/corners/facing_end`, `draw`). The
-  scorer reads the believed world, not the snapshot's `in_view`, except for what is in view
-  *now*, which the snapshot still says.
+  `cell: Cell(q, r, layer)`, `facing`, `seen_at`, `acuity`, `walked_since`, `age(now)`);
+  `forget(id)`. `hexes.py`: the plane's geometry (`OFFSETS`, `bearing`, `steps`, `along`,
+  `rotated(pitch, floor)`, `from_world`). `behaviour.py`: `Condition`, `Act`, `Selector`,
+  `Sequence`, `Result(ok, intent, path)`. `ambitions.py`: `Context(world, snapshot)`,
+  `Idle`, `Stalk(...)` with its dials, `REPERTOIRE` keyed on kind path, `choose`, `differs`,
+  `revise`. `mind.py`: `Mind.round(snapshots) -> [(body, intent)]` (observe, revise, choose,
+  want, differs), `decisions[body]` (ambition, path, want, sent); `uv run mind` sends and
+  shows, `--visualize` draws (`visualize.py`). An ambition reads the believed world, and the
+  snapshot only for what is in view *now* and the body's own place, facing and `doing`.
 - A snapshot's facts (`docs/ai_readme.md`, table): id, kind (path), tick, position (axial),
   facing (index), in_view (id, kind or none, offset, distance in steps, acuity, the seen
   thing's facing or none), doing (intent
@@ -364,10 +370,12 @@ mind has been designed yet: not its options, not its considerations, not how it 
 **One trap, settled.** Every new intent cuts short what is in flight (Lexa's call: "the
 smarter parts must not interrupt themselves"), so a mind that re-sent its want every round,
 even the same `GoTo`, would cut its own steps and the body would never arrive. Lexa's call
-(2026-09-27): the mind sends only when its want differs from the snapshot's `doing`. No memory
-needed, the board is the truth; a finished or cancelled intent empties `doing` and the want
-differs again. Not yet built: nothing sends. Also settled: the mind drives the fox first, the
-hare stays on the scene's click, which is how the fox is provoked.
+(2026-09-27): the mind sends only when its want differs from the snapshot's `doing`
+(`ambitions.differs`: a hold is never sent, a `Stop` only when something is in hand, a `GoTo`
+only when nothing is in hand or the target moved two or more cells). No memory needed, the
+board is the truth; a finished or cancelled intent empties `doing` and the want differs
+again. Also settled: the mind drives the fox first, the hare stays on the scene's click,
+which is how the fox is provoked; `uv run order 3 …` does the same from a terminal.
 
 **Where the midbrain stands.** Lexa opened the first behaviour and first put the believed
 world under it ("the fox can only do stuff like that if it's actively seeing the hare with
@@ -379,15 +387,25 @@ The Sims): ambitions bid utilities, the winner runs a behaviour tree, the one in
 boosted against thrashing; the Sims' advertisements-and-motives are the hook for where
 utilities will come from, off the believed world rather than the world. The one ambition is
 `Stalk`, Lexa's spec: "[stay behind target] -> [move to be x voxels from the target] -> [stay
-facing the target]", with a freeze node when the hare is looking (a dial, front 180°) and a
-circle node ("move orthogonal to it until we're right behind it"). `docs/ai_readme.md`,
-"Ambitions, and the stalk". Watched live: approach, hold, freeze, circle, settle.
+facing the target]", with a freeze node when the hare is looking (a dial, front 180°), a
+circle node ("move orthogonal to it until we're right behind it") that spirals in (a pitch
+dial, 15°), and a check node (every three cells walked unseen, pivot to face where the hare
+is believed; `revise` forgets it if the fox looks straight at the cell within its near reach
+and sees nothing). `docs/ai_readme.md`, "Ambitions, and the stalk", has the tree. Watched
+live: approach, hold, freeze, circle and spiral from 14 to 8 shaku, pivots that saw the hare,
+settle. Both animals' vision bands were stretched (1.5/2/2.5) so the stalk has room.
+
+Known wrinkles, left on purpose: "three behind" walks three offsets along the hare's rear
+direction, which along a corner direction is 5.2 shaku, not 3; the spiral's floor is 3 shaku;
+`revise`'s reach (18) is the fox's near band copied into Python, so it is wrong for any other
+kind and whenever the bands change; the boost is a flat 0.15 and `Idle` a flat 0.1.
 
 What the next session decides, one question at a time:
 
 1. The believed world's next rule, still set aside by Lexa's choice ("keep this object
-   permanence layer where it's at"): forgetting on an empty view (needs the cone, which the
-   wire does not carry), ageing, dead reckoning, cells seen and never seen.
+   permanence layer where it's at"; the two `revise` rules and `walked_since` are what the
+   stalk needed, not that layer growing): forgetting on an empty view in general (needs the
+   cone, which the wire does not carry), ageing, dead reckoning, cells seen and never seen.
 2. The hare's ambitions (flee, at least), which retire the scene's click bandaid, and a
    search ambition for the fox when prey is believed and then gone.
 3. Where utilities come from: the Sims' half, advertisements off believed things weighted by
@@ -408,7 +426,9 @@ believed world: the game, `uv run board`, and `uv run mind --visualize` in three
 then `uv run order 3 face W` to make the hare look at the fox (freeze), `face N` to put the
 fox abeam (circle), or a click to walk the hare off; `uv run mind` now sends, so `board` is the
 passive view. A headless check drives `Mind.round` from a `Bridge` and draws frames with
-`SDL_VIDEODRIVER=dummy` and `pygame.image.save`. 61 tests.
+`SDL_VIDEODRIVER=dummy` and `pygame.image.save`; the pattern is in this session's transcript,
+not in the repo. 67 tests. A run of the game opens a window on the desktop even when started
+from a script, and a click there walks the hare: in one check the hare wandered because of it.
 
 **How Lexa works, for this in particular:** design in chat first, one question at a time,
 options with costs and a recommendation, then wait for the yes; one small step per turn,
@@ -422,7 +442,7 @@ expects a plain-language answer before the go is re-asked.
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/ai-io`, on `midbrain`; its `target/` is a symlink to `cleanup-refactor`'s warm one, so the two share an engine build. `cleanup-refactor` (on `debug-feature`, merged) is what the desktop shortcut runs |
-| `main` at handoff | `76410ba`, the merge of PR #45 (the midbrain handoff) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`), #43 (the debug feature), #44 (the AI's I/O), #45 (handoff) |
-| Other worktrees | art sessions (`flora-models`, `understory`, `exp-05-main-coords`); `murabito` on `layer-skeleton` is stale |
+| This session's worktree | `.claude/worktrees/ai-io`, on `handoff-midbrain` (this docs PR); its `target/` is a symlink to `cleanup-refactor`'s warm one, so the two share an engine build. `cleanup-refactor` (on `debug-feature`, merged) is what the desktop shortcut runs |
+| `main` at handoff | `db0b176`, the merge of PR #47 (the stalk) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`), #43 (the debug feature), #44 (the AI's I/O), #45 (handoff), #46 (the believed world), #47 (the stalk, the seen thing's facing, vision stretched) |
+| Other worktrees | `cleanup-refactor` (on `debug-feature`, merged long ago: the desktop shortcut runs it, so the shortcut's game has no bridge and no stalk until that worktree moves to `main`); `exp-05-main-coords`, `yokai-models` (art sessions) |
