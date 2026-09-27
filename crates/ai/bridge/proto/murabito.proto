@@ -52,6 +52,9 @@ message Snapshot {
   // What the body did last and how it ended: the one before `doing`, not `doing`
   // itself. Absent until something has been asked.
   optional Previous previous = 10;
+  // The action underway: off the queue and not yet landed. Absent while nothing is in
+  // flight, and while the head of the queue still waits on its turn.
+  optional Action underway = 11;
 }
 
 // One thing in view, as the body sees it.
@@ -81,9 +84,12 @@ message Previous {
 // ---- the vocabulary --------------------------------------------------------------
 
 message Intent {
+  // 2 was `Sustained`, the paces to a cell the brainstem re-aimed itself; a path of
+  // steps the mind plans replaced it.
+  reserved 2;
   oneof kind {
     Short short = 1;
-    Sustained sustained = 2;
+    Path path = 3;
   }
 }
 
@@ -110,14 +116,14 @@ message Short {
 
 message Stop {}
 
-// Outlives rounds; the brainstem re-aims it every step: to a cell, at a pace.
-message Sustained {
-  oneof kind {
-    Voxel walk_to = 1;
-    Voxel jog_to = 2;
-    Voxel sprint_to = 3;
-    Voxel sneak_to = 4;
-  }
+// Outlives rounds: steps to take in order, each a pace word or a face, walked as
+// written; the brainstem plans none of it. Sent while the body is on a path, it amends
+// the path: the first `keep` actions still waiting on the queue stay, the rest are
+// dropped, and `steps` go on after them. The step in flight is never touched by a path.
+// Done when the last step lands; refused whole if a step is any other word.
+message Path {
+  uint32 keep = 1;
+  repeated Action steps = 2;
 }
 
 // One thing on the queue the mechanisms know how to do.

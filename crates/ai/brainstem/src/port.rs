@@ -44,6 +44,9 @@ pub struct Snapshot {
     pub queue: Vec<Action>,
     /// How far along the action in flight is, 0 to 1, or nothing in flight.
     pub in_flight: Option<f32>,
+    /// The action underway: off the queue and not yet landed. Nothing while nothing is
+    /// in flight, and nothing while the head of the queue still waits on its turn.
+    pub underway: Option<Action>,
     /// What the body did last and how it ended: the one before `doing`, not `doing`
     /// itself. Nothing until something has been asked.
     pub previous: Option<Previous>,
@@ -65,7 +68,7 @@ pub struct InView {
 }
 
 /// One intent for one body, as a mind sends it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Order {
     pub id: ThingId,
     pub intent: Intent,
@@ -204,6 +207,7 @@ fn snapshot(
         doing: body.doing(),
         queue: queue.iter().collect(),
         in_flight: progress.in_flight().then(|| progress.fraction()),
+        underway: progress.in_flight().then(|| queue.underway()).flatten(),
         previous: body.previous(),
     }
 }
@@ -319,6 +323,7 @@ mod tests {
         assert_eq!(card.doing, None);
         assert_eq!(card.queue, Vec::<Action>::new());
         assert_eq!(card.in_flight, None);
+        assert_eq!(card.underway, None);
         assert_eq!(card.previous, None);
 
         let mut in_view = card.in_view.clone();
@@ -365,7 +370,15 @@ mod tests {
             (fraction - 0.75).abs() < 1e-3,
             "eight ticks of a 10.67-tick notch: {fraction}"
         );
+        assert_eq!(card.underway, None, "the walk still waits on its turn");
         assert_eq!(card.previous, None);
+
+        tick(&mut app, 32);
+        let card = board(&app).get(id).unwrap();
+        assert_eq!(card.queue, [], "the step itself has been issued");
+        assert_eq!(card.underway, Some(Action::Walk(N)), "and is underway");
+        tick(&mut app, 16);
+        assert_eq!(board(&app).get(id).unwrap().underway, None, "landed");
     }
 
     #[test]

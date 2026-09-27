@@ -44,9 +44,13 @@ impl Plugin for ActionsPlugin {
 pub struct CutShort;
 
 /// Cuts short every body marked for it, before the head of its queue is issued.
-fn cut_short(mut commands: Commands, mut bodies: Query<(Entity, &mut Progress), With<CutShort>>) {
-    for (body, mut progress) in &mut bodies {
+fn cut_short(
+    mut commands: Commands,
+    mut bodies: Query<(Entity, &mut Progress, &mut ActionQueue), With<CutShort>>,
+) {
+    for (body, mut progress, mut queue) in &mut bodies {
         progress.abandon();
+        queue.underway = None;
         commands
             .entity(body)
             .remove::<(Step, Turn, Bite, CutShort)>();
@@ -98,40 +102,59 @@ impl Action {
     }
 }
 
-/// The actions a body has been asked to do, first to last.
+/// The actions a body has been asked to do, first to last, and the one it has left the
+/// queue to carry out.
 #[derive(Component, Debug, Default)]
-pub struct ActionQueue(VecDeque<Action>);
+pub struct ActionQueue {
+    waiting: VecDeque<Action>,
+    /// The action whose last intent was issued: off the queue, and underway until the
+    /// mechanism lands it. Nothing while the head still waits on its turn, since the
+    /// head is then still queued.
+    underway: Option<Action>,
+}
 
 impl ActionQueue {
     pub fn push(&mut self, action: Action) {
-        self.0.push_back(action);
+        self.waiting.push_back(action);
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.waiting.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.waiting.len()
     }
 
     /// What is queued, first to last, for whoever shows or reports it.
     pub fn iter(&self) -> impl Iterator<Item = Action> + '_ {
-        self.0.iter().copied()
+        self.waiting.iter().copied()
     }
 
     /// Drops everything queued. What is already in flight finishes, since the mechanism
     /// holds that, not the queue, unless the body is also marked [`CutShort`].
     pub fn clear(&mut self) {
-        self.0.clear();
+        self.waiting.clear();
+    }
+
+    /// Keeps the first `count` queued and drops the rest; what is in flight finishes.
+    pub fn truncate(&mut self, count: usize) {
+        self.waiting.truncate(count);
+    }
+
+    /// The action that left the queue last, once it is wholly issued. Whether the body
+    /// is still carrying it out is `Progress`'s to say: it stays here until the next
+    /// action leaves the queue.
+    pub fn underway(&self) -> Option<Action> {
+        self.underway
     }
 
     fn head(&self) -> Option<Action> {
-        self.0.front().copied()
+        self.waiting.front().copied()
     }
 
     fn done_with_head(&mut self) {
-        self.0.pop_front();
+        self.underway = self.waiting.pop_front();
     }
 }
 
@@ -248,6 +271,8 @@ fn issue(
         };
         if last {
             queue.done_with_head();
+        } else {
+            queue.underway = None;
         }
     }
 }
@@ -264,6 +289,29 @@ mod tests {
         assert_eq!(
             queue.iter().collect::<Vec<_>>(),
             [Action::Walk(Direction::E), Action::Face(Direction::N)]
+        );
+    }
+
+    #[test]
+    fn a_queue_truncated_keeps_its_first_actions_and_the_head_taken_is_underway() {
+        let mut queue = ActionQueue::default();
+        queue.push(Action::Walk(Direction::E));
+        queue.push(Action::Walk(Direction::E));
+        queue.push(Action::Face(Direction::N));
+        queue.truncate(1);
+        assert_eq!(
+            queue.iter().collect::<Vec<_>>(),
+            [Action::Walk(Direction::E)]
+        );
+        assert_eq!(queue.underway(), None, "nothing has left the queue");
+        queue.done_with_head();
+        assert!(queue.is_empty());
+        assert_eq!(queue.underway(), Some(Action::Walk(Direction::E)));
+        queue.truncate(5);
+        assert_eq!(
+            queue.underway(),
+            Some(Action::Walk(Direction::E)),
+            "truncating touches only what waits"
         );
     }
     use murabito_attacks::AttacksPlugin;

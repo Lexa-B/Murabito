@@ -11,8 +11,9 @@ use bevy::math::Ray3d;
 use bevy::math::primitives::InfinitePlane3d;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use murabito_actions::Action;
 use murabito_app_state::AppState;
-use murabito_brainstem::{Brainstem, Intent, Sustained};
+use murabito_brainstem::{Brainstem, Intent, Path};
 use murabito_hexcoords::{Direction, VoxelCoord};
 use murabito_kinds::{Fox, Hare, Sugi};
 use murabito_placement::{Facing, VoxelPosition};
@@ -179,7 +180,7 @@ fn command_the_hare(
     clicks: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
-    mut hares: Query<&mut Brainstem, With<Hare>>,
+    mut hares: Query<(&VoxelPosition, &mut Brainstem), With<Hare>>,
 ) {
     if !clicks.just_pressed(MouseButton::Left) {
         return;
@@ -199,8 +200,9 @@ fn command_the_hare(
     let Some(cell) = ground_voxel(ray) else {
         return;
     };
-    for mut hare in &mut hares {
-        hare.order(Intent::Sustained(Sustained::JogTo(cell)));
+    for (position, mut hare) in &mut hares {
+        let steps = position.0.straight_to(cell).into_iter().map(Action::Jog);
+        hare.order(Intent::Path(Path::fresh(steps.collect())));
     }
 }
 

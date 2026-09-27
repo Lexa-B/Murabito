@@ -5,7 +5,7 @@
 //! wire, and a malformed one is refused with a word on what was missing, never guessed.
 
 use murabito_actions::Action;
-use murabito_brainstem::{Doing, InView, Intent, Outcome, Previous, Short, Snapshot, Sustained};
+use murabito_brainstem::{Doing, InView, Intent, Outcome, Path, Previous, Short, Snapshot};
 use murabito_hexcoords::{Direction, Offset, VoxelCoord};
 use murabito_identity::ThingId;
 use murabito_vision::Acuity;
@@ -80,16 +80,12 @@ impl From<Short> for proto::Short {
     }
 }
 
-impl From<Sustained> for proto::Sustained {
-    fn from(sustained: Sustained) -> Self {
-        use proto::sustained::Kind;
-        let kind = match sustained {
-            Sustained::WalkTo(voxel) => Kind::WalkTo(voxel.into()),
-            Sustained::JogTo(voxel) => Kind::JogTo(voxel.into()),
-            Sustained::SprintTo(voxel) => Kind::SprintTo(voxel.into()),
-            Sustained::SneakTo(voxel) => Kind::SneakTo(voxel.into()),
-        };
-        Self { kind: Some(kind) }
+impl From<Path> for proto::Path {
+    fn from(path: Path) -> Self {
+        Self {
+            keep: u32::try_from(path.keep).unwrap_or(u32::MAX),
+            steps: path.steps.into_iter().map(Into::into).collect(),
+        }
     }
 }
 
@@ -98,7 +94,7 @@ impl From<Intent> for proto::Intent {
         use proto::intent::Kind;
         let kind = match intent {
             Intent::Short(short) => Kind::Short(short.into()),
-            Intent::Sustained(sustained) => Kind::Sustained(sustained.into()),
+            Intent::Path(path) => Kind::Path(path.into()),
         };
         Self { kind: Some(kind) }
     }
@@ -181,6 +177,7 @@ impl From<Snapshot> for proto::Snapshot {
             doing: snapshot.doing.map(Into::into),
             queue: snapshot.queue.into_iter().map(Into::into).collect(),
             in_flight: snapshot.in_flight,
+            underway: snapshot.underway.map(Into::into),
             previous: snapshot.previous.map(Into::into),
         }
     }
@@ -239,22 +236,38 @@ impl TryFrom<proto::Short> for Short {
     }
 }
 
-impl TryFrom<proto::Sustained> for Sustained {
+impl TryFrom<proto::Action> for Action {
     type Error = Malformed;
 
-    fn try_from(sustained: proto::Sustained) -> Result<Self, Malformed> {
-        use proto::sustained::Kind;
+    fn try_from(action: proto::Action) -> Result<Self, Malformed> {
+        use proto::action::Kind;
         Ok(
-            match sustained
-                .kind
-                .ok_or(Malformed("a sustained intent with no kind"))?
-            {
-                Kind::WalkTo(voxel) => Sustained::WalkTo(voxel.try_into()?),
-                Kind::JogTo(voxel) => Sustained::JogTo(voxel.try_into()?),
-                Kind::SprintTo(voxel) => Sustained::SprintTo(voxel.try_into()?),
-                Kind::SneakTo(voxel) => Sustained::SneakTo(voxel.try_into()?),
+            match action.kind.ok_or(Malformed("an action with no kind"))? {
+                Kind::Walk(direction) => Action::Walk(direction_in(direction)?),
+                Kind::Jog(direction) => Action::Jog(direction_in(direction)?),
+                Kind::Sprint(direction) => Action::Sprint(direction_in(direction)?),
+                Kind::Sneak(direction) => Action::Sneak(direction_in(direction)?),
+                Kind::Face(direction) => Action::Face(direction_in(direction)?),
+                Kind::Sidestep(direction) => Action::Sidestep(direction_in(direction)?),
+                Kind::Backstep(direction) => Action::Backstep(direction_in(direction)?),
+                Kind::Recoil(direction) => Action::Recoil(direction_in(direction)?),
+                Kind::Lunge(direction) => Action::Lunge(direction_in(direction)?),
+                Kind::Bite(_) => Action::Bite,
             },
         )
+    }
+}
+
+impl TryFrom<proto::Path> for Path {
+    type Error = Malformed;
+
+    fn try_from(path: proto::Path) -> Result<Self, Malformed> {
+        let steps = path
+            .steps
+            .into_iter()
+            .map(Action::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Path::new(path.keep as usize, steps))
     }
 }
 
@@ -266,7 +279,7 @@ impl TryFrom<proto::Intent> for Intent {
         Ok(
             match intent.kind.ok_or(Malformed("an intent with no kind"))? {
                 Kind::Short(short) => Intent::Short(short.try_into()?),
-                Kind::Sustained(sustained) => Intent::Sustained(sustained.try_into()?),
+                Kind::Path(path) => Intent::Path(path.try_into()?),
             },
         )
     }
@@ -313,15 +326,32 @@ mod tests {
             Intent::Short(Short::Recoil(Direction::W)),
             Intent::Short(Short::Lunge(Direction::E)),
             Intent::Short(Short::Bite),
-            Intent::Sustained(Sustained::WalkTo(voxel(3, -5))),
-            Intent::Sustained(Sustained::JogTo(voxel(3, -5))),
-            Intent::Sustained(Sustained::SprintTo(voxel(3, -5))),
-            Intent::Sustained(Sustained::SneakTo(voxel(3, -5))),
+            Intent::Path(Path::fresh(vec![])),
+            Intent::Path(Path::new(
+                2,
+                vec![
+                    Action::Sneak(Direction::E),
+                    Action::Face(Direction::N),
+                    Action::Jog(Direction::NNE),
+                ],
+            )),
         ];
         for intent in intents {
-            let message: proto::Intent = intent.into();
+            let message: proto::Intent = intent.clone().into();
             assert_eq!(Intent::try_from(message), Ok(intent));
         }
+    }
+
+    #[test]
+    fn a_path_with_a_step_missing_its_kind_is_refused() {
+        let message = proto::Path {
+            keep: 0,
+            steps: vec![proto::Action { kind: None }],
+        };
+        assert_eq!(
+            Path::try_from(message),
+            Err(Malformed("an action with no kind"))
+        );
     }
 
     #[test]
@@ -377,8 +407,9 @@ mod tests {
             doing: None,
             queue: vec![Action::Walk(Direction::E), Action::Face(Direction::N)],
             in_flight: Some(0.25),
+            underway: Some(Action::Walk(Direction::E)),
             previous: Some(Previous::new(
-                Intent::Sustained(Sustained::WalkTo(voxel(0, 0))),
+                Intent::Path(Path::fresh(vec![Action::Walk(Direction::E)])),
                 Outcome::Cancelled("startle_face_apparition"),
             )),
         };
@@ -414,6 +445,10 @@ mod tests {
             Some(proto::action::Kind::Walk(proto::Direction::E as i32))
         );
         assert_eq!(message.in_flight, Some(0.25));
+        assert_eq!(
+            message.underway.map(|action| action.kind),
+            Some(Some(proto::action::Kind::Walk(proto::Direction::E as i32)))
+        );
         let previous = message.previous.unwrap();
         assert_eq!(
             previous.outcome.unwrap().kind,
