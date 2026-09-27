@@ -93,3 +93,7 @@ class BelievedWorld:
 
     def get(self, thing: int) -> Belief | None:
         return self.beliefs.get(thing)
+
+    def forget(self, thing: int) -> None:
+        """Drops a belief; nothing if there was none."""
+        self.beliefs.pop(thing, None)
