@@ -12,6 +12,7 @@ import pygame
 from midbrain import murabito_pb2 as pb
 from midbrain.beliefs import Cell
 from midbrain.mind import Mind
+from midbrain.ambitions import bound_for
 from midbrain.visualize import SELF, View, draw, next_body
 
 FOX = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox"
@@ -81,3 +82,34 @@ def test_tab_cycles_the_bodies_on_the_board() -> None:
     assert next_body(mind, 1) == 3
     assert next_body(mind, 3) == 1
     assert next_body(Mind(), 1) == 1
+
+
+def test_a_fitted_view_contains_every_cell_with_room_to_spare() -> None:
+    far_apart = [Cell(-8, 0), Cell(0, -140), Cell(5, -4)]
+    view = View.fitting(far_apart, 900, 900, max_scale=28.0)
+    assert view.scale < 28.0, "zoomed out to fit"
+    for cell in far_apart:
+        x, y = view.pixel(cell)
+        assert 60 <= x <= 840 and 60 <= y <= 840, f"{cell} inside the margins"
+
+
+def test_a_fitted_view_never_zooms_closer_than_the_cap() -> None:
+    view = View.fitting([Cell(0, 0), Cell(1, 0)], 900, 900, max_scale=28.0)
+    assert view.scale == 28.0
+    assert close(view.pixel(Cell(0, 0)), (450 - 14, 450)), "the two cells sit either side of the middle"
+    assert View.fitting([], 900, 900, max_scale=28.0).scale == 28.0
+
+
+def test_a_frame_with_no_view_fits_itself_round_the_beliefs_and_the_wanted_cell() -> None:
+    pygame.init()
+    font = pygame.font.SysFont(None, 18)
+    mind = Mind()
+    mind.round([pb.Snapshot(
+        id=1, kind=FOX, tick=64, position=pb.Voxel(q=-8, r=0), facing=pb.Direction.ESE,
+        in_view=[pb.InView(id=2, kind=SUGI, offset=pb.Offset(dq=60, dr=-4), distance=60, acuity=pb.Acuity.FAR)],
+    )])
+    surface = pygame.Surface((900, 900))
+    draw(surface, mind, 1, None, font, max_scale=28.0)
+    view = View.fitting([Cell(-8, 0), Cell(52, -4)] + ([bound_for(mind.decisions[1].want)] if mind.decisions[1].want else []), 900, 900, 28.0)
+    x, y = view.pixel(Cell(52, -4))
+    assert surface.get_at((int(x), int(y)))[:3] == (70, 140, 90), "the sugi, sixty cells off, is on screen"

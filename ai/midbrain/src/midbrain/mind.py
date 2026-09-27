@@ -135,7 +135,7 @@ def main() -> None:
     parser.add_argument("--every", type=float, default=ROUND, help="seconds between rounds")
     parser.add_argument("--visualize", action="store_true", help="draw one body's believed world in a window")
     parser.add_argument("--body", type=int, default=None, help="which body's world to draw (default: the lowest id)")
-    parser.add_argument("--scale", type=float, default=28.0, help="pixels per shaku in the window")
+    parser.add_argument("--scale", type=float, default=28.0, help="the window's closest zoom, in pixels per shaku; it zooms out as far as it must to contain everything believed")
     args = parser.parse_args()
     try:
         if args.visualize:
