@@ -56,6 +56,13 @@ def face(direction: int) -> pb.Intent:
     return pb.Intent(short=pb.Short(face=direction))
 
 
+def lunge(direction: int) -> pb.Intent:
+    return pb.Intent(short=pb.Short(lunge=direction))
+
+
+BITE = pb.Intent(short=pb.Short(bite=pb.Bite()))
+
+
 def face_thing(thing: int) -> pb.Intent:
     return pb.Intent(short=pb.Short(face_thing=thing))
 
@@ -109,12 +116,15 @@ class Idle:
 
 @dataclass(frozen=True)
 class Stalk:
-    """Get behind the nearest believed thing of a kind and stay there, facing it.
+    """Get behind the nearest believed thing of a kind, pounce, and bite.
 
     The tree, first branch to succeed wins:
 
         stalk
         ├─ freeze     it is looking at us              → Stop
+        ├─ bite       beside it, facing it             → Bite
+        ├─ pounce     behind it, facing it, and a      → Lunge that way
+        │             lunge lands beside it
         ├─ check      we have walked ``check_after``   → face where we believe it is; hold
         │             cells without seeing it            once facing (revise then forgets it
         │                                                 if it isn't there)
@@ -125,7 +135,9 @@ class Stalk:
         └─ watch                                       → face it, or hold if we already do
 
     "Looking at us" is within ``looking_arc`` centred on the way it was last seen facing;
-    "on the rear line" is within ``rear_tolerance`` of dead behind it. ``spiral`` is the
+    "on the rear line" is within ``rear_tolerance`` of dead behind it; "facing it" is the
+    notch nearest the bearing to it, and a lunge goes only forward, so from ``distance``
+    behind the pounce fires once the watch has turned us. ``spiral`` is the
     circle's pitch: 0 keeps our distance, a pure arc; a positive angle tilts each swing that
     far inward, so we close in as we come round, never nearer than ``distance``. A thing whose facing
     was never seen is taken as not looking and approached straight.
@@ -172,6 +184,24 @@ class Stalk:
             return None
         return face(nearest_direction(toward_it))
 
+    def beside_it_facing_it(self, ctx: Context) -> bool:
+        target = self.target(ctx)
+        if target is None or steps(ctx.here, target.cell) != 1:
+            return False
+        return nearest_direction(bearing(ctx.here, target.cell)) == ctx.facing
+
+    def a_lunge_lands_beside_it(self, ctx: Context) -> bool:
+        target = self.target(ctx)
+        if target is None or self.off_rear_line(ctx):
+            return False
+        toward_it = bearing(ctx.here, target.cell)
+        if toward_it is None or nearest_direction(toward_it) != ctx.facing:
+            return False
+        return steps(along(ctx.here, ctx.facing, 2), target.cell) == 1
+
+    def pounce(self, ctx: Context) -> pb.Intent | None:
+        return lunge(ctx.facing)
+
     def off_rear_line(self, ctx: Context) -> bool:
         target = self.target(ctx)
         if target is None or target.facing is None:
@@ -211,6 +241,8 @@ class Stalk:
     def tree(self) -> Selector:
         return Selector(self.name, (
             Sequence("freeze", (Condition("looking at us", self.looking_at_us), Act("stop", lambda ctx: STOP))),
+            Sequence("bite", (Condition("beside it, facing it", self.beside_it_facing_it), Act("bite", lambda ctx: BITE))),
+            Sequence("pounce", (Condition("a lunge lands beside it", self.a_lunge_lands_beside_it), Act("lunge", self.pounce))),
             Sequence("check", (Condition("unseen too long", self.unseen_too_long), Act("look", self.look_at_it))),
             Sequence("circle", (Condition("off its rear line", self.off_rear_line), Act("round", self.round_toward_rear))),
             Sequence("approach", (Condition("farther than distance", self.farther_than_distance), Act("close in", self.close_in))),

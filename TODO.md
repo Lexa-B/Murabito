@@ -45,7 +45,8 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   feeds back; a "by" on `Doing` if the mind should defer to a reflex in hand; `Flee` as a
   `Sustained` variant when a mind needs it (`Follow` declined: the brainstem "shouldn't be
   smart enough to have awareness of other entities"); the rest of the action words (sidestep,
-  recoil, lunge, bite, …) in the stalk's tree, which sneaks and faces so far; keys in the board
+  recoil, …) in the stalk's tree, which sneaks, faces, lunges and bites so far; what a bite
+  does once there are jaws, and what the fox does after one; keys in the board
   viewer; a shared Python package for the wire once a second consumer (the cortex) arrives.
 - **The startle reflex knows too much.** Lexa, 2026-09-27: it "already requires more
   intelligence than it should have" for a brainstem-level thing (a kind dial, last tick's

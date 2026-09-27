@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from midbrain import murabito_pb2 as pb
-from midbrain.ambitions import STOP, Context, Idle, Stalk, choose, differs, face, face_thing, is_under, revise, sneak_to, walk_to
+from midbrain.ambitions import BITE, STOP, Context, Idle, Stalk, choose, differs, face, face_thing, is_under, lunge, revise, sneak_to, walk_to
 from midbrain.beliefs import BelievedWorld, Cell
 from midbrain.hexes import to_world
 
@@ -104,13 +104,36 @@ def test_a_hare_whose_facing_was_never_seen_is_approached_straight() -> None:
     assert result.intent == sneak_to(Cell(3, 0))
 
 
-def test_three_behind_and_facing_it_we_hold_and_off_facing_we_turn() -> None:
-    holding = STALK.want(fox_believing(fox_at=(3, 0), fox_facing=pb.Direction.E))
-    assert holding.path == ("stalk", "watch") and holding.intent is None
+def test_three_behind_and_facing_it_we_pounce_and_off_facing_we_turn() -> None:
+    pouncing = STALK.want(fox_believing(fox_at=(3, 0), fox_facing=pb.Direction.E))
+    assert pouncing.path == ("stalk", "pounce", "lunge")
+    assert pouncing.intent == lunge(pb.Direction.E), "two cells east lands beside the hare at (6, 0)"
     turning = STALK.want(fox_believing(fox_at=(3, 0), fox_facing=pb.Direction.N))
     assert turning.intent == face_thing(3)
     unseen = STALK.want(fox_believing(fox_at=(3, 0), fox_facing=pb.Direction.N, sees_hare=False))
     assert unseen.intent == face(pb.Direction.E)
+
+
+def test_beside_it_and_facing_it_we_bite_and_a_notch_off_we_turn_first() -> None:
+    biting = STALK.want(fox_believing(fox_at=(5, 0), fox_facing=pb.Direction.E))
+    assert biting.path == ("stalk", "bite", "bite") and biting.intent == BITE
+    turning = STALK.want(fox_believing(fox_at=(5, 0), fox_facing=pb.Direction.ENE))
+    assert turning.path == ("stalk", "watch") and turning.intent == face_thing(3)
+
+
+def test_no_pounce_from_the_side_or_from_too_far() -> None:
+    # One cell due north of the hare, facing it: abeam, past its 180° arc, but off its rear
+    # line, so we circle rather than lunge onto it.
+    flank = STALK.want(fox_believing(fox_at=(7, -2), fox_facing=pb.Direction.S))
+    assert flank.path[:2] == ("stalk", "circle")
+    # Four behind, facing it: a lunge lands two behind, not beside; keep approaching.
+    far = STALK.want(fox_believing(fox_at=(2, 0), fox_facing=pb.Direction.E))
+    assert far.path == ("stalk", "approach", "close in")
+
+
+def test_a_hare_looking_at_us_freezes_us_even_beside_it() -> None:
+    frozen = STALK.want(fox_believing(fox_at=(5, 0), fox_facing=pb.Direction.E, hare_facing=pb.Direction.W))
+    assert frozen.path == ("stalk", "freeze", "stop")
 
 
 def test_after_walking_three_cells_unseen_the_fox_pivots_to_check_then_holds() -> None:
