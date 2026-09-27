@@ -3695,6 +3695,7 @@ dependencies = [
  "bevy",
  "murabito_actions",
  "murabito_app_state",
+ "murabito_attacks",
  "murabito_brainstem",
  "murabito_bridge",
  "murabito_camera",
@@ -3722,6 +3723,7 @@ name = "murabito_actions"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "murabito_attacks",
  "murabito_hexcoords",
  "murabito_movement",
  "murabito_placement",
@@ -3736,6 +3738,14 @@ dependencies = [
  "murabito_keybinds",
  "serde",
  "serde_yaml_ng",
+]
+
+[[package]]
+name = "murabito_attacks"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "murabito_progress",
 ]
 
 [[package]]

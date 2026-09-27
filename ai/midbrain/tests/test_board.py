@@ -78,6 +78,7 @@ def test_every_action_word_reads_as_itself() -> None:
     assert action(pb.Action(backstep=pb.Direction.W)) == "Backstep W"
     assert action(pb.Action(recoil=pb.Direction.WNW)) == "Recoil WNW"
     assert action(pb.Action(lunge=pb.Direction.E)) == "Lunge E"
+    assert action(pb.Action(bite=pb.Bite())) == "Bite"
 
 
 def test_the_board_renders_every_body_with_its_facts() -> None:

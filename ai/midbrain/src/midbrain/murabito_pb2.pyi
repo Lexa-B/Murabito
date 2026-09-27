@@ -167,20 +167,26 @@ class Sustained(_message.Message):
     def __init__(self, go_to: _Optional[_Union[Voxel, _Mapping]] = ...) -> None: ...
 
 class Action(_message.Message):
-    __slots__ = ("go", "face", "sidestep", "backstep", "recoil", "lunge")
+    __slots__ = ("go", "face", "sidestep", "backstep", "recoil", "lunge", "bite")
     GO_FIELD_NUMBER: _ClassVar[int]
     FACE_FIELD_NUMBER: _ClassVar[int]
     SIDESTEP_FIELD_NUMBER: _ClassVar[int]
     BACKSTEP_FIELD_NUMBER: _ClassVar[int]
     RECOIL_FIELD_NUMBER: _ClassVar[int]
     LUNGE_FIELD_NUMBER: _ClassVar[int]
+    BITE_FIELD_NUMBER: _ClassVar[int]
     go: Go
     face: Direction
     sidestep: Direction
     backstep: Direction
     recoil: Direction
     lunge: Direction
-    def __init__(self, go: _Optional[_Union[Go, _Mapping]] = ..., face: _Optional[_Union[Direction, str]] = ..., sidestep: _Optional[_Union[Direction, str]] = ..., backstep: _Optional[_Union[Direction, str]] = ..., recoil: _Optional[_Union[Direction, str]] = ..., lunge: _Optional[_Union[Direction, str]] = ...) -> None: ...
+    bite: Bite
+    def __init__(self, go: _Optional[_Union[Go, _Mapping]] = ..., face: _Optional[_Union[Direction, str]] = ..., sidestep: _Optional[_Union[Direction, str]] = ..., backstep: _Optional[_Union[Direction, str]] = ..., recoil: _Optional[_Union[Direction, str]] = ..., lunge: _Optional[_Union[Direction, str]] = ..., bite: _Optional[_Union[Bite, _Mapping]] = ...) -> None: ...
+
+class Bite(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
 
 class Go(_message.Message):
     __slots__ = ("direction", "gait")

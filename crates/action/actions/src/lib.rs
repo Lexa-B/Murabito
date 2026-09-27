@@ -12,6 +12,7 @@
 use std::collections::VecDeque;
 
 use bevy::prelude::*;
+use murabito_attacks::Bite;
 use murabito_hexcoords::Direction;
 use murabito_movement::{Gait, Step, Turn, Way};
 use murabito_placement::Facing;
@@ -38,7 +39,7 @@ impl Plugin for ActionsPlugin {
 /// Put this on a body to drop whatever it is doing, now: the intent in flight is
 /// removed, the bar is abandoned, and the head of the queue is issued on this same tick.
 /// A cut step never happened, since a body's place changes only on landing; a cut turn
-/// keeps the notches already made. Removed as it is acted on.
+/// keeps the notches already made; a cut bite bit nothing. Removed as it is acted on.
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct CutShort;
 
@@ -46,7 +47,9 @@ pub struct CutShort;
 fn cut_short(mut commands: Commands, mut bodies: Query<(Entity, &mut Progress), With<CutShort>>) {
     for (body, mut progress) in &mut bodies {
         progress.abandon();
-        commands.entity(body).remove::<(Step, Turn, CutShort)>();
+        commands
+            .entity(body)
+            .remove::<(Step, Turn, Bite, CutShort)>();
     }
 }
 
@@ -75,6 +78,8 @@ pub enum Action {
     Recoil(Direction),
     /// Two voxels forward at a sprint, landed in one go.
     Lunge(Direction),
+    /// Bite whatever is in the cell faced. Bites nothing yet.
+    Bite,
 }
 
 /// The actions a body has been asked to do, first to last.
@@ -153,6 +158,7 @@ fn next_intent(action: Action, facing: Direction) -> Result<(Intent, bool), Wron
             };
             only(Way::Forward, step, facing)
         }
+        Action::Bite => Ok((Intent::Bite, true)),
     }
 }
 
@@ -170,6 +176,7 @@ fn only(needs: Way, step: Step, facing: Direction) -> Result<(Intent, bool), Wro
 enum Intent {
     Step(Step),
     Turn(Direction),
+    Bite,
 }
 
 /// Why an action is refused: its word is only for one way, and its direction is another.
@@ -179,8 +186,8 @@ struct WrongWay {
     way: Way,
 }
 
-/// A body doing nothing, so far as movement knows.
-type Idle = (Without<Step>, Without<Turn>);
+/// A body with no intent on it, so far as every mechanism knows.
+type Idle = (Without<Step>, Without<Turn>, Without<Bite>);
 
 /// Issues, for every body with nothing in flight, the intent its head action needs, and
 /// drops the action once its last intent is out. An action refused is dropped with a
@@ -211,6 +218,7 @@ fn issue(
         match intent {
             Intent::Step(step) => commands.entity(body).insert(step),
             Intent::Turn(direction) => commands.entity(body).insert(Turn(direction)),
+            Intent::Bite => commands.entity(body).insert(Bite),
         };
         if last {
             queue.done_with_head();
@@ -235,6 +243,7 @@ mod tests {
             ]
         );
     }
+    use murabito_attacks::AttacksPlugin;
     use murabito_hexcoords::VoxelCoord;
     use murabito_movement::{Locomotion, MovementPlugin};
     use murabito_placement::VoxelPosition;
@@ -314,6 +323,14 @@ mod tests {
     }
 
     #[test]
+    fn a_bite_is_a_bite_and_done_whichever_way_the_body_faces() {
+        assert_eq!(
+            next_intent(Action::Bite, Direction::E),
+            Ok((Intent::Bite, true))
+        );
+    }
+
+    #[test]
     fn a_way_word_the_wrong_way_is_refused() {
         use Direction::*;
         let wrong = |needs, way| Err(WrongWay { needs, way });
@@ -363,6 +380,7 @@ mod tests {
             MinimalPlugins,
             ProgressPlugin,
             MovementPlugin,
+            AttacksPlugin,
             ActionsPlugin,
         ));
         app.insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
@@ -477,7 +495,10 @@ mod tests {
     fn ticks_until_idle(app: &mut App, body: Entity) -> u32 {
         for tick in 1..=1000 {
             app.update();
-            let idle = queued(app, body) == 0 && !has::<Step>(app, body) && !has::<Turn>(app, body);
+            let idle = queued(app, body) == 0
+                && !has::<Step>(app, body)
+                && !has::<Turn>(app, body)
+                && !has::<Bite>(app, body);
             if idle {
                 return tick;
             }
@@ -594,6 +615,33 @@ mod tests {
         // Refused on tick 1, the walk issued on tick 2, landing 16 ticks later.
         assert_eq!(ticks_until_idle(&mut app, body), 17);
         assert_eq!(position_of(&app, body), voxel(1, 0, 0));
+    }
+
+    #[test]
+    fn a_bite_holds_the_body_sixteen_ticks_and_moves_nothing() {
+        let (mut app, body) = body_facing(Direction::E);
+        push(&mut app, body, Action::Bite);
+
+        assert_eq!(ticks_until_idle(&mut app, body), 16);
+        assert_eq!(position_of(&app, body), voxel(0, 0, 0));
+        assert_eq!(facing_of(&app, body), Direction::E);
+    }
+
+    #[test]
+    fn a_bite_cut_short_is_gone_and_the_next_action_starts_at_once() {
+        let (mut app, body) = body_facing(Direction::E);
+        push(&mut app, body, Action::Bite);
+        for _ in 0..8 {
+            app.update();
+        }
+        assert!(has::<Bite>(&app, body));
+
+        app.world_mut().entity_mut(body).insert(CutShort);
+        push(&mut app, body, Action::Go(Direction::E, Gait::Walk));
+        app.update();
+
+        assert!(!has::<Bite>(&app, body));
+        assert!(has::<Step>(&app, body));
     }
 
     #[test]

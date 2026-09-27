@@ -116,6 +116,7 @@ impl From<Action> for proto::Action {
             Action::Backstep(direction) => Kind::Backstep(direction_out(direction)),
             Action::Recoil(direction) => Kind::Recoil(direction_out(direction)),
             Action::Lunge(direction) => Kind::Lunge(direction_out(direction)),
+            Action::Bite => Kind::Bite(proto::Bite {}),
         };
         Self { kind: Some(kind) }
     }

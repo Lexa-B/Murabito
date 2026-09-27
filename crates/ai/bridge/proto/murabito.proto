@@ -119,8 +119,12 @@ message Action {
     Direction backstep = 4;
     Direction recoil = 5;
     Direction lunge = 6;
+    Bite bite = 7;
   }
 }
+
+// Bite whatever is in the cell faced. Bites nothing yet.
+message Bite {}
 
 // One voxel that way at a gait, turning first if need be.
 message Go {

@@ -81,6 +81,8 @@ def action(what: pb.Action) -> str:
             return f"Recoil {direction(what.recoil)}"
         case "lunge":
             return f"Lunge {direction(what.lunge)}"
+        case "bite":
+            return "Bite"
     return "?"
 
 
