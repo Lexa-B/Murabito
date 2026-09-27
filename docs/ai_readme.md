@@ -267,6 +267,8 @@ runs this tree:
 ```
 stalk
 ├─ freeze     the hare is looking at us (its last-seen facing, within the arc)   → Stop
+├─ bite       beside it, facing it                                              → Bite
+├─ pounce     behind it, facing it, and a lunge lands beside it                 → Lunge that way
 ├─ check      we have walked `check_after` cells without seeing it               → face where we believe it is;
 │                                                                                  hold once facing
 ├─ circle     we are off its rear line                                          → SneakTo a cell one notch round toward

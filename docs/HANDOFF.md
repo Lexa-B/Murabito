@@ -338,7 +338,7 @@ is still design. `TODO.md` is what's queued.
 Written 2026-09-27 for the session that starts the midbrain's first behaviour cold, and
 brought current the same day as the believed world (PR #46) and the stalk (PR #47) landed,
 and again with the action words (`Walk`, `Sprint`, `Sidestep`, `Lunge`, `Bite`, …) and the
-sustained paces; the stalk sneaks, and the rest are there for variety in the tree.
+sustained paces; the stalk sneaks, pounces and bites, and the rest are there for variety in the tree.
 Everything is on `main`; branch afresh from `origin/main` in the `ai-io` worktree (`git -C
 <wt> fetch --prune && git -C <wt> switch -C <branch> --no-track origin/main`; its `target/` is
 a symlink to `cleanup-refactor`'s and stays). A plain-language walkthrough of the I/O, with
@@ -467,7 +467,7 @@ expects a plain-language answer before the go is re-asked.
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/ai-io`, on `sustained-paces` (the paces to a cell); its `target/` is a symlink to `cleanup-refactor`'s warm one, so the two share an engine build. `cleanup-refactor` (on `debug-feature`, merged) is what the desktop shortcut runs |
-| `main` at handoff | `d4a2216`, the merge of PR #49 (the action words) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`), #43 (the debug feature), #44 (the AI's I/O), #45 (handoff), #46 (the believed world), #47 (the stalk, the seen thing's facing, vision stretched), #48 (handoff review), #49 (the action words, the attacks stub) |
+| This session's worktree | `.claude/worktrees/ai-io`, on `pounce` (the lunge and the bite in the stalk); its `target/` is a symlink to `cleanup-refactor`'s warm one, so the two share an engine build. `cleanup-refactor` (on `debug-feature`, merged) is what the desktop shortcut runs |
+| `main` at handoff | `20ac469`, the merge of PR #50 (the sustained paces) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`), #43 (the debug feature), #44 (the AI's I/O), #45 (handoff), #46 (the believed world), #47 (the stalk, the seen thing's facing, vision stretched), #48 (handoff review), #49 (the action words, the attacks stub), #50 (the sustained paces; the stalk sneaks) |
 | Other worktrees | `cleanup-refactor` (on `debug-feature`, merged long ago: the desktop shortcut runs it, so the shortcut's game has no bridge and no stalk until that worktree moves to `main`); `exp-05-main-coords`, `yokai-models` (art sessions) |
