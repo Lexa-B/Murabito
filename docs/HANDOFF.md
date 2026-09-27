@@ -7,7 +7,7 @@ sight; on 2026-09-24 with identity (PR #42) and the debug feature (PR #43); and 
 with the AI's I/O (PR #44): the kind label and the ontology, the brainstem, the reflexes, the
 port, the bridge and the Python midbrain's home; and the same day with the mind's believed
 world (PR #46) and the fox's stalk (PR #47), then checked over for a fresh session (PR #48);
-and with the action words and the attacks stub. Everything here is on `main`. `AGENTS.md` is the authority on how to
+and with the action words, the attacks stub and the sustained paces. Everything here is on `main`. `AGENTS.md` is the authority on how to
 work; this is where things stand, for a session starting cold.
 
 ## What runs
@@ -16,7 +16,7 @@ work; this is where things stand, for a session starting cold.
 `--features debug` or `--debug` for the debug build, which also serves the world's data on
 `127.0.0.1:15702` for `scripts/probe.sh` to read. The game always listens for a mind on
 `127.0.0.1:15703`; from `ai/midbrain/`, `uv run board` shows every body's snapshot live,
-`uv run order 3 goto 0 0` tells one what to want, and `uv run mind --visualize` opens a window
+`uv run order 3 walkto 0 0` tells one what to want, and `uv run mind --visualize` opens a window
 of what one body believes: a flat hex map, north up, the body at its true cell and every thing
 it has seen frozen where it last saw it, labelled with how long ago. What runs: a green ground
 one cho square under a pale sky, lit by a sun; a fox eight cells west of the origin, standing
@@ -136,6 +136,10 @@ is still design. `TODO.md` is what's queued.
   is refused, never bent: "if something sends an action in the wrong direction, we need to know
   it's broken so we can fix it." `issue` drops it with a warning; the brainstem ends it
   `Refused` so the mind hears.
+- **A sustained word is a cell at a pace** (Lexa, 2026-09-27): `GoTo` became `WalkTo`, with
+  `JogTo`, `SprintTo`, `SneakTo` beside it, each re-aimed every landing in its pace's word.
+  The stalk's approach and circle sneak. The way words have no "to" form, since they cannot
+  be re-aimed at an arbitrary cell without turning.
 - **Bite is a stub in its own crate, `murabito_attacks`**: a quarter of a second on the bar,
   no target, no effect; the cell faced is what it will bite.
 - **`ActionQueue`, not "orders"**: anything may push, nothing in it says who did or why. The
@@ -219,7 +223,7 @@ is still design. `TODO.md` is what's queued.
   mind both speaking it; a reflex interrupts and drops, and the midbrain is told it was
   cancelled (B′ over interrupt-and-resume); a new intent cuts short what is in flight ("a
   reflex that waits half a second is no reflex; the smarter parts must not interrupt
-  themselves"); step at a time, no plan, for `GoTo`; a snapshot of flat facts for a utility
+  themselves"); step at a time, no plan, for a pace to a cell; a snapshot of flat facts for a utility
   scorer, built at publish after `Sense`, pulled by the mind; `previous` says what was done
   as well as how it ended, so it isn't read as the current intent's; a sighting names the
   seen thing's kind by its whole path (a node, not the leaf, when perception gets fuzzy).
@@ -333,8 +337,8 @@ is still design. `TODO.md` is what's queued.
 
 Written 2026-09-27 for the session that starts the midbrain's first behaviour cold, and
 brought current the same day as the believed world (PR #46) and the stalk (PR #47) landed,
-and again with the action words (`Walk`, `Sprint`, `Sidestep`, `Lunge`, `Bite`, …), which the
-tree does not use yet: they are there for variety in it, Lexa's next aim.
+and again with the action words (`Walk`, `Sprint`, `Sidestep`, `Lunge`, `Bite`, …) and the
+sustained paces; the stalk sneaks, and the rest are there for variety in the tree.
 Everything is on `main`; branch afresh from `origin/main` in the `ai-io` worktree (`git -C
 <wt> fetch --prune && git -C <wt> switch -C <branch> --no-track origin/main`; its `target/` is
 a symlink to `cleanup-refactor`'s and stays). A plain-language walkthrough of the I/O, with
@@ -377,7 +381,8 @@ the believed world), the numbers and the one ambition are placeholders.
   + since), queue, in_flight (0..1 or none), previous (intent + outcome or none).
 - The vocabulary a mind may send: `Stop`, `Face(dir)`, `FaceThing(id)`, the action words
   `Walk`, `Jog`, `Sprint`, `Sneak`, `Sidestep`, `Backstep`, `Recoil`, `Lunge` (each a dir) and
-  `Bite`, and `GoTo(q, r, layer)`, which walks. A wrong-way word ends `Refused("not lateral")`
+  `Bite`, and `WalkTo`, `JogTo`, `SprintTo`, `SneakTo(q, r, layer)`, a cell at a pace, re-aimed
+  every landing. A wrong-way word ends `Refused("not lateral")`
   and the like. New words are variants added in the brainstem when the mind needs them
   (`Follow`, `Flee` are the ones named).
 - Numbers: 64 ticks a second; at 4 shaku/s an edge step is 16 ticks, a corner step 28, a
@@ -388,10 +393,11 @@ the believed world), the numbers and the one ambition are placeholders.
 
 **One trap, settled.** Every new intent cuts short what is in flight (Lexa's call: "the
 smarter parts must not interrupt themselves"), so a mind that re-sent its want every round,
-even the same `GoTo`, would cut its own steps and the body would never arrive. Lexa's call
+even the same `SneakTo`, would cut its own steps and the body would never arrive. Lexa's call
 (2026-09-27): the mind sends only when its want differs from the snapshot's `doing`
-(`ambitions.differs`: a hold is never sent, a `Stop` only when something is in hand, a `GoTo`
-only when nothing is in hand or the target moved two or more cells). No memory needed, the
+(`ambitions.differs`: a hold is never sent, a `Stop` only when something is in hand, a pace to
+a cell only when nothing is in hand, the pace in hand is another, or the target moved two or
+more cells). No memory needed, the
 board is the truth; a finished or cancelled intent empties `doing` and the want differs
 again. Also settled: the mind drives the fox first, the hare stays on the scene's click,
 which is how the fox is provoked; `uv run order 3 …` does the same from a terminal.
@@ -437,7 +443,7 @@ What the next session decides, one question at a time:
 **How to test against the game.** From the `ai-io` worktree, `scripts/run.sh` (the desktop
 shortcut runs the other worktree, still on a branch from before the bridge); the log says "the
 bridge listens on 127.0.0.1:15703". A scripted run is `timeout 60 scripts/run.sh` in the
-background, then `uv run order 3 goto 0 0` or a Python snippet with `Bridge()`. `uv run
+background, then `uv run order 3 walkto 0 0` or a Python snippet with `Bridge()`. `uv run
 pytest` in `ai/midbrain/` (a fake bridge thread in `tests/test_client.py` is the
 pattern for testing a client without the game). `RUST_LOG=murabito_brainstem=debug` traces
 every aim and step in `~/.cache/murabito/run.log`; reflex fires are always logged. For the
@@ -461,7 +467,7 @@ expects a plain-language answer before the go is re-asked.
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/ai-io`, on `more-actions` (the action words); its `target/` is a symlink to `cleanup-refactor`'s warm one, so the two share an engine build. `cleanup-refactor` (on `debug-feature`, merged) is what the desktop shortcut runs |
-| `main` at handoff | `84761f2`, the merge of PR #48 (the handoff review) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`), #43 (the debug feature), #44 (the AI's I/O), #45 (handoff), #46 (the believed world), #47 (the stalk, the seen thing's facing, vision stretched), #48 (handoff review) |
+| This session's worktree | `.claude/worktrees/ai-io`, on `sustained-paces` (the paces to a cell); its `target/` is a symlink to `cleanup-refactor`'s warm one, so the two share an engine build. `cleanup-refactor` (on `debug-feature`, merged) is what the desktop shortcut runs |
+| `main` at handoff | `d4a2216`, the merge of PR #49 (the action words) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`), #43 (the debug feature), #44 (the AI's I/O), #45 (handoff), #46 (the believed world), #47 (the stalk, the seen thing's facing, vision stretched), #48 (handoff review), #49 (the action words, the attacks stub) |
 | Other worktrees | `cleanup-refactor` (on `debug-feature`, merged long ago: the desktop shortcut runs it, so the shortcut's game has no bridge and no stalk until that worktree moves to `main`); `exp-05-main-coords`, `yokai-models` (art sessions) |
