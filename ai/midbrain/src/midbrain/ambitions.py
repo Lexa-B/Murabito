@@ -12,15 +12,18 @@ utility is a plain function.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
+import random
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from midbrain import murabito_pb2 as pb
 from midbrain.behaviour import Act, Condition, Result, Selector, Sequence
 from midbrain.beliefs import Belief, BelievedWorld, Cell
-from midbrain.hexes import along, angle_of, apart, bearing, nearest_direction, opposite, rotated, steps, turn_between
+from midbrain.hexes import along, angle_of, apart, bearing, from_world, nearest_direction, opposite, rotated, steps, to_world, turn_between
 
 STOP = pb.Intent(short=pb.Short(stop=pb.Stop()))
+TICKS_PER_SECOND = 64
 
 
 def _to(pace: str, cell: Cell) -> pb.Intent:
@@ -74,14 +77,26 @@ def is_under(kind: str | None, ancestor: str) -> bool:
 
 @dataclass(frozen=True)
 class Context:
-    """What an ambition reads: one body's believed world and its snapshot this round."""
+    """What an ambition reads: one body's believed world and its snapshot this round, and
+    the body's scratch, where an ambition keeps what it needs to remember between rounds
+    that the board cannot show it (a rest that ends at a tick). Each ambition keeps to keys
+    of its own name; the scratch is the body's alone, shared with no other body."""
 
     world: BelievedWorld
     snapshot: pb.Snapshot
+    scratch: dict[str, object] = field(default_factory=dict)
 
     @property
     def here(self) -> Cell:
         return Cell.of(self.snapshot.position)
+
+    @property
+    def tick(self) -> int:
+        return self.snapshot.tick
+
+    @property
+    def in_hand(self) -> pb.Intent | None:
+        return self.snapshot.doing.intent if self.snapshot.HasField("doing") else None
 
     @property
     def facing(self) -> int:
@@ -255,11 +270,87 @@ class Stalk:
         return self.tree.tick(ctx)
 
 
+@dataclass(frozen=True)
+class Wander:
+    """Walk a leg somewhere ahead, rest a while, walk another. For a body with nowhere
+    to be.
+
+    The tree, first branch to succeed wins:
+
+        wander
+        ├─ walking   a pace is in hand                → hold, let it land
+        ├─ resting   the rest drawn has not ended     → hold
+        ├─ arrived   nothing in hand, no rest drawn   → draw a rest of ``rest`` seconds,
+        │                                                remember when it ends; hold
+        └─ set off   the rest is over                 → forget it; WalkTo a cell ``leg``
+                                                         shaku away, within ``arc`` of the
+                                                         way we face
+
+    The leg's bearing and length are drawn from ``rng``; a test hands in a seeded one. The
+    rest's end is the one thing the board cannot show, so it lives in the body's scratch
+    under ``wander.rest_until``. On a body's first round it rests before its first leg.
+    """
+
+    leg: tuple[float, float] = (4.0, 8.0)
+    """Shortest and longest leg, in shaku."""
+    rest: tuple[float, float] = (3.0, 10.0)
+    """Shortest and longest rest between legs, in seconds."""
+    arc: float = 180.0
+    """Degrees centred on the way we face within which a leg's bearing is drawn."""
+    score: float = 0.3
+    """What it bids: always a little, above idling, below anything with a reason."""
+    rng: random.Random = field(default_factory=random.Random, compare=False)
+    name: str = "wander"
+
+    REST_UNTIL = "wander.rest_until"
+
+    def utility(self, ctx: Context) -> float:
+        return self.score
+
+    # --- the tree's tests and wants ---
+
+    def a_pace_in_hand(self, ctx: Context) -> bool:
+        return ctx.in_hand is not None and bound_for(ctx.in_hand) is not None
+
+    def rest_not_over(self, ctx: Context) -> bool:
+        until = ctx.scratch.get(self.REST_UNTIL)
+        return until is not None and ctx.tick < until
+
+    def no_rest_drawn(self, ctx: Context) -> bool:
+        return self.REST_UNTIL not in ctx.scratch
+
+    def draw_a_rest(self, ctx: Context) -> pb.Intent | None:
+        seconds = self.rng.uniform(*self.rest)
+        ctx.scratch[self.REST_UNTIL] = ctx.tick + round(seconds * TICKS_PER_SECOND)
+        return None
+
+    def set_off(self, ctx: Context) -> pb.Intent | None:
+        ctx.scratch.pop(self.REST_UNTIL, None)
+        degrees = angle_of(ctx.facing) + self.rng.uniform(-self.arc / 2, self.arc / 2)
+        length = self.rng.uniform(*self.leg)
+        x, z = to_world(ctx.here)
+        theta = math.radians(degrees)
+        cell = from_world(x + length * math.cos(theta), z - length * math.sin(theta), ctx.here.layer)
+        return walk_to(cell) if cell != ctx.here else None
+
+    @property
+    def tree(self) -> Selector:
+        return Selector(self.name, (
+            Sequence("walking", (Condition("a pace in hand", self.a_pace_in_hand), Act("keep on", lambda ctx: None))),
+            Sequence("resting", (Condition("rest not over", self.rest_not_over), Act("wait", lambda ctx: None))),
+            Sequence("arrived", (Condition("no rest drawn", self.no_rest_drawn), Act("rest", self.draw_a_rest))),
+            Act("set off", self.set_off),
+        ))
+
+    def want(self, ctx: Context) -> Result:
+        return self.tree.tick(ctx)
+
+
 FOX = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox"
 HARE = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::hare"
 
 REPERTOIRE: dict[str, list[Ambition]] = {
-    FOX: [Idle(), Stalk(prey=HARE)],
+    FOX: [Idle(), Wander(), Stalk(prey=HARE)],
 }
 """What each kind can want, keyed on its path. A kind not listed only idles."""
 
