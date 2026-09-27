@@ -3,7 +3,8 @@
 A pygame window beside the game. The game is the truth; this window is what one body
 believes: a hex grid, north up, the body at its true cell with a line for its facing, and
 every thing it has ever seen as a filled hex where it last saw it, labelled with what it
-is and how long ago that was. Nothing here moves or fades on its own; it redraws each
+is and how long ago that was; what it decided this round, and the cell it wants to reach
+as an outlined hex. Nothing here moves or fades on its own; it redraws each
 round from the mind. Tab cycles which body's world is shown; Escape or closing quits.
 
 Screen geometry is the game's (``crates/hexcoords``): pointy-top cells one shaku flat to
@@ -101,16 +102,23 @@ def draw(surface: pygame.Surface, mind: Mind, body: int, view: View, font: pygam
         pygame.draw.polygon(surface, colour_of(belief.kind), corners)
         if belief.id in seen_now:
             pygame.draw.polygon(surface, SEEN_NOW, corners, 2)
+        if belief.facing is not None:
+            pygame.draw.line(surface, LABEL, view.pixel(belief.cell), view.facing_end(belief.cell, belief.facing), 2)
         cx, cy = view.pixel(belief.cell)
         name = f"#{belief.id} {name_of(belief.kind) if belief.kind else '?'}"
         surface.blit(font.render(name, True, LABEL), (cx + view.scale * 0.6, cy - 14))
         surface.blit(font.render(ago(belief.age(snapshot.tick)), True, LABEL), (cx + view.scale * 0.6, cy + 1))
 
+    decision = mind.decisions.get(body)
+    if decision is not None and decision.want is not None and decision.want.WhichOneof("kind") == "sustained":
+        pygame.draw.polygon(surface, SELF, view.corners(Cell.of(decision.want.sustained.go_to)), 2)
     here = Cell.of(snapshot.position)
     pygame.draw.polygon(surface, SELF, view.corners(here))
     pygame.draw.line(surface, SELF, view.pixel(here), view.facing_end(here, snapshot.facing), 3)
     title = f"#{body} {name_of(snapshot.kind)} believes   tick {snapshot.tick}   {len(world)} things   Tab: next body"
     surface.blit(font.render(title, True, LABEL), (12, 12))
+    if decision is not None:
+        surface.blit(font.render(f"decided  {decision}".replace("→", "->"), True, LABEL), (12, 30))
 
 
 def find_display() -> None:
@@ -152,7 +160,8 @@ def show(host: str, port: int, every: float, body: int | None, scale: float) -> 
                     running = False
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_TAB and body is not None:
                     body = next_body(mind, body)
-            mind.round(bridge.snapshots())
+            for wanted_by, intent in mind.round(bridge.snapshots()):
+                bridge.order(wanted_by, intent)
             if body is None and mind.worlds:
                 body = min(mind.worlds)
             draw(screen, mind, body if body is not None else 0, view, font)

@@ -24,6 +24,7 @@ def snapshot() -> pb.Snapshot:
                 offset=pb.Offset(dq=13, dr=-4, dlayer=0),
                 distance=13,
                 acuity=pb.Acuity.MID,
+                facing=pb.Direction.N,
             ),
             pb.InView(id=4, offset=pb.Offset(dq=2, dr=0, dlayer=0), distance=2, acuity=pb.Acuity.NEAR),
         ],

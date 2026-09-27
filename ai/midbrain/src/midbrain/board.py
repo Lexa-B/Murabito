@@ -122,6 +122,7 @@ def body_panel(snapshot: pb.Snapshot) -> Panel:
     seen.add_column("offset")
     seen.add_column("steps", justify="right")
     seen.add_column("acuity")
+    seen.add_column("facing")
     for thing in sorted(snapshot.in_view, key=lambda t: t.distance):
         seen.add_row(
             f"#{thing.id}",
@@ -129,9 +130,10 @@ def body_panel(snapshot: pb.Snapshot) -> Panel:
             offset(thing.offset),
             str(thing.distance),
             pb.Acuity.Name(thing.acuity).lower(),
+            direction(thing.facing) if thing.HasField("facing") else "-",
         )
     if not snapshot.in_view:
-        seen.add_row(Text("nothing", style="dim"), "", "", "", "")
+        seen.add_row(Text("nothing", style="dim"), "", "", "", "", "")
 
     title = f"#{snapshot.id} {name_of(snapshot.kind)}"
     return Panel(Group(facts, Text(""), seen), title=title, title_align="left")

@@ -36,6 +36,11 @@ class Cell:
         """The cell this offset away."""
         return Cell(self.q + offset.dq, self.r + offset.dr, self.layer + offset.dlayer)
 
+    def steps_to(self, other: Cell) -> int:
+        """Cells apart across faces, layer ignored."""
+        dq, dr = other.q - self.q, other.r - self.r
+        return max(abs(dq), abs(dr), abs(dq + dr))
+
     def __str__(self) -> str:
         return f"({self.q}, {self.r}, {self.s}) L{self.layer}"
 
@@ -53,6 +58,10 @@ class Belief:
     """The tick of that sighting."""
     acuity: int
     """How well it was seen then: a ``pb.Acuity`` value."""
+    facing: int | None
+    """The way it faced then, a ``pb.Direction`` value, or None if it has no facing."""
+    walked_since: int = 0
+    """Cells the body has walked since it last saw the thing."""
 
     def age(self, now: int) -> int:
         """Ticks since the last sighting."""
@@ -66,12 +75,21 @@ class BelievedWorld:
     body: int
     """The id of the body whose beliefs these are."""
     beliefs: dict[int, Belief] = field(default_factory=dict)
+    last_cell: Cell | None = None
+    """Where the body stood at the last snapshot, to count what it walks."""
 
     def observe(self, snapshot: pb.Snapshot) -> None:
-        """Takes in one round's snapshot: every sighting becomes, or refreshes, a belief."""
+        """Takes in one round's snapshot: every sighting becomes, or refreshes, a belief, and
+        every belief not refreshed is charged the cells the body walked since last time."""
         if snapshot.id != self.body:
             raise ValueError(f"snapshot of #{snapshot.id} given to #{self.body}'s beliefs")
         here = Cell.of(snapshot.position)
+        walked = self.last_cell.steps_to(here) if self.last_cell is not None else 0
+        self.last_cell = here
+        seen = {sighting.id for sighting in snapshot.in_view}
+        for belief in self.beliefs.values():
+            if belief.id not in seen:
+                belief.walked_since += walked
         for sighting in snapshot.in_view:
             self.beliefs[sighting.id] = Belief(
                 id=sighting.id,
@@ -79,6 +97,7 @@ class BelievedWorld:
                 cell=here.plus(sighting.offset),
                 seen_at=snapshot.tick,
                 acuity=sighting.acuity,
+                facing=sighting.facing if sighting.HasField("facing") else None,
             )
 
     def __iter__(self):
@@ -90,3 +109,7 @@ class BelievedWorld:
 
     def get(self, thing: int) -> Belief | None:
         return self.beliefs.get(thing)
+
+    def forget(self, thing: int) -> None:
+        """Drops a belief; nothing if there was none."""
+        self.beliefs.pop(thing, None)

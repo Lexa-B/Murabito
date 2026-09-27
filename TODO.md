@@ -36,16 +36,20 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   left button. It goes when the midbrain drives the hare, or when a selection-and-command
   module lands, whichever comes first. A rest is still not an action (Lexa, 2026-09-22): an
   idle body is an empty queue by the mind's choice, so there is no `Action::Wait`.
-- **The midbrain's first behaviour.** The wire, the board, a hand-given order and the
-  believed world exist (`ai/midbrain/`, `docs/ai_readme.md`); `uv run mind` believes and
-  decides nothing. What doesn't exist is the scorer: a consideration reads a number off the
-  believed world, a score picks an option, an intent goes down, in the utility-AI shape Lexa
-  named. Decided 2026-09-27: the mind sends only when its want differs from the snapshot's
-  `doing` (every new intent cuts short what is in flight); the fox first, the hare on the
-  click. Its own design talk. With it, or after: `Walk`, `Follow`, `Flee` as `Sustained`
-  variants; a "by" on `Doing` if the mind should defer to a reflex in hand; keys in the board
-  viewer if `uv run order` gets tiresome; a shared Python package for the wire once a second
-  consumer (the cortex) arrives.
+- **The midbrain, past proof of concept.** The first behaviour exists (2026-09-27): the fox
+  stalks the hare through ambitions, a behaviour tree and the believed world
+  (`docs/ai_readme.md`, "Ambitions, and the stalk"), all of it quick proof-of-concept by
+  Lexa's word, to be fleshed out later. What's queued: the Sims' half, believed things
+  advertising what they offer and motives weighting them, as where utilities come from; the
+  hare's ambitions (flee), which retire the click bandaid; a search ambition; what `previous`
+  feeds back; a "by" on `Doing` if the mind should defer to a reflex in hand; `Walk`, `Flee`
+  as `Sustained` variants when a mind needs them (`Follow` declined: the brainstem "shouldn't
+  be smart enough to have awareness of other entities"); keys in the board viewer; a shared
+  Python package for the wire once a second consumer (the cortex) arrives.
+- **The startle reflex knows too much.** Lexa, 2026-09-27: it "already requires more
+  intelligence than it should have" for a brainstem-level thing (a kind dial, last tick's
+  list, the turning rule). Revisit when the game-side memory exists or when reflexes get
+  their own design pass; not a bug, a smell.
 - **Running `Sense` every n ticks.** Lexa, 2026-09-26: evaluate casting every second tick
   or so for cost, which still keeps within what animal eyes do; the recast-on-change item
   under loose ends is the other lever.

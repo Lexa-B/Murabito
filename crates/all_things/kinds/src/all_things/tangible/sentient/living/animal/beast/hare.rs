@@ -10,21 +10,21 @@ use crate::{Beast, Model};
 /// 兎: the Japanese hare (野兎). Its pace is a guess at a walk, 5 shaku (about
 /// 1.5 m) a second, until someone who knows says otherwise.
 /// Prey's eyes: on the sides of the head, so most of the way round but short and
-/// low-acuity, sharp to 8 shaku, then 18, then 26. Placeholder tuning from the first
-/// attempt.
+/// low-acuity, sharp to 12 shaku, then 36, then 65. The first attempt's placeholder tuning
+/// (8, 18, 26) stretched on 2026-09-27 by 1.5, 2 and 2.5, as the fox's.
 const HARE_VISION: Vision = Vision {
     arc: 240.0,
     bands: [
         Band {
-            range: 8,
+            range: 12,
             sensitivity: 1.0,
         },
         Band {
-            range: 18,
+            range: 36,
             sensitivity: 0.55,
         },
         Band {
-            range: 26,
+            range: 65,
             sensitivity: 0.25,
         },
     ],

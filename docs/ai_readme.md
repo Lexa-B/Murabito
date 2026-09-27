@@ -154,7 +154,7 @@ A snapshot is flat facts with names, built for a scorer to read:
 | `id`, `kind` | the body's number and its path in the tree of kinds |
 | `tick` | which tick this is a picture of |
 | `position`, `facing` | the voxel as in memory, `{q, r, layer}`, and the compass direction |
-| `in_view` | per sighting: `id`, `kind` (or none if the thing carries no label), `offset`, `distance` in steps, `acuity` |
+| `in_view` | per sighting: `id`, `kind` (or none if the thing carries no label), `offset`, `distance` in steps, `acuity`, `facing` (the way the seen thing faces, or none) |
 | `doing` | the intent and the tick it began, or nothing |
 | `queue` | every action waiting, first to last |
 | `in_flight` | the fraction of the current step, or nothing |
@@ -207,7 +207,8 @@ A mind does not act on what a body sees; it acts on what the body *believes*, an
 ways the moment the body looks away. `beliefs.py` is that layer, in its smallest form. Each body
 on the board has a `BelievedWorld`, and in it a `Belief` per thing the body has ever seen, keyed
 on the thing's id: its kind path (or none, if the sighting carried no label), the cell it stood
-in, the tick it was last seen, and the acuity then. The cell is absolute, the body's own voxel
+in, the way it faced, the tick it was last seen, the acuity then, and how many cells the body
+has walked since (`walked_since`, the seed of uncertainty later). The cell is absolute, the body's own voxel
 plus the sighting's offset, so "four steps south of me" is remembered as "at (-8, 4)" and still
 means something once the body has walked on. One verb, `observe(snapshot)`, writes every
 sighting in over what was there; a snapshot from another body is refused.
@@ -227,6 +228,52 @@ is and how long ago, outlined if in view this round. The game window beside it i
 nothing of the truth is drawn here. Layers are tracked in the model and shown in the terminal
 view, and flattened in the window until something stands on one.
 
+### Ambitions, and the stalk
+
+The mind decides the way Halo Infinite's bots do, with the Sims' half left as a hook. Every
+round, each **ambition** in a body's repertoire (`ambitions.py`, `REPERTOIRE`, keyed on the
+kind's path; a kind not listed only idles) reads the believed world and the snapshot and bids
+a utility, 0 to 1; `choose` takes the highest, with a small boost for the one in hand so a
+near tie doesn't flip every round. The winner then ticks its **behaviour tree**
+(`behaviour.py`: `Condition`, `Act`, `Selector`, `Sequence`, ticked afresh from the root each
+round, no memory of its own) for the intent it wants, and the loop sends that only if it
+**differs** from what the body is doing: a hold is never sent, a `Stop` only when something is
+in hand, a `GoTo` only when nothing is in hand or the target has moved two or more cells, so
+the mind never cuts its own steps. Before bidding, `revise` drops a belief the body's own eyes
+contradict: a thing that should be within a cell and isn't in view, or one on the notch the
+body faces within its near reach (18 cells, the fox's near band, copied) and not in view.
+
+The fox's repertoire is `Idle` and `Stalk(prey=hare, distance=3, looking_arc=180,
+rear_tolerance=15, spiral=15, check_after=3)`, which bids 1 while it believes in a hare and
+runs this tree:
+
+```
+stalk
+├─ freeze     the hare is looking at us (its last-seen facing, within the arc)   → Stop
+├─ check      we have walked `check_after` cells without seeing it               → face where we believe it is;
+│                                                                                  hold once facing
+├─ circle     we are off its rear line                                          → GoTo a cell one notch round toward
+│                                                                                  its rear, spiralling in by `spiral`
+├─ approach   on the rear line, farther than `distance`                         → GoTo the cell `distance` behind it
+└─ watch                                                                        → face it, or hold if we already do
+```
+
+The check is Lexa's: a circling fox faces the way it walks, so every few cells it pivots to
+see the hare is where it left it. If it is, the sighting resets the count and circling resumes;
+if the fox looks straight at the believed cell within its near reach and sees nothing, `revise`
+forgets the hare (the second of its two rules, beside standing on the cell), the stalk bids 0,
+and the fox idles. `spiral` is the circle's pitch, Lexa's dial: 0 is a pure arc at the fox's current distance; a
+positive angle tilts each swing that far inward off the tangent, so the fox closes as it
+comes round (about 13% nearer per 30° swing at 15°), never nearer than `distance`. An
+ambition that has lost its reason to run bids 0 and gets no boost, so a stalk whose prey was
+forgotten is let go. All of it reads beliefs, so a hare that walked out of view is still
+stalked to where it was last seen and, once the fox stands there and sees nothing, forgotten. `hexes.py` is the mind's
+copy of the plane for the geometry: bearings, rotations, the twelve offsets. Watched live on
+2026-09-27: the fox approached to three behind the hare and held; froze when the hare turned to
+look; circled to the hare's new rear when it faced across; settled and faced it. Every decision
+shows in the terminal view and the window as the path through the tree, `stalk › circle ›
+round`, and the cell it wants as an outlined hex.
+
 ## Design
 
 - **The believed world's growth**, one rule at a time, each watched in the window before the
@@ -234,15 +281,12 @@ view, and flattened in the window until something stands on one.
   ageing and confidence; dead reckoning along a last course; a memory of cells seen and never
   seen. All inside `beliefs.py`; none touches the wire. exp-02's belief store is the model to
   draw on.
-- **The midbrain's first behaviour.** The scorer above the believed world: a client on its own
-  125 ms clock that reads every snapshot, scores, and sends each body an intent, the
-  utility-AI shape Lexa named (a consideration reads a number, a score picks an option). Two
-  calls made on 2026-09-27: the mind sends only when its want differs from the snapshot's
-  `doing`, since every new intent cuts short what is in flight and a mind re-sending the same
-  want each round would cut its own steps; and the mind drives the fox first, the hare staying
-  on the scene's click. Options, considerations, and what `previous` feeds back are its own
-  design talk. `Doing` on the wire does not say whether the intent in hand is the mind's or a
-  reflex's; if the mind should defer to a reflex, `Doing` grows a "by".
+- **The mind's growth**, all proof-of-concept so far ("we'll flesh it out later"): the Sims'
+  half, things in the believed world advertising what they offer and the body's motives
+  weighting them, as the source of utilities; a search ambition for prey believed and lost;
+  the hare's own ambitions (flee), which retire the scene's click; what `previous` feeds
+  back (`Cancelled`, `Lost`); whether the mind defers to a reflex in hand, which needs a
+  "by" on `Doing`, since the wire doesn't say whose intent it is.
 - **Deferred words**: `Walk`, `Follow`, `Flee`, each a variant and a few lines in drive.
 - **A body's own memory in the game**, below reflexes and brainstem, so a reflex asks "not in
   what I believe" rather than "not in last tick's list"; the mind's believed world does not

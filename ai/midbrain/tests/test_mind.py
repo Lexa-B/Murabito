@@ -22,7 +22,38 @@ def hare(tick: int, *in_view: pb.InView) -> pb.Snapshot:
 
 
 def seen(id: int, dq: int, dr: int, kind: str) -> pb.InView:
-    return pb.InView(id=id, kind=kind, offset=pb.Offset(dq=dq, dr=dr), distance=max(abs(dq), abs(dr)), acuity=pb.Acuity.MID)
+    return pb.InView(
+        id=id, kind=kind, offset=pb.Offset(dq=dq, dr=dr), distance=max(abs(dq), abs(dr)), acuity=pb.Acuity.MID,
+        facing=pb.Direction.NNW,
+    )
+
+
+def hare_facing(facing: int) -> pb.InView:
+    sighting = seen(3, 14, 0, HARE)
+    sighting.facing = facing
+    return sighting
+
+
+def test_the_fox_stalks_what_it_believes_and_the_hare_only_idles() -> None:
+    mind = Mind()
+    orders = mind.round([fox(64, hare_facing(pb.Direction.E)), hare(64)])
+    assert orders == [(1, pb.Intent(sustained=pb.Sustained(go_to=pb.Voxel(q=3, r=0))))]
+    assert mind.decisions[1].path == ("stalk", "approach", "close in") and mind.decisions[1].sent
+    assert mind.decisions[3].path == ("idle",) and not mind.decisions[3].sent
+    assert str(mind.decisions[1]) == "stalk › approach › close in  →  GoTo (3, 0, -3) L0  (sent)"
+    assert str(mind.decisions[3]) == "idle  →  hold"
+
+
+def test_an_order_in_hand_is_not_sent_again_and_a_stop_is_when_the_hare_looks() -> None:
+    mind = Mind()
+    mind.round([fox(64, hare_facing(pb.Direction.E))])
+    going = fox(72, hare_facing(pb.Direction.E))
+    going.doing.CopyFrom(pb.Doing(intent=pb.Intent(sustained=pb.Sustained(go_to=pb.Voxel(q=3, r=0))), since=65))
+    assert mind.round([going]) == []
+    looking = fox(80, hare_facing(pb.Direction.W))
+    looking.doing.CopyFrom(going.doing)
+    assert mind.round([looking]) == [(1, pb.Intent(short=pb.Short(stop=pb.Stop())))]
+    assert mind.decisions[1].path == ("stalk", "freeze", "stop")
 
 
 def test_a_round_gives_every_body_a_world_and_fills_it() -> None:
@@ -52,6 +83,7 @@ def test_the_view_names_each_belief_and_how_long_ago() -> None:
     text = console.export_text()
     assert "tick 80   2 minds" in text
     assert "#1 fox" in text and "#3 hare" in text
-    assert "sugi" in text and "(5, -4, -1) L0" in text and "16 ticks ago" in text
+    assert "sugi" in text and "(5, -4, -1) L0" in text and "16 ticks ago" in text and "NNW" in text
+    assert "decided  idle  →  hold" in text
     assert "nothing yet" in text
     assert ago(0) == "now"

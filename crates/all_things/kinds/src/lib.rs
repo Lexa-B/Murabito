@@ -367,8 +367,8 @@ mod tests {
         let hare_eyes = world.entity(hare).get::<Vision>().expect("eyes").clone();
         assert!(fox_eyes.arc < hare_eyes.arc);
         assert!(fox_eyes.far_range() > hare_eyes.far_range());
-        assert_eq!((fox_eyes.arc, fox_eyes.far_range()), (120.0, 48));
-        assert_eq!((hare_eyes.arc, hare_eyes.far_range()), (240.0, 26));
+        assert_eq!((fox_eyes.arc, fox_eyes.far_range()), (120.0, 120));
+        assert_eq!((hare_eyes.arc, hare_eyes.far_range()), (240.0, 65));
     }
 
     #[test]
