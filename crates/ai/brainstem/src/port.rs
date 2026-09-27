@@ -249,7 +249,7 @@ mod tests {
         voxel,
     };
     use crate::{Outcome, Short};
-    use murabito_movement::{Gait, Locomotion};
+    use murabito_movement::Locomotion;
 
     const BODY: Kind = Kind::at("test::bodies::body");
     const THING: Kind = Kind::at("test::things::thing");
@@ -359,7 +359,7 @@ mod tests {
         let doing = card.doing.expect("stepping north");
         assert_eq!(doing.intent(), Intent::Short(Short::Step(N)));
         assert_eq!(doing.since(), 1);
-        assert_eq!(card.queue, [Action::Go(N, Gait::Walk)]);
+        assert_eq!(card.queue, [Action::Walk(N)]);
         let fraction = card.in_flight.expect("a notch of turning in flight");
         assert!(
             (fraction - 0.75).abs() < 1e-3,

@@ -27,7 +27,6 @@ use bevy::prelude::*;
 use murabito_actions::{Action, ActionQueue, AskingSet, CutShort};
 use murabito_hexcoords::{Direction, VoxelCoord};
 use murabito_identity::ThingId;
-use murabito_movement::Gait;
 use murabito_perception::PerceptionSet;
 use murabito_placement::{Facing, VoxelPosition};
 use murabito_progress::Progress;
@@ -275,7 +274,7 @@ fn resolve_short(short: Short, seen: Option<&Seen>) -> Resolved {
     match short {
         Short::Stop => Resolved::Finish(Outcome::Done),
         Short::Face(direction) => Resolved::Push(Action::Face(direction)),
-        Short::Step(direction) => Resolved::Push(Action::Go(direction, Gait::Walk)),
+        Short::Step(direction) => Resolved::Push(Action::Walk(direction)),
         Short::FaceThing(id) => {
             let sighting = seen.and_then(|seen| seen.iter().find(|sighting| sighting.id == id));
             match sighting.map(|sighting| sighting.offset.bearing()) {
@@ -364,7 +363,7 @@ fn drive(tick: Res<Tick>, mut commands: Commands, mut bodies: Query<Driven>) {
                             "tick {}: {who} at {:?} steps {direction:?} toward {target:?}",
                             tick.0, position.0
                         );
-                        queue.push(Action::Go(direction, Gait::Walk));
+                        queue.push(Action::Walk(direction));
                     }
                     None => body.finish(Outcome::Done),
                 }
@@ -589,7 +588,7 @@ pub(crate) mod tests {
         );
         assert_eq!(
             resolve_short(Short::Step(E), None),
-            Resolved::Push(Action::Go(E, Gait::Walk))
+            Resolved::Push(Action::Walk(E))
         );
     }
 

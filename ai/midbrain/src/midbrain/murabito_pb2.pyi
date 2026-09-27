@@ -7,13 +7,6 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
-class Gait(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
-    __slots__ = ()
-    SNEAK: _ClassVar[Gait]
-    WALK: _ClassVar[Gait]
-    JOG: _ClassVar[Gait]
-    SPRINT: _ClassVar[Gait]
-
 class Direction(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     E: _ClassVar[Direction]
@@ -34,10 +27,6 @@ class Acuity(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     NEAR: _ClassVar[Acuity]
     MID: _ClassVar[Acuity]
     FAR: _ClassVar[Acuity]
-SNEAK: Gait
-WALK: Gait
-JOG: Gait
-SPRINT: Gait
 E: Direction
 ENE: Direction
 NNE: Direction
@@ -167,34 +156,32 @@ class Sustained(_message.Message):
     def __init__(self, go_to: _Optional[_Union[Voxel, _Mapping]] = ...) -> None: ...
 
 class Action(_message.Message):
-    __slots__ = ("go", "face", "sidestep", "backstep", "recoil", "lunge", "bite")
-    GO_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("walk", "jog", "sprint", "sneak", "face", "sidestep", "backstep", "recoil", "lunge", "bite")
+    WALK_FIELD_NUMBER: _ClassVar[int]
+    JOG_FIELD_NUMBER: _ClassVar[int]
+    SPRINT_FIELD_NUMBER: _ClassVar[int]
+    SNEAK_FIELD_NUMBER: _ClassVar[int]
     FACE_FIELD_NUMBER: _ClassVar[int]
     SIDESTEP_FIELD_NUMBER: _ClassVar[int]
     BACKSTEP_FIELD_NUMBER: _ClassVar[int]
     RECOIL_FIELD_NUMBER: _ClassVar[int]
     LUNGE_FIELD_NUMBER: _ClassVar[int]
     BITE_FIELD_NUMBER: _ClassVar[int]
-    go: Go
+    walk: Direction
+    jog: Direction
+    sprint: Direction
+    sneak: Direction
     face: Direction
     sidestep: Direction
     backstep: Direction
     recoil: Direction
     lunge: Direction
     bite: Bite
-    def __init__(self, go: _Optional[_Union[Go, _Mapping]] = ..., face: _Optional[_Union[Direction, str]] = ..., sidestep: _Optional[_Union[Direction, str]] = ..., backstep: _Optional[_Union[Direction, str]] = ..., recoil: _Optional[_Union[Direction, str]] = ..., lunge: _Optional[_Union[Direction, str]] = ..., bite: _Optional[_Union[Bite, _Mapping]] = ...) -> None: ...
+    def __init__(self, walk: _Optional[_Union[Direction, str]] = ..., jog: _Optional[_Union[Direction, str]] = ..., sprint: _Optional[_Union[Direction, str]] = ..., sneak: _Optional[_Union[Direction, str]] = ..., face: _Optional[_Union[Direction, str]] = ..., sidestep: _Optional[_Union[Direction, str]] = ..., backstep: _Optional[_Union[Direction, str]] = ..., recoil: _Optional[_Union[Direction, str]] = ..., lunge: _Optional[_Union[Direction, str]] = ..., bite: _Optional[_Union[Bite, _Mapping]] = ...) -> None: ...
 
 class Bite(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
-
-class Go(_message.Message):
-    __slots__ = ("direction", "gait")
-    DIRECTION_FIELD_NUMBER: _ClassVar[int]
-    GAIT_FIELD_NUMBER: _ClassVar[int]
-    direction: Direction
-    gait: Gait
-    def __init__(self, direction: _Optional[_Union[Direction, str]] = ..., gait: _Optional[_Union[Gait, str]] = ...) -> None: ...
 
 class Outcome(_message.Message):
     __slots__ = ("done", "stopped", "superseded", "cancelled", "lost")

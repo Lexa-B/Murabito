@@ -8,7 +8,6 @@ use murabito_actions::Action;
 use murabito_brainstem::{Doing, InView, Intent, Outcome, Previous, Short, Snapshot, Sustained};
 use murabito_hexcoords::{Direction, Offset, VoxelCoord};
 use murabito_identity::ThingId;
-use murabito_movement::Gait;
 use murabito_vision::Acuity;
 
 use crate::proto;
@@ -30,15 +29,6 @@ impl std::error::Error for Malformed {}
 /// A direction's number on the wire is its index in memory.
 fn direction_out(direction: Direction) -> i32 {
     i32::from(direction.index())
-}
-
-fn gait_out(gait: Gait) -> i32 {
-    match gait {
-        Gait::Sneak => proto::Gait::Sneak as i32,
-        Gait::Walk => proto::Gait::Walk as i32,
-        Gait::Jog => proto::Gait::Jog as i32,
-        Gait::Sprint => proto::Gait::Sprint as i32,
-    }
 }
 
 fn acuity_out(acuity: Acuity) -> i32 {
@@ -107,10 +97,10 @@ impl From<Action> for proto::Action {
     fn from(action: Action) -> Self {
         use proto::action::Kind;
         let kind = match action {
-            Action::Go(direction, gait) => Kind::Go(proto::Go {
-                direction: direction_out(direction),
-                gait: gait_out(gait),
-            }),
+            Action::Walk(direction) => Kind::Walk(direction_out(direction)),
+            Action::Jog(direction) => Kind::Jog(direction_out(direction)),
+            Action::Sprint(direction) => Kind::Sprint(direction_out(direction)),
+            Action::Sneak(direction) => Kind::Sneak(direction_out(direction)),
             Action::Face(direction) => Kind::Face(direction_out(direction)),
             Action::Sidestep(direction) => Kind::Sidestep(direction_out(direction)),
             Action::Backstep(direction) => Kind::Backstep(direction_out(direction)),
@@ -351,10 +341,7 @@ mod tests {
                 facing: Some(Direction::N),
             }],
             doing: None,
-            queue: vec![
-                Action::Go(Direction::E, Gait::Walk),
-                Action::Face(Direction::N),
-            ],
+            queue: vec![Action::Walk(Direction::E), Action::Face(Direction::N)],
             in_flight: Some(0.25),
             previous: Some(Previous::new(
                 Intent::Sustained(Sustained::GoTo(voxel(0, 0))),
@@ -390,10 +377,7 @@ mod tests {
         assert_eq!(message.queue.len(), 2);
         assert_eq!(
             message.queue[0].kind,
-            Some(proto::action::Kind::Go(proto::Go {
-                direction: proto::Direction::E as i32,
-                gait: proto::Gait::Walk as i32,
-            }))
+            Some(proto::action::Kind::Walk(proto::Direction::E as i32))
         );
         assert_eq!(message.in_flight, Some(0.25));
         let previous = message.previous.unwrap();
