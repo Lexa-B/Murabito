@@ -107,8 +107,9 @@ class Stalk:
     """How many cells behind it to settle."""
     looking_arc: float = 180.0
     """Degrees of its front within which it counts as looking at us."""
-    rear_tolerance: float = 30.0
-    """Degrees either side of dead behind that count as on its rear line."""
+    rear_tolerance: float = 15.0
+    """Degrees either side of dead behind that count as on its rear line: half a notch, so
+    the fox keeps circling until it is on the notch dead behind."""
     name: str = "stalk"
 
     def target(self, ctx: Context) -> Belief | None:
@@ -173,6 +174,19 @@ class Stalk:
 
     def want(self, ctx: Context) -> Result:
         return self.tree.tick(ctx)
+
+
+FOX = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox"
+HARE = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::hare"
+
+REPERTOIRE: dict[str, list[Ambition]] = {
+    FOX: [Idle(), Stalk(prey=HARE)],
+}
+"""What each kind can want, keyed on its path. A kind not listed only idles."""
+
+
+def repertoire_for(kind: str) -> list[Ambition]:
+    return REPERTOIRE.get(kind, [Idle()])
 
 
 def revise(ctx: Context) -> list[int]:

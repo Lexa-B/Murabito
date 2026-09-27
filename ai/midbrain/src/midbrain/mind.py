@@ -1,9 +1,10 @@
 """The mind's loop: ``uv run mind``.
 
-Every round, about 125 ms, it pulls every body's snapshot from the game's bridge and feeds
-each into that body's believed world. It decides nothing and sends nothing yet. What it
-shows is what each body believes: every thing it has ever seen, where it last saw it, and
-how long ago. Run it beside the game; the game is the truth, this is the belief.
+Every round, about 125 ms, it pulls every body's snapshot from the game's bridge, feeds
+each into that body's believed world, revises what can't be so, lets the body's ambitions
+bid, ticks the winner's tree, and sends the intent it wants if that differs from what the
+body is doing. What it shows is what each body believes and what it decided. Run it beside
+the game; the game is the truth, this is the mind.
 """
 
 from __future__ import annotations
@@ -18,24 +19,57 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from collections.abc import Callable
 from midbrain import murabito_pb2 as pb
+from midbrain.ambitions import Ambition, Context, choose, differs, repertoire_for, revise
 from midbrain.beliefs import BelievedWorld
-from midbrain.board import ROUND, direction, name_of, voxel
+from midbrain.board import ROUND, direction, intent as intent_words, name_of, voxel
 from midbrain.client import HOST, PORT, Bridge
+
+
+@dataclass(frozen=True)
+class Decision:
+    """What one body decided this round: which ambition, the path through its tree, the
+    intent it wanted, and whether that was worth sending."""
+
+    ambition: str
+    path: tuple[str, ...]
+    want: pb.Intent | None
+    sent: bool
+
+    def __str__(self) -> str:
+        want = intent_words(self.want) if self.want is not None else "hold"
+        return f"{' › '.join(self.path)}  →  {want}" + ("  (sent)" if self.sent else "")
 
 
 @dataclass
 class Mind:
-    """Every body's believed world, and the latest snapshot each was fed."""
+    """Every body's believed world, the latest snapshot each was fed, and what each decided."""
 
     worlds: dict[int, BelievedWorld] = field(default_factory=dict)
     latest: dict[int, pb.Snapshot] = field(default_factory=dict)
+    current: dict[int, str] = field(default_factory=dict)
+    """The ambition each body has in hand, boosted when its bids are next compared."""
+    decisions: dict[int, Decision] = field(default_factory=dict)
+    repertoire: Callable[[str], list[Ambition]] = repertoire_for
 
-    def round(self, snapshots: list[pb.Snapshot]) -> None:
-        """One round: every snapshot into its body's world, a new world for a new body."""
+    def round(self, snapshots: list[pb.Snapshot]) -> list[tuple[int, pb.Intent]]:
+        """One round: observe, revise, choose, want; the orders worth sending, per body."""
+        orders = []
         for snapshot in snapshots:
-            self.worlds.setdefault(snapshot.id, BelievedWorld(snapshot.id)).observe(snapshot)
+            world = self.worlds.setdefault(snapshot.id, BelievedWorld(snapshot.id))
+            world.observe(snapshot)
             self.latest[snapshot.id] = snapshot
+            ctx = Context(world, snapshot)
+            revise(ctx)
+            ambition = choose(self.repertoire(snapshot.kind), ctx, self.current.get(snapshot.id))
+            self.current[snapshot.id] = ambition.name
+            result = ambition.want(ctx)
+            sent = differs(result.intent, snapshot)
+            self.decisions[snapshot.id] = Decision(ambition.name, result.path, result.intent, sent)
+            if sent:
+                orders.append((snapshot.id, result.intent))
+        return orders
 
     def world(self, body: int) -> BelievedWorld | None:
         return self.worlds.get(body)
@@ -53,6 +87,7 @@ def ago(ticks: int) -> str:
 def body_panel(mind: Mind, body: int) -> Panel:
     snapshot, world = mind.latest[body], mind.worlds[body]
     header = Text(f"at {voxel(snapshot.position)}  facing {direction(snapshot.facing)}", style="dim")
+    decided = Text(f"decided  {mind.decisions[body]}")
     beliefs = Table(box=None, pad_edge=False, show_header=True, header_style="dim")
     beliefs.add_column("believes")
     beliefs.add_column("kind")
@@ -72,7 +107,7 @@ def body_panel(mind: Mind, body: int) -> Panel:
     if not len(world):
         beliefs.add_row(Text("nothing yet", style="dim"), "", "", "", "", "")
     title = f"#{body} {name_of(snapshot.kind)}"
-    return Panel(Group(header, beliefs), title=title, title_align="left")
+    return Panel(Group(header, decided, beliefs), title=title, title_align="left")
 
 
 def render(mind: Mind) -> Group:
@@ -85,7 +120,8 @@ def think(host: str, port: int, every: float) -> None:
     console = Console()
     with Bridge(host, port) as bridge, Live(console=console, refresh_per_second=8) as live:
         while True:
-            mind.round(bridge.snapshots())
+            for body, intent in mind.round(bridge.snapshots()):
+                bridge.order(body, intent)
             live.update(render(mind))
             time.sleep(every)
 

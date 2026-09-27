@@ -367,29 +367,33 @@ needed, the board is the truth; a finished or cancelled intent empties `doing` a
 differs again. Not yet built: nothing sends. Also settled: the mind drives the fox first, the
 hare stays on the scene's click, which is how the fox is provoked.
 
-**Where the midbrain stopped.** Lexa opened the first behaviour and then set it aside: "the fox
-can only do stuff like that if it's actively seeing the hare with the current system"; the
-believed world came first (`docs/ai_readme.md`, "The believed world"). It is built in its
-smallest form and validated against the game. What the next session decides, one question at
-a time:
+**Where the midbrain stands.** Lexa opened the first behaviour and first put the believed
+world under it ("the fox can only do stuff like that if it's actively seeing the hare with
+the current system"), then built the first behaviour on it the same day, all of it
+proof-of-concept by Lexa's word ("everything we're making in the midbrain right now is quick
+proof-of-concept work"): `uv run mind` now decides and sends. The shape is Halo's, from the
+two transcripts Lexa gave (AI and Games #71 on Halo Infinite's bots; Game Maker's Toolkit on
+The Sims): ambitions bid utilities, the winner runs a behaviour tree, the one in hand is
+boosted against thrashing; the Sims' advertisements-and-motives are the hook for where
+utilities will come from, off the believed world rather than the world. The one ambition is
+`Stalk`, Lexa's spec: "[stay behind target] -> [move to be x voxels from the target] -> [stay
+facing the target]", with a freeze node when the hare is looking (a dial, front 180°) and a
+circle node ("move orthogonal to it until we're right behind it"). `docs/ai_readme.md`,
+"Ambitions, and the stalk". Watched live: approach, hold, freeze, circle, settle.
 
-1. The believed world's next rule. Candidates, in the order Lexa set aside: forgetting a thing
-   whose believed cell is in view and empty (needs the cone, which the wire does not carry:
-   either a Python copy of `Vision`'s arc and bands per kind, or the snapshot grows the cells
-   in view); ageing and a confidence; dead reckoning; cells seen and never seen. Each is a
-   few lines in `beliefs.py` and a look in the window.
-2. What the first behaviour is, now reading beliefs: the stated target was "send the fox
-   somewhere and face it at the hare"; a watcher (face the hare when believed near), a stalker
-   (go to where the hare is believed, stand and face it when close) were the sizes offered.
-   Lexa's earlier words for the fox were predator-shaped, for the hare prey-shaped; nothing is
-   decided.
-3. Options and considerations: what the fox can want and what numbers decide (believed
-   distance, age of the belief, acuity, whether the last order was cancelled). Per-kind
-   scoring keyed on the `kind` path.
-4. How `previous` feeds back: `Cancelled(startle_face_apparition)`, `Lost(id)`, `Done`; and
-   whether the mind defers to a reflex in hand (`Doing` would need a "by").
-5. Where scoring lives (`midbrain/decide.py`?), pure and pytest-able; `mind.py`'s loop stays
-   thin.
+What the next session decides, one question at a time:
+
+1. The believed world's next rule, still set aside by Lexa's choice ("keep this object
+   permanence layer where it's at"): forgetting on an empty view (needs the cone, which the
+   wire does not carry), ageing, dead reckoning, cells seen and never seen.
+2. The hare's ambitions (flee, at least), which retire the scene's click bandaid, and a
+   search ambition for the fox when prey is believed and then gone.
+3. Where utilities come from: the Sims' half, advertisements off believed things weighted by
+   motives; the body's state on the snapshot is the other input Lexa named.
+4. How `previous` feeds back, and whether the mind defers to a reflex in hand (`Doing` would
+   need a "by"). Lexa's remark to keep: the startle reflex "already requires more
+   intelligence than it should have"; the brainstem "shouldn't be smart enough to have
+   awareness of other entities" (why `Follow` was declined in favour of mind-side hysteresis).
 
 **How to test against the game.** From the `ai-io` worktree, `scripts/run.sh` (the desktop
 shortcut runs the other worktree, still on a branch from before the bridge); the log says "the
@@ -399,9 +403,10 @@ pytest` in `ai/midbrain/` (a fake bridge thread in `tests/test_client.py` is the
 pattern for testing a client without the game). `RUST_LOG=murabito_brainstem=debug` traces
 every aim and step in `~/.cache/murabito/run.log`; reflex fires are always logged. For the
 believed world: the game, `uv run board`, and `uv run mind --visualize` in three terminals,
-then `uv run order 3 goto …` or a click to walk the hare out of the fox's view and watch its
-hex stay put while the age climbs. A headless check draws a frame with `SDL_VIDEODRIVER=dummy`
-and `pygame.image.save`, as `tests/test_visualize.py` does on a `Surface`. 36 tests.
+then `uv run order 3 face W` to make the hare look at the fox (freeze), `face N` to put the
+fox abeam (circle), or a click to walk the hare off; `uv run mind` now sends, so `board` is the
+passive view. A headless check drives `Mind.round` from a `Bridge` and draws frames with
+`SDL_VIDEODRIVER=dummy` and `pygame.image.save`. 61 tests.
 
 **How Lexa works, for this in particular:** design in chat first, one question at a time,
 options with costs and a recommendation, then wait for the yes; one small step per turn,
