@@ -49,7 +49,7 @@ def test_once_the_rest_is_over_it_sets_off_on_a_leg_ahead_and_forgets_the_rest()
         assert Wander.REST_UNTIL not in ctx.scratch
         there = bound_for(result.intent)
         assert result.intent.sustained.WhichOneof("kind") == "walk_to"
-        assert 3.4 <= shaku_between(ctx.here, there) <= 8.6, "four to eight shaku, give or take the rounding to a cell"
+        assert 3.4 <= shaku_between(ctx.here, there) <= 12.6, "four to twelve shaku, give or take the rounding to a cell"
         assert apart(bearing(ctx.here, there), angle_of(pb.Direction.N)) <= 90 + 10, "within the front 180, give or take the rounding"
 
 

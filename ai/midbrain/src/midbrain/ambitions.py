@@ -291,7 +291,7 @@ class Wander:
     under ``wander.rest_until``. On a body's first round it rests before its first leg.
     """
 
-    leg: tuple[float, float] = (4.0, 8.0)
+    leg: tuple[float, float] = (4.0, 12.0)
     """Shortest and longest leg, in shaku."""
     rest: tuple[float, float] = (2.0, 8.0)
     """Shortest and longest rest between legs, in seconds."""
