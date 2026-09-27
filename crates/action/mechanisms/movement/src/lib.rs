@@ -62,24 +62,32 @@ impl Gait {
     }
 }
 
-/// The intent to step one voxel in a direction, at a gait. Put it on a body with a
-/// `Locomotion` and `step` carries it out over ticks, then removes it. Any of the twelve
-/// directions is a legal step: which [`Way`] it goes relative to the facing decides how
-/// the body faces on landing, and the landing turns it at most one notch. One at a time:
-/// the actions layer never issues another while one is in flight.
+/// The intent to step `reach` voxels in a direction, at a gait, landing in one go. Put it
+/// on a body with a `Locomotion` and `step` carries it out over ticks, then removes it.
+/// Any of the twelve directions is a legal step: which [`Way`] it goes relative to the
+/// facing decides how the body faces on landing, and the landing turns it at most one
+/// notch. A reach of two is a lunge: the body is never in the cell between. One at a
+/// time: the actions layer never issues another while one is in flight.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Step {
     pub direction: Direction,
     pub gait: Gait,
+    pub reach: u8,
 }
 
 impl Step {
-    /// A step at walking pace.
+    /// One voxel at walking pace.
     pub fn walk(direction: Direction) -> Self {
         Step {
             direction,
             gait: Gait::Walk,
+            reach: 1,
         }
+    }
+
+    /// What the step costs, in shaku walked: the way's cost, `reach` times over.
+    pub fn cost(self) -> f32 {
+        cost(self.direction) * f32::from(self.reach)
     }
 }
 
@@ -149,11 +157,13 @@ fn step(
 ) {
     for (body, step, locomotion, mut position, mut facing, mut progress) in &mut bodies {
         if !progress.in_flight() {
-            progress.start::<Step>(cost(step.direction));
+            progress.start::<Step>(step.cost());
         }
         let pace = locomotion.speed * step.gait.factor();
         if progress.advance(pace * time.delta_secs()) {
-            position.0 = position.0.neighbour(step.direction);
+            for _ in 0..step.reach {
+                position.0 = position.0.neighbour(step.direction);
+            }
             facing.0 = landing(facing.0, step.direction);
             progress.finish();
             commands.entity(body).remove::<Step>();
@@ -239,12 +249,9 @@ mod tests {
         app.world().get::<Step>(body).is_some()
     }
 
-    /// Issues a step at a gait and counts the ticks until it lands, giving up after too
-    /// many.
-    fn ticks_to_step_at(app: &mut App, body: Entity, direction: Direction, gait: Gait) -> u32 {
-        app.world_mut()
-            .entity_mut(body)
-            .insert(Step { direction, gait });
+    /// Issues a step and counts the ticks until it lands, giving up after too many.
+    fn ticks_to_land(app: &mut App, body: Entity, step: Step) -> u32 {
+        app.world_mut().entity_mut(body).insert(step);
         for tick in 1..=200 {
             app.update();
             if !is_stepping(app, body) {
@@ -254,9 +261,30 @@ mod tests {
         panic!("the step never landed");
     }
 
+    /// Issues a one-voxel step at a gait and counts the ticks until it lands.
+    fn ticks_to_step_at(app: &mut App, body: Entity, direction: Direction, gait: Gait) -> u32 {
+        ticks_to_land(
+            app,
+            body,
+            Step {
+                gait,
+                ..Step::walk(direction)
+            },
+        )
+    }
+
     /// Issues a walking step and counts the ticks until it lands.
     fn ticks_to_step(app: &mut App, body: Entity, direction: Direction) -> u32 {
         ticks_to_step_at(app, body, direction, Gait::Walk)
+    }
+
+    /// Two voxels forward at sprint pace.
+    fn lunge(direction: Direction) -> Step {
+        Step {
+            gait: Gait::Sprint,
+            reach: 2,
+            ..Step::walk(direction)
+        }
     }
 
     fn is_turning(app: &App, body: Entity) -> bool {
@@ -373,14 +401,47 @@ mod tests {
     }
 
     #[test]
-    fn a_walk_step_and_a_bare_step_are_the_same_thing() {
+    fn a_walk_step_is_one_voxel_at_walking_pace() {
         assert_eq!(
             Step::walk(Direction::E),
             Step {
                 direction: Direction::E,
-                gait: Gait::Walk
+                gait: Gait::Walk,
+                reach: 1,
             }
         );
+    }
+
+    #[test]
+    fn a_step_costs_its_way_times_its_reach() {
+        assert_eq!(Step::walk(Direction::E).cost(), 1.0);
+        assert_eq!(lunge(Direction::E).cost(), 2.0);
+        assert!((lunge(Direction::N).cost() - 2.0 * SQRT_3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_lunge_lands_two_cells_on_in_one_go_at_sprint_pace() {
+        // Two shaku at 12 shaku/s is 10.67 ticks, so 11; a corner lunge, 2√3, is 18.5.
+        let (mut app, body) = body_at(voxel(0, 0, 0), Direction::E, 4.0);
+
+        assert_eq!(ticks_to_land(&mut app, body, lunge(Direction::E)), 11);
+        assert_eq!(position_of(&app, body), voxel(2, 0, 0));
+
+        let (mut app, body) = body_at(voxel(0, 0, 0), Direction::N, 4.0);
+
+        assert_eq!(ticks_to_land(&mut app, body, lunge(Direction::N)), 19);
+        assert_eq!(position_of(&app, body), voxel(2, -4, 0));
+    }
+
+    #[test]
+    fn a_lunge_mid_flight_is_still_in_the_cell_it_left_from() {
+        let (mut app, body) = body_at(voxel(0, 0, 0), Direction::E, 4.0);
+        app.world_mut().entity_mut(body).insert(lunge(Direction::E));
+
+        (0..10).for_each(|_| app.update());
+
+        assert!(is_stepping(&app, body));
+        assert_eq!(position_of(&app, body), voxel(0, 0, 0));
     }
 
     #[test]
