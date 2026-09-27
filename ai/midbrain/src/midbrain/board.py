@@ -42,15 +42,16 @@ def offset(delta: pb.Offset) -> str:
 
 def short(motion: pb.Short) -> str:
     match motion.WhichOneof("kind"):
+        case None:
+            return "?"
         case "stop":
             return "Stop"
-        case "face":
-            return f"Face {direction(motion.face)}"
+        case "bite":
+            return "Bite"
         case "face_thing":
             return f"FaceThing #{motion.face_thing}"
-        case "step":
-            return f"Step {direction(motion.step)}"
-    return "?"
+        case word:
+            return f"{word.capitalize()} {direction(getattr(motion, word))}"
 
 
 def intent(what: pb.Intent) -> str:
@@ -64,12 +65,13 @@ def intent(what: pb.Intent) -> str:
 
 
 def action(what: pb.Action) -> str:
-    match what.WhichOneof("kind"):
-        case "go":
-            return f"Go {direction(what.go)}"
-        case "face":
-            return f"Face {direction(what.face)}"
-    return "?"
+    """The word, and its direction if it has one: `Walk E`, `Bite`."""
+    word = what.WhichOneof("kind")
+    if word is None:
+        return "?"
+    if word == "bite":
+        return "Bite"
+    return f"{word.capitalize()} {direction(getattr(what, word))}"
 
 
 def outcome(ended: pb.Outcome) -> str:
@@ -78,6 +80,8 @@ def outcome(ended: pb.Outcome) -> str:
             return f"Cancelled by {ended.cancelled}"
         case "lost":
             return f"Lost #{ended.lost}"
+        case "refused":
+            return f"Refused, {ended.refused}"
         case None:
             return "?"
         case kind:

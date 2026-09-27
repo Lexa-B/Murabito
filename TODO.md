@@ -42,10 +42,11 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   Lexa's word, to be fleshed out later. What's queued: the Sims' half, believed things
   advertising what they offer and motives weighting them, as where utilities come from; the
   hare's ambitions (flee), which retire the click bandaid; a search ambition; what `previous`
-  feeds back; a "by" on `Doing` if the mind should defer to a reflex in hand; `Walk`, `Flee`
-  as `Sustained` variants when a mind needs them (`Follow` declined: the brainstem "shouldn't
-  be smart enough to have awareness of other entities"); keys in the board viewer; a shared
-  Python package for the wire once a second consumer (the cortex) arrives.
+  feeds back; a "by" on `Doing` if the mind should defer to a reflex in hand; `Flee` as a
+  `Sustained` variant when a mind needs it (`Follow` declined: the brainstem "shouldn't be
+  smart enough to have awareness of other entities"); the action words (sneak, sidestep,
+  recoil, lunge, bite, …) in the stalk's tree, which still only walks; keys in the board
+  viewer; a shared Python package for the wire once a second consumer (the cortex) arrives.
 - **The startle reflex knows too much.** Lexa, 2026-09-27: it "already requires more
   intelligence than it should have" for a brainstem-level thing (a kind dial, last tick's
   list, the turning rule). Revisit when the game-side memory exists or when reflexes get

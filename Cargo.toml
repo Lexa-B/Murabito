@@ -48,6 +48,7 @@ murabito_identity = { path = "crates/all_things/identity" }
 murabito_debug = { path = "crates/debug" }
 murabito_progress = { path = "crates/action/progress" }
 murabito_movement = { path = "crates/action/mechanisms/movement" }
+murabito_attacks = { path = "crates/action/mechanisms/attacks" }
 murabito_actions = { path = "crates/action/actions" }
 murabito_kinds = { path = "crates/all_things/kinds" }
 murabito_perception = { path = "crates/perception/perception" }

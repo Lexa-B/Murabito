@@ -94,8 +94,24 @@ pub enum Short {
     Face(Direction),
     /// Turn to face that thing, where it is seen now. `Lost` if it isn't in view.
     FaceThing(ThingId),
-    /// Walk one cell that way, turning first if need be.
-    Step(Direction),
+    /// One cell that way at walking pace, turning first if need be.
+    Walk(Direction),
+    /// A walk at twice the pace.
+    Jog(Direction),
+    /// A walk at three times the pace.
+    Sprint(Direction),
+    /// A walk at half the pace.
+    Sneak(Direction),
+    /// One cell sideways, without turning. `Refused` unless the way is lateral.
+    Sidestep(Direction),
+    /// One cell back, without turning. `Refused` unless the way is rear.
+    Backstep(Direction),
+    /// A backstep at a jog. `Refused` unless the way is rear.
+    Recoil(Direction),
+    /// Two cells forward at a sprint, in one go. `Refused` unless the way is forward.
+    Lunge(Direction),
+    /// Bite whatever is in the cell faced. Bites nothing yet.
+    Bite,
 }
 
 /// What a body can be told that outlives rounds: drive keeps re-aiming it, one step at a
@@ -127,6 +143,8 @@ pub enum Outcome {
     Cancelled(&'static str),
     /// The thing it named was not in view when the body went to act on it.
     Lost(ThingId),
+    /// The body could not be asked it the way it faced, and the reason why.
+    Refused(&'static str),
 }
 
 /// What the body did last, and how it ended: the record a mind reads to learn what
@@ -269,20 +287,33 @@ enum Resolved {
 
 /// The one action a short is. A stop is none and never reaches here; facing a thing is a
 /// turn toward where it is seen, done already if it shares the cell, lost if it is not
-/// in view.
-fn resolve_short(short: Short, seen: Option<&Seen>) -> Resolved {
-    match short {
-        Short::Stop => Resolved::Finish(Outcome::Done),
-        Short::Face(direction) => Resolved::Push(Action::Face(direction)),
-        Short::Step(direction) => Resolved::Push(Action::Go(direction)),
+/// in view; a word the body cannot be asked the way it faces is refused, with the
+/// reason, before it ever reaches the queue.
+fn resolve_short(short: Short, facing: Direction, seen: Option<&Seen>) -> Resolved {
+    let action = match short {
+        Short::Stop => return Resolved::Finish(Outcome::Done),
+        Short::Face(direction) => Action::Face(direction),
         Short::FaceThing(id) => {
             let sighting = seen.and_then(|seen| seen.iter().find(|sighting| sighting.id == id));
-            match sighting.map(|sighting| sighting.offset.bearing()) {
+            return match sighting.map(|sighting| sighting.offset.bearing()) {
                 None => Resolved::Finish(Outcome::Lost(id)),
                 Some(None) => Resolved::Finish(Outcome::Done),
                 Some(Some(direction)) => Resolved::Push(Action::Face(direction)),
-            }
+            };
         }
+        Short::Walk(direction) => Action::Walk(direction),
+        Short::Jog(direction) => Action::Jog(direction),
+        Short::Sprint(direction) => Action::Sprint(direction),
+        Short::Sneak(direction) => Action::Sneak(direction),
+        Short::Sidestep(direction) => Action::Sidestep(direction),
+        Short::Backstep(direction) => Action::Backstep(direction),
+        Short::Recoil(direction) => Action::Recoil(direction),
+        Short::Lunge(direction) => Action::Lunge(direction),
+        Short::Bite => Action::Bite,
+    };
+    match action.check(facing) {
+        Ok(()) => Resolved::Push(action),
+        Err(wrong) => Resolved::Finish(Outcome::Refused(wrong.reason())),
     }
 }
 
@@ -339,7 +370,7 @@ fn drive(tick: Res<Tick>, mut commands: Commands, mut bodies: Query<Driven>) {
         let idle = queue.is_empty() && !progress.in_flight();
         match doing.intent {
             Intent::Short(short) if !body.pushed => {
-                match resolve_short(short, seen) {
+                match resolve_short(short, facing.0, seen) {
                     Resolved::Push(action) => {
                         debug!(
                             "tick {}: {who} facing {:?} at {:?} pushes {action:?} for {short:?}",
@@ -363,7 +394,7 @@ fn drive(tick: Res<Tick>, mut commands: Commands, mut bodies: Query<Driven>) {
                             "tick {}: {who} at {:?} steps {direction:?} toward {target:?}",
                             tick.0, position.0
                         );
-                        queue.push(Action::Go(direction));
+                        queue.push(Action::Walk(direction));
                     }
                     None => body.finish(Outcome::Done),
                 }
@@ -377,6 +408,7 @@ fn drive(tick: Res<Tick>, mut commands: Commands, mut bodies: Query<Driven>) {
 pub(crate) mod tests {
     use super::*;
     use murabito_actions::ActionsPlugin;
+    use murabito_attacks::AttacksPlugin;
     use murabito_identity::{IdentityPlugin, NextThingId};
     use murabito_movement::{Locomotion, MovementPlugin};
     use murabito_perception::PerceptionPlugin;
@@ -429,6 +461,7 @@ pub(crate) mod tests {
             IdentityPlugin,
             ProgressPlugin,
             MovementPlugin,
+            AttacksPlugin,
             ActionsPlugin,
             PerceptionPlugin,
             VisionPlugin,
@@ -532,7 +565,7 @@ pub(crate) mod tests {
     #[test]
     fn a_newer_order_supersedes_and_a_stop_stops() {
         let mut body = Brainstem::default();
-        body.order(short(Short::Step(E)));
+        body.order(short(Short::Walk(E)));
         let pending = body.take_pending().unwrap();
         body.begin(pending, 1);
 
@@ -541,7 +574,7 @@ pub(crate) mod tests {
         body.begin(pending, 2);
         let previous = body.previous().expect("something ended");
         assert_eq!(previous.outcome(), Outcome::Superseded);
-        assert_eq!(previous.intent(), short(Short::Step(E)), "and it says what");
+        assert_eq!(previous.intent(), short(Short::Walk(E)), "and it says what");
         assert_eq!(body.doing().unwrap().intent(), short(Short::Face(N)));
 
         body.order(short(Short::Stop));
@@ -554,7 +587,7 @@ pub(crate) mod tests {
     #[test]
     fn a_reflex_cancels_by_name() {
         let mut body = Brainstem::default();
-        body.order(short(Short::Step(E)));
+        body.order(short(Short::Walk(E)));
         let pending = body.take_pending().unwrap();
         body.begin(pending, 1);
 
@@ -572,23 +605,52 @@ pub(crate) mod tests {
     fn the_later_of_two_orders_in_one_tick_is_the_one_taken() {
         let mut body = Brainstem::default();
         body.order(short(Short::Face(N)));
-        body.order(short(Short::Step(E)));
+        body.order(short(Short::Walk(E)));
         let pending = body.take_pending().unwrap();
-        assert_eq!(pending.intent, short(Short::Step(E)));
+        assert_eq!(pending.intent, short(Short::Walk(E)));
         assert_eq!(body.take_pending(), None);
     }
 
     // -- the pure parts -------------------------------------------------------------
 
     #[test]
-    fn a_face_is_a_face_and_a_step_a_go() {
+    fn each_word_is_its_action() {
+        use Direction::W;
+        let words = [
+            (Short::Face(N), Action::Face(N)),
+            (Short::Walk(E), Action::Walk(E)),
+            (Short::Jog(W), Action::Jog(W)),
+            (Short::Sprint(E), Action::Sprint(E)),
+            (Short::Sneak(E), Action::Sneak(E)),
+            (Short::Sidestep(N), Action::Sidestep(N)),
+            (Short::Backstep(W), Action::Backstep(W)),
+            (Short::Recoil(W), Action::Recoil(W)),
+            (Short::Lunge(E), Action::Lunge(E)),
+            (Short::Bite, Action::Bite),
+        ];
+        for (word, action) in words {
+            assert_eq!(
+                resolve_short(word, E, None),
+                Resolved::Push(action),
+                "{word:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_way_word_the_wrong_way_is_refused_before_it_reaches_the_queue() {
+        use Direction::W;
         assert_eq!(
-            resolve_short(Short::Face(N), None),
-            Resolved::Push(Action::Face(N))
+            resolve_short(Short::Sidestep(E), E, None),
+            Resolved::Finish(Outcome::Refused("not lateral"))
         );
         assert_eq!(
-            resolve_short(Short::Step(E), None),
-            Resolved::Push(Action::Go(E))
+            resolve_short(Short::Recoil(E), E, None),
+            Resolved::Finish(Outcome::Refused("not rear"))
+        );
+        assert_eq!(
+            resolve_short(Short::Lunge(W), E, None),
+            Resolved::Finish(Outcome::Refused("not forward"))
         );
     }
 
@@ -596,7 +658,7 @@ pub(crate) mod tests {
     fn facing_a_thing_with_nothing_in_view_is_lost() {
         let id = NextThingId::default().mint();
         assert_eq!(
-            resolve_short(Short::FaceThing(id), None),
+            resolve_short(Short::FaceThing(id), E, None),
             Resolved::Finish(Outcome::Lost(id))
         );
     }
@@ -651,6 +713,36 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_refused_order_ends_on_its_tick_and_the_body_never_moves() {
+        let (mut app, body) = body();
+        order(&mut app, body, short(Short::Sidestep(E)));
+
+        tick(&mut app, 1);
+        assert_eq!(brainstem(&app, body).doing(), None);
+        assert_eq!(
+            previous_outcome(&app, body),
+            Some(Outcome::Refused("not lateral"))
+        );
+        assert_eq!(queued(&app, body), 0);
+
+        tick(&mut app, 30);
+        assert_eq!(position(&app, body), voxel(0, 0));
+    }
+
+    #[test]
+    fn a_recoil_order_lands_the_body_one_back_in_eight_ticks_still_facing_east() {
+        use Direction::W;
+        let (mut app, body) = body();
+        order(&mut app, body, short(Short::Recoil(W)));
+
+        tick(&mut app, 8);
+        assert_eq!(position(&app, body), voxel(-1, 0));
+        assert_eq!(facing(&app, body), E);
+        tick(&mut app, 1);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
+    }
+
+    #[test]
     fn with_nothing_ordered_a_body_stands_there() {
         let (mut app, body) = body();
         tick(&mut app, 10);
@@ -693,7 +785,7 @@ pub(crate) mod tests {
     #[test]
     fn a_step_order_moves_the_body_one_cell_and_is_done() {
         let (mut app, body) = body();
-        order(&mut app, body, short(Short::Step(E)));
+        order(&mut app, body, short(Short::Walk(E)));
         tick(&mut app, 16);
         assert_eq!(
             position(&app, body),
@@ -709,7 +801,7 @@ pub(crate) mod tests {
     #[test]
     fn a_newer_order_cuts_the_step_in_flight_and_begins_on_that_tick() {
         let (mut app, body) = body();
-        order(&mut app, body, short(Short::Step(E)));
+        order(&mut app, body, short(Short::Walk(E)));
         tick(&mut app, 1);
         order(&mut app, body, short(Short::Face(N)));
         tick(&mut app, 1);
@@ -730,7 +822,7 @@ pub(crate) mod tests {
     #[test]
     fn a_stop_empties_the_body_and_says_so() {
         let (mut app, body) = body();
-        order(&mut app, body, short(Short::Step(E)));
+        order(&mut app, body, short(Short::Walk(E)));
         tick(&mut app, 1);
         order(&mut app, body, short(Short::Stop));
         tick(&mut app, 1);

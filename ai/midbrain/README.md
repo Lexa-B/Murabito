@@ -5,7 +5,8 @@ The slow mind, outside the game, in Python. It talks to the game's bridge on
 
 ```
 uv run board          # watch every body's snapshot, live, while the game runs
-uv run order 3 goto 0 0   # tell body #3 what to want: stop | face DIR | face-thing N | step DIR | goto Q R
+uv run order 3 goto 0 0   # tell body #3 what to want: stop | face DIR | face-thing N | goto Q R
+uv run order 1 recoil W   # or walk, jog, sprint, sneak, sidestep, backstep, lunge DIR; bite
 uv run mind           # the mind: believes, decides, sends; what each body believes and decided, live
 uv run mind --visualize   # the same, with one body's believed world in a window; --body N, Tab cycles, Esc quits
 uv run pytest         # the tests

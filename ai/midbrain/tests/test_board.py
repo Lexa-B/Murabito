@@ -5,7 +5,17 @@ from __future__ import annotations
 from rich.console import Console
 
 from midbrain import murabito_pb2 as pb
-from midbrain.board import doing, in_flight, intent, name_of, outcome, previous, render, voxel
+from midbrain.board import (
+    action,
+    doing,
+    in_flight,
+    intent,
+    name_of,
+    outcome,
+    previous,
+    render,
+    voxel,
+)
 
 FOX = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox"
 
@@ -32,7 +42,7 @@ def snapshot() -> pb.Snapshot:
             intent=pb.Intent(sustained=pb.Sustained(go_to=pb.Voxel(q=0, r=0, layer=0))),
             since=40,
         ),
-        queue=[pb.Action(go=pb.Direction.E)],
+        queue=[pb.Action(walk=pb.Direction.E)],
         in_flight=0.5,
         previous=pb.Previous(
             intent=pb.Intent(short=pb.Short(face=pb.Direction.N)),
@@ -47,11 +57,15 @@ def test_the_words_for_each_fact() -> None:
     assert name_of("") == "?"
     assert voxel(s.position) == "(-8, 0, 8) L0"
     assert intent(s.doing.intent) == "GoTo (0, 0, 0) L0"
+    assert intent(pb.Intent(short=pb.Short(sneak=pb.Direction.N))) == "Sneak N"
+    assert intent(pb.Intent(short=pb.Short(bite=pb.Bite()))) == "Bite"
+    assert intent(pb.Intent(short=pb.Short(face_thing=3))) == "FaceThing #3"
     assert doing(s) == "GoTo (0, 0, 0) L0  since tick 40 (24 ticks)"
     assert in_flight(s) == "[##########..........] 50%"
     assert previous(s) == "Face N  →  Cancelled by startle_face_apparition"
     assert outcome(pb.Outcome(done=pb.Done())) == "Done"
     assert outcome(pb.Outcome(lost=7)) == "Lost #7"
+    assert outcome(pb.Outcome(refused="not lateral")) == "Refused, not lateral"
 
 
 def test_a_body_with_nothing_going_on_reads_as_such() -> None:
@@ -61,6 +75,19 @@ def test_a_body_with_nothing_going_on_reads_as_such() -> None:
     assert previous(bare) == "nothing yet"
 
 
+def test_every_action_word_reads_as_itself() -> None:
+    assert action(pb.Action(walk=pb.Direction.E)) == "Walk E"
+    assert action(pb.Action(jog=pb.Direction.E)) == "Jog E"
+    assert action(pb.Action(sprint=pb.Direction.N)) == "Sprint N"
+    assert action(pb.Action(sneak=pb.Direction.N)) == "Sneak N"
+    assert action(pb.Action(face=pb.Direction.W)) == "Face W"
+    assert action(pb.Action(sidestep=pb.Direction.N)) == "Sidestep N"
+    assert action(pb.Action(backstep=pb.Direction.W)) == "Backstep W"
+    assert action(pb.Action(recoil=pb.Direction.WNW)) == "Recoil WNW"
+    assert action(pb.Action(lunge=pb.Direction.E)) == "Lunge E"
+    assert action(pb.Action(bite=pb.Bite())) == "Bite"
+
+
 def test_the_board_renders_every_body_with_its_facts() -> None:
     console = Console(width=100, record=True, force_terminal=False)
     console.print(render([snapshot()]))
@@ -68,7 +95,7 @@ def test_the_board_renders_every_body_with_its_facts() -> None:
     assert "tick 64" in text and "1 bodies" in text
     assert "#2 fox" in text
     assert "facing ESE" in text
-    assert "Go E" in text
+    assert "Walk E" in text
     assert "#4" in text and "near" in text
     assert "sugi" in text and "mid" in text
     assert "Face N  →  Cancelled by startle_face_apparition" in text

@@ -94,7 +94,17 @@ message Short {
     Direction face = 2;
     // Face that thing, by its number, where it is seen now.
     uint64 face_thing = 3;
-    Direction step = 4;
+    // The action words, as `Action` below; a way word the body cannot be asked the way
+    // it faces ends `refused`.
+    Direction walk = 4;
+    Direction jog = 5;
+    Direction sprint = 6;
+    Direction sneak = 7;
+    Direction sidestep = 8;
+    Direction backstep = 9;
+    Direction recoil = 10;
+    Direction lunge = 11;
+    Bite bite = 12;
   }
 }
 
@@ -108,12 +118,26 @@ message Sustained {
 }
 
 // One thing on the queue the mechanisms know how to do.
+// One thing a body has been asked to do, as `murabito_actions::Action`: the word, and
+// nothing under it. The words that name a way, sidestep, backstep, recoil and lunge,
+// are only that way relative to the body's facing; the game refuses one that is not.
 message Action {
   oneof kind {
-    Direction go = 1;
-    Direction face = 2;
+    Direction walk = 1;
+    Direction jog = 2;
+    Direction sprint = 3;
+    Direction sneak = 4;
+    Direction face = 5;
+    Direction sidestep = 6;
+    Direction backstep = 7;
+    Direction recoil = 8;
+    Direction lunge = 9;
+    Bite bite = 10;
   }
 }
+
+// Bite whatever is in the cell faced. Bites nothing yet.
+message Bite {}
 
 message Outcome {
   oneof kind {
@@ -124,6 +148,8 @@ message Outcome {
     string cancelled = 4;
     // The number of the thing that was not in view.
     uint64 lost = 5;
+    // Why the body could not be asked it the way it faced: "not lateral" and the like.
+    string refused = 6;
   }
 }
 

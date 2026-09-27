@@ -15,4 +15,5 @@ murabito_progress.workspace = true
 murabito_vision.workspace = true
 
 [dev-dependencies]
+murabito_attacks.workspace = true
 murabito_movement.workspace = true

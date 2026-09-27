@@ -6,8 +6,8 @@ then with the kinds; on 2026-09-23 with placement, the hex additions, and percep
 sight; on 2026-09-24 with identity (PR #42) and the debug feature (PR #43); and on 2026-09-27
 with the AI's I/O (PR #44): the kind label and the ontology, the brainstem, the reflexes, the
 port, the bridge and the Python midbrain's home; and the same day with the mind's believed
-world (PR #46) and the fox's stalk (PR #47), then checked over for a fresh session (the docs
-PR this update is). Everything here is on `main`. `AGENTS.md` is the authority on how to
+world (PR #46) and the fox's stalk (PR #47), then checked over for a fresh session (PR #48);
+and with the action words and the attacks stub. Everything here is on `main`. `AGENTS.md` is the authority on how to
 work; this is where things stand, for a session starting cold.
 
 ## What runs
@@ -69,8 +69,9 @@ Every arrow in the dependency graph points down; `crates/action/`, `crates/all_t
 | `murabito_progress` | `crates/action/progress` | `Progress`, the one accumulation bar per entity, `abandon`ed when a body is cut short; `MechanismSet`; the sweep | `Progress`, `MechanismSet`, `ProgressPlugin` |
 | `murabito_perception` | `crates/perception/perception` | `Occupancy`, which things stand in which voxel, rebuilt each tick; `PerceptionSet::{Gather, Sense}` in `FixedUpdate` after `MechanismSet` | `Occupancy`, `PerceptionSet`, `PerceptionPlugin` |
 | `murabito_vision` | `crates/perception/senses/vision` | `Vision` (a cone on `Facing`, three bands, `Vision::BLIND`), a member of `Sentient`; the cast, private; `Seen`, the tick's `Sighting`s (entity, id, offset, acuity) | `Vision`, `Band`, `Acuity`, `Seen`, `Sighting`, `VisionPlugin` |
-| `murabito_movement` | `crates/action/mechanisms/movement` | `Locomotion`; the `Step` and `Turn` intents and their tick systems, which write `murabito_placement`'s position and facing | those, plus `cost`, `can_step`, `MovementPlugin` |
-| `murabito_actions` | `crates/action/actions` | `ActionQueue` of `Action::{Go, Face}`, readable with `iter`; `issue`, where turn-then-step lives, after `AskingSet`; `CutShort`, the mark that drops what is in flight so the head of the queue is issued this tick | `Action`, `ActionQueue`, `AskingSet`, `CutShort`, `ActionsPlugin` |
+| `murabito_movement` | `crates/action/mechanisms/movement` | `Locomotion`; the `Step { direction, gait, reach }` and `Turn` intents and their tick systems, which write `murabito_placement`'s position and facing; `Gait` (½, 1, 2, 3 × speed), `Way` (forward, lateral, rear of the facing) and the landing rule | those, plus `cost`, `landing`, `MovementPlugin` |
+| `murabito_attacks` | `crates/action/mechanisms/attacks` | the `Bite` intent, a quarter of a second on the bar that bites nothing yet | `Bite`, `AttacksPlugin` |
+| `murabito_actions` | `crates/action/actions` | `ActionQueue` of `Action`, the ten words (`Walk`, `Jog`, `Sprint`, `Sneak`, `Face`, `Sidestep`, `Backstep`, `Recoil`, `Lunge`, `Bite`), readable with `iter`; `issue`, where turn-then-step and the refusal of a wrong-way word live, after `AskingSet`; `Action::check`, the same refusal askable first; `CutShort`, the mark that drops what is in flight so the head of the queue is issued this tick | `Action`, `WrongWay`, `ActionQueue`, `AskingSet`, `CutShort`, `ActionsPlugin` |
 
 The design briefs in `docs/*_readme.md` mark, section by section, what is implemented and what
 is still design. `TODO.md` is what's queued.
@@ -123,7 +124,20 @@ is still design. `TODO.md` is what's queued.
   a time, the short way round, through every direction between; exactly opposite goes
   anticlockwise.
 - **A step within one notch of the facing needs no turn**; the landing takes the notch for free.
-  Wider needs a `Turn` first, which `issue` puts in, to one notch short on the near side.
+  Wider needs a `Turn` first, which `issue` puts in for the pace words, to one notch short on
+  the near side.
+- **Any direction is a legal step, and the way decides the landing** (2026-09-27): forward
+  lands facing the way gone, lateral orthogonal, rear opposite, each on the side of the old
+  facing, never more than one notch of turn. Gait and reach are knobs on `Step` that nothing
+  above the mechanism sees.
+- **The words are the vocabulary, all the way up** (Lexa, 2026-09-27): `Walk`, `Jog`,
+  `Sprint`, `Sneak`, `Sidestep`, `Backstep`, `Recoil`, `Lunge`, `Bite`, each fixing its own
+  pace and reach. The AI is not to choose a gait. A way word asked the wrong way of the facing
+  is refused, never bent: "if something sends an action in the wrong direction, we need to know
+  it's broken so we can fix it." `issue` drops it with a warning; the brainstem ends it
+  `Refused` so the mind hears.
+- **Bite is a stub in its own crate, `murabito_attacks`**: a quarter of a second on the bar,
+  no target, no effect; the cell faced is what it will bite.
 - **`ActionQueue`, not "orders"**: anything may push, nothing in it says who did or why. The
   state machine is implicit: the head of the queue plus what is in flight.
 - **Members are listed in the root manifest**, since a glob can't cover a group directory.
@@ -318,7 +332,9 @@ is still design. `TODO.md` is what's queued.
 ## Picking up: the midbrain
 
 Written 2026-09-27 for the session that starts the midbrain's first behaviour cold, and
-brought current the same day as the believed world (PR #46) and the stalk (PR #47) landed.
+brought current the same day as the believed world (PR #46) and the stalk (PR #47) landed,
+and again with the action words (`Walk`, `Sprint`, `Sidestep`, `Lunge`, `Bite`, …), which the
+tree does not use yet: they are there for variety in it, Lexa's next aim.
 Everything is on `main`; branch afresh from `origin/main` in the `ai-io` worktree (`git -C
 <wt> fetch --prune && git -C <wt> switch -C <branch> --no-track origin/main`; its `target/` is
 a symlink to `cleanup-refactor`'s and stays). A plain-language walkthrough of the I/O, with
@@ -359,11 +375,14 @@ the believed world), the numbers and the one ambition are placeholders.
   facing (index), in_view (id, kind or none, offset, distance in steps, acuity, the seen
   thing's facing or none), doing (intent
   + since), queue, in_flight (0..1 or none), previous (intent + outcome or none).
-- The vocabulary a mind may send: `Stop`, `Face(dir)`, `FaceThing(id)`, `Step(dir)`,
-  `GoTo(q, r, layer)`. New words are `Sustained` variants added in the brainstem when the
-  mind needs them (`Walk`, `Follow`, `Flee` are the ones named).
+- The vocabulary a mind may send: `Stop`, `Face(dir)`, `FaceThing(id)`, the action words
+  `Walk`, `Jog`, `Sprint`, `Sneak`, `Sidestep`, `Backstep`, `Recoil`, `Lunge` (each a dir) and
+  `Bite`, and `GoTo(q, r, layer)`, which walks. A wrong-way word ends `Refused("not lateral")`
+  and the like. New words are variants added in the brainstem when the mind needs them
+  (`Follow`, `Flee` are the ones named).
 - Numbers: 64 ticks a second; at 4 shaku/s an edge step is 16 ticks, a corner step 28, a
-  quarter turn 32; a round of 125 ms is 8 ticks. The fox starts at (-8, 0) facing ESE, the
+  quarter turn 32; a sneak is twice that, a jog half, a sprint a third (an edge sprint lands on
+  tick 6, a lunge on 11, a recoil on 8); a bite is 16; a round of 125 ms is 8 ticks. The fox starts at (-8, 0) facing ESE, the
   hare at (6, 0) facing E, the sugi at (5, -4); the fox's bands are 18/60/120 cells and the
   hare's 12/36/65 (stretched 1.5/2/2.5 from the first attempt's on 2026-09-27).
 
@@ -442,7 +461,7 @@ expects a plain-language answer before the go is re-asked.
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/ai-io`, on `handoff-midbrain` (this docs PR); its `target/` is a symlink to `cleanup-refactor`'s warm one, so the two share an engine build. `cleanup-refactor` (on `debug-feature`, merged) is what the desktop shortcut runs |
-| `main` at handoff | `db0b176`, the merge of PR #47 (the stalk) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`), #43 (the debug feature), #44 (the AI's I/O), #45 (handoff), #46 (the believed world), #47 (the stalk, the seen thing's facing, vision stretched) |
+| This session's worktree | `.claude/worktrees/ai-io`, on `more-actions` (the action words); its `target/` is a symlink to `cleanup-refactor`'s warm one, so the two share an engine build. `cleanup-refactor` (on `debug-feature`, merged) is what the desktop shortcut runs |
+| `main` at handoff | `84761f2`, the merge of PR #48 (the handoff review) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`), #43 (the debug feature), #44 (the AI's I/O), #45 (handoff), #46 (the believed world), #47 (the stalk, the seen thing's facing, vision stretched), #48 (handoff review) |
 | Other worktrees | `cleanup-refactor` (on `debug-feature`, merged long ago: the desktop shortcut runs it, so the shortcut's game has no bridge and no stalk until that worktree moves to `main`); `exp-05-main-coords`, `yokai-models` (art sessions) |

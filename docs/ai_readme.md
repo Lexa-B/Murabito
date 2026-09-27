@@ -42,7 +42,15 @@ pub enum Short {            // over within one round of the mind: a single motio
     Stop,
     Face(Direction),
     FaceThing(ThingId),     // toward where the thing is seen now; Lost if it isn't in view
-    Step(Direction),
+    Walk(Direction),        // the action words of actions_readme.md, one to one:
+    Jog(Direction),         // the paces turn first if need be
+    Sprint(Direction),
+    Sneak(Direction),
+    Sidestep(Direction),    // the way words are only that way of the body's facing,
+    Backstep(Direction),    // and are Refused otherwise
+    Recoil(Direction),
+    Lunge(Direction),
+    Bite,
 }
 
 pub enum Sustained {        // outlives rounds; drive re-aims it every step
@@ -59,8 +67,11 @@ moved target or a superseded order needs no replanning. `GoTo` picks the step th
 shortest walk, the step's own cost in shaku plus the straight line left from where it lands,
 so a corner step (√3 shaku) is taken when it truly cuts the corner and never to zig-zag.
 
-New words are new variants: `Walk(Direction)`, `Follow(ThingId)`, `Flee(ThingId)` are the ones
-named so far, each a few lines in drive when a mind asks for it (design).
+A `Short` that is an action word is that word and nothing under it: the brainstem never sees a
+gait or a reach, and a mind cannot ask for one. It asks `Action::check` against the body's own
+facing before pushing, and ends a wrong-way word as `Refused` with the reason, so the mind hears
+through `previous` and not the log. New words are new variants: `Follow(ThingId)`, `Flee(ThingId)`
+are the ones named so far, each a few lines in drive when a mind asks for it (design).
 
 ## The body's driver: `Brainstem`
 
@@ -77,6 +88,7 @@ pub enum Outcome {
     Superseded,               // a newer order replaced it
     Cancelled(&'static str),  // a reflex, by name, replaced it
     Lost(ThingId),            // the thing it named was not in view
+    Refused(&'static str),    // the body could not be asked it the way it faced: "not lateral"
 }
 ```
 
@@ -187,7 +199,8 @@ A `uv` project on Python 3.13, the first client of the bridge.
 
 ```
 uv run board                 # every body's snapshot, live, redrawn every 125 ms
-uv run order 3 goto 0 0      # one order by hand: stop | face DIR | face-thing N | step DIR | goto Q R [LAYER]
+uv run order 3 goto 0 0      # one order by hand: stop | face DIR | face-thing N | goto Q R [LAYER]
+uv run order 1 recoil W      # or walk, jog, sprint, sneak, sidestep, backstep, lunge DIR; bite
 uv run mind                  # what every body believes, live, in the terminal
 uv run mind --visualize      # one body's believed world drawn in a window; --body N, Tab cycles
 uv run pytest
@@ -287,7 +300,8 @@ round`, and the cell it wants as an outlined hex.
   the hare's own ambitions (flee), which retire the scene's click; what `previous` feeds
   back (`Cancelled`, `Lost`); whether the mind defers to a reflex in hand, which needs a
   "by" on `Doing`, since the wire doesn't say whose intent it is.
-- **Deferred words**: `Walk`, `Follow`, `Flee`, each a variant and a few lines in drive.
+- **Deferred words**: `Follow`, `Flee`, each a variant and a few lines in drive. The action
+  words are in, one to one with `Action`; the tree does not use them yet.
 - **A body's own memory in the game**, below reflexes and brainstem, so a reflex asks "not in
   what I believe" rather than "not in last tick's list"; the mind's believed world does not
   reach the reflexes. `TODO.md`.

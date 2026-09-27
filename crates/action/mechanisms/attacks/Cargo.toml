@@ -1,0 +1,9 @@
+[package]
+name = "murabito_attacks"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+bevy.workspace = true
+murabito_progress.workspace = true

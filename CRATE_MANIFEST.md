@@ -30,7 +30,8 @@ crates/
 │  ├─ actions/            murabito_actions
 │  ├─ progress/           murabito_progress
 │  └─ mechanisms/         one crate per kind of thing a body can do
-│     └─ movement/        murabito_movement
+│     ├─ movement/        murabito_movement
+│     └─ attacks/         murabito_attacks
 ├─ perception/            the senses: a group directory, not a crate
 │  ├─ perception/         murabito_perception
 │  └─ senses/             one crate per sense, each with its own list in its own shape
@@ -168,6 +169,9 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 - **`murabito_movement`** — the movement mechanism: how fast a body goes
   (`Locomotion`), and the `Step` and `Turn` intents it carries out on `FixedUpdate`,
   writing `murabito_placement`'s position and facing. Design: `docs/movement_readme.md`.
+- **`murabito_attacks`** — the attacks mechanism: the `Bite` intent, carried out on
+  `FixedUpdate` on a bar measured in seconds. A stub that bites nothing, holding the
+  word's place until there are jaws, targets and hurt.
 
 ## Reading the world
 

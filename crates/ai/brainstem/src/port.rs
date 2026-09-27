@@ -351,15 +351,15 @@ mod tests {
         // A step north from a body facing east is a turn first: the turn is in flight
         // and the step waits behind it on the queue.
         let (mut app, body, id) = labelled_body();
-        order(&mut app, body, Intent::Short(Short::Step(N)));
+        order(&mut app, body, Intent::Short(Short::Walk(N)));
         tick(&mut app, 8);
 
         let card = board(&app).get(id).unwrap();
         assert_eq!(card.tick, 8);
         let doing = card.doing.expect("stepping north");
-        assert_eq!(doing.intent(), Intent::Short(Short::Step(N)));
+        assert_eq!(doing.intent(), Intent::Short(Short::Walk(N)));
         assert_eq!(doing.since(), 1);
-        assert_eq!(card.queue, [Action::Go(N)]);
+        assert_eq!(card.queue, [Action::Walk(N)]);
         let fraction = card.in_flight.expect("a notch of turning in flight");
         assert!(
             (fraction - 0.75).abs() < 1e-3,
@@ -400,7 +400,7 @@ mod tests {
         let (mut app, body, _) = labelled_body();
         let nobody = mint(&mut app);
         orders(&app)
-            .send(nobody, Intent::Short(Short::Step(E)))
+            .send(nobody, Intent::Short(Short::Walk(E)))
             .unwrap();
         tick(&mut app, 20);
         assert_eq!(position(&app, body), voxel(0, 0));
@@ -418,7 +418,7 @@ mod tests {
             let card = far_board.get(id).expect("the body is on the board");
             assert_eq!(card.position, voxel(0, 0));
             far_orders
-                .send(card.id, Intent::Short(Short::Step(E)))
+                .send(card.id, Intent::Short(Short::Walk(E)))
                 .expect("sent");
             card.tick
         });

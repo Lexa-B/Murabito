@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use murabito_actions::ActionsPlugin;
 use murabito_app_state::{AppStatePlugin, AppStateSettings};
+use murabito_attacks::AttacksPlugin;
 use murabito_brainstem::BrainstemPlugin;
 use murabito_bridge::BridgePlugin;
 use murabito_camera::{CameraPlugin, CameraSettings};
@@ -40,6 +41,7 @@ fn main() {
             (
                 PlacementPlugin,
                 MovementPlugin,
+                AttacksPlugin,
                 ProgressPlugin,
                 ActionsPlugin,
                 BrainstemPlugin,
