@@ -24,7 +24,11 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   list", and the snapshot can carry beliefs beside sightings. Until then one gap stays open:
   a body walking straight reveals things by its own motion too, and only turning is
   suppressed, so a walker can still startle at what its walk brought into view. Lexa,
-  2026-09-27. Its own design talk.
+  2026-09-27. Its own design talk. The *mind's* believed world exists since 2026-09-27
+  (`ai/midbrain/src/midbrain/beliefs.py`, Lexa's call: in Python, in the mind, first), in its
+  smallest form: a thing is frozen where it was last seen and refreshed each round. Its
+  growth, one rule at a time: forgetting a thing whose believed cell is in view and empty;
+  ageing; dead reckoning; a memory of cells. The reflexes can't read it, so this item stands.
 - **The scene's click-to-command is a bandaid.** The fox's loop and the hare's triangle are
   gone (2026-09-26): the brainstem drives every queue now. In their place, a left-click on
   the ground sends the hare walking there, so the fox's reflex can be tried by hand. It reads
@@ -32,13 +36,16 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   left button. It goes when the midbrain drives the hare, or when a selection-and-command
   module lands, whichever comes first. A rest is still not an action (Lexa, 2026-09-22): an
   idle body is an empty queue by the mind's choice, so there is no `Action::Wait`.
-- **The midbrain's first behaviour.** The wire, the board and a hand-given order exist
-  (`ai/midbrain/`, `docs/ai_readme.md`); what doesn't is a mind: a client on its own 125 ms
-  clock that reads every snapshot, scores, and sends each body an intent, in the utility-AI
-  shape Lexa named. First target: send the fox somewhere and face it at the hare. Its own
-  design talk. With it, or after: `Walk`, `Follow`, `Flee` as `Sustained` variants; keys in
-  the board viewer if `uv run order` gets tiresome; a shared Python package for the wire once
-  a second consumer (the cortex) arrives.
+- **The midbrain's first behaviour.** The wire, the board, a hand-given order and the
+  believed world exist (`ai/midbrain/`, `docs/ai_readme.md`); `uv run mind` believes and
+  decides nothing. What doesn't exist is the scorer: a consideration reads a number off the
+  believed world, a score picks an option, an intent goes down, in the utility-AI shape Lexa
+  named. Decided 2026-09-27: the mind sends only when its want differs from the snapshot's
+  `doing` (every new intent cuts short what is in flight); the fox first, the hare on the
+  click. Its own design talk. With it, or after: `Walk`, `Follow`, `Flee` as `Sustained`
+  variants; a "by" on `Doing` if the mind should defer to a reflex in hand; keys in the board
+  viewer if `uv run order` gets tiresome; a shared Python package for the wire once a second
+  consumer (the cortex) arrives.
 - **Running `Sense` every n ticks.** Lexa, 2026-09-26: evaluate casting every second tick
   or so for cost, which still keeps within what animal eyes do; the recast-on-change item
   under loose ends is the other lever.

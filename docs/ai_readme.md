@@ -1,8 +1,8 @@
 # The AI's I/O
 
 A brief on how a mind meets a body: the three crates under `crates/ai/` and the Python project
-under `ai/midbrain/`, as agreed in design on 2026-09-26 and built through 2026-09-27.
-Implemented as described unless marked as design.
+under `ai/midbrain/`, as agreed in design on 2026-09-26 and built through 2026-09-27, with the
+mind's believed world begun the same day. Implemented as described unless marked as design.
 
 ## The shape of it
 
@@ -18,7 +18,9 @@ Three layers, and a seam between the lower two and the top one.
 - **The midbrain** (`ai/midbrain/`) is the slow mind. It runs outside the game process, on its
   own clock, about every 125 ms, in Python. It reads a snapshot of every body and tells each
   what to want. Its first behaviour is design (below); what exists is the wire, a live view of
-  the board, and an order given by hand.
+  the board, an order given by hand, and the first **believed world**: what each body has seen,
+  frozen where it last saw it, the layer between what the brainstem tells the mind and what the
+  mind will decide on.
 
 Between the brainstem and the midbrain sits **the port**: a board of snapshots going up, a
 channel of orders coming down. Whatever holds the port's far ends is the mind. Inside the game
@@ -186,6 +188,8 @@ A `uv` project on Python 3.13, the first client of the bridge.
 ```
 uv run board                 # every body's snapshot, live, redrawn every 125 ms
 uv run order 3 goto 0 0      # one order by hand: stop | face DIR | face-thing N | step DIR | goto Q R [LAYER]
+uv run mind                  # what every body believes, live, in the terminal
+uv run mind --visualize      # one body's believed world drawn in a window; --body N, Tab cycles
 uv run pytest
 ./regen.sh                   # after the .proto changes
 ```
@@ -197,16 +201,52 @@ uv run pytest
 with a word on what it wanted; the midbrain's first behaviour calls the same thing with its own
 words. `board.py` draws one panel per body.
 
+### The believed world
+
+A mind does not act on what a body sees; it acts on what the body *believes*, and the two part
+ways the moment the body looks away. `beliefs.py` is that layer, in its smallest form. Each body
+on the board has a `BelievedWorld`, and in it a `Belief` per thing the body has ever seen, keyed
+on the thing's id: its kind path (or none, if the sighting carried no label), the cell it stood
+in, the tick it was last seen, and the acuity then. The cell is absolute, the body's own voxel
+plus the sighting's offset, so "four steps south of me" is remembered as "at (-8, 4)" and still
+means something once the body has walked on. One verb, `observe(snapshot)`, writes every
+sighting in over what was there; a snapshot from another body is refused.
+
+Nothing is forgotten, nothing moves on its own, nothing fades: a thing out of view stays where
+it was last seen and only its age grows. That is the whole model for now, chosen so it could be
+watched and validated before it grows (below). It runs in the mind, once a round, so a sighting
+shorter than a round can slip between snapshots; that is the midbrain's nature.
+
+`mind.py` is the loop: a `Mind` holds every body's world and the latest snapshot each gave (a
+body's own place and facing are truth, not belief), and each round pulls the board and observes
+every snapshot. It decides nothing and sends nothing yet. `visualize.py` draws one body's world
+in a pygame window, flat and top-down in the game's own geometry (pointy-top cells, `x = q +
+r/2`, `z = r·√3/2`, north up): the body at its true cell with a line for its facing, each
+believed thing a filled hex where it was last seen, coloured by kind and labelled with what it
+is and how long ago, outlined if in view this round. The game window beside it is the truth;
+nothing of the truth is drawn here. Layers are tracked in the model and shown in the terminal
+view, and flattened in the window until something stands on one.
+
 ## Design
 
-- **The midbrain's first behaviour.** A client on its own 125 ms clock that reads every
-  snapshot, scores, and sends each body an intent: the utility-AI shape Lexa named (a
-  consideration reads a number, a score picks an option). First target: send the fox somewhere
-  and face it at the hare. Its own design talk; nothing decided beyond the shape of the I/O.
+- **The believed world's growth**, one rule at a time, each watched in the window before the
+  next: forgetting a thing whose believed cell is in view and empty (negative evidence);
+  ageing and confidence; dead reckoning along a last course; a memory of cells seen and never
+  seen. All inside `beliefs.py`; none touches the wire. exp-02's belief store is the model to
+  draw on.
+- **The midbrain's first behaviour.** The scorer above the believed world: a client on its own
+  125 ms clock that reads every snapshot, scores, and sends each body an intent, the
+  utility-AI shape Lexa named (a consideration reads a number, a score picks an option). Two
+  calls made on 2026-09-27: the mind sends only when its want differs from the snapshot's
+  `doing`, since every new intent cuts short what is in flight and a mind re-sending the same
+  want each round would cut its own steps; and the mind drives the fox first, the hare staying
+  on the scene's click. Options, considerations, and what `previous` feeds back are its own
+  design talk. `Doing` on the wire does not say whether the intent in hand is the mind's or a
+  reflex's; if the mind should defer to a reflex, `Doing` grows a "by".
 - **Deferred words**: `Walk`, `Follow`, `Flee`, each a variant and a few lines in drive.
-- **A believed world**, the body's own memory of what it has seen and where, keyed on
-  `ThingId`, below reflexes and brainstem, so a reflex asks "not in what I believe" and the
-  snapshot can carry beliefs beside sightings. `TODO.md`.
+- **A body's own memory in the game**, below reflexes and brainstem, so a reflex asks "not in
+  what I believe" rather than "not in last tick's list"; the mind's believed world does not
+  reach the reflexes. `TODO.md`.
 - **Keys in the viewer**, if the one-shot `order` gets tiresome.
 - **A shared Python package** for the wire once a second consumer (the cortex) arrives; the
   client lives in the midbrain until then.
