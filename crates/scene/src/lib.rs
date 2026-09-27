@@ -170,7 +170,7 @@ fn spawn_hare(mut commands: Commands) {
 }
 
 /// BANDAID, to go with the midbrain or a selection module, whichever comes first
-/// (`TODO.md`): a left-click on the ground sends the hare walking to the cell under the
+/// (`TODO.md`): a left-click on the ground sends the hare jogging to the cell under the
 /// cursor, so the fox's reflex can be tried by hand. It reads the mouse directly rather
 /// than through `murabito_keybinds`, and it names the hare and the left button; a real
 /// command module would do neither. Only while the world runs, so a click on an overlay
@@ -200,7 +200,7 @@ fn command_the_hare(
         return;
     };
     for mut hare in &mut hares {
-        hare.order(Intent::Sustained(Sustained::WalkTo(cell)));
+        hare.order(Intent::Sustained(Sustained::JogTo(cell)));
     }
 }
 

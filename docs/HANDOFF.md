@@ -48,7 +48,7 @@ Every arrow in the dependency graph points down; `crates/action/`, `crates/all_t
 |---|---|---|---|
 | `murabito` | `crates/murabito` | the app: a plugin list; its `debug` feature turns on every crate's and the server | |
 | `murabito_debug` | `crates/debug` | Bevy's remote protocol on the loopback address, behind the `debug` feature; an empty plugin without it; registers nothing, depends on no module | `DebugPlugin`, `PORT` |
-| `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns a `Fox`, a `Hare` and a `Sugi` from the kinds with a position and a facing; a left-click on the ground orders the hare there through the brainstem (a bandaid); draws the progress bars, cones and sightlines (placeholders until a UI module owns them) | `ScenePlugin` |
+| `murabito_scene` | `crates/scene` | ground, sun, sky, ambient light; spawns a `Fox`, a `Hare` and a `Sugi` from the kinds with a position and a facing; a left-click on the ground orders the hare to jog there through the brainstem (a bandaid); draws the progress bars, cones and sightlines (placeholders until a UI module owns them) | `ScenePlugin` |
 | `murabito_brainstem` | `crates/ai/brainstem` | the vocabulary (`Short`, `Sustained`, `Intent`, `Outcome`, `Previous`, `Doing`); `Brainstem`, one intent per body, the only thing that pushes onto a queue; `BrainstemSet::{Orders, Reflexes, Drive}` in `AskingSet`; the `Port`: a board of `Snapshot`s posted after the senses (each sighting an `InView` with the seen thing's kind and facing), a channel of `Order`s drained once a tick, far ends `Board` and `Orders` | those, plus `InView`, `BrainstemPlugin` |
 | `murabito_reflexes` | `crates/ai/reflexes` | the catalogue `Reflex` (so far `StartleFaceApparition { by: Kind }`), `Wired` (a reflex at a priority), `Reflexes` (a body's repertoire, tunable), `LastLook`; one system in the `Reflexes` slot that preempts the brainstem | `Reflex`, `Wired`, `Reflexes`, `LastLook`, `ReflexesPlugin` |
 | `murabito_bridge` | `crates/ai/bridge` | the port's far ends on a loopback TCP socket, port 15703, length-framed protobuf per `proto/murabito.proto`, compiled at build time by `protox`; `wire.rs` converts at the edge | `BridgePlugin`, `Bridge`, `PORT`, `proto` |
@@ -453,7 +453,7 @@ fox abeam (circle), or a click to walk the hare off; `uv run mind` now sends, so
 passive view. A headless check drives `Mind.round` from a `Bridge` and draws frames with
 `SDL_VIDEODRIVER=dummy` and `pygame.image.save`; the pattern is in this session's transcript,
 not in the repo. 67 tests. A run of the game opens a window on the desktop even when started
-from a script, and a click there walks the hare: in one check the hare wandered because of it.
+from a script, and a click there jogs the hare: in one check the hare wandered because of it.
 
 **How Lexa works, for this in particular:** design in chat first, one question at a time,
 options with costs and a recommendation, then wait for the yes; one small step per turn,
