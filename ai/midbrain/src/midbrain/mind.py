@@ -93,9 +93,17 @@ def main() -> None:
     parser.add_argument("--host", default=HOST)
     parser.add_argument("--port", type=int, default=PORT)
     parser.add_argument("--every", type=float, default=ROUND, help="seconds between rounds")
+    parser.add_argument("--visualize", action="store_true", help="draw one body's believed world in a window")
+    parser.add_argument("--body", type=int, default=None, help="which body's world to draw (default: the lowest id)")
+    parser.add_argument("--scale", type=float, default=28.0, help="pixels per shaku in the window")
     args = parser.parse_args()
     try:
-        think(args.host, args.port, args.every)
+        if args.visualize:
+            from midbrain.visualize import show
+
+            show(args.host, args.port, args.every, args.body, args.scale)
+        else:
+            think(args.host, args.port, args.every)
     except ConnectionRefusedError:
         raise SystemExit(f"no game listening on {args.host}:{args.port}: is it running?")
     except KeyboardInterrupt:

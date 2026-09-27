@@ -1,0 +1,83 @@
+"""The window's geometry, pure, and one frame drawn offscreen."""
+
+from __future__ import annotations
+
+import math
+import os
+
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+
+import pygame
+
+from midbrain import murabito_pb2 as pb
+from midbrain.beliefs import Cell
+from midbrain.mind import Mind
+from midbrain.visualize import SELF, View, draw, next_body
+
+FOX = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox"
+SUGI = "murabito_kinds::all_things::tangible::non_sentient::plant::tree::sugi"
+
+
+def close(a: tuple[float, float], b: tuple[float, float]) -> bool:
+    return math.isclose(a[0], b[0], abs_tol=1e-6) and math.isclose(a[1], b[1], abs_tol=1e-6)
+
+
+def test_cells_land_where_the_game_puts_them() -> None:
+    view = View(scale=10, centre=(100, 100))
+    assert close(view.pixel(Cell(0, 0)), (100, 100))
+    assert close(view.pixel(Cell(1, 0)), (110, 100))  # east is right
+    assert close(view.pixel(Cell(0, 1)), (105, 100 + 5 * math.sqrt(3)))  # south-south-east is down and a little right
+    assert close(view.pixel(Cell(1, -2)), (100, 100 - 10 * math.sqrt(3)))  # north is straight up
+
+
+def test_a_cell_is_pointy_top_with_its_first_corner_due_north() -> None:
+    view = View(scale=10, centre=(100, 100))
+    corners = view.corners(Cell(0, 0))
+    assert len(corners) == 6
+    assert close(corners[0], (100, 100 - 10 / math.sqrt(3)))
+    assert close(corners[3], (100, 100 + 10 / math.sqrt(3)))
+
+
+def test_facing_lines_point_the_compass_way() -> None:
+    view = View(scale=10, centre=(100, 100))
+    assert close(view.facing_end(Cell(0, 0), pb.Direction.E, length=1), (110, 100))
+    assert close(view.facing_end(Cell(0, 0), pb.Direction.N, length=1), (100, 90))
+    assert close(view.facing_end(Cell(0, 0), pb.Direction.W, length=1), (90, 100))
+
+
+def test_the_grid_covers_the_window_and_no_more() -> None:
+    view = View(scale=10, centre=(50, 50))
+    cells = view.cells_on_screen(100, 100)
+    assert Cell(0, 0) in cells
+    assert Cell(4, 0) in cells and Cell(6, 0) not in cells
+    assert all(0 <= view.pixel(c)[0] < 100 and 0 <= view.pixel(c)[1] < 100 for c in cells)
+
+
+def test_a_frame_paints_the_body_at_its_cell_and_its_beliefs_where_it_saw_them() -> None:
+    pygame.init()
+    font = pygame.font.SysFont(None, 18)
+    mind = Mind()
+    mind.round([pb.Snapshot(
+        id=1, kind=FOX, tick=64, position=pb.Voxel(q=-8, r=0), facing=pb.Direction.ESE,
+        in_view=[pb.InView(id=2, kind=SUGI, offset=pb.Offset(dq=13, dr=-4), distance=13, acuity=pb.Acuity.MID)],
+    )])
+    view = View(scale=20, centre=(450, 450))
+    surface = pygame.Surface((900, 900))
+    draw(surface, mind, 1, view, font)
+    x, y = view.pixel(Cell(-8, 0))
+    assert surface.get_at((int(x), int(y) + 6))[:3] == SELF  # below the facing line, still in the body's hex
+    x, y = view.pixel(Cell(5, -4))
+    assert surface.get_at((int(x), int(y)))[:3] == (70, 140, 90)  # the sugi's green
+
+
+def test_a_missing_body_draws_a_note_not_a_crash() -> None:
+    pygame.init()
+    draw(pygame.Surface((300, 300)), Mind(), 7, View(scale=10, centre=(150, 150)), pygame.font.SysFont(None, 18))
+
+
+def test_tab_cycles_the_bodies_on_the_board() -> None:
+    mind = Mind()
+    mind.round([pb.Snapshot(id=1, kind=FOX, tick=1), pb.Snapshot(id=3, kind=FOX, tick=1)])
+    assert next_body(mind, 1) == 3
+    assert next_body(mind, 3) == 1
+    assert next_body(Mind(), 1) == 1
