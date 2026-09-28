@@ -7,7 +7,10 @@ is and how long ago that was; what it decided this round, and the path it wants 
 as outlined hexes, the last one bold. Nothing here moves or fades on its own; it redraws each
 round from the mind. The view has no fixed centre: each frame it zooms and pans to contain
 the body, everything it believes and the cell it wants, up to ``--scale`` pixels per shaku.
-Tab cycles which body's world is shown; Escape or closing quits.
+Beside it, a pane draws the body's current ambition's tree top-down as it loaded from its
+file, the nodes on this round's decision path lit and the one that decided marked, with
+what it wants under it: the mind thinking, live, off nothing but the decision it already
+records. Tab cycles which body is shown; Escape or closing quits.
 
 Screen geometry is the game's (``crates/hexcoords``): pointy-top cells one shaku flat to
 flat, a cell's centre at ``x = q + r/2``, ``z = r·√3/2``, east right, north up.
@@ -24,9 +27,10 @@ from dataclasses import dataclass
 import pygame
 
 from midbrain import murabito_pb2 as pb
-from midbrain.ambitions import route_of
+from midbrain.ambitions import repertoire_for, route_of
+from midbrain.behaviour import Act, Condition, Node, Selector, Sequence
 from midbrain.beliefs import Cell
-from midbrain.board import name_of
+from midbrain.board import intent as intent_words, name_of
 from midbrain.client import Bridge
 from midbrain.mind import Mind, ago
 
@@ -35,7 +39,15 @@ CORNER_RADIUS = 1 / SQRT_3
 """Centre to corner, in cell widths."""
 
 WINDOW = 900
+PANE = 440
+"""The tree pane's width, to the right of the world."""
+ROW = 20
+"""Pixels per node row in the tree pane."""
 BACKGROUND = (28, 32, 30)
+PANE_BACKGROUND = (22, 25, 24)
+DIM = (110, 112, 118)
+LIT = (240, 200, 90)
+DECIDED = (70, 60, 30)
 GRID = (52, 58, 54)
 SELF = (240, 200, 90)
 SEEN_NOW = (235, 235, 245)
@@ -102,6 +114,75 @@ def colour_of(kind: str | None) -> tuple[int, int, int]:
     return KIND_COLOURS.get(name_of(kind), UNKNOWN_COLOUR) if kind else UNKNOWN_COLOUR
 
 
+@dataclass(frozen=True)
+class Row:
+    """One node of a tree laid out top-down: how deep, what kind, its name, whether this
+    round's decision passed through it, and whether it is the node that decided."""
+
+    depth: int
+    kind: str
+    name: str
+    on_path: bool
+    decided: bool
+
+
+KINDS = {Selector: "?", Sequence: ">", Condition: "if", Act: "do"}
+
+
+def rows(tree: Node, path: tuple[str, ...]) -> list[Row]:
+    """The tree as rows, depth first, the decision path (node names, root first) lit
+    along the one branch whose names match it in order."""
+    out: list[Row] = []
+
+    def visit(node: Node, depth: int, along: tuple[str, ...]) -> None:
+        here = bool(along) and along[0] == node.name
+        rest = along[1:] if here else ()
+        out.append(Row(depth, KINDS[type(node)], node.name, here, here and not rest))
+        for child in getattr(node, "children", ()):
+            visit(child, depth + 1, rest)
+
+    visit(tree, 0, path)
+    return out
+
+
+def tree_of(mind: Mind, body: int) -> Node | None:
+    """The tree of the ambition the body has in hand, as it loads now; None if that
+    ambition has no tree."""
+    snapshot, decision = mind.latest.get(body), mind.decisions.get(body)
+    if snapshot is None or decision is None:
+        return None
+    for ambition in repertoire_for(snapshot.kind):
+        if ambition.name == decision.ambition:
+            return getattr(ambition, "tree", None)
+    return None
+
+
+def draw_tree(surface: pygame.Surface, mind: Mind, body: int, font: pygame.font.Font) -> None:
+    """The tree pane: the ambition in hand, its tree with this round's path lit, and what
+    it wants."""
+    surface.fill(PANE_BACKGROUND)
+    decision = mind.decisions.get(body)
+    if decision is None:
+        surface.blit(font.render("no decision yet", True, LABEL), (12, 12))
+        return
+    surface.blit(font.render(f"ambition  {decision.ambition}", True, LABEL), (12, 12))
+    tree = tree_of(mind, body)
+    top = 40
+    if tree is None:
+        surface.blit(font.render("(no tree)", True, DIM), (12, top))
+    else:
+        for index, row in enumerate(rows(tree, decision.path)):
+            y = top + index * ROW
+            if row.decided:
+                pygame.draw.rect(surface, DECIDED, (0, y - 2, surface.get_width(), ROW))
+            colour = LIT if row.on_path else DIM
+            surface.blit(font.render(f"{row.kind} {row.name}", True, colour), (12 + 18 * row.depth, y))
+        top += ROW * (len(rows(tree, decision.path)) + 1)
+    want = intent_words(decision.want, show=2) if decision.want is not None else "hold"
+    sent = "  (sent)" if decision.sent else ""
+    surface.blit(font.render(f"wants  {want}{sent}".replace("→", "->"), True, LABEL), (12, top))
+
+
 def cells_to_show(mind: Mind, body: int) -> list[Cell]:
     """What the view must contain: the body, everything it believes, and the cell it wants."""
     snapshot, world = mind.latest.get(body), mind.world(body)
@@ -112,9 +193,14 @@ def cells_to_show(mind: Mind, body: int) -> list[Cell]:
     return cells + (route_of(decision.want, snapshot) if decision is not None else [])
 
 
-def draw(surface: pygame.Surface, mind: Mind, body: int, view: View | None, font: pygame.font.Font, max_scale: float = 28.0) -> None:
-    """One frame: the grid, then the body's beliefs, then the body itself on top. With no
-    view given, one is fitted to contain everything there is to show."""
+def draw(surface: pygame.Surface, mind: Mind, body: int, view: View | None, font: pygame.font.Font, max_scale: float = 28.0, pane: int = 0) -> None:
+    """One frame: the grid, then the body's beliefs, then the body itself on top, and,
+    given a ``pane`` width, the tree pane on the right. With no view given, one is fitted
+    to contain everything there is to show."""
+    if pane:
+        width, height = surface.get_size()
+        draw_tree(surface.subsurface((width - pane, 0, pane, height)), mind, body, font)
+        surface = surface.subsurface((0, 0, width - pane, height))
     surface.fill(BACKGROUND)
     width, height = surface.get_size()
     if view is None:
@@ -180,7 +266,7 @@ def next_body(mind: Mind, body: int) -> int:
 def show(host: str, port: int, every: float, body: int | None, scale: float) -> None:
     find_display()
     pygame.init()
-    screen = pygame.display.set_mode((WINDOW, WINDOW))
+    screen = pygame.display.set_mode((WINDOW + PANE, WINDOW))
     pygame.display.set_caption("midbrain: a believed world")
     font = pygame.font.SysFont(None, 18)
     mind = Mind()
@@ -196,7 +282,7 @@ def show(host: str, port: int, every: float, body: int | None, scale: float) -> 
                 bridge.order(wanted_by, intent)
             if body is None and mind.worlds:
                 body = min(mind.worlds)
-            draw(screen, mind, body if body is not None else 0, None, font, max_scale=scale)
+            draw(screen, mind, body if body is not None else 0, None, font, max_scale=scale, pane=PANE)
             pygame.display.flip()
             time.sleep(every)
     pygame.quit()

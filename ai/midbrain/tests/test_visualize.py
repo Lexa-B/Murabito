@@ -13,7 +13,7 @@ from midbrain import murabito_pb2 as pb
 from midbrain.beliefs import Cell
 from midbrain.mind import Mind
 from midbrain.ambitions import route_of
-from midbrain.visualize import SELF, View, draw, next_body
+from midbrain.visualize import DECIDED, PANE, SELF, Row, View, draw, next_body, rows
 
 FOX = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::fox"
 SUGI = "murabito_kinds::all_things::tangible::non_sentient::plant::tree::sugi"
@@ -113,3 +113,49 @@ def test_a_frame_with_no_view_fits_itself_round_the_beliefs_and_the_wanted_cell(
     view = View.fitting([Cell(-8, 0), Cell(52, -4)] + route_of(mind.decisions[1].want, mind.latest[1]), 900, 900, 28.0)
     x, y = view.pixel(Cell(52, -4))
     assert surface.get_at((int(x), int(y)))[:3] == (70, 140, 90), "the sugi, sixty cells off, is on screen"
+
+
+HARE = "murabito_kinds::all_things::tangible::sentient::living::animal::beast::hare"
+
+
+def stalking_mind() -> Mind:
+    mind = Mind()
+    mind.round([pb.Snapshot(
+        id=1, kind=FOX, tick=64, position=pb.Voxel(q=-8, r=0), facing=pb.Direction.ESE,
+        in_view=[pb.InView(id=3, kind=HARE, offset=pb.Offset(dq=14, dr=0), distance=14, acuity=pb.Acuity.NEAR, facing=pb.Direction.E)],
+    )])
+    return mind
+
+
+def test_rows_lay_the_tree_out_top_down_and_light_the_decision_path() -> None:
+    from midbrain.ambitions import Stalk
+
+    mind = stalking_mind()
+    assert mind.decisions[1].path == ("stalk", "approach", "close in")
+    laid = rows(Stalk(prey=HARE).tree, mind.decisions[1].path)
+    assert laid[0] == Row(0, "?", "stalk", True, False)
+    assert laid[1] == Row(1, ">", "freeze", False, False)
+    assert laid[2] == Row(2, "if", "looking at us", False, False)
+    assert [row.name for row in laid if row.on_path] == ["stalk", "approach", "close in"]
+    assert [row.name for row in laid if row.decided] == ["close in"]
+    assert laid[-1] == Row(1, "do", "watch", False, False)
+    assert not any(row.on_path for row in rows(Stalk(prey=HARE).tree, ()))
+
+
+def test_the_pane_marks_the_row_that_decided_and_the_world_keeps_its_own_width() -> None:
+    from midbrain.ambitions import Stalk
+
+    pygame.init()
+    font = pygame.font.SysFont(None, 18)
+    mind = stalking_mind()
+    surface = pygame.Surface((900 + PANE, 900))
+    draw(surface, mind, 1, None, font, max_scale=28.0, pane=PANE)
+    laid = rows(Stalk(prey=HARE).tree, mind.decisions[1].path)
+    decided = next(i for i, row in enumerate(laid) if row.decided)
+    y = 40 + decided * 20
+    assert surface.get_at((900 + PANE - 4, y + 2))[:3] == DECIDED, "the deciding row's band spans the pane"
+    assert surface.get_at((900 + PANE - 4, 40 + 2))[:3] != DECIDED, "the root's row is not banded"
+    # The world is fitted to the 900 px on the left, not the whole surface.
+    view = View.fitting([Cell(-8, 0), Cell(6, 0)] + [Cell(3, 0)], 900, 900, 28.0)
+    x, yb = view.pixel(Cell(-8, 0))
+    assert surface.get_at((int(x), int(yb) + 6))[:3] == SELF
