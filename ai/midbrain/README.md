@@ -8,7 +8,8 @@ uv run board          # watch every body's snapshot, live, while the game runs
 uv run order 3 walkto 0 0 # tell body #3 what to want: stop | face DIR | face-thing N | walkto Q R (or jogto, sprintto, sneakto)
 uv run order 1 recoil W   # or walk, jog, sprint, sneak, sidestep, backstep, lunge DIR; bite
 uv run mind           # the mind: believes, decides, sends; what each body believes and decided, live
-uv run mind --visualize   # the same, with one body's believed world in a window; --body N, Tab cycles, Esc quits
+uv run mind --visualize   # the same, with one body's believed world and its ambition's tree, live, in a window; --body N, Tab cycles, Esc quits
+uv run trees          # every ambition's tree as it loads from trees/*.xml
 uv run pytest         # the tests
 ./regen.sh            # after the .proto changes: regenerate murabito_pb2.py
 ```
@@ -17,11 +18,13 @@ uv run pytest         # the tests
 `order.py` says one order by hand; `board.py` shows what every body is told.
 `beliefs.py` is the believed world: a `BelievedWorld` per body, a `Belief` per thing it has
 seen, frozen where it was last seen. `ambitions.py` is what a body can want (`Idle`, `Wander`, `Stalk`),
-each bidding a utility and the winner running a tree from `behaviour.py`; `hexes.py` is the
-geometry and `paths.py` the planner, A* across the plane round what is believed. `mind.py`
+each bidding a utility and the winner running a tree from `behaviour.py`, whose shape is
+the file `trees/<ambition>.xml` in BehaviorTree.CPP's XML, editable in Groot2 and re-read
+when it changes (`trees.py`); `hexes.py` is the geometry and `paths.py` the planner, A*
+across the plane round what is believed. `mind.py`
 runs the round: observe, revise, choose, want, send what differs from what the body is doing,
 a path as an amendment of the one in hand; `visualize.py` draws one body's world, decision
-and route, flat, north up, in the game's geometry. Run the game beside it: the game is the
-truth.
+and route, flat, north up, in the game's geometry, and beside it the ambition's tree with
+this round's path lit. Run the game beside it: the game is the truth.
 `murabito_pb2.py` is generated and checked in; a test fails if it falls behind the
 contract. Python 3.13, dependencies with `uv add`.
