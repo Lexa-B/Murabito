@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from midbrain import murabito_pb2 as pb
-from midbrain.ambitions import BITE, STOP, Context, Idle, Stalk, bound_for, choose, face, face_thing, is_under, lunge, path, revise, to_send
+from midbrain.ambitions import BITE, STOP, Context, Idle, Stalk, bound_for, choose, face, face_thing, is_under, lunge, path, revise, sidestep, to_send
 from midbrain.beliefs import BelievedWorld, Cell
 from midbrain.hexes import to_world
 
@@ -160,14 +160,53 @@ def test_after_walking_three_cells_unseen_the_fox_pivots_to_check_then_goes_on()
     assert two.want(ctx).path[1] == "circle"
 
 
-def test_at_the_settle_cell_off_a_corner_direction_the_fox_watches_rather_than_approaching_itself() -> None:
-    # The hare faces WNW, a corner direction: three offsets behind it is six steps away.
-    at_settle = fox_believing(hare_at=(0, -140), hare_facing=pb.Direction.WNW, fox_at=(3, -137), fox_facing=pb.Direction.WNW)
-    result = STALK.want(at_settle)
-    assert result.path == ("stalk", "watch") and result.intent is None, "facing it from its settle cell: hold"
-    one_short = fox_believing(hare_at=(0, -140), hare_facing=pb.Direction.WNW, fox_at=(4, -136), fox_facing=pb.Direction.WNW)
+def test_at_the_settle_cell_the_fox_pounces_rather_than_sneaking_to_where_it_stands() -> None:
+    # The hare faces WNW, a corner direction; the pounce line is an edge line beside its
+    # rear, E here, and the settle cell three along it is (3, -140).
+    ctx = fox_believing(hare_at=(0, -140), hare_facing=pb.Direction.WNW, fox_at=(3, -137), fox_facing=pb.Direction.WNW)
+    assert STALK.pounce_line(ctx, STALK.target(ctx)) in (pb.Direction.E, pb.Direction.SSE)
+    at_settle = fox_believing(hare_at=(0, -140), hare_facing=pb.Direction.WNW, fox_at=(3, -140), fox_facing=pb.Direction.W)
+    assert STALK.want(at_settle).path == ("stalk", "pounce", "lunge"), "on the line, facing it, three along: pounce"
+    assert not STALK.farther_than_distance(at_settle), "never told it is still too far"
+    one_short = fox_believing(hare_at=(0, -140), hare_facing=pb.Direction.WNW, fox_at=(4, -140), fox_facing=pb.Direction.W)
     assert STALK.want(one_short).path == ("stalk", "approach", "close in")
-    assert bound_for(STALK.want(one_short).intent, one_short.snapshot) == Cell(3, -137)
+    assert bound_for(STALK.want(one_short).intent, one_short.snapshot) == Cell(3, -140)
+
+
+def test_a_hare_facing_a_corner_direction_is_pounced_along_the_edge_beside_its_rear() -> None:
+    # The hare at (30, -30) faces N, a corner direction; a bite reaches only across a
+    # face, so the fox lines up 30° off dead behind, on the SSW edge line since it comes
+    # from the south-west, and settles three along it at (27, -27).
+    hare, fox = (30, -30), (-8, 0)
+    ctx = fox_believing(hare_at=hare, hare_facing=pb.Direction.N, fox_at=fox, fox_facing=pb.Direction.ENE)
+    assert STALK.pounce_line(ctx, STALK.target(ctx)) == pb.Direction.SSW
+    assert STALK.settle_cell(ctx, STALK.target(ctx)) == Cell(27, -27)
+    settled = fox_believing(hare_at=hare, hare_facing=pb.Direction.N, fox_at=(27, -27), fox_facing=pb.Direction.NNE)
+    pouncing = STALK.want(settled)
+    assert pouncing.path == ("stalk", "pounce", "lunge") and pouncing.intent == lunge(pb.Direction.NNE)
+    landed = fox_believing(hare_at=hare, hare_facing=pb.Direction.N, fox_at=(29, -29), fox_facing=pb.Direction.NNE)
+    assert STALK.want(landed).path == ("stalk", "bite", "bite"), "the cell faced, across a face, is the hare's"
+    # From the south-east instead, the other edge line, SSE, is the nearer one.
+    other_side = fox_believing(hare_at=hare, hare_facing=pb.Direction.N, fox_at=(40, -10), fox_facing=pb.Direction.N)
+    assert STALK.pounce_line(other_side, STALK.target(other_side)) == pb.Direction.SSE
+
+
+def test_a_bite_is_never_wanted_across_a_corner() -> None:
+    # Two steps off along N is the corner neighbour: the hare is in the cell faced, but
+    # no bite reaches across a corner, and no lunge lands there.
+    corner = fox_believing(hare_at=(6, 0), hare_facing=pb.Direction.E, fox_at=(5, 2), fox_facing=pb.Direction.N)
+    result = STALK.want(corner)
+    assert result.path[1] not in ("bite", "pounce")
+
+
+def test_one_sidestep_off_the_pounce_line_the_fox_sidesteps_rather_than_turning() -> None:
+    # Settled three west of the hare, facing it; the hare shifted a cell to (6, -1).
+    ctx = fox_believing(hare_at=(6, -1), hare_facing=pb.Direction.E, fox_at=(3, 0), fox_facing=pb.Direction.E)
+    result = STALK.want(ctx)
+    assert result.path == ("stalk", "set up", "sidestep")
+    assert result.intent == sidestep(pb.Direction.NNW), "to (3, -1), a lateral cell, no turn"
+    lined_up = fox_believing(hare_at=(6, -1), hare_facing=pb.Direction.E, fox_at=(3, -1), fox_facing=pb.Direction.E)
+    assert STALK.want(lined_up).path == ("stalk", "pounce", "lunge")
 
 
 def test_a_ghost_reached_and_not_seen_is_forgotten_and_the_fox_wanders() -> None:

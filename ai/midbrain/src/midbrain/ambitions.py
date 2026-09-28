@@ -84,6 +84,18 @@ def lunge(direction: int) -> pb.Intent:
     return pb.Intent(short=pb.Short(lunge=direction))
 
 
+def sidestep(direction: int) -> pb.Intent:
+    return pb.Intent(short=pb.Short(sidestep=direction))
+
+
+EDGES = (0, 2, 4, 6, 8, 10)
+"""The six edge directions: a step along one crosses a face, and a bite reaches only
+across a face."""
+
+LATERAL = (2, 3, 4, 8, 9, 10)
+"""Notches off the facing that a sidestep may go: two to four either side."""
+
+
 BITE = pb.Intent(short=pb.Short(bite=pb.Bite()))
 
 
@@ -183,28 +195,37 @@ class Idle:
 class Stalk:
     """Get behind the nearest believed thing of a kind, pounce, and bite.
 
+    A bite reaches only across a face, so the line the fox pounces along, the **pounce
+    line**, is always an edge direction: the thing's rear line when it faces an edge
+    direction, else the edge direction 30° either side of dead behind that is nearer
+    the fox, so it circles less and the choice holds once it is on it. A lunge covers
+    two cells along the facing and the bite takes the third.
+
     The tree, first branch to succeed wins:
 
         stalk
         ├─ freeze     it is looking at us              → Stop
-        ├─ bite       beside it, facing it             → Bite
-        ├─ pounce     behind it, facing it, and a      → Lunge that way
-        │             lunge lands beside it
+        ├─ bite       the cell we face, across an      → Bite
+        │             edge, is its
+        ├─ pounce     facing along an edge, and the    → Lunge that way
+        │             third cell that way is its
+        ├─ set up     one sidestep would put us on     → Sidestep there
+        │             the pounce line, facing it
         ├─ check      we have walked ``check_after``   → face where we believe it is; once
         │             cells without seeing it            facing, hold a round and count afresh
         │                                                 (revise forgets it if it isn't there
         │                                                 and is within reach; else we go on,
         │                                                 and closer)
-        ├─ circle     we are off its rear line         → SneakTo a cell one notch round toward
-        │                                                 its rear, spiralling in by ``spiral``
-        ├─ approach   on the rear line, farther than   → SneakTo the cell ``distance`` behind it
-        │             ``distance``
+        ├─ circle     we are off the pounce line       → SneakTo a cell one notch round toward
+        │                                                 it, spiralling in by ``spiral``
+        ├─ approach   on the pounce line, farther     → SneakTo the cell ``distance`` along it
+        │             than ``distance``
         └─ watch                                       → face it, or hold if we already do
 
     "Looking at us" is within ``looking_arc`` centred on the way it was last seen facing;
-    "on the rear line" is within ``rear_tolerance`` of dead behind it; "facing it" is the
+    "on the pounce line" is within ``line_tolerance`` of it; "facing it" is the
     notch nearest the bearing to it, and a lunge goes only forward, so from ``distance``
-    behind the pounce fires once the watch has turned us. ``spiral`` is the
+    along the line the pounce fires once the watch has turned us. ``spiral`` is the
     circle's pitch: 0 keeps our distance, a pure arc; a positive angle tilts each swing that
     far inward, so we close in as we come round, never nearer than ``distance``. A thing whose facing
     was never seen is taken as not looking and approached straight.
@@ -216,9 +237,9 @@ class Stalk:
     """How many cells behind it to settle."""
     looking_arc: float = 180.0
     """Degrees of its front within which it counts as looking at us."""
-    rear_tolerance: float = 15.0
-    """Degrees either side of dead behind that count as on its rear line: half a notch, so
-    the fox keeps circling until it is on the notch dead behind."""
+    line_tolerance: float = 15.0
+    """Degrees either side of the pounce line that count as on it: half a notch, so the
+    fox keeps circling until it is on the notch."""
     spiral: float = 15.0
     """Degrees the circling path tilts inward, off the tangent; 0 is a pure arc."""
     check_after: int = 3
@@ -257,44 +278,66 @@ class Stalk:
         return face(nearest_direction(toward_it))
 
     def beside_it_facing_it(self, ctx: Context) -> bool:
+        """The cell we face is its, across an edge: where a bite reaches."""
         target = self.target(ctx)
-        if target is None or steps(ctx.here, target.cell) != 1:
-            return False
-        return nearest_direction(bearing(ctx.here, target.cell)) == ctx.facing
+        return target is not None and ctx.facing in EDGES and neighbour(ctx.here, ctx.facing) == target.cell
 
     def a_lunge_lands_beside_it(self, ctx: Context) -> bool:
+        """Facing along an edge direction with its cell the third that way: a lunge takes
+        two and lands us facing it across the face."""
         target = self.target(ctx)
-        if target is None or self.off_rear_line(ctx):
-            return False
-        toward_it = bearing(ctx.here, target.cell)
-        if toward_it is None or nearest_direction(toward_it) != ctx.facing:
-            return False
-        return steps(along(ctx.here, ctx.facing, 2), target.cell) == 1
+        return target is not None and ctx.facing in EDGES and along(ctx.here, ctx.facing, 3) == target.cell
 
     def pounce(self, ctx: Context) -> pb.Intent | None:
         return lunge(ctx.facing)
 
-    def off_rear_line(self, ctx: Context) -> bool:
+    def sidestep_onto_the_line(self, ctx: Context) -> int | None:
+        """The lateral direction one sidestep of which would put a lunge beside it, if
+        there is one: the pounce line has shifted a cell and we need not turn."""
         target = self.target(ctx)
-        if target is None or target.facing is None:
+        if target is None or ctx.facing not in EDGES:
+            return None
+        for notches in LATERAL:
+            way = (ctx.facing + notches) % 12
+            if along(neighbour(ctx.here, way), ctx.facing, 3) == target.cell:
+                return way
+        return None
+
+    def a_sidestep_lines_up_a_lunge(self, ctx: Context) -> bool:
+        return self.sidestep_onto_the_line(ctx) is not None
+
+    def set_up(self, ctx: Context) -> pb.Intent | None:
+        return sidestep(self.sidestep_onto_the_line(ctx))
+
+    def pounce_line(self, ctx: Context, target: Belief) -> int:
+        """The edge direction from it along which we line up: its rear if that is an edge
+        direction, else whichever edge direction beside its rear is nearer our bearing
+        from it; with its facing never seen, the edge direction nearest our bearing."""
+        toward_us = bearing(target.cell, ctx.here)
+        ideal = angle_of(opposite(target.facing)) if target.facing is not None else toward_us
+        if ideal is None:
+            return 0
+        tie_break = toward_us if toward_us is not None else ideal
+        return min(EDGES, key=lambda edge: (round(apart(angle_of(edge), ideal), 6), apart(angle_of(edge), tie_break)))
+
+    def off_the_line(self, ctx: Context) -> bool:
+        target = self.target(ctx)
+        if target is None:
             return False
         toward_us = bearing(target.cell, ctx.here)
-        return toward_us is not None and apart(angle_of(opposite(target.facing)), toward_us) > self.rear_tolerance
+        return toward_us is not None and apart(angle_of(self.pounce_line(ctx, target)), toward_us) > self.line_tolerance
 
-    def round_toward_rear(self, ctx: Context) -> pb.Intent | None:
+    def round_toward_the_line(self, ctx: Context) -> pb.Intent | None:
         target = self.target(ctx)
         toward_us = bearing(target.cell, ctx.here)
-        rear = angle_of(opposite(target.facing))
-        swing = 30.0 if turn_between(toward_us, rear) > 0 else -30.0
+        line = angle_of(self.pounce_line(ctx, target))
+        swing = 30.0 if turn_between(toward_us, line) > 0 else -30.0
         cell = rotated(ctx.here, target.cell, swing, pitch=self.spiral, floor=self.distance)
         return ctx.sneak_to(cell) if cell != ctx.here else None
 
     def settle_cell(self, ctx: Context, target: Belief) -> Cell:
-        """The cell ``distance`` offsets behind it along its rear line, or, if its facing
-        was never seen, ``distance`` offsets from it on the notch toward us."""
-        if target.facing is not None:
-            return along(target.cell, opposite(target.facing), self.distance)
-        return along(target.cell, nearest_direction(bearing(target.cell, ctx.here)), self.distance)
+        """The cell ``distance`` offsets from it along the pounce line."""
+        return along(target.cell, self.pounce_line(ctx, target), self.distance)
 
     def farther_than_distance(self, ctx: Context) -> bool:
         """Farther from it than the settle cell is: in steps, since along a corner
@@ -323,8 +366,9 @@ class Stalk:
             Sequence("freeze", (Condition("looking at us", self.looking_at_us), Act("stop", lambda ctx: STOP))),
             Sequence("bite", (Condition("beside it, facing it", self.beside_it_facing_it), Act("bite", lambda ctx: BITE))),
             Sequence("pounce", (Condition("a lunge lands beside it", self.a_lunge_lands_beside_it), Act("lunge", self.pounce))),
+            Sequence("set up", (Condition("a sidestep lines up a lunge", self.a_sidestep_lines_up_a_lunge), Act("sidestep", self.set_up))),
             Sequence("check", (Condition("unseen too long", self.unseen_too_long), Act("look", self.look_at_it))),
-            Sequence("circle", (Condition("off its rear line", self.off_rear_line), Act("round", self.round_toward_rear))),
+            Sequence("circle", (Condition("off the pounce line", self.off_the_line), Act("round", self.round_toward_the_line))),
             Sequence("approach", (Condition("farther than distance", self.farther_than_distance), Act("close in", self.close_in))),
             Act("watch", self.watch),
         ))
