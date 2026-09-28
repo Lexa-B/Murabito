@@ -6,7 +6,7 @@ import math
 import random
 
 from midbrain import murabito_pb2 as pb
-from midbrain.ambitions import Context, Idle, Stalk, Wander, bound_for, choose, walk_to
+from midbrain.ambitions import Context, Idle, Stalk, Wander, bound_for, choose, path
 from midbrain.beliefs import BelievedWorld, Cell
 from midbrain.hexes import angle_of, apart, bearing, to_world
 from midbrain.mind import Mind
@@ -47,8 +47,8 @@ def test_once_the_rest_is_over_it_sets_off_on_a_leg_ahead_and_forgets_the_rest()
         result = wander(seed).want(ctx)
         assert result.path == ("wander", "set off")
         assert Wander.REST_UNTIL not in ctx.scratch
-        there = bound_for(result.intent)
-        assert result.intent.sustained.WhichOneof("kind") == "walk_to"
+        there = bound_for(result.intent, ctx.snapshot)
+        assert result.intent.path.steps[0].WhichOneof("kind") == "walk"
         assert 3.4 <= shaku_between(ctx.here, there) <= 12.6, "four to twelve shaku, give or take the rounding to a cell"
         assert apart(bearing(ctx.here, there), angle_of(pb.Direction.N)) <= 90 + 10, "within the front 180, give or take the rounding"
 
@@ -59,8 +59,8 @@ def test_the_same_seed_draws_the_same_leg() -> None:
     assert a.intent == b.intent
 
 
-def test_a_pace_in_hand_is_left_to_land() -> None:
-    ctx = context(tick=320, doing=walk_to(Cell(5, 0)))
+def test_a_path_in_hand_is_left_to_land() -> None:
+    ctx = context(tick=320, doing=path("walk", [pb.Direction.E] * 3))
     result = wander().want(ctx)
     assert result.path == ("wander", "walking", "keep on") and result.intent is None
     assert ctx.scratch == {}, "no rest is drawn while walking"

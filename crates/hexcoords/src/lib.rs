@@ -18,7 +18,7 @@
 use std::fmt;
 use std::ops::{Add, Sub};
 
-use bevy::math::{Quat, Vec3};
+use bevy::math::{Quat, Vec3, Vec3Swizzles};
 
 /// A voxel's height, in shaku: 5 sun.
 const LAYER_HEIGHT: f32 = 0.5;
@@ -232,6 +232,38 @@ impl VoxelCoord {
     /// All twelve neighbours on this layer, in [`Direction::ALL`]'s order.
     pub fn neighbours(self) -> [Self; 12] {
         Direction::ALL.map(|direction| self.neighbour(direction))
+    }
+
+    /// The one step toward a voxel that promises the shortest walk across an empty
+    /// plane: the step's own length in shaku plus the straight line left from where it
+    /// lands. A corner step is √3 shaku, so it is taken when it truly cuts the corner
+    /// and not to zig-zag. `None` standing there, on the plane; the layer is not walked.
+    pub fn step_toward(self, to: Self) -> Option<Direction> {
+        if self.q == to.q && self.r == to.r {
+            return None;
+        }
+        let ground = |cell: Self| cell.to_world().xz();
+        let target = ground(to);
+        let walk = |direction: Direction| {
+            let landing = self.neighbour(direction);
+            ground(self).distance(ground(landing)) + ground(landing).distance(target)
+        };
+        Direction::ALL
+            .into_iter()
+            .min_by(|&a, &b| walk(a).total_cmp(&walk(b)))
+    }
+
+    /// Every step of a straight walk to a voxel across an empty plane, first to last:
+    /// [`step_toward`](Self::step_toward) again and again until standing there. Empty
+    /// standing there already.
+    pub fn straight_to(self, to: Self) -> Vec<Direction> {
+        let mut steps = Vec::new();
+        let mut here = self;
+        while let Some(direction) = here.step_toward(to) {
+            steps.push(direction);
+            here = here.neighbour(direction);
+        }
+        steps
     }
 
     /// How many steps across faces from this voxel to another, on the plane: the layer
@@ -605,6 +637,44 @@ mod tests {
 
     fn axial_and_layer(voxel: VoxelCoord) -> (i32, i32, i32) {
         (voxel.q(), voxel.r(), voxel.layer())
+    }
+
+    #[test]
+    fn the_step_toward_a_voxel_is_the_one_that_ends_nearest_on_the_ground() {
+        let origin = voxel(0, 0, 0);
+        assert_eq!(
+            origin.step_toward(voxel(3, 0, 0)),
+            Some(Direction::E),
+            "three cells east: east"
+        );
+        assert_eq!(
+            origin.step_toward(voxel(2, -1, 0)),
+            Some(Direction::ENE),
+            "the corner neighbour, in one corner step"
+        );
+        assert_eq!(origin.step_toward(voxel(2, -4, 0)), Some(Direction::N));
+        assert_eq!(origin.step_toward(origin), None, "standing there");
+        assert_eq!(
+            origin.step_toward(voxel(0, 0, 2)),
+            None,
+            "the layer is not walked"
+        );
+    }
+
+    #[test]
+    fn a_straight_walk_arrives_and_is_the_steps_taken() {
+        let target = voxel(5, -2, 0);
+        let steps = voxel(-3, 4, 0).straight_to(target);
+        assert!(steps.len() < 30, "wandering");
+        let landing = steps
+            .iter()
+            .fold(voxel(-3, 4, 0), |here, &step| here.neighbour(step));
+        assert_eq!(landing, target);
+        assert_eq!(
+            voxel(0, 0, 0).straight_to(voxel(3, 0, 0)),
+            [Direction::E, Direction::E, Direction::E]
+        );
+        assert!(target.straight_to(target).is_empty());
     }
 
     #[test]

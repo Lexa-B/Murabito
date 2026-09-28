@@ -3,9 +3,11 @@
 A pygame window beside the game. The game is the truth; this window is what one body
 believes: a hex grid, north up, the body at its true cell with a line for its facing, and
 every thing it has ever seen as a filled hex where it last saw it, labelled with what it
-is and how long ago that was; what it decided this round, and the cell it wants to reach
-as an outlined hex. Nothing here moves or fades on its own; it redraws each
-round from the mind. Tab cycles which body's world is shown; Escape or closing quits.
+is and how long ago that was; what it decided this round, and the path it wants to walk
+as outlined hexes, the last one bold. Nothing here moves or fades on its own; it redraws each
+round from the mind. The view has no fixed centre: each frame it zooms and pans to contain
+the body, everything it believes and the cell it wants, up to ``--scale`` pixels per shaku.
+Tab cycles which body's world is shown; Escape or closing quits.
 
 Screen geometry is the game's (``crates/hexcoords``): pointy-top cells one shaku flat to
 flat, a cell's centre at ``x = q + r/2``, ``z = r·√3/2``, east right, north up.
@@ -22,7 +24,7 @@ from dataclasses import dataclass
 import pygame
 
 from midbrain import murabito_pb2 as pb
-from midbrain.ambitions import bound_for
+from midbrain.ambitions import route_of
 from midbrain.beliefs import Cell
 from midbrain.board import name_of
 from midbrain.client import Bridge
@@ -70,6 +72,20 @@ class View:
         angle = math.radians(30 * direction)
         return cx + length * self.scale * math.cos(angle), cy - length * self.scale * math.sin(angle)
 
+    @classmethod
+    def fitting(cls, cells: list[Cell], width: int, height: int, max_scale: float, margin: float = 60.0) -> View:
+        """The view that contains every cell given, a cell's width to spare round the edge
+        and ``margin`` pixels more for labels, no larger than ``max_scale`` pixels per shaku.
+        An empty list gives the default view."""
+        if not cells:
+            return cls(scale=max_scale, centre=(width / 2, height / 2))
+        xs = [cell.q + cell.r / 2 for cell in cells]
+        zs = [cell.r * SQRT_3 / 2 for cell in cells]
+        span_x, span_z = max(xs) - min(xs) + 2, max(zs) - min(zs) + 2
+        scale = min(max_scale, (width - 2 * margin) / span_x, (height - 2 * margin) / span_z)
+        mid_x, mid_z = (max(xs) + min(xs)) / 2, (max(zs) + min(zs)) / 2
+        return cls(scale=scale, centre=(width / 2 - mid_x * scale, height / 2 - mid_z * scale))
+
     def cells_on_screen(self, width: int, height: int) -> list[Cell]:
         """Every cell whose centre falls inside a window of this size."""
         reach = int(max(width, height) / self.scale) + 2
@@ -86,10 +102,23 @@ def colour_of(kind: str | None) -> tuple[int, int, int]:
     return KIND_COLOURS.get(name_of(kind), UNKNOWN_COLOUR) if kind else UNKNOWN_COLOUR
 
 
-def draw(surface: pygame.Surface, mind: Mind, body: int, view: View, font: pygame.font.Font) -> None:
-    """One frame: the grid, then the body's beliefs, then the body itself on top."""
+def cells_to_show(mind: Mind, body: int) -> list[Cell]:
+    """What the view must contain: the body, everything it believes, and the cell it wants."""
+    snapshot, world = mind.latest.get(body), mind.world(body)
+    if snapshot is None or world is None:
+        return []
+    cells = [Cell.of(snapshot.position)] + [belief.cell for belief in world]
+    decision = mind.decisions.get(body)
+    return cells + (route_of(decision.want, snapshot) if decision is not None else [])
+
+
+def draw(surface: pygame.Surface, mind: Mind, body: int, view: View | None, font: pygame.font.Font, max_scale: float = 28.0) -> None:
+    """One frame: the grid, then the body's beliefs, then the body itself on top. With no
+    view given, one is fitted to contain everything there is to show."""
     surface.fill(BACKGROUND)
     width, height = surface.get_size()
+    if view is None:
+        view = View.fitting(cells_to_show(mind, body), width, height, max_scale)
     for cell in view.cells_on_screen(width, height):
         pygame.draw.polygon(surface, GRID, view.corners(cell), 1)
 
@@ -111,13 +140,15 @@ def draw(surface: pygame.Surface, mind: Mind, body: int, view: View, font: pygam
         surface.blit(font.render(ago(belief.age(snapshot.tick)), True, LABEL), (cx + view.scale * 0.6, cy + 1))
 
     decision = mind.decisions.get(body)
-    target = bound_for(decision.want) if decision is not None and decision.want is not None else None
-    if target is not None:
-        pygame.draw.polygon(surface, SELF, view.corners(target), 2)
+    route = route_of(decision.want, snapshot) if decision is not None else []
+    for cell in route[:-1]:
+        pygame.draw.polygon(surface, SELF, view.corners(cell), 1)
+    if route:
+        pygame.draw.polygon(surface, SELF, view.corners(route[-1]), 2)
     here = Cell.of(snapshot.position)
     pygame.draw.polygon(surface, SELF, view.corners(here))
     pygame.draw.line(surface, SELF, view.pixel(here), view.facing_end(here, snapshot.facing), 3)
-    title = f"#{body} {name_of(snapshot.kind)} believes   tick {snapshot.tick}   {len(world)} things   Tab: next body"
+    title = f"#{body} {name_of(snapshot.kind)} believes   tick {snapshot.tick}   {len(world)} things   {view.scale:.0f} px/shaku   Tab: next body"
     surface.blit(font.render(title, True, LABEL), (12, 12))
     if decision is not None:
         surface.blit(font.render(f"decided  {decision}".replace("→", "->"), True, LABEL), (12, 30))
@@ -152,7 +183,6 @@ def show(host: str, port: int, every: float, body: int | None, scale: float) -> 
     screen = pygame.display.set_mode((WINDOW, WINDOW))
     pygame.display.set_caption("midbrain: a believed world")
     font = pygame.font.SysFont(None, 18)
-    view = View(scale=scale)
     mind = Mind()
     with Bridge(host, port) as bridge:
         running = True
@@ -166,7 +196,7 @@ def show(host: str, port: int, every: float, body: int | None, scale: float) -> 
                 bridge.order(wanted_by, intent)
             if body is None and mind.worlds:
                 body = min(mind.worlds)
-            draw(screen, mind, body if body is not None else 0, view, font)
+            draw(screen, mind, body if body is not None else 0, None, font, max_scale=scale)
             pygame.display.flip()
             time.sleep(every)
     pygame.quit()

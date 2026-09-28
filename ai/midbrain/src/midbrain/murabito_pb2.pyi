@@ -70,7 +70,7 @@ class Snapshots(_message.Message):
     def __init__(self, bodies: _Optional[_Iterable[_Union[Snapshot, _Mapping]]] = ...) -> None: ...
 
 class Snapshot(_message.Message):
-    __slots__ = ("id", "kind", "tick", "position", "facing", "in_view", "doing", "queue", "in_flight", "previous")
+    __slots__ = ("id", "kind", "tick", "position", "facing", "in_view", "doing", "queue", "in_flight", "previous", "underway")
     ID_FIELD_NUMBER: _ClassVar[int]
     KIND_FIELD_NUMBER: _ClassVar[int]
     TICK_FIELD_NUMBER: _ClassVar[int]
@@ -81,6 +81,7 @@ class Snapshot(_message.Message):
     QUEUE_FIELD_NUMBER: _ClassVar[int]
     IN_FLIGHT_FIELD_NUMBER: _ClassVar[int]
     PREVIOUS_FIELD_NUMBER: _ClassVar[int]
+    UNDERWAY_FIELD_NUMBER: _ClassVar[int]
     id: int
     kind: str
     tick: int
@@ -91,7 +92,8 @@ class Snapshot(_message.Message):
     queue: _containers.RepeatedCompositeFieldContainer[Action]
     in_flight: float
     previous: Previous
-    def __init__(self, id: _Optional[int] = ..., kind: _Optional[str] = ..., tick: _Optional[int] = ..., position: _Optional[_Union[Voxel, _Mapping]] = ..., facing: _Optional[_Union[Direction, str]] = ..., in_view: _Optional[_Iterable[_Union[InView, _Mapping]]] = ..., doing: _Optional[_Union[Doing, _Mapping]] = ..., queue: _Optional[_Iterable[_Union[Action, _Mapping]]] = ..., in_flight: _Optional[float] = ..., previous: _Optional[_Union[Previous, _Mapping]] = ...) -> None: ...
+    underway: Action
+    def __init__(self, id: _Optional[int] = ..., kind: _Optional[str] = ..., tick: _Optional[int] = ..., position: _Optional[_Union[Voxel, _Mapping]] = ..., facing: _Optional[_Union[Direction, str]] = ..., in_view: _Optional[_Iterable[_Union[InView, _Mapping]]] = ..., doing: _Optional[_Union[Doing, _Mapping]] = ..., queue: _Optional[_Iterable[_Union[Action, _Mapping]]] = ..., in_flight: _Optional[float] = ..., previous: _Optional[_Union[Previous, _Mapping]] = ..., underway: _Optional[_Union[Action, _Mapping]] = ...) -> None: ...
 
 class InView(_message.Message):
     __slots__ = ("id", "kind", "offset", "distance", "acuity", "facing")
@@ -126,12 +128,12 @@ class Previous(_message.Message):
     def __init__(self, intent: _Optional[_Union[Intent, _Mapping]] = ..., outcome: _Optional[_Union[Outcome, _Mapping]] = ...) -> None: ...
 
 class Intent(_message.Message):
-    __slots__ = ("short", "sustained")
+    __slots__ = ("short", "path")
     SHORT_FIELD_NUMBER: _ClassVar[int]
-    SUSTAINED_FIELD_NUMBER: _ClassVar[int]
+    PATH_FIELD_NUMBER: _ClassVar[int]
     short: Short
-    sustained: Sustained
-    def __init__(self, short: _Optional[_Union[Short, _Mapping]] = ..., sustained: _Optional[_Union[Sustained, _Mapping]] = ...) -> None: ...
+    path: Path
+    def __init__(self, short: _Optional[_Union[Short, _Mapping]] = ..., path: _Optional[_Union[Path, _Mapping]] = ...) -> None: ...
 
 class Short(_message.Message):
     __slots__ = ("stop", "face", "face_thing", "walk", "jog", "sprint", "sneak", "sidestep", "backstep", "recoil", "lunge", "bite")
@@ -165,17 +167,13 @@ class Stop(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
 
-class Sustained(_message.Message):
-    __slots__ = ("walk_to", "jog_to", "sprint_to", "sneak_to")
-    WALK_TO_FIELD_NUMBER: _ClassVar[int]
-    JOG_TO_FIELD_NUMBER: _ClassVar[int]
-    SPRINT_TO_FIELD_NUMBER: _ClassVar[int]
-    SNEAK_TO_FIELD_NUMBER: _ClassVar[int]
-    walk_to: Voxel
-    jog_to: Voxel
-    sprint_to: Voxel
-    sneak_to: Voxel
-    def __init__(self, walk_to: _Optional[_Union[Voxel, _Mapping]] = ..., jog_to: _Optional[_Union[Voxel, _Mapping]] = ..., sprint_to: _Optional[_Union[Voxel, _Mapping]] = ..., sneak_to: _Optional[_Union[Voxel, _Mapping]] = ...) -> None: ...
+class Path(_message.Message):
+    __slots__ = ("keep", "steps")
+    KEEP_FIELD_NUMBER: _ClassVar[int]
+    STEPS_FIELD_NUMBER: _ClassVar[int]
+    keep: int
+    steps: _containers.RepeatedCompositeFieldContainer[Action]
+    def __init__(self, keep: _Optional[int] = ..., steps: _Optional[_Iterable[_Union[Action, _Mapping]]] = ...) -> None: ...
 
 class Action(_message.Message):
     __slots__ = ("walk", "jog", "sprint", "sneak", "face", "sidestep", "backstep", "recoil", "lunge", "bite")

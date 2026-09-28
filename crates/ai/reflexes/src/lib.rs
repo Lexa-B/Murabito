@@ -210,8 +210,9 @@ fn twitch(mut bodies: Query<Twitched>, kinds: Query<&Kind>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use murabito_actions::Action;
     use murabito_actions::{ActionQueue, ActionsPlugin};
-    use murabito_brainstem::{BrainstemPlugin, Intent, Outcome, Sustained};
+    use murabito_brainstem::{BrainstemPlugin, Intent, Outcome, Path};
     use murabito_hexcoords::{Offset, VoxelCoord};
     use murabito_identity::{IdentityPlugin, NextThingId};
     use murabito_movement::{Locomotion, MovementPlugin};
@@ -475,7 +476,13 @@ mod tests {
         app.world_mut()
             .get_mut::<Brainstem>(body)
             .unwrap()
-            .order(Intent::Sustained(Sustained::WalkTo(voxel(6, 0))));
+            .order(Intent::Path(Path::fresh(
+                voxel(0, 0)
+                    .straight_to(voxel(6, 0))
+                    .into_iter()
+                    .map(Action::Walk)
+                    .collect(),
+            )));
         tick(&mut app, 3);
 
         let apparition = creature_at(&mut app, voxel(2, -4)); // two cells north, near

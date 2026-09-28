@@ -44,9 +44,13 @@ impl Plugin for ActionsPlugin {
 pub struct CutShort;
 
 /// Cuts short every body marked for it, before the head of its queue is issued.
-fn cut_short(mut commands: Commands, mut bodies: Query<(Entity, &mut Progress), With<CutShort>>) {
-    for (body, mut progress) in &mut bodies {
+fn cut_short(
+    mut commands: Commands,
+    mut bodies: Query<(Entity, &mut Progress, &mut ActionQueue), With<CutShort>>,
+) {
+    for (body, mut progress, mut queue) in &mut bodies {
         progress.abandon();
+        queue.underway = None;
         commands
             .entity(body)
             .remove::<(Step, Turn, Bite, CutShort)>();
@@ -85,7 +89,8 @@ pub enum Action {
     Recoil(Direction),
     /// Two voxels forward at a sprint, landed in one go.
     Lunge(Direction),
-    /// Bite whatever is in the cell faced. Bites nothing yet.
+    /// Bite whatever is in the cell faced, across a face: refused when the body faces
+    /// a corner. Bites nothing yet.
     Bite,
 }
 
@@ -93,52 +98,71 @@ impl Action {
     /// Whether the body, facing `facing`, may be asked this: `Err` says why not. The same
     /// rule `issue` refuses by, so whoever pushes can ask first and hear the answer
     /// rather than find a warning in the log.
-    pub fn check(self, facing: Direction) -> Result<(), WrongWay> {
+    pub fn check(self, facing: Direction) -> Result<(), Refusal> {
         next_intent(self, facing).map(|_| ())
     }
 }
 
-/// The actions a body has been asked to do, first to last.
+/// The actions a body has been asked to do, first to last, and the one it has left the
+/// queue to carry out.
 #[derive(Component, Debug, Default)]
-pub struct ActionQueue(VecDeque<Action>);
+pub struct ActionQueue {
+    waiting: VecDeque<Action>,
+    /// The action whose last intent was issued: off the queue, and underway until the
+    /// mechanism lands it. Nothing while the head still waits on its turn, since the
+    /// head is then still queued.
+    underway: Option<Action>,
+}
 
 impl ActionQueue {
     pub fn push(&mut self, action: Action) {
-        self.0.push_back(action);
+        self.waiting.push_back(action);
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.waiting.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.waiting.len()
     }
 
     /// What is queued, first to last, for whoever shows or reports it.
     pub fn iter(&self) -> impl Iterator<Item = Action> + '_ {
-        self.0.iter().copied()
+        self.waiting.iter().copied()
     }
 
     /// Drops everything queued. What is already in flight finishes, since the mechanism
     /// holds that, not the queue, unless the body is also marked [`CutShort`].
     pub fn clear(&mut self) {
-        self.0.clear();
+        self.waiting.clear();
+    }
+
+    /// Keeps the first `count` queued and drops the rest; what is in flight finishes.
+    pub fn truncate(&mut self, count: usize) {
+        self.waiting.truncate(count);
+    }
+
+    /// The action that left the queue last, once it is wholly issued. Whether the body
+    /// is still carrying it out is `Progress`'s to say: it stays here until the next
+    /// action leaves the queue.
+    pub fn underway(&self) -> Option<Action> {
+        self.underway
     }
 
     fn head(&self) -> Option<Action> {
-        self.0.front().copied()
+        self.waiting.front().copied()
     }
 
     fn done_with_head(&mut self) {
-        self.0.pop_front();
+        self.underway = self.waiting.pop_front();
     }
 }
 
 /// Which intent the action at the head needs next, given the way the body faces, and
 /// whether that intent is the action's last; or why the action is refused. Pure, so the
 /// rule is testable on its own.
-fn next_intent(action: Action, facing: Direction) -> Result<(Intent, bool), WrongWay> {
+fn next_intent(action: Action, facing: Direction) -> Result<(Intent, bool), Refusal> {
     let one = |direction, gait| Step {
         gait,
         ..Step::walk(direction)
@@ -159,6 +183,7 @@ fn next_intent(action: Action, facing: Direction) -> Result<(Intent, bool), Wron
             };
             only(Way::Forward, step, facing)
         }
+        Action::Bite if facing.is_corner() => Err(Refusal::AcrossACorner),
         Action::Bite => Ok((Intent::Bite, true)),
     }
 }
@@ -166,7 +191,7 @@ fn next_intent(action: Action, facing: Direction) -> Result<(Intent, bool), Wron
 /// The step, and done, if the body already faces its way; otherwise a turn to one notch
 /// short of it, with the action kept, and the step takes the last notch for free on
 /// landing. That is the turn-then-step rule, in one place.
-fn forward(step: Step, facing: Direction) -> Result<(Intent, bool), WrongWay> {
+fn forward(step: Step, facing: Direction) -> Result<(Intent, bool), Refusal> {
     if Way::of(facing, step.direction) == Way::Forward {
         return Ok((Intent::Step(step), true));
     }
@@ -178,12 +203,12 @@ fn forward(step: Step, facing: Direction) -> Result<(Intent, bool), WrongWay> {
 }
 
 /// The step, and done, if it goes the way the word needs; refused otherwise.
-fn only(needs: Way, step: Step, facing: Direction) -> Result<(Intent, bool), WrongWay> {
+fn only(needs: Way, step: Step, facing: Direction) -> Result<(Intent, bool), Refusal> {
     let way = Way::of(facing, step.direction);
     if way == needs {
         Ok((Intent::Step(step), true))
     } else {
-        Err(WrongWay { needs, way })
+        Err(Refusal::WrongWay { needs, way })
     }
 }
 
@@ -194,20 +219,25 @@ enum Intent {
     Bite,
 }
 
-/// Why an action is refused: its word is only for one way, and its direction is another.
+/// Why an action is refused before it reaches a mechanism.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WrongWay {
-    pub needs: Way,
-    pub way: Way,
+pub enum Refusal {
+    /// Its word is only for one way, and its direction is another.
+    WrongWay { needs: Way, way: Way },
+    /// A bite reaches only across a face, and the body faces a corner.
+    AcrossACorner,
 }
 
-impl WrongWay {
-    /// The refusal in three words, for an outcome.
+impl Refusal {
+    /// The refusal in a few words, for an outcome.
     pub fn reason(self) -> &'static str {
-        match self.needs {
-            Way::Forward => "not forward",
-            Way::Lateral => "not lateral",
-            Way::Rear => "not rear",
+        match self {
+            Refusal::WrongWay { needs, .. } => match needs {
+                Way::Forward => "not forward",
+                Way::Lateral => "not lateral",
+                Way::Rear => "not rear",
+            },
+            Refusal::AcrossACorner => "not across a face",
         }
     }
 }
@@ -231,11 +261,11 @@ fn issue(
         };
         let (intent, last) = match next_intent(action, facing.0) {
             Ok(next) => next,
-            Err(WrongWay { needs, way }) => {
+            Err(refusal) => {
                 warn!(
-                    "{body}: {action:?} while facing {:?} is {way:?}, and the word is only \
-                     {needs:?}: refused",
-                    facing.0
+                    "{body}: {action:?} while facing {:?} is refused, {}",
+                    facing.0,
+                    refusal.reason()
                 );
                 queue.done_with_head();
                 continue;
@@ -248,6 +278,8 @@ fn issue(
         };
         if last {
             queue.done_with_head();
+        } else {
+            queue.underway = None;
         }
     }
 }
@@ -264,6 +296,29 @@ mod tests {
         assert_eq!(
             queue.iter().collect::<Vec<_>>(),
             [Action::Walk(Direction::E), Action::Face(Direction::N)]
+        );
+    }
+
+    #[test]
+    fn a_queue_truncated_keeps_its_first_actions_and_the_head_taken_is_underway() {
+        let mut queue = ActionQueue::default();
+        queue.push(Action::Walk(Direction::E));
+        queue.push(Action::Walk(Direction::E));
+        queue.push(Action::Face(Direction::N));
+        queue.truncate(1);
+        assert_eq!(
+            queue.iter().collect::<Vec<_>>(),
+            [Action::Walk(Direction::E)]
+        );
+        assert_eq!(queue.underway(), None, "nothing has left the queue");
+        queue.done_with_head();
+        assert!(queue.is_empty());
+        assert_eq!(queue.underway(), Some(Action::Walk(Direction::E)));
+        queue.truncate(5);
+        assert_eq!(
+            queue.underway(),
+            Some(Action::Walk(Direction::E)),
+            "truncating touches only what waits"
         );
     }
     use murabito_attacks::AttacksPlugin;
@@ -379,21 +434,37 @@ mod tests {
         assert_eq!(
             Action::Sidestep(Direction::E)
                 .check(Direction::E)
-                .map_err(WrongWay::reason),
+                .map_err(Refusal::reason),
             Err("not lateral")
         );
         assert_eq!(
             Action::Lunge(Direction::W)
                 .check(Direction::E)
-                .map_err(WrongWay::reason),
+                .map_err(Refusal::reason),
             Err("not forward")
+        );
+    }
+
+    #[test]
+    fn a_bite_is_across_a_face_and_refused_across_a_corner() {
+        assert_eq!(
+            next_intent(Action::Bite, Direction::E),
+            Ok((Intent::Bite, true))
+        );
+        assert_eq!(
+            next_intent(Action::Bite, Direction::N),
+            Err(Refusal::AcrossACorner)
+        );
+        assert_eq!(
+            Action::Bite.check(Direction::ENE).map_err(Refusal::reason),
+            Err("not across a face")
         );
     }
 
     #[test]
     fn a_way_word_the_wrong_way_is_refused() {
         use Direction::*;
-        let wrong = |needs, way| Err(WrongWay { needs, way });
+        let wrong = |needs, way| Err(Refusal::WrongWay { needs, way });
         assert_eq!(
             next_intent(Action::Sidestep(E), E),
             wrong(Way::Lateral, Way::Forward)

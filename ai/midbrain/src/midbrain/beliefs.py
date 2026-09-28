@@ -61,7 +61,8 @@ class Belief:
     facing: int | None
     """The way it faced then, a ``pb.Direction`` value, or None if it has no facing."""
     walked_since: int = 0
-    """Cells the body has walked since it last saw the thing."""
+    """Cells the body has walked since it last saw the thing, or last looked for it and
+    found nothing: an ambition that has checked on it sets this back to zero."""
 
     def age(self, now: int) -> int:
         """Ticks since the last sighting."""

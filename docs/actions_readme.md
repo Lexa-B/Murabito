@@ -101,13 +101,15 @@ except the last:
 | `Backstep(d)` | one voxel at a walk, without turning; lands facing away from the way | rear |
 | `Recoil(d)` | a backstep at a jog | rear |
 | `Lunge(d)` | two voxels at a sprint, landed in one go | forward |
-| `Bite` | a bite at whatever is in the cell faced (nothing yet) | |
+| `Bite` | a bite at whatever is in the cell faced (nothing yet) | across a face: refused when the body faces a corner direction |
 
 A word that names a way is only that way of the body's facing (`Way::of`, in
-`movement_readme.md`). One asked the wrong way is **refused**: dropped from the queue with a
-warning, never bent into something else, since whoever asked has it wrong and should hear so.
-`Action::check(facing)` is the same rule, askable before pushing, so the brainstem can end a
-wrong word as `Refused` and tell the mind rather than the log.
+`movement_readme.md`), and a bite reaches only across a face (Lexa, 2026-09-28: "bites are
+faces, not corners"). One asked the wrong way, or a bite asked facing a corner, is
+**refused** (`Refusal`, with its reason: "not lateral", "not across a face"): dropped from the
+queue with a warning, never bent into something else, since whoever asked has it wrong and
+should hear so. `Action::check(facing)` is the same rule, askable before pushing, so the
+brainstem can end a wrong word as `Refused` and tell the mind rather than the log.
 
 One `FixedUpdate` system, `issue`, runs before the mechanisms. For a body with nothing in flight
 (no intent on it, and `Progress` idle) it takes the action at the head and issues the intent it
@@ -122,6 +124,12 @@ needs next; the action is dropped once its last intent is out. That is where seq
 - A way word issues its `Step` and is done, or is refused; it never turns first.
 - `Bite` issues a `Bite`, and is done.
 - Nothing is issued while something is in flight, whatever kind it is.
+
+The queue also keeps the action **underway**: the one whose last intent was issued, off the
+queue and not yet landed, so the brainstem's snapshot can say which way the step in flight
+goes and a mind can plan from where it lands. While a pace word's turn is in flight the word
+is still at the head, and nothing is underway. `truncate(n)` keeps the first `n` waiting and
+drops the rest, for a path amended from outside; what is in flight finishes.
 
 Whatever pushes onto a queue runs in `AskingSet`, which `issue` follows, so an action asked
 for on a tick is looked at on that tick rather than the next depending on which system the

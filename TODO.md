@@ -42,12 +42,15 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   Lexa's word, to be fleshed out later. What's queued: the Sims' half, believed things
   advertising what they offer and motives weighting them, as where utilities come from; the
   hare's ambitions (flee), which retire the click bandaid; a search ambition; what `previous`
-  feeds back; a "by" on `Doing` if the mind should defer to a reflex in hand; `Flee` as a
-  `Sustained` variant when a mind needs it (`Follow` declined: the brainstem "shouldn't be
-  smart enough to have awareness of other entities"); the rest of the action words (sidestep,
-  recoil, …) in the stalk's tree, which sneaks, faces, lunges and bites so far; what a bite
-  does once there are jaws, and what the fox does after one; keys in the board
-  viewer; a shared Python package for the wire once a second consumer (the cortex) arrives.
+  feeds back; a "by" on `Doing` if the mind should defer to a reflex in hand; a turn cost in
+  the mind's A* (`paths.py`), so equal walks stop flipping and paths run straighter, and
+  believed things blocking the corner between two cells; backstep and recoil in some tree
+  (the stalk sneaks, faces, sidesteps, lunges and bites); what a bite does once there are
+  jaws, and what the fox does after one (it bites every 18 ticks for now); a search ambition
+  once entities persist (the wander fires when a hare is lost, by Lexa's choice, until then);
+  keys in the board viewer; a shared Python package for the wire once a second consumer (the
+  cortex) arrives. `Follow` and `Flee` as brainstem words are moot: the mind plans and amends
+  its own paths (2026-09-28).
 - **The startle reflex knows too much.** Lexa, 2026-09-27: it "already requires more
   intelligence than it should have" for a brainstem-level thing (a kind dial, last tick's
   list, the turning rule). Revisit when the game-side memory exists or when reflexes get

@@ -7,8 +7,10 @@
 //!
 //! - a [`Short`] finishes within a round of the slower mind: one turn, one step, a stop.
 //!   A reflex may only ever say one of these.
-//! - a [`Sustained`] outlives rounds. Drive re-aims it every step from where the body
-//!   stands and what it sees now, so a moved target is followed without a new order.
+//! - a [`Path`] outlives rounds: steps to take in order, queued as written. Drive plans
+//!   nothing; whoever wrote the path re-plans as the world moves and amends it, keeping
+//!   the steps still right and replacing the rest, and the step in flight is never cut
+//!   by a path, only by a short.
 //!
 //! Anything may [`Brainstem::order`] an intent, and a reflex may [`Brainstem::preempt`]
 //! one; the systems here carry the current intent out and record how the last one ended
@@ -18,14 +20,15 @@
 //! The tick, inside `AskingSet`, in [`BrainstemSet`]'s order: **Orders** takes what
 //! arrived; **Reflexes** is the slot the reflexes crate fills, so a fright beats an order
 //! from the same tick; **Drive** takes the body for a new intent, clearing the queue and
-//! cutting short whatever is in flight, so the new one starts this tick; after that it
-//! pushes the next action only when the body is idle. After the senses, **publish** writes every body's [`Snapshot`] to the
+//! cutting short whatever is in flight, so the new one starts this tick, or amends the
+//! path in hand; after that it pushes a short's one action only when the body is idle
+//! and ends a path once its last step has landed. After the senses, **publish** writes every body's [`Snapshot`] to the
 //! [`Port`]'s board, and orders arrive through the same port's channel: that is the
 //! whole seam between a body and its mind. Design: `docs/ai_readme.md`.
 
 use bevy::prelude::*;
 use murabito_actions::{Action, ActionQueue, AskingSet, CutShort};
-use murabito_hexcoords::{Direction, VoxelCoord};
+use murabito_hexcoords::Direction;
 use murabito_identity::ThingId;
 use murabito_perception::PerceptionSet;
 use murabito_placement::{Facing, VoxelPosition};
@@ -114,48 +117,55 @@ pub enum Short {
     Bite,
 }
 
-/// What a body can be told that outlives rounds: drive keeps re-aiming it, one step at a
-/// time, until it is done or dropped.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Sustained {
-    /// Walk to that cell, each step the one that brings the body nearest. Done on
-    /// standing there; the layer is not walked, only the plane.
-    WalkTo(VoxelCoord),
-    /// The same at a jog.
-    JogTo(VoxelCoord),
-    /// The same at a sprint.
-    SprintTo(VoxelCoord),
-    /// The same at a sneak.
-    SneakTo(VoxelCoord),
+/// What a body can be told that outlives rounds: steps to take in order, each a pace
+/// word or a turn, walked as written. Drive plans none of it. A path arriving while the
+/// body is on one amends it: the first `keep` actions still waiting on the queue stay,
+/// the rest are dropped, and these steps go on after them; the step in flight is never
+/// touched. Done when the last step has landed. A path carrying any other word is
+/// refused whole.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Path {
+    /// How many of the actions still waiting on the queue to keep ahead of `steps`.
+    /// Means nothing unless the body is on a path already.
+    pub keep: usize,
+    pub steps: Vec<Action>,
 }
 
-impl Sustained {
-    /// The cell it is bound for.
-    pub fn target(self) -> VoxelCoord {
-        match self {
-            Sustained::WalkTo(cell)
-            | Sustained::JogTo(cell)
-            | Sustained::SprintTo(cell)
-            | Sustained::SneakTo(cell) => cell,
-        }
+impl Path {
+    pub fn new(keep: usize, steps: Vec<Action>) -> Self {
+        Self { keep, steps }
     }
 
-    /// The word each of its steps is.
-    fn step(self) -> fn(Direction) -> Action {
-        match self {
-            Sustained::WalkTo(_) => Action::Walk,
-            Sustained::JogTo(_) => Action::Jog,
-            Sustained::SprintTo(_) => Action::Sprint,
-            Sustained::SneakTo(_) => Action::Sneak,
+    /// A path from a standstill: nothing kept.
+    pub fn fresh(steps: Vec<Action>) -> Self {
+        Self::new(0, steps)
+    }
+
+    /// Whether every step is a pace word or a turn; the reason if one is not.
+    fn check(&self) -> Result<(), &'static str> {
+        let is_step = |action: &Action| {
+            matches!(
+                action,
+                Action::Walk(_)
+                    | Action::Jog(_)
+                    | Action::Sprint(_)
+                    | Action::Sneak(_)
+                    | Action::Face(_)
+            )
+        };
+        if self.steps.iter().all(is_step) {
+            Ok(())
+        } else {
+            Err("a path may only step and turn")
         }
     }
 }
 
 /// Everything a body can be told.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Intent {
     Short(Short),
-    Sustained(Sustained),
+    Path(Path),
 }
 
 /// How an intent ended, for whoever gave it.
@@ -177,7 +187,7 @@ pub enum Outcome {
 
 /// What the body did last, and how it ended: the record a mind reads to learn what
 /// became of its order, and of what was done in its place.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Previous {
     intent: Intent,
     outcome: Outcome,
@@ -189,7 +199,7 @@ impl Previous {
     }
 
     pub fn intent(&self) -> Intent {
-        self.intent
+        self.intent.clone()
     }
 
     pub fn outcome(&self) -> Outcome {
@@ -197,8 +207,9 @@ impl Previous {
     }
 }
 
-/// What the body is doing now, and since which tick.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// What the body is doing now, and since which tick. On a path, the intent is the path
+/// as last written: the amendment's `keep` and steps, not the whole walk.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Doing {
     intent: Intent,
     since: u64,
@@ -206,7 +217,7 @@ pub struct Doing {
 
 impl Doing {
     pub fn intent(&self) -> Intent {
-        self.intent
+        self.intent.clone()
     }
 
     pub fn since(&self) -> u64 {
@@ -222,7 +233,7 @@ enum Cause {
     Reflex(&'static str),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct Pending {
     intent: Intent,
     cause: Cause,
@@ -264,12 +275,12 @@ impl Brainstem {
     }
 
     pub fn doing(&self) -> Option<Doing> {
-        self.doing
+        self.doing.clone()
     }
 
     /// What the body did last and how it ended; nothing until something has been asked.
     pub fn previous(&self) -> Option<Previous> {
-        self.previous
+        self.previous.clone()
     }
 
     /// Whether a new intent waits for drive to take it up.
@@ -277,11 +288,25 @@ impl Brainstem {
         self.pending.take()
     }
 
+    /// Whether a pending intent amends the path in hand rather than replacing it: an
+    /// ordered path, while a path is being done.
+    fn amends(&self, pending: &Pending) -> bool {
+        pending.cause == Cause::Order
+            && matches!(pending.intent, Intent::Path(_))
+            && matches!(
+                self.doing,
+                Some(Doing {
+                    intent: Intent::Path(_),
+                    ..
+                })
+            )
+    }
+
     /// The pending intent becomes what is done, and what was done gets its outcome. Pure
     /// bookkeeping: the queue is drive's to clear.
     fn begin(&mut self, pending: Pending, now: u64) {
         let is_stop = pending.intent == Intent::Short(Short::Stop);
-        if let Some(doing) = self.doing {
+        if let Some(doing) = self.doing.take() {
             let outcome = match (pending.cause, is_stop) {
                 (Cause::Reflex(name), _) => Outcome::Cancelled(name),
                 (Cause::Order, true) => Outcome::Stopped,
@@ -296,8 +321,16 @@ impl Brainstem {
         self.pushed = false;
     }
 
+    /// The path in hand is rewritten as the amendment says, and goes on since when it
+    /// began: nothing ended.
+    fn amend(&mut self, path: Path) {
+        if let Some(doing) = self.doing.as_mut() {
+            doing.intent = Intent::Path(path);
+        }
+    }
+
     fn finish(&mut self, ended: Outcome) {
-        if let Some(doing) = self.doing {
+        if let Some(doing) = self.doing.take() {
             self.previous = Some(Previous::new(doing.intent, ended));
         }
         self.doing = None;
@@ -345,31 +378,12 @@ fn resolve_short(short: Short, facing: Direction, seen: Option<&Seen>) -> Resolv
     }
 }
 
-/// The one step toward a cell that promises the shortest walk: the step's own cost in
-/// shaku plus the straight-line distance left from where it lands. A corner step is √3
-/// shaku, so it is taken when it truly cuts the corner and not to zig-zag. `None`
-/// standing there, on the plane; the layer is not walked.
-fn step_toward(from: VoxelCoord, to: VoxelCoord) -> Option<Direction> {
-    if from.q() == to.q() && from.r() == to.r() {
-        return None;
-    }
-    let ground = |cell: VoxelCoord| cell.to_world().xz();
-    let target = ground(to);
-    let walk = |direction: Direction| {
-        let landing = from.neighbour(direction);
-        ground(from).distance(ground(landing)) + ground(landing).distance(target)
-    };
-    Direction::ALL
-        .into_iter()
-        .min_by(|&a, &b| walk(a).total_cmp(&walk(b)))
-}
-
-/// Carries every body's current intent out, one push at a time. A new intent takes the
-/// body now: the queue is cleared and whatever is in flight is cut short, so the new
-/// intent's first action is issued this same tick. After that the next action goes on
-/// only once the queue is empty and the bar is idle. A short is done when its one action
-/// has been pushed and the body is idle again; a sustained intent is re-aimed at every
-/// such moment until nothing is left to do.
+/// Carries every body's current intent out. A new intent takes the body now: the queue
+/// is cleared and whatever is in flight is cut short, so the new intent's first action
+/// is issued this same tick; a path over a path instead amends the queue and cuts
+/// nothing. After that a short's one action goes on only once the queue is empty and
+/// the bar is idle, and the short is done when the body is idle again; a path's steps
+/// are all queued as it begins, and it is done when the body is idle again.
 /// Everything of a body that drive touches. The id and facing are only for the trace.
 type Driven<'a> = (
     Entity,
@@ -386,13 +400,42 @@ fn drive(tick: Res<Tick>, mut commands: Commands, mut bodies: Query<Driven>) {
     for (entity, id, mut body, mut queue, progress, position, facing, seen) in &mut bodies {
         let who = id.map_or_else(|| "a body".to_owned(), ThingId::to_string);
         if let Some(pending) = body.take_pending() {
-            queue.clear();
-            if progress.in_flight() {
-                commands.entity(entity).insert(CutShort);
+            if body.amends(&pending) {
+                let Intent::Path(path) = pending.intent else {
+                    unreachable!("amends only a path");
+                };
+                debug!(
+                    "tick {}: {who} at {:?} keeps {} of {} queued and takes {} more steps",
+                    tick.0,
+                    position.0,
+                    path.keep.min(queue.len()),
+                    queue.len(),
+                    path.steps.len()
+                );
+                queue.truncate(path.keep);
+                take_up(&mut body, &mut queue, path);
+            } else {
+                queue.clear();
+                if progress.in_flight() {
+                    commands.entity(entity).insert(CutShort);
+                }
+                let is_path = matches!(pending.intent, Intent::Path(_));
+                body.begin(pending, tick.0);
+                if is_path {
+                    let Some(Intent::Path(path)) = body.doing().map(|doing| doing.intent()) else {
+                        unreachable!("a path was begun");
+                    };
+                    debug!(
+                        "tick {}: {who} at {:?} sets off on {} steps",
+                        tick.0,
+                        position.0,
+                        path.steps.len()
+                    );
+                    take_up(&mut body, &mut queue, path);
+                }
             }
-            body.begin(pending, tick.0);
         }
-        let Some(doing) = body.doing else {
+        let Some(doing) = body.doing() else {
             continue;
         };
         let idle = queue.is_empty() && !progress.in_flight();
@@ -415,23 +458,25 @@ fn drive(tick: Res<Tick>, mut commands: Commands, mut bodies: Query<Driven>) {
             }
             Intent::Short(_) if idle => body.finish(Outcome::Done),
             Intent::Short(_) => {}
-            Intent::Sustained(sustained) if idle => {
-                let target = sustained.target();
-                match step_toward(position.0, target) {
-                    Some(direction) => {
-                        let action = sustained.step()(direction);
-                        debug!(
-                            "tick {}: {who} at {:?} pushes {action:?} toward {target:?}",
-                            tick.0, position.0
-                        );
-                        queue.push(action);
-                    }
-                    None => body.finish(Outcome::Done),
-                }
-            }
-            Intent::Sustained(_) => {}
+            Intent::Path(_) if idle => body.finish(Outcome::Done),
+            Intent::Path(_) => {}
         }
     }
+}
+
+/// A path's steps go on the queue, or the whole path is refused if one is not a step.
+/// Amending and beginning alike: the path in hand becomes this one.
+fn take_up(body: &mut Brainstem, queue: &mut ActionQueue, path: Path) {
+    if let Err(why) = path.check() {
+        queue.clear();
+        body.amend(path);
+        body.finish(Outcome::Refused(why));
+        return;
+    }
+    for step in &path.steps {
+        queue.push(*step);
+    }
+    body.amend(path);
 }
 
 #[cfg(test)]
@@ -439,6 +484,7 @@ pub(crate) mod tests {
     use super::*;
     use murabito_actions::ActionsPlugin;
     use murabito_attacks::AttacksPlugin;
+    use murabito_hexcoords::VoxelCoord;
     use murabito_identity::{IdentityPlugin, NextThingId};
     use murabito_movement::{Locomotion, MovementPlugin};
     use murabito_perception::PerceptionPlugin;
@@ -477,8 +523,15 @@ pub(crate) mod tests {
         Intent::Short(short)
     }
 
+    /// A straight walk from the origin to a cell, as the steps a mind would send.
     fn walk_to(q: i32, r: i32) -> Intent {
-        Intent::Sustained(Sustained::WalkTo(voxel(q, r)))
+        path_at(Action::Walk, voxel(0, 0), voxel(q, r))
+    }
+
+    fn path_at(word: fn(Direction) -> Action, from: VoxelCoord, to: VoxelCoord) -> Intent {
+        Intent::Path(Path::fresh(
+            from.straight_to(to).into_iter().map(word).collect(),
+        ))
     }
 
     /// A ticking app with everything a body needs to look, be told, and move.
@@ -691,41 +744,6 @@ pub(crate) mod tests {
             resolve_short(Short::FaceThing(id), E, None),
             Resolved::Finish(Outcome::Lost(id))
         );
-    }
-
-    #[test]
-    fn the_step_toward_a_cell_is_the_one_that_ends_nearest_on_the_ground() {
-        let origin = voxel(0, 0);
-        assert_eq!(
-            step_toward(origin, voxel(3, 0)),
-            Some(E),
-            "three cells east: east"
-        );
-        assert_eq!(
-            step_toward(origin, voxel(2, -1)),
-            Some(ENE),
-            "the corner neighbour, in one corner step"
-        );
-        assert_eq!(step_toward(origin, voxel(2, -4)), Some(N));
-        assert_eq!(step_toward(origin, origin), None, "standing there");
-        assert_eq!(
-            step_toward(origin, VoxelCoord::new(0, 0, 0, 2).unwrap()),
-            None,
-            "the layer is not walked"
-        );
-    }
-
-    #[test]
-    fn stepping_toward_a_cell_always_arrives() {
-        let target = voxel(5, -2);
-        let mut here = voxel(-3, 4);
-        let mut steps = 0;
-        while let Some(direction) = step_toward(here, target) {
-            here = here.neighbour(direction);
-            steps += 1;
-            assert!(steps < 30, "wandering");
-        }
-        assert_eq!(here, target);
     }
 
     // -- in the tick ----------------------------------------------------------------
@@ -972,28 +990,39 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn each_pace_to_a_cell_is_bound_for_it_and_steps_in_its_word() {
-        let cell = voxel(3, 0);
-        let paces = [
-            (Sustained::WalkTo(cell), Action::Walk(E)),
-            (Sustained::JogTo(cell), Action::Jog(E)),
-            (Sustained::SprintTo(cell), Action::Sprint(E)),
-            (Sustained::SneakTo(cell), Action::Sneak(E)),
-        ];
-        for (sustained, action) in paces {
-            assert_eq!(sustained.target(), cell);
-            assert_eq!(sustained.step()(E), action, "{sustained:?}");
-        }
+    fn a_path_may_only_step_and_turn_and_is_refused_whole_otherwise() {
+        assert_eq!(
+            Path::fresh(vec![Action::Sneak(E), Action::Face(N), Action::Jog(N)]).check(),
+            Ok(())
+        );
+        assert_eq!(
+            Path::fresh(vec![Action::Walk(E), Action::Bite]).check(),
+            Err("a path may only step and turn")
+        );
+        let (mut app, body) = body();
+        order(
+            &mut app,
+            body,
+            Intent::Path(Path::fresh(vec![Action::Walk(E), Action::Lunge(E)])),
+        );
+        tick(&mut app, 1);
+        assert_eq!(
+            previous_outcome(&app, body),
+            Some(Outcome::Refused("a path may only step and turn"))
+        );
+        assert_eq!(queued(&app, body), 0, "none of it was taken");
+        tick(&mut app, 20);
+        assert_eq!(position(&app, body), voxel(0, 0));
     }
 
     #[test]
-    fn a_sneak_to_creeps_there_at_half_pace_and_is_done() {
+    fn a_sneaking_path_creeps_there_at_half_pace_and_is_done() {
         // Two edge steps east at a sneak: 32 ticks each, 64 to stand there, done the tick after.
         let (mut app, body) = body();
         order(
             &mut app,
             body,
-            Intent::Sustained(Sustained::SneakTo(voxel(2, 0))),
+            path_at(Action::Sneak, voxel(0, 0), voxel(2, 0)),
         );
 
         tick(&mut app, 32);
@@ -1009,23 +1038,36 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_walk_to_is_re_aimed_from_wherever_the_body_stands_when_a_step_lands() {
-        // Four steps east are ordered. With two landed and the third in flight, the order
-        // becomes a cell a corner step off where the body stands: the third step is cut,
-        // and the body aims afresh from where it is, one corner step.
+    fn a_path_amended_keeps_the_step_in_flight_and_goes_on_from_where_it_lands() {
+        // Four steps east are ordered. With two landed and the third in flight, one step
+        // waits on the queue. The amendment keeps none of it and adds a corner step, the
+        // plan from where the third lands: that step is not cut, it lands on tick 48,
+        // and the corner step follows from (3, 0) to (4, -1).
         let (mut app, body) = body();
         order(&mut app, body, walk_to(4, 0));
-        tick(&mut app, 32);
+        tick(&mut app, 33);
         assert_eq!(position(&app, body), voxel(2, 0), "two steps of 16 ticks");
+        assert_eq!(
+            queued(&app, body),
+            1,
+            "the third is in flight, the fourth waits"
+        );
 
-        order(&mut app, body, walk_to(4, -1));
-        tick(&mut app, 27);
+        order(
+            &mut app,
+            body,
+            Intent::Path(Path::new(0, vec![Action::Walk(Direction::NNE)])),
+        );
+        tick(&mut app, 15);
         assert_eq!(
             position(&app, body),
-            voxel(2, 0),
-            "the third step was cut; a corner step is 28 ticks"
+            voxel(3, 0),
+            "the third step landed on tick 48"
         );
-        tick(&mut app, 1);
+        let doing = brainstem(&app, body).doing().expect("still on the path");
+        assert_eq!(doing.since(), 1, "the same path, since it began");
+        assert_eq!(previous_outcome(&app, body), None, "nothing ended");
+        tick(&mut app, 28);
         assert_eq!(
             position(&app, body),
             voxel(4, -1),
@@ -1033,5 +1075,74 @@ pub(crate) mod tests {
         );
         tick(&mut app, 1);
         assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
+    }
+
+    #[test]
+    fn an_amendment_keeps_the_first_of_what_waits_and_drops_the_rest() {
+        // Four steps east: with one landed and the second in flight, two wait. Keep one
+        // and turn north after it: three steps east in all, then the turn.
+        let (mut app, body) = body();
+        order(&mut app, body, walk_to(4, 0));
+        tick(&mut app, 17);
+        assert_eq!(position(&app, body), voxel(1, 0));
+        assert_eq!(queued(&app, body), 2);
+
+        order(
+            &mut app,
+            body,
+            Intent::Path(Path::new(1, vec![Action::Face(N)])),
+        );
+        tick(&mut app, 1);
+        assert_eq!(queued(&app, body), 2, "one kept, one added");
+        tick(&mut app, 31);
+        assert_eq!(
+            position(&app, body),
+            voxel(3, 0),
+            "the second landed on 32, the kept third on 48"
+        );
+        tick(&mut app, 32);
+        assert_eq!(facing(&app, body), N, "and the turn after it");
+        assert_eq!(position(&app, body), voxel(3, 0));
+        tick(&mut app, 1);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Done));
+    }
+
+    #[test]
+    fn a_fresh_path_over_a_short_cuts_it_and_supersedes_it() {
+        let (mut app, body) = body();
+        order(&mut app, body, short(Short::Face(N)));
+        tick(&mut app, 8);
+        order(&mut app, body, walk_to(1, 0));
+        tick(&mut app, 1);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Superseded));
+        tick(&mut app, 15);
+        assert_eq!(
+            position(&app, body),
+            voxel(1, 0),
+            "the step east from tick 9 lands on 24"
+        );
+        assert_eq!(
+            facing(&app, body),
+            E,
+            "the turn north was cut: the body still faced east"
+        );
+    }
+
+    #[test]
+    fn a_short_over_a_path_cuts_the_step_in_flight_and_supersedes_the_path() {
+        let (mut app, body) = body();
+        order(&mut app, body, walk_to(3, 0));
+        tick(&mut app, 20);
+        order(&mut app, body, short(Short::Face(N)));
+        tick(&mut app, 1);
+        assert_eq!(previous_outcome(&app, body), Some(Outcome::Superseded));
+        assert_eq!(queued(&app, body), 0, "the path's steps are gone");
+        tick(&mut app, 40);
+        assert_eq!(
+            position(&app, body),
+            voxel(1, 0),
+            "the second step never landed"
+        );
+        assert_eq!(facing(&app, body), N);
     }
 }
