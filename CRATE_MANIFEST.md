@@ -123,8 +123,9 @@ depends on every plugin crate and is the only thing that depends on `murabito_se
 
 - **`murabito_brainstem`** — every sentient body's driver: in the seat, not in charge.
   Owns the vocabulary a body can be told: `Short`, a stop, a turn, a turn to face a
-  thing, a step, each over within a round of the slower mind; `Sustained`, a walk to a
-  cell, re-aimed at every step from where the body stands. Holds one intent per body in
+  thing, a step, each over within a round of the slower mind; `Path`, steps to take in
+  order as a mind planned them, queued as written and amended in place, the step in
+  flight never cut by a path. Holds one intent per body in
   a `Brainstem` component and is the only thing that pushes onto the `ActionQueue`, one
   action at a time, every tick in `AskingSet`. Records what the last intent was and how
   it ended (`Previous`: the intent, and an `Outcome`: done, stopped, superseded,

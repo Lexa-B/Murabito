@@ -16,10 +16,12 @@ uv run pytest         # the tests
 `src/midbrain/client.py` is the wire: frames, a request for snapshots, an order.
 `order.py` says one order by hand; `board.py` shows what every body is told.
 `beliefs.py` is the believed world: a `BelievedWorld` per body, a `Belief` per thing it has
-seen, frozen where it was last seen. `ambitions.py` is what a body can want (`Idle`, `Stalk`),
+seen, frozen where it was last seen. `ambitions.py` is what a body can want (`Idle`, `Wander`, `Stalk`),
 each bidding a utility and the winner running a tree from `behaviour.py`; `hexes.py` is the
-geometry. `mind.py` runs the round: observe, revise, choose, want, send if it differs from what
-the body is doing; `visualize.py` draws one body's world and decision, flat, north up, in the
-game's geometry. Run the game beside it: the game is the truth.
+geometry and `paths.py` the planner, A* across the plane round what is believed. `mind.py`
+runs the round: observe, revise, choose, want, send what differs from what the body is doing,
+a path as an amendment of the one in hand; `visualize.py` draws one body's world, decision
+and route, flat, north up, in the game's geometry. Run the game beside it: the game is the
+truth.
 `murabito_pb2.py` is generated and checked in; a test fails if it falls behind the
 contract. Python 3.13, dependencies with `uv add`.

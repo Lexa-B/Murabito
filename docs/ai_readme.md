@@ -32,7 +32,7 @@ the bridge and the reflexes depend on the brainstem, `murabito_kinds` depends on
 reflexes (a `Sentient` requires a `Brainstem` and a `Reflexes`), and the brainstem depends on
 the senses and the queue below it. The brainstem never learns a fox, a reflex or a socket exists.
 
-## The vocabulary: `Short` and `Sustained`
+## The vocabulary: `Short` and `Path`
 
 The brainstem owns the words a body can be told, in two tiers, and the compiler holds the line
 between them.
@@ -53,28 +53,33 @@ pub enum Short {            // over within one round of the mind: a single motio
     Bite,
 }
 
-pub enum Sustained {        // outlives rounds; drive re-aims it every step: a cell, at a pace
-    WalkTo(VoxelCoord),     // on the plane; the layer is not walked
-    JogTo(VoxelCoord),      // each step the pace's word: Jog, Sprint, Sneak
-    SprintTo(VoxelCoord),
-    SneakTo(VoxelCoord),
-}
+pub struct Path {           // outlives rounds: steps to take in order, walked as written
+    pub keep: usize,        // sent while on a path, it amends it: this many of the actions
+    pub steps: Vec<Action>, // still waiting stay, the rest go, these follow; the step in
+}                           // flight is never touched. Pace words and Face only.
 
-pub enum Intent { Short(Short), Sustained(Sustained) }
+pub enum Intent { Short(Short), Path(Path) }
 ```
 
 A reflex's code returns an `Option<Short>`, by type, so a reflex can never hold a body for
-longer than one round; the rule is structural. A `Sustained` intent has no plan: at every
-landing, drive picks the next step afresh from where the body stands and what it sees, so a
-moved target or a superseded order needs no replanning. A pace to a cell picks the step that promises the
-shortest walk, the step's own cost in shaku plus the straight line left from where it lands,
-so a corner step (√3 shaku) is taken when it truly cuts the corner and never to zig-zag.
+longer than one round; the rule is structural. A `Path` is the mind's plan and nothing of the
+brainstem's: drive queues its steps as written and plans none (Lexa, 2026-09-28, replacing
+the paces to a cell that drive re-aimed itself: "make these long actions a queue of shorts
+in the brainstem... the midbrain will also need to be smart enough to only swap out the part
+of the path that's different"). A path that arrives while the body is on one **amends** it,
+keeping the first `keep` actions still waiting and replacing the rest, so a moving target
+re-plans the tail of the walk while the step in flight lands; a path over anything else, and
+a short over a path, is a new intent as any other. A path is done when its last step has
+landed, and refused whole if a step is any word but a pace or `Face`. The straight walk
+across an empty plane that drive used to take is `VoxelCoord::straight_to` in `hexcoords`,
+for whoever has no planner: the scene's click jogs the hare along one.
 
 A `Short` that is an action word is that word and nothing under it: the brainstem never sees a
 gait or a reach, and a mind cannot ask for one. It asks `Action::check` against the body's own
 facing before pushing, and ends a wrong-way word as `Refused` with the reason, so the mind hears
-through `previous` and not the log. New words are new variants: `Follow(ThingId)`, `Flee(ThingId)`
-are the ones named so far, each a few lines in drive when a mind asks for it (design).
+through `previous` and not the log. A bite is across a face, never a corner (Lexa,
+2026-09-28: "bites are faces, not corners"): one asked while the body faces a corner
+direction is `Refused("not across a face")` the same way.
 
 ## The body's driver: `Brainstem`
 
@@ -110,8 +115,9 @@ Three steps inside `murabito_actions::AskingSet`, chained, in `BrainstemSet`:
    flight, the body is marked `CutShort` (actions' mark: the `Step` or `Turn` is dropped and the
    bar abandoned before `issue` runs on this same tick). Then, for a `Short`, its one action is
    pushed once and the intent is done when the body is idle again (queue empty, bar not in
-   flight); for a `Sustained`, the next step is pushed whenever the body is idle, and it is done
-   when nothing is left.
+   flight); for a `Path`, every step is pushed as it begins, and it is done when the body is
+   idle again. A path arriving over a path amends the queue instead (truncate to `keep`,
+   append) and cuts nothing.
 
 Then the mechanisms move the body, perception rebuilds `Occupancy` and every eye looks, and
 **publish** writes every body's `Snapshot` to the board, after `PerceptionSet::Sense`, so the
@@ -173,6 +179,7 @@ A snapshot is flat facts with names, built for a scorer to read:
 | `doing` | the intent and the tick it began, or nothing |
 | `queue` | every action waiting, first to last |
 | `in_flight` | the fraction of the current step, or nothing |
+| `underway` | the action off the queue and not yet landed, or nothing: nothing too while the head still waits on its turn, since it is then still queued |
 | `previous` | what was done last and how it ended, or nothing yet |
 
 The engine's `Entity` handle stays out of it: a mind keys on `ThingId`.
@@ -253,27 +260,42 @@ kind's path; a kind not listed only idles) reads the believed world and the snap
 a utility, 0 to 1; `choose` takes the highest, with a small boost for the one in hand so a
 near tie doesn't flip every round. The winner then ticks its **behaviour tree**
 (`behaviour.py`: `Condition`, `Act`, `Selector`, `Sequence`, ticked afresh from the root each
-round, no memory of its own) for the intent it wants, and the loop sends that only if it
-**differs** from what the body is doing: a hold is never sent, a `Stop` only when something is
-in hand, a pace to a cell only when nothing is in hand, the pace in hand is another, or the
-target has moved two or more cells, so the mind never cuts its own steps. Before bidding, `revise` drops a belief the body's own eyes
+round, no memory of its own) for the intent it wants, and the loop sends what `to_send`
+makes of that: a hold is never sent, a `Stop` only when something is in hand, a short when it
+is not exactly what is in hand, and a path as an **amendment** of the path in hand, the
+steps that match the queue from the front kept and only the rest sent, nothing at all when
+the whole of it matches, so a target on the move re-plans the tail of the walk and the mind
+never cuts its own steps. Before bidding, `revise` drops a belief the body's own eyes
 contradict: a thing that should be within a cell and isn't in view, or one on the notch the
 body faces within its near reach (18 cells, the fox's near band, copied) and not in view.
 
+A pace to a cell is a **path** the mind plans (`paths.py`): A* over the hex plane in shaku,
+an edge step 1 and a corner step √3, every believed cell blocked, a cap on cells opened so a
+walled-in goal cannot hang a round, and nothing if something is believed to stand on the
+goal itself. It is planned from the body's *origin*, where the action underway lands, so an
+amendment joins on where the step in flight ends. The board reads a path as its first steps
+and their count; the window draws the route as outlined hexes, the landing bold. Ties in
+A* between equal walks flip as the origin moves and send amendments that only reorder
+equivalent steps; harmless, and a turn cost would settle it (design).
+
 The fox's repertoire is `Idle`, `Wander` and `Stalk(prey=hare, distance=3, looking_arc=180,
-rear_tolerance=15, spiral=15, check_after=3)`, which bids 1 while it believes in a hare and
-runs this tree:
+line_tolerance=15, spiral=15, check_after=3)`, which bids 1 while it believes in a hare and
+runs this tree. Its **pounce line** is always an edge direction, since a bite reaches only
+across a face: the hare's rear line when that is one, else the edge direction beside its rear
+nearer the fox, so it circles less and the choice holds once it is on it.
 
 ```
 stalk
 ├─ freeze     the hare is looking at us (its last-seen facing, within the arc)   → Stop
-├─ bite       beside it, facing it                                              → Bite
-├─ pounce     behind it, facing it, and a lunge lands beside it                 → Lunge that way
+├─ bite       the cell we face, across an edge, is its                          → Bite
+├─ pounce     facing along an edge, and the third cell that way is its          → Lunge that way
+├─ set up     one sidestep would put us on the pounce line, facing it           → Sidestep there
 ├─ check      we have walked `check_after` cells without seeing it               → face where we believe it is;
-│                                                                                  hold once facing
-├─ circle     we are off its rear line                                          → SneakTo a cell one notch round toward
-│                                                                                  its rear, spiralling in by `spiral`
-├─ approach   on the rear line, farther than `distance`                         → SneakTo the cell `distance` behind it
+│                                                                                  hold a round, count afresh
+├─ circle     we are off the pounce line                                        → sneak a path one notch round
+│                                                                                  toward it, spiralling in by `spiral`
+├─ approach   on the pounce line, farther than `distance`                       → sneak a path to the cell `distance`
+│                                                                                  along it
 └─ watch                                                                        → face it, or hold if we already do
 ```
 
@@ -281,7 +303,10 @@ The check is Lexa's: a circling fox faces the way it walks, so every few cells i
 see the hare is where it left it. If it is, the sighting resets the count and circling resumes;
 if the fox looks straight at the believed cell within its near reach and sees nothing, `revise`
 forgets the hare (the second of its two rules, beside standing on the cell), the stalk bids 0,
-and the fox idles. `spiral` is the circle's pitch, Lexa's dial: 0 is a pure arc at the fox's current distance; a
+and the fox wanders. Having looked and seen nothing beyond that reach, the check is done and
+the count starts afresh, so the fox walks on toward the ghost rather than staring at it
+(2026-09-28: a fox stood forever facing a ghost thirty cells off). `spiral` is the circle's
+pitch, Lexa's dial: 0 is a pure arc at the fox's current distance; a
 positive angle tilts each swing that far inward off the tangent, so the fox closes as it
 comes round (about 13% nearer per 30° swing at 15°), never nearer than `distance`. An
 ambition that has lost its reason to run bids 0 and gets no boost, so a stalk whose prey was
@@ -289,17 +314,21 @@ forgotten is let go. All of it reads beliefs, so a hare that walked out of view 
 stalked to where it was last seen and, once the fox stands there and sees nothing, forgotten. `hexes.py` is the mind's
 copy of the plane for the geometry: bearings, rotations, the twelve offsets. Watched live on
 2026-09-27: the fox approached to three behind the hare and held; froze when the hare turned to
-look; circled to the hare's new rear when it faced across; settled and faced it. Every decision
-shows in the terminal view and the window as the path through the tree, `stalk › circle ›
-round`, and the cell it wants as an outlined hex.
+look; circled to the hare's new rear when it faced across; settled and faced it. And on
+2026-09-28, with paths: the hare jogged thirty cells north-east and stopped facing N, a
+corner direction; the fox sneaked after it in one unbroken walk, thirty orders out and every
+one after the first an amendment or a check, settled on the SSW edge line beside its rear,
+faced it, lunged on tick 1326, landed beside it across a face and bit. Every decision shows
+in the terminal view and the window as the path through the tree, `stalk › circle › round`,
+and the route it wants as outlined hexes.
 
 `Wander(leg=(4, 12), rest=(2, 8), arc=180)` is what the fox does with nowhere to be: it bids
 a flat 0.3, above `Idle`'s 0.1 and below any ambition with a reason, so it runs whenever the
 fox believes in no hare (Lexa's word, 2026-09-27: this is also what fires when the fox
 *loses* a hare, until an internal ontology with entity persistence gives it a proper search).
-Its tree: a pace in hand, hold and let it land; a rest not yet over, hold; nothing in hand and
-no rest drawn, draw one of `rest` seconds and hold; otherwise forget the rest and `WalkTo` a
-cell `leg` shaku away on a bearing drawn within `arc` of the way it faces, so each leg swings
+Its tree: a path in hand, hold and let it land; a rest not yet over, hold; nothing in hand and
+no rest drawn, draw one of `rest` seconds and hold; otherwise forget the rest and walk a path
+to a cell `leg` shaku away on a bearing drawn within `arc` of the way it faces, so each leg swings
 its cone somewhere new. The bearing and the length come from a `random.Random` the ambition
 carries; tests hand in a seeded one.
 
@@ -326,8 +355,11 @@ came back within 120 cells.
   the hare's own ambitions (flee), which retire the scene's click; what `previous` feeds
   back (`Cancelled`, `Lost`); whether the mind defers to a reflex in hand, which needs a
   "by" on `Doing`, since the wire doesn't say whose intent it is.
-- **Deferred words**: `Follow`, `Flee`, each a variant and a few lines in drive. The action
-  words are in, one to one with `Action`; the tree does not use them yet.
+- **The planner's growth**: a turn cost in A* (state as cell and heading), which straightens
+  paths and stops equal walks flipping; believed things blocking the corner between two
+  cells, not only the cell they stand in; a horizon, if whole paths on the wire ever weigh.
+  `Follow` and `Flee` as brainstem words are moot now that the mind plans and amends its own
+  paths; the tree uses sneak, face, sidestep, lunge and bite so far, not backstep or recoil.
 - **A body's own memory in the game**, below reflexes and brainstem, so a reflex asks "not in
   what I believe" rather than "not in last tick's list"; the mind's believed world does not
   reach the reflexes. `TODO.md`.
