@@ -18,10 +18,11 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from midbrain import murabito_pb2 as pb
-from midbrain.behaviour import Act, Condition, Result, Selector, Sequence
+from midbrain.behaviour import Node, Result
 from midbrain.beliefs import Belief, BelievedWorld, Cell
 from midbrain.hexes import along, angle_of, apart, bearing, from_world, nearest_direction, opposite, rotated, steps, to_world, turn_between
 from midbrain.paths import cells_along, landing, neighbour, plan
+from midbrain.trees import Leaves, load
 
 STOP = pb.Intent(short=pb.Short(stop=pb.Stop()))
 TICKS_PER_SECOND = 64
@@ -201,7 +202,8 @@ class Stalk:
     the fox, so it circles less and the choice holds once it is on it. A lunge covers
     two cells along the facing and the bite takes the third.
 
-    The tree, first branch to succeed wins:
+    The tree is ``trees/stalk.xml``, loaded with the leaves below; first branch to
+    succeed wins:
 
         stalk
         ├─ freeze     it is looking at us              → Stop
@@ -361,17 +363,33 @@ class Stalk:
         return face_thing(target.id) if target.id in ctx.seen_now else face(nearest_direction(toward_it))
 
     @property
-    def tree(self) -> Selector:
-        return Selector(self.name, (
-            Sequence("freeze", (Condition("looking at us", self.looking_at_us), Act("stop", lambda ctx: STOP))),
-            Sequence("bite", (Condition("beside it, facing it", self.beside_it_facing_it), Act("bite", lambda ctx: BITE))),
-            Sequence("pounce", (Condition("a lunge lands beside it", self.a_lunge_lands_beside_it), Act("lunge", self.pounce))),
-            Sequence("set up", (Condition("a sidestep lines up a lunge", self.a_sidestep_lines_up_a_lunge), Act("sidestep", self.set_up))),
-            Sequence("check", (Condition("unseen too long", self.unseen_too_long), Act("look", self.look_at_it))),
-            Sequence("circle", (Condition("off the pounce line", self.off_the_line), Act("round", self.round_toward_the_line))),
-            Sequence("approach", (Condition("farther than distance", self.farther_than_distance), Act("close in", self.close_in))),
-            Act("watch", self.watch),
-        ))
+    def leaves(self) -> Leaves:
+        """What the tree file may refer to, by ID."""
+        return Leaves(
+            conditions={
+                "looking_at_us": self.looking_at_us,
+                "beside_it_facing_it": self.beside_it_facing_it,
+                "a_lunge_lands_beside_it": self.a_lunge_lands_beside_it,
+                "a_sidestep_lines_up_a_lunge": self.a_sidestep_lines_up_a_lunge,
+                "unseen_too_long": self.unseen_too_long,
+                "off_the_pounce_line": self.off_the_line,
+                "farther_than_distance": self.farther_than_distance,
+            },
+            acts={
+                "stop": lambda ctx: STOP,
+                "bite": lambda ctx: BITE,
+                "lunge": self.pounce,
+                "sidestep": self.set_up,
+                "look": self.look_at_it,
+                "round": self.round_toward_the_line,
+                "close_in": self.close_in,
+                "watch": self.watch,
+            },
+        )
+
+    @property
+    def tree(self) -> Node:
+        return load(self.name, self.leaves)
 
     def want(self, ctx: Context) -> Result:
         if self.target(ctx) is None:
@@ -384,7 +402,8 @@ class Wander:
     """Walk a leg somewhere ahead, rest a while, walk another. For a body with nowhere
     to be.
 
-    The tree, first branch to succeed wins:
+    The tree is ``trees/wander.xml``, loaded with the leaves below; first branch to
+    succeed wins:
 
         wander
         ├─ walking   a path is in hand                → hold, let it land
@@ -443,13 +462,25 @@ class Wander:
         return ctx.walk_to(cell) if cell != ctx.here else None
 
     @property
-    def tree(self) -> Selector:
-        return Selector(self.name, (
-            Sequence("walking", (Condition("a path in hand", self.a_path_in_hand), Act("keep on", lambda ctx: None))),
-            Sequence("resting", (Condition("rest not over", self.rest_not_over), Act("wait", lambda ctx: None))),
-            Sequence("arrived", (Condition("no rest drawn", self.no_rest_drawn), Act("rest", self.draw_a_rest))),
-            Act("set off", self.set_off),
-        ))
+    def leaves(self) -> Leaves:
+        """What the tree file may refer to, by ID."""
+        return Leaves(
+            conditions={
+                "a_path_in_hand": self.a_path_in_hand,
+                "rest_not_over": self.rest_not_over,
+                "no_rest_drawn": self.no_rest_drawn,
+            },
+            acts={
+                "keep_on": lambda ctx: None,
+                "wait": lambda ctx: None,
+                "rest": self.draw_a_rest,
+                "set_off": self.set_off,
+            },
+        )
+
+    @property
+    def tree(self) -> Node:
+        return load(self.name, self.leaves)
 
     def want(self, ctx: Context) -> Result:
         return self.tree.tick(ctx)

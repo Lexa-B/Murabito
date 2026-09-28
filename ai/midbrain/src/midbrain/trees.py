@@ -9,14 +9,17 @@ is data. Every leaf has an **ID**, its name made an identifier (``looking at us`
 The file is BT.CPP's version 4 format: a ``<root>`` with one ``<BehaviorTree>`` per tree,
 ``Fallback`` for our selector, ``Sequence`` for our sequence, ``<Condition ID=…/>`` and
 ``<Action ID=…/>`` for the leaves, and a ``<TreeNodesModel>`` listing every leaf, which is
-Groot2's palette. ``export`` writes every ambition's tree to ``ai/midbrain/trees/``, and a
-test fails when the checked-in files fall behind the code; ``load`` builds a tree back from
-a file with an ambition's leaves.
+Groot2's palette. The files in ``ai/midbrain/trees/`` are the source of truth: an
+ambition's ``tree`` is ``load``ed from its file with its ``leaves``, parsed again whenever
+the file changes, so an edit saved in Groot2 reaches the mind on its next round. A file
+that will not load, an edit saved mid-way, is warned about and the last good tree kept.
+``uv run trees`` shows every tree as loaded; ``to_xml`` writes one out, for a first file.
 """
 
 from __future__ import annotations
 
 import re
+import sys
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -145,38 +148,48 @@ def _node(element: ET.Element, leaves: Leaves) -> Node:
             raise Malformed(f"no node for <{other}>")
 
 
-def load(name: str, leaves: Leaves) -> Node:
-    """The tree in ``trees/<name>.xml``."""
-    return from_xml((TREES / f"{name}.xml").read_text(), leaves)
+_good: dict[Path, tuple[float, str]] = {}
+"""Per file, the modification time last read and the text that loaded: the last good."""
 
 
-# ---- the files ----------------------------------------------------------------------
+def load(name: str, leaves: Leaves, where: Path = TREES) -> Node:
+    """The tree in ``<where>/<name>.xml``, read again when the file has changed. A file
+    that fails to load is warned about once per change and the last good one is kept; with
+    no good one yet, the error is raised."""
+    path = where / f"{name}.xml"
+    stamp = path.stat().st_mtime
+    known = _good.get(path)
+    if known is not None and known[0] == stamp:
+        return from_xml(known[1], leaves)
+    text = path.read_text()
+    try:
+        tree = from_xml(text, leaves)
+    except (Malformed, UnknownLeaf, ET.ParseError) as why:
+        if known is None:
+            raise
+        print(f"{path}: {why}; keeping the tree that last loaded", file=sys.stderr)
+        _good[path] = (stamp, known[1])
+        return from_xml(known[1], leaves)
+    _good[path] = (stamp, text)
+    return tree
 
 
-def exports() -> dict[str, str]:
-    """Every ambition with a tree, and its file's text, as the code has it now."""
-    from midbrain.ambitions import REPERTOIRE
-
-    files = {}
-    for ambitions in REPERTOIRE.values():
-        for ambition in ambitions:
-            tree = getattr(ambition, "tree", None)
-            if tree is not None:
-                files[ambition.name] = to_xml(tree)
-    return files
-
-
-def export(into: Path = TREES) -> list[Path]:
-    """Writes every tree file; ``uv run trees``."""
-    into.mkdir(parents=True, exist_ok=True)
-    written = []
-    for name, text in exports().items():
-        path = into / f"{name}.xml"
-        path.write_text(text)
-        written.append(path)
-    return written
+def outline(node: Node, depth: int = 0) -> str:
+    """A tree as indented lines, one per node, for a look in the terminal."""
+    kind = {Selector: "?", Sequence: "→", Condition: "if", Act: "do"}[type(node)]
+    lines = [f"{'  ' * depth}{kind} {node.name}"]
+    for child in getattr(node, "children", ()):
+        lines.append(outline(child, depth + 1))
+    return "\n".join(lines)
 
 
 def main() -> None:
-    for path in export():
-        print(f"wrote {path}")
+    """``uv run trees``: every ambition's tree as it loads from its file."""
+    from midbrain.ambitions import REPERTOIRE
+
+    for ambitions in REPERTOIRE.values():
+        for ambition in ambitions:
+            if hasattr(ambition, "leaves"):
+                print(f"{TREES / ambition.name}.xml")
+                print(outline(ambition.tree))
+                print()

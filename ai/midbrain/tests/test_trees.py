@@ -8,7 +8,7 @@ import pytest
 
 from midbrain.ambitions import HARE, Stalk, Wander
 from midbrain.behaviour import Act, Condition, Selector, Sequence
-from midbrain.trees import TREES, Malformed, UnknownLeaf, exports, from_xml, identifier, leaves_of, to_xml
+from midbrain.trees import TREES, Malformed, UnknownLeaf, from_xml, identifier, leaves_of, load, outline, to_xml
 from test_ambitions import fox_believing
 
 
@@ -47,13 +47,46 @@ def test_a_tree_comes_back_from_its_file_the_same_and_decides_the_same() -> None
     assert from_xml(to_xml(wander), leaves_of(wander)) == wander
 
 
-def test_the_checked_in_tree_files_are_what_the_code_exports() -> None:
-    files = exports()
-    assert set(files) == {"stalk", "wander"}
-    for name, text in files.items():
-        path = TREES / f"{name}.xml"
-        assert path.exists(), f"{path} is missing: run uv run trees"
-        assert path.read_text() == text, f"{path} fell behind the code: run uv run trees"
+def test_every_leaf_an_ambition_declares_is_in_its_file_and_every_id_in_the_file_is_a_leaf() -> None:
+    for ambition in (Stalk(prey=HARE), Wander()):
+        tree = ambition.tree  # loads, so every ID in the file is a leaf
+        in_file = leaves_of(tree)
+        assert set(in_file.conditions) == set(ambition.leaves.conditions), ambition.name
+        assert set(in_file.acts) == set(ambition.leaves.acts), ambition.name
+
+
+def test_a_changed_file_is_read_again_and_a_broken_edit_keeps_the_last_good_tree(tmp_path, capsys) -> None:
+    import os
+    import time
+
+    leaves = leaves_of(Selector("t", (Condition("is it", lambda c: True), Act("do it", lambda c: None))))
+    path = tmp_path / "t.xml"
+    path.write_text(to_xml(Selector("t", (Condition("is it", lambda c: True),))))
+    first = load("t", leaves, tmp_path)
+    assert [child.name for child in first.children] == ["is it"]
+
+    path.write_text(to_xml(Selector("t", (Act("do it", lambda c: None),))))
+    os.utime(path, (time.time() + 5, time.time() + 5))
+    second = load("t", leaves, tmp_path)
+    assert [child.name for child in second.children] == ["do it"], "the edit reached the tree"
+
+    path.write_text("<root><BehaviorTree ID='t'><Fallback name='t'><Action ID='no_such'/></Fallback></BehaviorTree></root>")
+    os.utime(path, (time.time() + 10, time.time() + 10))
+    third = load("t", leaves, tmp_path)
+    assert third == second, "the broken edit is not taken"
+    assert "no act 'no_such'" in capsys.readouterr().err
+    assert load("t", leaves, tmp_path) == second and capsys.readouterr().err == "", "warned once"
+
+    broken_from_the_start = tmp_path / "u.xml"
+    broken_from_the_start.write_text("<root/>")
+    with pytest.raises(Malformed):
+        load("u", leaves, tmp_path)
+
+
+def test_an_outline_reads_top_down() -> None:
+    lines = outline(Stalk(prey=HARE).tree).splitlines()
+    assert lines[0] == "? stalk" and lines[1] == "  → freeze" and lines[2] == "    if looking at us" and lines[3] == "    do stop"
+    assert lines[-1] == "  do watch"
 
 
 def test_a_file_naming_a_leaf_the_ambition_lacks_says_which() -> None:
