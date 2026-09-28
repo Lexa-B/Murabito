@@ -213,7 +213,8 @@ uv run order 3 walkto 0 0    # one order by hand: stop | face DIR | face-thing N
                              #   or jogto, sprintto, sneakto
 uv run order 1 recoil W      # or walk, jog, sprint, sneak, sidestep, backstep, lunge DIR; bite
 uv run mind                  # what every body believes, live, in the terminal
-uv run mind --visualize      # one body's believed world drawn in a window; --body N, Tab cycles
+uv run mind --visualize      # one body's believed world and its ambition's tree, live; --body N, Tab cycles
+uv run trees                 # every ambition's tree as it loads from ai/midbrain/trees/*.xml
 uv run pytest
 ./regen.sh                   # after the .proto changes
 ```
@@ -260,7 +261,8 @@ kind's path; a kind not listed only idles) reads the believed world and the snap
 a utility, 0 to 1; `choose` takes the highest, with a small boost for the one in hand so a
 near tie doesn't flip every round. The winner then ticks its **behaviour tree**
 (`behaviour.py`: `Condition`, `Act`, `Selector`, `Sequence`, ticked afresh from the root each
-round, no memory of its own) for the intent it wants, and the loop sends what `to_send`
+round, no memory of its own; its shape a file, see "Trees as files" below) for the intent it
+wants, and the loop sends what `to_send`
 makes of that: a hold is never sent, a `Stop` only when something is in hand, a short when it
 is not exactly what is in hand, and a path as an **amendment** of the path in hand, the
 steps that match the queue from the front kept and only the rest sent, nothing at all when
@@ -342,6 +344,37 @@ shared one, when it comes, will be made "very different from Halo". Watched live
 legs of about six cells drifting north, and the stalk taking over mid-leg the moment the hare
 came back within 120 cells.
 
+### Trees as files, and the mind seen thinking
+
+Lexa (2026-09-28): "i'm really big on visualization, so i'd like for all of our BTs to have
+a visual editor." Groot2, BehaviorTree.CPP's editor, over behavior3editor, which is
+unmaintained and has no live view. The split an editor needs is the usual one: the **leaves
+stay code** and the **shape is data**. Every leaf has an ID, its name made an identifier
+(`beside it, facing it` is `beside_it_facing_it`), and each ambition declares its leaves by
+ID (`Stalk.leaves`, `Wander.leaves`: a `Leaves` of conditions and acts). The tree itself is
+`ai/midbrain/trees/<ambition>.xml`, BT.CPP's version 4 format: `Fallback` for our selector,
+`Sequence`, `<Condition ID=…/>` and `<Action ID=…/>` leaves whose `name` keeps the words a
+decision's path shows, and a `<TreeNodesModel>` listing every leaf, Groot2's palette.
+`trees.py` loads a tree from its file with the ambition's leaves (`load`), refusing an
+unknown leaf or a malformed file by name, and writes one out (`to_xml`) for a first file.
+
+The file is the source of truth. An ambition's `tree` loads it each round, parsed again
+whenever its modification time changes, so an edit saved in Groot2 reaches the mind on its
+next round with nothing restarted; a file that will not load, an edit saved mid-way, is
+warned about once on stderr and the last good tree kept. Tests hold the file and the code
+together: every leaf an ambition declares is in its file and every ID in the file is a leaf,
+and the loaded stalk decides as the tests expect. A new ambition writes its file by hand or
+in Groot2, or exports a first one with `to_xml` from a tree built in a test.
+
+The live half needs no protocol: the mind already records each body's decision as the
+path of node names through its tree. The window's right-hand pane draws the ambition in
+hand and its tree top-down as it loads now, `?` a selector, `>` a sequence, `if` and `do`
+the leaves, the nodes on this round's path lit, the one that decided banded, and what it
+wants underneath; the world keeps its own width on the left. So the recipe is the game,
+`uv run mind --visualize`, and Groot2 open on `ai/midbrain/trees/stalk.xml`: drag a branch,
+save, and the fox's next decision lights the new shape. Groot2's own live monitor speaks
+BT.CPP's ZeroMQ protocol and its paid tier keeps moving; the pane is the live view here.
+
 ## Design
 
 - **The believed world's growth**, one rule at a time, each watched in the window before the
@@ -364,6 +397,10 @@ came back within 120 cells.
   what I believe" rather than "not in last tick's list"; the mind's believed world does not
   reach the reflexes. `TODO.md`.
 - **Keys in the viewer**, if the one-shot `order` gets tiresome.
+- **The trees' growth**: decorators (inverters, repeaters) and sub-trees when a tree needs
+  them, each a tag in `trees.py` and a node in `behaviour.py`; utilities shown beside the
+  ambition in the pane once there is more than one to compare; a tree drawn as boxes and
+  lines rather than rows, if the rows stop reading well.
 - **A shared Python package** for the wire once a second consumer (the cortex) arrives; the
   client lives in the midbrain until then.
 - **Running `Sense` every n ticks**, if the cast's cost bites; every second tick keeps within

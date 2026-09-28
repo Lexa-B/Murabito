@@ -247,7 +247,8 @@ is still design. `TODO.md` is what's queued.
   (schema as the contract) rather than gRPC (a second async runtime in the game); reflexes
   as their own crate, a catalogue with per-reflex code, a kind picking its repertoire and
   dials, priorities per instance ("Bob is a tad jumpy"), answering only a `Short` so a reflex
-  never outlives a round; one vocabulary in two tiers (`Short`, `Sustained`, now `Path`), a reflex and a
+  never outlives a round; one vocabulary in two tiers (`Short`, `Sustained`, now `Path`), a
+  reflex and a
   mind both speaking it; a reflex interrupts and drops, and the midbrain is told it was
   cancelled (B′ over interrupt-and-resume); a new intent cuts short what is in flight ("a
   reflex that waits half a second is no reflex; the smarter parts must not interrupt
@@ -379,15 +380,17 @@ is still design. `TODO.md` is what's queued.
 Written 2026-09-27 for the session that starts the midbrain's first behaviour cold, brought
 current the same day as the believed world (PR #46), the stalk (#47), the action words
 (#49), the sustained paces (#50) and the pounce (#51) landed, and again on 2026-09-28 for
-the wander and the scratch (PR #53, merged) and the paths and the face-only bite (PR #54,
-this one, on the branch `paths`). **Lexa's stated aim: more ambitions for the fox (the
-wander was the first; a second was announced and not yet described), then wiring in the
-hare.** Once #54 is on `main`, branch afresh from `origin/main` in the `ai-io` worktree (`git -C <wt> fetch --prune
+the wander and the scratch (PR #53), the paths and the face-only bite (PR #54), and on
+2026-09-29 for the trees as files and the tree pane (PR #55, this one, on the branch
+`tree-files`). **Lexa's stated aim: more ambitions for the fox (the wander was the first; a
+second was announced and not yet described), then wiring in the hare.** Once #55 is on
+`main`, branch afresh from `origin/main` in the `ai-io` worktree (`git -C <wt> fetch --prune
 && git -C <wt> switch -C <branch> --no-track origin/main`; its `target/` is a symlink to
 `cleanup-refactor`'s and stays). A plain-language walkthrough of the I/O, with diagrams, is a
 private page Lexa has the link to (claude.ai artifact `Ff85UQifrkfqY9TKUhboVv`; it stops at
 the port and knows nothing of the mind); `docs/ai_readme.md` is the brief in the repo,
-believed world, stalk, wander and paths included; `docs/actions_readme.md` has the words.
+believed world, stalk, wander, paths and trees-as-files included; `docs/actions_readme.md`
+has the words.
 
 **What is settled, and is not up for redesign:** everything in `docs/ai_readme.md` above its
 Design section, and every call listed under "The AI's I/O", "The believed world lives in the
@@ -502,11 +505,15 @@ the origin moves, so amendments sometimes only reorder equivalent steps (a turn 
 settle it); a wander leg that lands on a believed cell plans nothing and the fox rests again.
 
 **Adding an ambition**, the pattern as it stands: a frozen dataclass in `ambitions.py` with a
-`name`, `utility(ctx) -> float` in 0..1, and `want(ctx) -> Result` (a `Result(False, None,
-(name, "why"))` when it has nothing to want, else `self.tree.tick(ctx)`); the tree is a
-`Selector` of `Sequence(Condition, Act)` branches ticked afresh each round, each test and want
-a method that reads the target afresh from the believed world; its dials are dataclass fields
-with docstrings; it goes in `REPERTOIRE[kind path]` beside `Idle`. What it must remember
+`name`, `utility(ctx) -> float` in 0..1, `leaves -> Leaves` (its conditions and acts by ID,
+each a method that reads the target afresh from the believed world), `tree ->
+load(self.name, self.leaves)`, and `want(ctx) -> Result` (a `Result(False, None, (name,
+"why"))` when it has nothing to want, else `self.tree.tick(ctx)`); the tree's shape is
+`ai/midbrain/trees/<name>.xml`, a `Fallback` of `Sequence`s of a `Condition` and an
+`Action` by ID, written by hand, in Groot2, or exported once with `trees.to_xml` from a
+tree built in a test; its dials are dataclass fields with docstrings; it goes in
+`REPERTOIRE[kind path]` beside `Idle`. A test in `tests/test_trees.py` holds every
+ambition's leaves and file together. What it must remember
 between rounds that the board cannot show goes in `ctx.scratch`, the body's own dict, under
 keys of its own name (`Wander` and its `wander.rest_until` are the pattern; the mind's tests
 for it are in `tests/test_wander.py`, which imports the helpers from `test_ambitions`). Tests in
@@ -549,28 +556,36 @@ What the next session decides, one question at a time:
    own paths and the brainstem walks them as written).
 7. The planner's next rule: a turn cost in A*, believed things blocking the corner between
    two cells, and whether the freeze deadlock above is handled.
+8. The trees' growth, now that they are files Lexa edits in Groot2 (Lexa: "i'm really big
+   on visualization"): decorators and sub-trees when a tree needs them, utilities in the
+   pane once there are several to compare, boxes and lines if the rows stop reading well.
+   Groot2's own live monitor was set aside: it speaks BT.CPP's ZeroMQ protocol and its paid
+   tier keeps moving; the window's pane, lit from the decision path the mind records, is
+   the live view.
 
 **How to test against the game.** From the `ai-io` worktree, `scripts/run.sh` (the desktop
 shortcut runs the other worktree, still on a branch from before the bridge); the log says "the
 bridge listens on 127.0.0.1:15703". A scripted run is `timeout 60 scripts/run.sh` in the
-background, then `uv run order 3 walkto 0 0` (planned as a path from where the hare stands,
-so the body must be on the board) or a Python snippet with `Bridge()`. `uv run pytest` in
+background, then `uv run order 3 walkto 0 0` (planned as a path from where the hare stands, so
+the body must be on the board) or a Python snippet with `Bridge()`. `uv run pytest` in
 `ai/midbrain/` (101 tests; a fake bridge thread in `tests/test_client.py` is the pattern for
-testing a client without the game). `RUST_LOG=murabito_brainstem=debug` traces
-every aim and step in `~/.cache/murabito/run.log`; reflex fires and refused words are always
-logged. For the mind: the game, `uv run board`, and `uv run mind --visualize` in three
-terminals, then `uv run order 3 face W` to make the hare look at the fox (freeze), `face N`
-to put the fox abeam (circle), or a click to jog the hare off; `uv run mind` sends, so
-`board` is the passive view. A headless check is a script that opens a `Bridge`, loops
+testing a client without the game). `RUST_LOG=murabito_brainstem=debug` traces every aim and
+step in `~/.cache/murabito/run.log`; reflex fires and refused words are always logged. For the
+mind: the game, `uv run board`, and `uv run mind --visualize` in three terminals, then `uv run
+order 3 face W` to make the hare look at the fox (freeze), `face N` to put the fox abeam
+(circle), or a click to jog the hare off; `uv run mind` sends, so `board` is the passive view.
+For the trees: Groot2 open on `ai/midbrain/trees/stalk.xml` beside the window; drag a branch
+or delete one, save, and the pane lights the new shape on the next round (`uv run trees`
+prints what loads; a file that will not load is warned about on the mind's stderr and the last
+good one kept). A headless check is a script that opens a `Bridge`, loops
 `Mind.round(bridge.snapshots())`, sends each order and prints `mind.decisions[1]` whenever it
 changes, with `SDL_VIDEODRIVER=dummy` and `pygame.image.save` for frames; the pattern is in
 this stretch's transcripts, not in the repo. A run of the game opens a window on the desktop
 even when started from a script, and a click there jogs the hare: twice a check saw the hare
-wander because of it. To provoke the wander, the fox must believe in no hare, and it sees
-120 cells: `uv run order 3 sprintto 0 -140` and a 30 s wait before starting the mind. To
-watch a chase, jog the hare off with a click or `uv run order 3 jogto 30 -30` while the
-mind runs: the fox should follow in one unbroken sneak, the board showing amendments with
-`keep` above zero.
+wander because of it. To provoke the wander, the fox must believe in no hare, and it sees 120
+cells: `uv run order 3 sprintto 0 -140` and a 30 s wait before starting the mind. To watch a
+chase, jog the hare off with a click or `uv run order 3 jogto 30 -30` while the mind runs: the
+fox should follow in one unbroken sneak, the board showing amendments with `keep` above zero.
 
 **How Lexa works, for this in particular:** design in chat first, one question at a time,
 options with costs and a recommendation, then wait for the yes; one small step per turn,
@@ -587,7 +602,7 @@ fix it"); a crate is named for the family (`attacks`), not the first member (`bi
 | | |
 |---|---|
 | Repo | `/home/lexa/DevProjects/_GameDev/Murabito`, main checkout on `main` |
-| This session's worktree | `.claude/worktrees/ai-io`, on `paths` (PR #54: the fitted window, the two ghost fixes, the paths, the face-only bite, these docs; PR #53 before it was the wander and the scratch); its `target/` is a symlink to `cleanup-refactor`'s warm one, so the two share an engine build. `cleanup-refactor` (on `debug-feature`, merged) is what the desktop shortcut runs |
-| `main` at handoff | `4741cab`, the merge of PR #53 (the wander and the scratch) |
-| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`), #43 (the debug feature), #44 (the AI's I/O), #45 (handoff), #46 (the believed world), #47 (the stalk, the seen thing's facing, vision stretched), #48 (handoff review), #49 (the action words, the attacks stub), #50 (the sustained paces; the stalk sneaks), #51 (the stalk pounces and bites), #52 (handoff), #53 (the wander, the scratch) |
+| This session's worktree | `.claude/worktrees/ai-io`, on `tree-files` (PR #55: the trees as files, the tree pane, these docs); its `target/` is a symlink to `cleanup-refactor`'s warm one, so the two share an engine build. `cleanup-refactor` (on `debug-feature`, merged) is what the desktop shortcut runs |
+| `main` at handoff | `2379713`, the merge of PR #54 (the paths and the face-only bite) |
+| Merged this stretch | #16 (archive the first attempt), #19 (workspace), #20 (scene, camera, keybinds), #23 (hexcoords, another session), #25 (movement), #27 (docs), #28 (user_data, settings, i18n), #29 (crate manifest), #30 (app state), #31 (models reorganised, an art session), #32 (overlays), #33 (settings page), #35 (kinds), #34 (docs), #36 (villager bodies, an art session), #37 (docs review), #38 (placement), #39 (hex offsets and rings), #40 (camera zoom-out, another session), #41 (perception and sight), #42 (identity, `crates/all_things/`), #43 (the debug feature), #44 (the AI's I/O), #45 (handoff), #46 (the believed world), #47 (the stalk, the seen thing's facing, vision stretched), #48 (handoff review), #49 (the action words, the attacks stub), #50 (the sustained paces; the stalk sneaks), #51 (the stalk pounces and bites), #52 (handoff), #53 (the wander, the scratch), #54 (paths; the face-only bite) |
 | Other worktrees | `cleanup-refactor` (on `debug-feature`, merged long ago: the desktop shortcut runs it, so the shortcut's game has no bridge and no stalk until that worktree moves to `main`); `exp-05-main-coords`, `yokai-models` (art sessions) |

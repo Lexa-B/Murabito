@@ -1,0 +1,28 @@
+<root BTCPP_format="4" main_tree_to_execute="wander">
+  <BehaviorTree ID="wander">
+    <Fallback name="wander">
+      <Sequence name="walking">
+        <Condition ID="a_path_in_hand" name="a path in hand" />
+        <Action ID="keep_on" name="keep on" />
+      </Sequence>
+      <Sequence name="resting">
+        <Condition ID="rest_not_over" name="rest not over" />
+        <Action ID="wait" name="wait" />
+      </Sequence>
+      <Sequence name="arrived">
+        <Condition ID="no_rest_drawn" name="no rest drawn" />
+        <Action ID="rest" name="rest" />
+      </Sequence>
+      <Action ID="set_off" name="set off" />
+    </Fallback>
+  </BehaviorTree>
+  <TreeNodesModel>
+    <Condition ID="a_path_in_hand" />
+    <Condition ID="no_rest_drawn" />
+    <Condition ID="rest_not_over" />
+    <Action ID="keep_on" />
+    <Action ID="rest" />
+    <Action ID="set_off" />
+    <Action ID="wait" />
+  </TreeNodesModel>
+</root>

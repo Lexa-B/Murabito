@@ -38,7 +38,8 @@ agreed in chat before it's built (`AGENTS.md`); this is the list, not the design
   idle body is an empty queue by the mind's choice, so there is no `Action::Wait`.
 - **The midbrain, past proof of concept.** The first behaviour exists (2026-09-27): the fox
   stalks the hare through ambitions, a behaviour tree and the believed world
-  (`docs/ai_readme.md`, "Ambitions, and the stalk"), all of it quick proof-of-concept by
+  (`docs/ai_readme.md`, "Ambitions, the stalk, and the wander"; the trees are files editable
+  in Groot2 since 2026-09-28, "Trees as files"), all of it quick proof-of-concept by
   Lexa's word, to be fleshed out later. What's queued: the Sims' half, believed things
   advertising what they offer and motives weighting them, as where utilities come from; the
   hare's ambitions (flee), which retire the click bandaid; a search ambition; what `previous`
