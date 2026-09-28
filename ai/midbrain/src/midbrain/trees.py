@@ -134,6 +134,9 @@ def from_xml(text: str, leaves: Leaves) -> Node:
 
 
 def _node(element: ET.Element, leaves: Leaves) -> Node:
+    """A node from its element. A leaf is written two ways in BT.CPP's format, both
+    taken here: ``<Condition ID="x"/>``, as we write it, and ``<x/>``, the ID as the
+    tag, as Groot2 writes it back."""
     name = element.get("name") or element.get("ID") or element.tag
     match element.tag:
         case "Fallback":
@@ -144,6 +147,10 @@ def _node(element: ET.Element, leaves: Leaves) -> Node:
             return leaves.condition(element.get("ID", ""), name)
         case "Action":
             return leaves.act(element.get("ID", ""), name)
+        case id if id in leaves.conditions:
+            return leaves.condition(id, name)
+        case id if id in leaves.acts:
+            return leaves.act(id, name)
         case other:
             raise Malformed(f"no node for <{other}>")
 

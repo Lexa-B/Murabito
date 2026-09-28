@@ -83,6 +83,26 @@ def test_a_changed_file_is_read_again_and_a_broken_edit_keeps_the_last_good_tree
         load("u", leaves, tmp_path)
 
 
+def test_a_leaf_written_as_its_id_tag_the_way_groot2_saves_it_loads_too() -> None:
+    leaves = leaves_of(Selector("t", (Condition("is it", lambda c: True), Act("do it", lambda c: None))))
+    as_groot2_writes = """<root BTCPP_format="4" main_tree_to_execute="t">
+      <BehaviorTree ID="t" _fullpath="">
+        <Fallback name="t" _uid="1">
+          <Sequence name="s" _uid="2">
+            <is_it name="is it" _uid="3"/>
+            <do_it _uid="4"/>
+          </Sequence>
+        </Fallback>
+      </BehaviorTree>
+      <TreeNodesModel>
+        <Condition ID="is_it" editable="true"/>
+        <Action ID="do_it" editable="true"/>
+      </TreeNodesModel>
+    </root>"""
+    tree = from_xml(as_groot2_writes, leaves)
+    assert tree == Selector("t", (Sequence("s", (leaves.condition("is_it", "is it"), leaves.act("do_it", "do_it"))),))
+
+
 def test_an_outline_reads_top_down() -> None:
     lines = outline(Stalk(prey=HARE).tree).splitlines()
     assert lines[0] == "? stalk" and lines[1] == "  → freeze" and lines[2] == "    if looking at us" and lines[3] == "    do stop"
