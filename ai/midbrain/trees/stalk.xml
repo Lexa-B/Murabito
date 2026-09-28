@@ -1,0 +1,52 @@
+<root BTCPP_format="4" main_tree_to_execute="stalk">
+  <BehaviorTree ID="stalk">
+    <Fallback name="stalk">
+      <Sequence name="freeze">
+        <Condition ID="looking_at_us" name="looking at us" />
+        <Action ID="stop" name="stop" />
+      </Sequence>
+      <Sequence name="bite">
+        <Condition ID="beside_it_facing_it" name="beside it, facing it" />
+        <Action ID="bite" name="bite" />
+      </Sequence>
+      <Sequence name="pounce">
+        <Condition ID="a_lunge_lands_beside_it" name="a lunge lands beside it" />
+        <Action ID="lunge" name="lunge" />
+      </Sequence>
+      <Sequence name="set up">
+        <Condition ID="a_sidestep_lines_up_a_lunge" name="a sidestep lines up a lunge" />
+        <Action ID="sidestep" name="sidestep" />
+      </Sequence>
+      <Sequence name="check">
+        <Condition ID="unseen_too_long" name="unseen too long" />
+        <Action ID="look" name="look" />
+      </Sequence>
+      <Sequence name="circle">
+        <Condition ID="off_the_pounce_line" name="off the pounce line" />
+        <Action ID="round" name="round" />
+      </Sequence>
+      <Sequence name="approach">
+        <Condition ID="farther_than_distance" name="farther than distance" />
+        <Action ID="close_in" name="close in" />
+      </Sequence>
+      <Action ID="watch" name="watch" />
+    </Fallback>
+  </BehaviorTree>
+  <TreeNodesModel>
+    <Condition ID="a_lunge_lands_beside_it" />
+    <Condition ID="a_sidestep_lines_up_a_lunge" />
+    <Condition ID="beside_it_facing_it" />
+    <Condition ID="farther_than_distance" />
+    <Condition ID="looking_at_us" />
+    <Condition ID="off_the_pounce_line" />
+    <Condition ID="unseen_too_long" />
+    <Action ID="bite" />
+    <Action ID="close_in" />
+    <Action ID="look" />
+    <Action ID="lunge" />
+    <Action ID="round" />
+    <Action ID="sidestep" />
+    <Action ID="stop" />
+    <Action ID="watch" />
+  </TreeNodesModel>
+</root>
