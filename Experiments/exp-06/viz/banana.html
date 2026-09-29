@@ -118,6 +118,47 @@ svg { width: 100%; height: auto; display: block; }
   <div class="facts" id="facts4"></div>
   <p class="muted">The noise is Perlin's lattice noise with a seeded hash for the gradients, scaled to run about −1…1, so <code>A₀</code> is the coarsest octave's swing in metres. Nothing here reads the coast: the shore, its land share, and the box-count against Kantō's 1.1–1.15 are read after erosion.</p>
 
+  <h1 id="stepGradient">Step n+1a: the downhill face of every ri</h1>
+  <p>A step for later, drawn now: it reads whatever surface the last step left, which is step 4's for the moment, and will read the eroded one once step 5 exists. For each ri, the gradient at its centre by central differences half a ri either side, in metres per ri, then reversed, so it points downhill, the way water runs, and snapped to the nearest of the ri's six faces: <code>E, NNE, NNW, W, SSW, SSE</code>, the order of <code>Direction::ALL</code>. An arrow's length is the slope, capped at the slider's value, so the plain's few metres per ri show as short stubs and the mountainsides as full arrows.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="controls controls-gradient"></div>
+  <div class="pair">
+    <div style="max-width: 640px">
+      <div class="panel-title">the world, ri by ri · height under the arrows · downhill, snapped to a face</div>
+      <svg id="gradients" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by height with an arrow on each ri showing the direction and steepness of its slope."><g id="gradientsScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div class="facts" id="factsGradient"></div>
+  </div>
+
+  <h1 id="stepRain">Step n+1b: the year's rain on every ri</h1>
+  <p>Also for later, drawn now. Step 3's precipitation, read on the surface the last step left (step 4's for now, so the noise's heights and aspects count), times the ri's area: a ri is 3,927 m flat to flat, so <code>13.36 km²</code>, and 1 mm over it is <code>13,360 m³</code>. The result is a volume per ri per year, in millions of cubic metres, shaded like step 3's precipitation map. Every ri gets its rain, sea included. Nothing moves yet.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="pair">
+    <div style="max-width: 640px">
+      <div class="panel-title">the world, ri by ri · rain a year, millions of m³ · step-2 shore dotted</div>
+      <svg id="rain" viewBox="0 0 560 560" role="img" aria-label="The world's ri shaded blue by the volume of precipitation that falls on each in a year."><g id="rainScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div class="facts" id="factsRain"></div>
+  </div>
+
+  <h1 id="stepSettle">Step n+1c: the rain settled, ri to ri</h1>
+  <p>Also for later. Each ri's year of rain runs to its lowest neighbour, highest ri first, until it leaves the world's edge for a lower ri outside, in any of the six directions, or gets stuck in a pit. The sea inside the world is only low ground here; its water runs off the edge like any other. A pit fills to the height at which it would spill, so every pit is a lake with a capacity. Anything below 0 m is water already, the coast being the zero set, so a pit's fresh capacity runs from 0 m, or from its floor if that is higher, up to the spill: a basin the noise cut off from the sea becomes a lake whose fresh water sits above 0 m, and a pit whose spill is under the sea holds nothing. A lake keeps the year's inflow up to its capacity and passes the rest over its spill. The graph is the six faces of each ri, and the ring of ri outside the world is read from the same surface, so "off the map" is honest.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="pair">
+    <div>
+      <div class="panel-title">what is left after settling · lakes, by the volume held · millions of m³</div>
+      <svg id="lakes" viewBox="0 0 560 560" role="img" aria-label="The world's ri with the lakes shaded blue by the volume of water they hold after a year's rain has settled."><g id="lakesScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the flow · each ri's outlet face, arrows sized by the volume passing through</div>
+      <svg id="flow" viewBox="0 0 560 560" role="img" aria-label="The world's ri with a blue arrow on each pointing to the face its water leaves by, thicker where more water passes."><g id="flowScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="facts" id="factsSettle"></div>
+
 </main>
 <script>
 (function () {
@@ -129,7 +170,7 @@ svg { width: 100%; height: auto; display: block; }
   // Honshu-like at its Kantō width: an 80° arc about 1,300 km along the axis, 236 km wide, in ri. Fixed, not dialled.
   const R_RI = 237, W_RI = 60, ARC_DEG = 80;
   // One θ and one d, with a copy of the sliders under every step, all kept in step.
-  const state = { theta: 12, inset: 6, seed: 1, amp: 250, hurst: 0.65, stretch: 2 };
+  const state = { theta: 12, inset: 6, seed: 1, amp: 250, hurst: 0.65, stretch: 2, gref: 150 };
   const SLIDERS = [
     { key: "theta", label: "θ, degrees", min: 0, max: 359.5, step: 0.5, fmt: x => x.toFixed(1) + "°" },
     { key: "inset", label: "inset d, ri", min: -25, max: 45, step: 0.5, fmt: x => (x >= 0 ? "+" : "") + x.toFixed(1) },
@@ -155,7 +196,12 @@ svg { width: 100%; height: auto; display: block; }
       return { sync() { for (const b of bound) { b.input.value = state[b.s.key]; b.out.textContent = b.s.fmt(state[b.s.key]); } } };
     });
   }
-  const controls = [...bindSliders(".controls-shared", SLIDERS), ...bindSliders(".controls-structure", STRUCTURE_SLIDERS)];
+  const GRADIENT_SLIDERS = [
+    { key: "gref", label: "full arrow at", min: 20, max: 600, step: 10, fmt: x => x.toFixed(0) + " m/ri" },
+  ];
+  // The seed, on its own, under every step after the one that introduces it.
+  const SEED_SLIDERS = STRUCTURE_SLIDERS.filter(s => s.key === "seed");
+  const controls = [...bindSliders(".controls-shared", SLIDERS), ...bindSliders(".controls-structure", STRUCTURE_SLIDERS), ...bindSliders(".controls-seed", SEED_SLIDERS), ...bindSliders(".controls-gradient", GRADIENT_SLIDERS)];
   function update() { controls.forEach(c => c.sync()); render(); }
 
   // The outline as a dense polyline, anticlockwise from the outer apex. Coordinates are (east, north) in ri.
@@ -282,18 +328,19 @@ svg { width: 100%; height: auto; display: block; }
   const INLAND_RI = 20;                                        // distance from the coast at which a place counts as fully inland
   const P_PACIFIC = 1500, P_JAPAN_SEA = 2200, P_PER_M = 0.5, P_ASPECT = 600;
   const WIND_WINTER = [Math.cos(rad(315)), Math.sin(rad(315))], WIND_SUMMER = [Math.cos(rad(135)), Math.sin(rad(135))];  // the way each wind blows toward
-  function gradient(p, v) {                                    // metres per ri, by central differences half a ri apart
-    const d = 0.25;
-    return [(height([p[0] + d, p[1]], v) - height([p[0] - d, p[1]], v)) / (2 * d), (height([p[0], p[1] + d], v) - height([p[0], p[1] - d], v)) / (2 * d)];
-  }
-  function climate(p, v, apexNorth) {
-    const b = bandCoords(p, v), h = height(p, v);
+  // The gradient of any field in metres per ri, by central differences d either side.
+  const gradientOf = (field, p, d) => [(field([p[0] + d, p[1]]) - field([p[0] - d, p[1]])) / (2 * d), (field([p[0], p[1] + d]) - field([p[0], p[1] - d])) / (2 * d)];
+  const gradient = (p, v) => gradientOf(x => height(x, v), p, 0.25);   // step 2's surface, half a ri apart
+  // `field` is the surface the climate reads: step 2's by default, or whatever a later step hands in.
+  function climate(p, v, apexNorth, field) {
+    const surf = field || (x => height(x, v));
+    const b = bandCoords(p, v), h = surf(p);
     const aEff = b.e > 0 && b.e < 1 ? b.a / Math.sqrt(1 - b.e * b.e) : b.a;
     const coastDist = Math.max(0, 1 - Math.min(1, Math.abs(aEff))) * (v.w / 2);
     const inland = Math.min(1, coastDist / INLAND_RI);
     const tMean = T_APEX - T_PER_RI_NORTH * (p[1] - apexNorth) - LAPSE * h;
     const half = HALF_RANGE_COAST + (HALF_RANGE_INLAND - HALF_RANGE_COAST) * inland;
-    const g = gradient(p, v), slope = w => Math.max(-1, Math.min(1, (g[0] * w[0] + g[1] * w[1]) / 100));
+    const g = gradientOf(surf, p, 0.25), slope = w => Math.max(-1, Math.min(1, (g[0] * w[0] + g[1] * w[1]) / 100));
     const side = (Math.max(-1, Math.min(1, aEff)) + 1) / 2;   // 1 at the outer (Pacific) coast, 0 at the inner
     const precip = Math.max(400, P_JAPAN_SEA + (P_PACIFIC - P_JAPAN_SEA) * side + P_PER_M * h + P_ASPECT * (0.6 * slope(WIND_WINTER) + 0.4 * slope(WIND_SUMMER)));
     return { tMin: tMean - half, tMean, tMax: tMean + half, precip };
@@ -345,6 +392,75 @@ svg { width: 100%; height: auto; display: block; }
   const wide = document.getElementById("wideScene"), near = document.getElementById("nearScene"), facts = document.getElementById("facts");
   const section = document.getElementById("sectionScene"), heights = document.getElementById("heightsScene"), profiles = document.getElementById("profiles"), facts2 = document.getElementById("facts2");
   const climateGrid = document.getElementById("climate"), facts3 = document.getElementById("facts3");
+  const gradScene = document.getElementById("gradientsScene"), factsGradient = document.getElementById("factsGradient");
+  const rainScene = document.getElementById("rainScene"), factsRain = document.getElementById("factsRain");
+  const lakesScene = document.getElementById("lakesScene"), flowScene = document.getElementById("flowScene"), factsSettle = document.getElementById("factsSettle");
+  // A ri's six neighbours in axial steps, Direction::ALL's order: E, NNE, NNW, W, SSW, SSE (+r is south).
+  const NEIGH = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+  const LAKE_RAMP = [[0, [205, 222, 236]], [0.5, [90, 140, 200]], [1, [20, 55, 140]]];
+
+  // The settling: fill pits to their spill height (a priority flood from the outlets), then route every ri's
+  // rain to its lowest neighbour, or along the flood tree where the surface is a flat lake, highest first.
+  // Outlets are the sea ri inside the world and the ring of ri just outside it; water reaching either is gone.
+  function settle(cells, heightAt, rainAt) {
+    const n = cells.length, idx = new Map(); cells.forEach(([q, r], i) => idx.set(q + "," + r, i));
+    // nodes: the world's ri, then the ring of ri just outside it, which are the outlets off the map
+    const nodes = cells.slice(), h = cells.map(([q, r]) => heightAt(q, r));
+    for (let i = 0; i < n; i++) for (const [dq, dr] of NEIGH) { const q = cells[i][0] + dq, r = cells[i][1] + dr, k = q + "," + r; if (!idx.has(k)) { idx.set(k, nodes.length); nodes.push([q, r]); h.push(heightAt(q, r)); } }
+    const N = nodes.length, isRing = i => i >= n;
+    // priority flood: the seeds are the ring, at its own height, in every direction; every ri inside fills to
+    // the lowest height it can be reached over from outside, which is its spill level if it sits in a pit.
+    // The sea inside the world is just low ground here: its water leaves over the edge like any other.
+    const F = new Array(N).fill(Infinity), parent = new Array(N).fill(-1), seen = new Array(N).fill(false), open = [], order = [];
+    for (let i = n; i < N; i++) { F[i] = h[i]; seen[i] = true; open.push(i); }
+    while (open.length) {
+      let best = 0; for (let j = 1; j < open.length; j++) if (F[open[j]] < F[open[best]]) best = j;
+      const i = open[best]; open[best] = open[open.length - 1]; open.pop(); order.push(i);
+      const [q, r] = nodes[i];
+      for (const [dq, dr] of NEIGH) { const j = idx.get((q + dq) + "," + (r + dr)); if (j === undefined || seen[j] || isRing(j)) continue; seen[j] = true; F[j] = Math.max(h[j], F[i]); parent[j] = i; open.push(j); }
+    }
+    // each ri's outlet: its lowest neighbour by filled height if strictly lower, else the flood parent (flat lake)
+    const outlet = new Array(n).fill(-1), outFace = new Array(n).fill(-1);
+    for (let i = 0; i < n; i++) {
+      const [q, r] = cells[i]; let lo = F[i], pick = -1, face = -1;
+      for (let k = 0; k < 6; k++) { const j = idx.get((q + NEIGH[k][0]) + "," + (r + NEIGH[k][1])); if (F[j] < lo) { lo = F[j]; pick = j; face = k; } }
+      if (pick < 0 && parent[i] >= 0) { pick = parent[i]; const [pq, pr] = nodes[pick]; face = NEIGH.findIndex(([dq, dr]) => pq === q + dq && pr === r + dr); }
+      outlet[i] = pick; outFace[i] = face;
+    }
+    // lakes: connected ri sharing one filled height above their own. Anything below 0 m is water already
+    // (the coast is the zero set), so a pit's fresh capacity runs from 0 m, or its floor if higher, up to
+    // the spill; a pit whose spill is under the sea has no fresh capacity and just passes water on.
+    const lake = new Array(n).fill(-1), lakes = [], freshCap = i => Math.max(0, F[i] - Math.max(h[i], 0)) * AREA_RI / 1e6;
+    for (let i = 0; i < n; i++) {
+      if (lake[i] >= 0 || F[i] <= h[i] + 1e-6) continue;
+      const id = lakes.length, members = [i]; lake[i] = id; let cap = 0, floor = Infinity;
+      for (let s = 0; s < members.length; s++) {
+        const m = members[s], [q, r] = cells[m]; cap += freshCap(m); floor = Math.min(floor, h[m]);
+        for (const [dq, dr] of NEIGH) { const j = idx.get((q + dq) + "," + (r + dr)); if (j < n && lake[j] < 0 && F[j] > h[j] + 1e-6 && Math.abs(F[j] - F[i]) < 1e-6) { lake[j] = id; members.push(j); } }
+      }
+      lakes.push({ id, members, capacity: cap, floor, inflow: 0, held: 0, spill: F[i], exit: -1 });
+    }
+    // route in reverse flood order, so every ri drains after everything that drains into it; a lake keeps
+    // the year's inflow up to its fresh capacity at its exit ri and passes the rest; water reaching the ring
+    // has left the world, counted by the edge it crossed
+    const flow = new Array(N).fill(0); for (let i = 0; i < n; i++) flow[i] = rainAt(i);
+    const offByEdge = [0, 0, 0, 0, 0, 0], edgeOf = ([q, r]) => ((Math.round(Math.atan2(-r * ROW, q + r / 2) / rad(60)) % 6) + 6) % 6;
+    for (let s = order.length - 1; s >= 0; s--) {
+      const i = order[s]; if (isRing(i)) continue;
+      let out = flow[i];
+      // a lake may touch its spill through several ri: each exit fills what capacity is left, then passes the rest
+      if (lake[i] >= 0 && (outlet[i] < 0 || outlet[i] >= n || lake[outlet[i]] !== lake[i])) { const L = lakes[lake[i]]; L.inflow += out; const take = Math.min(L.capacity - L.held, out); L.held += take; L.exit = i; out -= take; }
+      if (outlet[i] < 0) { offByEdge[edgeOf(cells[i])] += out; continue; }
+      if (outlet[i] >= n) offByEdge[edgeOf(nodes[outlet[i]])] += out; else flow[outlet[i]] += out;
+    }
+    // the fresh water held, spread over a lake's ri by each one's share of the capacity; its surface level
+    const held = new Array(n).fill(0), level = new Array(n).fill(null);
+    for (const L of lakes) { const fill = L.capacity > 0 ? L.held / L.capacity : 0; L.level = L.capacity > 0 ? Math.max(L.floor, 0) + (L.spill - Math.max(L.floor, 0)) * fill : null; for (const m of L.members) { held[m] = freshCap(m) * fill; level[m] = L.level; } }
+    return { n, nodes, h, F, outlet, outFace, lake, lakes, flow, held, level, offByEdge, offMap: offByEdge.reduce((a, b) => a + b, 0) };
+  }
+  const RI_M = 3927, AREA_RI = Math.sqrt(3) / 2 * RI_M * RI_M;   // m² of one ri, flat to flat 3,927 m
+  const M3_PER_MM = AREA_RI / 1000;                               // m³ that 1 mm over a ri comes to
+  const VOLUME_RAMP = PRECIP_RAMP.map(([mm, c]) => [mm * M3_PER_MM / 1e6, c]);   // millions of m³
   const noiseScene = document.getElementById("noiseScene"), heights4 = document.getElementById("heights4Scene"), section4 = document.getElementById("section4Scene"), octaveTable = document.getElementById("octaves"), facts4 = document.getElementById("facts4");
   function view(cx, cy, scale) { return p => ({ x: 280 + (p[0] - cx) * scale, y: 280 - (p[1] - cy) * scale }); }
   const pts = (ps, f) => ps.map(p => { const s = f(p); return s.x + "," + s.y; }).join(" ");
@@ -609,6 +725,114 @@ svg { width: 100%; height: auto; display: block; }
     row4("the arc's grain here", "heading " + ((Math.atan2(tangent[1], tangent[0]) * 180 / Math.PI + 360) % 180).toFixed(0) + "° from east · lattice " + (LAMBDA_0 * state.stretch).toFixed(0) + " × " + LAMBDA_0 + " ri at octave 0");
     { const slopeCoast = 3.0, amp12 = state.amp * (12 / LAMBDA_0) ** state.hurst;
       row4("amplitude at a 12-ri wavelength", amp12.toFixed(0) + " m: on the plain at 3 m per ri that is " + (amp12 / slopeCoast).toFixed(0) + " ri of coast"); }
+
+    // ---- Step n+1a: the gradient of every ri, on whatever surface the last step left.
+    const surface = height4;
+    // The six faces of a pointy-top ri, Direction::ALL's order: E at 0°, then every 60° anticlockwise.
+    const FACE_DIR = Array.from({ length: 6 }, (_, k) => [Math.cos(rad(60 * k)), Math.sin(rad(60 * k))]);
+    const downhillFace = g => ((Math.round(Math.atan2(-g[1], -g[0]) / rad(60)) % 6) + 6) % 6;
+    gradScene.replaceChildren();
+    gradScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    const arrows = [], faceCount = [0, 0, 0, 0, 0, 0];
+    let steepest = { mag: 0 }, landSlope = 0, landSlopeN = 0;
+    for (const [q, r] of RI_CELLS) {
+      const c = riCentre(q, r, centre), h = surface(c), g = gradientOf(surface, c, 0.5), mag = Math.hypot(g[0], g[1]);
+      gradScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: heightColour(h), "fill-opacity": 0.6, stroke: "none" }));
+      if (mag > steepest.mag) steepest = { mag, q, r, h };
+      if (h > 0) { landSlope += mag; landSlopeN++; }
+      if (mag === 0) continue;
+      const face = downhillFace(g); faceCount[face]++;
+      const len = Math.min(1, mag / state.gref) * 0.85, d = FACE_DIR[face], n = [-d[1], d[0]];
+      const tail = [c[0] - d[0] * len / 2, c[1] - d[1] * len / 2], tip = [c[0] + d[0] * len / 2, c[1] + d[1] * len / 2];
+      const head = 0.12 + 0.1 * len;
+      arrows.push([tail, tip], [tip, [tip[0] - d[0] * head + n[0] * head * 0.6, tip[1] - d[1] * head + n[1] * head * 0.6]], [tip, [tip[0] - d[0] * head - n[0] * head * 0.6, tip[1] - d[1] * head - n[1] * head * 0.6]]);
+    }
+    gradScene.appendChild(el("path", { d: arrows.map(([a, b]) => { const s = HV(a), t = HV(b); return "M" + s.x.toFixed(1) + " " + s.y.toFixed(1) + "L" + t.x.toFixed(1) + " " + t.y.toFixed(1); }).join(""), stroke: "currentColor", "stroke-width": 1.1, "stroke-linecap": "round" }));
+    gradScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    gradScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    gradScene.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "arrows point downhill, snapped to a face · full length at " + state.gref + " m per ri · reading step 4's surface"));
+    factsGradient.replaceChildren();
+    const rowG = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); factsGradient.appendChild(d); };
+    const asSlope = m => (m / RI_M * 100).toFixed(1) + "% · " + (Math.atan(m / RI_M) * 180 / Math.PI).toFixed(1) + "°";
+    { const g0 = gradientOf(surface, centre, 0.5), m0 = Math.hypot(g0[0], g0[1]);
+      rowG("at the origin", m0.toFixed(1) + " m per ri, " + asSlope(m0) + ", downhill heading " + ((Math.atan2(-g0[1], -g0[0]) * 180 / Math.PI + 360) % 360).toFixed(0) + "° from east → face " + EDGE_NAMES[downhillFace(g0)]); }
+    rowG("ri draining through each face", EDGE_NAMES.map((n, k) => n + " " + faceCount[k]).join(" · "));
+    rowG("steepest ri", steepest.mag.toFixed(0) + " m per ri, " + asSlope(steepest.mag) + " at ri (" + steepest.q + ", " + steepest.r + "), " + steepest.h.toFixed(0) + " m");
+    rowG("mean slope over land ri", (landSlopeN ? landSlope / landSlopeN : 0).toFixed(1) + " m per ri, " + asSlope(landSlopeN ? landSlope / landSlopeN : 0));
+    rowG("ri at or past full arrow length", String(RI_CELLS.filter(([q, r]) => { const g = gradientOf(surface, riCentre(q, r, centre), 0.5); return Math.hypot(g[0], g[1]) >= state.gref; }).length) + " of 1,296");
+    rowG("surface read", "step 4, h₂ + structure noise · differences ±0.5 ri");
+
+    // ---- Step n+1b: the year's rain on every ri, as a volume. Step 3's precipitation on the current surface, times the ri's area.
+    rainScene.replaceChildren();
+    rainScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let rainTotal = 0, rainLand = 0, rainMax = { vol: 0 }, rainMin = { vol: Infinity };
+    for (const [q, r] of RI_CELLS) {
+      const c = riCentre(q, r, centre), mm = climate(c, v, apexNorth, surface).precip, vol = mm * M3_PER_MM / 1e6;
+      rainTotal += vol; if (surface(c) > 0) rainLand += vol;
+      if (vol > rainMax.vol) rainMax = { vol, mm, q, r }; if (vol < rainMin.vol) rainMin = { vol, mm, q, r };
+      rainScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: ramp(VOLUME_RAMP, vol), stroke: "none" }));
+    }
+    rainScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    rainScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    for (let i = 0; i < 40; i++) { const x = VOLUME_RAMP[0][0] + (VOLUME_RAMP[VOLUME_RAMP.length - 1][0] - VOLUME_RAMP[0][0]) * (i / 39); rainScene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(VOLUME_RAMP, x), stroke: "none" })); }
+    rainScene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, VOLUME_RAMP[0][0].toFixed(0) + " M m³"));
+    rainScene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, VOLUME_RAMP[VOLUME_RAMP.length - 1][0].toFixed(0) + " M m³"));
+    rainScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, "a year's rain on the world: " + (rainTotal / 1000).toFixed(1) + " km³ · reading step 4's surface"));
+    factsRain.replaceChildren();
+    const rowR = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); factsRain.appendChild(d); };
+    rowR("one ri", (AREA_RI / 1e6).toFixed(2) + " km² · 1 mm = " + M3_PER_MM.toLocaleString(undefined, { maximumFractionDigits: 0 }) + " m³");
+    { const k0 = climate(centre, v, apexNorth, surface); rowR("at the origin", k0.precip.toFixed(0) + " mm → " + (k0.precip * M3_PER_MM / 1e6).toFixed(1) + " million m³"); }
+    rowR("wettest ri", rainMax.vol.toFixed(1) + " million m³ (" + rainMax.mm.toFixed(0) + " mm) at (" + rainMax.q + ", " + rainMax.r + ")");
+    rowR("driest ri", rainMin.vol.toFixed(1) + " million m³ (" + rainMin.mm.toFixed(0) + " mm) at (" + rainMin.q + ", " + rainMin.r + ")");
+    rowR("the world, a year", (rainTotal / 1000).toFixed(2) + " km³ · on land " + (rainLand / 1000).toFixed(2) + " km³ · mean per ri " + (rainTotal / RI_CELLS.length).toFixed(1) + " million m³");
+    rowR("surface read", "step 4's, for height and aspect · nothing moved");
+
+    // ---- Step n+1c: settle the rain. Lakes on the left, the flow on the right.
+    const rainOf = RI_CELLS.map(([q, r]) => climate(riCentre(q, r, centre), v, apexNorth, surface).precip * M3_PER_MM / 1e6);
+    const S = settle(RI_CELLS, (q, r) => surface(riCentre(q, r, centre)), i => rainOf[i]);
+    const heldMax = Math.max(1e-9, ...S.held), flowMax = Math.max(1e-9, ...S.flow.slice(0, S.n).filter((f, i) => S.h[i] > 0));
+    lakesScene.replaceChildren();
+    lakesScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    RI_CELLS.forEach(([q, r], i) => {
+      const c = riCentre(q, r, centre), fill = S.held[i] > 0 ? ramp(LAKE_RAMP, S.held[i] / heldMax) : S.h[i] <= 0 ? "var(--sea)" : "var(--land)";
+      lakesScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill, stroke: "none" }));
+    });
+    lakesScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    lakesScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    for (let i = 0; i < 40; i++) lakesScene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(LAKE_RAMP, i / 39), stroke: "none" }));
+    lakesScene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, "0"));
+    lakesScene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, heldMax.toFixed(1) + " M m³ in one ri"));
+    const heldTotal = S.lakes.reduce((a, L) => a + L.held, 0), freshLakes = S.lakes.filter(L => L.capacity > 0), wetLakes = S.lakes.filter(L => L.held > 0), wetCells = S.held.filter(x => x > 0).length;
+    lakesScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, wetLakes.length + " lakes holding " + heldTotal.toFixed(0) + " M m³ over " + wetCells + " ri"));
+
+    flowScene.replaceChildren();
+    flowScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    RI_CELLS.forEach(([q, r], i) => { const c = riCentre(q, r, centre); flowScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: heightColour(S.h[i]), "fill-opacity": 0.35, stroke: "none" })); });
+    flowScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1, "stroke-dasharray": "3 4" }));
+    { const byStyle = new Map();
+      RI_CELLS.forEach(([q, r], i) => {
+        if (S.outFace[i] < 0) return;
+        const c = riCentre(q, r, centre), d = FACE_DIR[S.outFace[i]], nrm = [-d[1], d[0]], w = 0.4 + 5 * Math.sqrt(S.flow[i] / flowMax), key = w.toFixed(1) + (S.h[i] <= 0 && !(S.held[i] > 0) ? "s" : "l");
+        const tail = [c[0] - d[0] * 0.42, c[1] - d[1] * 0.42], tip = [c[0] + d[0] * 0.42, c[1] + d[1] * 0.42], head = 0.16;
+        const segs = [[tail, tip], [tip, [tip[0] - d[0] * head + nrm[0] * head * 0.6, tip[1] - d[1] * head + nrm[1] * head * 0.6]], [tip, [tip[0] - d[0] * head - nrm[0] * head * 0.6, tip[1] - d[1] * head - nrm[1] * head * 0.6]]];
+        if (!byStyle.has(key)) byStyle.set(key, []); byStyle.get(key).push(...segs);
+      });
+      for (const [key, segs] of byStyle) flowScene.appendChild(el("path", { d: segs.map(([a, b]) => { const s = HV(a), t = HV(b); return "M" + s.x.toFixed(1) + " " + s.y.toFixed(1) + "L" + t.x.toFixed(1) + " " + t.y.toFixed(1); }).join(""), stroke: "var(--shore)", "stroke-width": key.slice(0, -1), opacity: key.endsWith("s") ? 0.4 : 1, "stroke-linecap": "round", "stroke-linejoin": "round" })); }
+    flowScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    flowScene.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "off the map " + (S.offMap / 1000).toFixed(2) + " km³ · held " + (heldTotal / 1000).toFixed(2) + " km³ · widest on land " + flowMax.toFixed(0) + " M m³ · sea ri faint"));
+
+    factsSettle.replaceChildren();
+    const rowS = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); factsSettle.appendChild(d); };
+    const rainAll = rainOf.reduce((a, b) => a + b, 0);
+    rowS("a year's rain in, and where it ends", rainAll.toFixed(0) + " M m³ = off the map " + S.offMap.toFixed(0) + " + held in lakes " + heldTotal.toFixed(0) + (Math.abs(rainAll - S.offMap - heldTotal) < 0.5 ? " · balances" : " · does not balance"));
+    rowS("off the map, by the world's edge crossed", EDGE_NAMES.map((nm, k) => nm + " " + S.offByEdge[k].toFixed(0)).join(" · "));
+    rowS("pits found", S.lakes.length + " · " + freshLakes.length + " with fresh capacity above 0 m · " + wetLakes.length + " hold water over " + wetCells + " ri");
+    { const big = S.lakes.slice().sort((a, b) => b.held - a.held)[0];
+      rowS("largest lake by water held", big && big.held > 0 ? big.held.toFixed(1) + " M m³ of " + big.capacity.toFixed(0) + " capacity · " + big.members.length + " ri · floor " + big.floor.toFixed(0) + " m" + (big.floor <= 0 ? " (a cut-off sea basin)" : "") + " · surface at " + big.level.toFixed(1) + " m, spill at " + big.spill.toFixed(0) + " m" + (big.inflow > big.capacity ? " · full, spilling " + (big.inflow - big.capacity).toFixed(0) : "") : "none"); }
+    { let bi = -1; for (let i = 0; i < S.n; i++) if (S.h[i] > 0 && (bi < 0 || S.flow[i] > S.flow[bi])) bi = i;
+      const to = bi >= 0 ? (S.outlet[bi] < 0 ? "nowhere" : S.outlet[bi] >= S.n ? "off the map" : S.h[S.outlet[bi]] <= 0 ? "a sea ri" : S.held[S.outlet[bi]] > 0 ? "a lake" : "ri (" + RI_CELLS[S.outlet[bi]] + ")") : "";
+      rowS("largest flow through a land ri", bi >= 0 ? S.flow[bi].toFixed(0) + " M m³ a year through ri (" + RI_CELLS[bi] + ") into " + to + " by its " + EDGE_NAMES[S.outFace[bi]] + " face" : "none"); }
+    rowS("outlet faces used, all ri", EDGE_NAMES.map((nm, k) => nm + " " + S.outFace.filter(f => f === k).length).join(" · "));
 
   }
   update();
