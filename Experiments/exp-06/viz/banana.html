@@ -155,10 +155,11 @@ svg { width: 100%; height: auto; display: block; }
   <p class="muted">Things to look at: on the plain <code>m</code> and <code>t</code> are both 0, so the lowland and the coast stay where step 4 left them; with more than one octave the finer gullies run parallel to the coarser, since nothing feeds one octave's slope to the next until 5b. The window reads structure octaves down to 2½ chō, so its "before" is finer than the world map's.</p>
 
   <h1 id="step5b">Step 5b: erosion, each octave's slope fed to the next</h1>
-  <p>The same octaves as 5a, but octave <code>k + 1</code>'s pivots read the slope of the base <em>plus the gullies octaves first to k already cut</em>, and so does its mask. On the side of a coarse gully the slope points into it, so the finer stripes turn and run into it: that is the branching. A gully's slope is taken as the video's straight gullies, a triangle wave of the same amplitude and spacing, <code>±4·E·S/c</code> across the slope by the sign of the sine, so fine gullies do not curl at the ends of the sine. Every pivot's direction is still a pure function of its node and seed, through the cache of coarser pivots, so a chō and a ri agree on every octave they share. The sliders are 5a's, linked.</p>
+  <p>The same octaves as 5a, but octave <code>k + 1</code>'s pivots read the slope of the base <em>plus the gullies octaves first to k already cut</em>, and so does its mask. On the side of a coarse gully the slope points into it, so the finer stripes turn and run into it: that is the branching. A gully's slope is taken as the video's straight gullies, a triangle wave of the same amplitude and spacing, <code>±4·E·S/c</code> across the slope by the sign of the sine, so fine gullies do not curl at the ends of the sine. Every pivot's direction is still a pure function of its node and seed, through the cache of coarser pivots, so a chō and a ri agree on every octave they share. The slopes are exact: the hex noise is differentiated in closed form and the tectonic spline by a fine central difference, no sampling per octave. The one switch here is the base slope the pivots read: the true slope, so a fine gully branches off a coarse one at an angle that depends on how steep the ground is, or, as the video ends up doing, its direction at a fixed strength relative to the straight-gully slope of the octave above, so the branching angle is the same everywhere. The other sliders are 5a's, linked.</p>
   <div class="controls controls-shared"></div>
   <div class="controls controls-seed"></div>
   <div class="controls controls-erosion"></div>
+  <div class="controls controls-pivots"></div>
 
   <div class="pair">
     <div>
@@ -188,6 +189,7 @@ svg { width: 100%; height: auto; display: block; }
   <div class="controls controls-shared"></div>
   <div class="controls controls-seed"></div>
   <div class="controls controls-erosion"></div>
+  <div class="controls controls-pivots"></div>
   <div class="controls controls-stacking"></div>
 
   <div class="pair">
@@ -216,6 +218,7 @@ svg { width: 100%; height: auto; display: block; }
   <div class="controls controls-shared"></div>
   <div class="controls controls-seed"></div>
   <div class="controls controls-erosion"></div>
+  <div class="controls controls-pivots"></div>
   <div class="controls controls-stacking"></div>
   <div class="controls controls-norm"></div>
 
@@ -322,7 +325,7 @@ svg { width: 100%; height: auto; display: block; }
   // Honshu-like at its Kantō width: an 80° arc about 1,300 km along the axis, 236 km wide, in ri. Fixed, not dialled.
   const R_RI = 237, W_RI = 60, ARC_DEG = 80;
   // One θ and one d, with a copy of the sliders under every step, all kept in step.
-  const state = { theta: 12, inset: 12.5, seed: 1, amp: 250, hurst: 0.65, stretch: 2, gref: 150, erosion: 300, firstOctave: 2, octaves5: 8, stripes: 1.5, sigmaRef: 0.03, windowQRS: null, stacking: 1, normAbove: 0.3 };
+  const state = { theta: 12, inset: 10, seed: 1, amp: 250, hurst: 0.65, stretch: 2, gref: 150, erosion: 200, firstOctave: 2, octaves5: 8, stripes: 1.5, sigmaRef: 0.03, windowQRS: null, stacking: 1, normAbove: 0.3, baseStrength: 0 };
   const SLIDERS = [
     { key: "theta", label: "θ, degrees", min: 0, max: 359.5, step: 0.5, fmt: x => x.toFixed(1) + "°" },
     { key: "inset", label: "inset d, ri", min: -25, max: 45, step: 0.5, fmt: x => (x >= 0 ? "+" : "") + x.toFixed(1) },
@@ -377,6 +380,11 @@ svg { width: 100%; height: auto; display: block; }
   // The seed, on its own, under every step after the one that introduces it.
   const SEED_SLIDERS = STRUCTURE_SLIDERS.filter(s => s.key === "seed");
   // Step 5c's one dial: the exponent on (1 − |R|) in the mask, the video's "terrain detail"; 0 is 5b exactly.
+  // Step 5b's switch: the base slope the pivots read is the true one (0), or its direction at a fixed strength,
+  // this many times the straight-gully slope of the octave above (the video's final form).
+  const PIVOT_SLIDERS = [
+    { key: "baseStrength", label: "base for pivots", min: 0, max: 3, step: 0.1, fmt: x => x === 0 ? "true slope" : x.toFixed(1) + "× gully" },
+  ];
   const STACK_SLIDERS = [
     { key: "stacking", label: "stacking p", min: 0, max: 3, step: 0.1, fmt: x => x.toFixed(1) },
   ];
@@ -384,7 +392,7 @@ svg { width: 100%; height: auto; display: block; }
   const NORM_SLIDERS = [
     { key: "normAbove", label: "normalise above", min: 0, max: 1, step: 0.05, fmt: x => x >= 1 ? "off" : x.toFixed(2) },
   ];
-  const controls = [...bindSliders(".controls-shared", SLIDERS), ...bindSliders(".controls-structure", STRUCTURE_SLIDERS), ...bindSliders(".controls-seed", SEED_SLIDERS), ...bindSliders(".controls-erosion", EROSION_SLIDERS), ...bindSliders(".controls-stacking", STACK_SLIDERS), ...bindSliders(".controls-norm", NORM_SLIDERS), ...bindSliders(".controls-gradient", GRADIENT_SLIDERS)];
+  const controls = [...bindSliders(".controls-shared", SLIDERS), ...bindSliders(".controls-structure", STRUCTURE_SLIDERS), ...bindSliders(".controls-seed", SEED_SLIDERS), ...bindSliders(".controls-erosion", EROSION_SLIDERS), ...bindSliders(".controls-pivots", PIVOT_SLIDERS), ...bindSliders(".controls-stacking", STACK_SLIDERS),...bindSliders(".controls-norm", NORM_SLIDERS), ...bindSliders(".controls-gradient", GRADIENT_SLIDERS)];
   function update() { controls.forEach(c => c.sync()); render(); }
   // A slider drag fires many input events; the readouts follow at once, the render waits until the drag pauses.
   let pendingRender = null;
@@ -575,6 +583,19 @@ svg { width: 100%; height: auto; display: block; }
     }
     return Math.sqrt(3) * sum / wsum;
   }
+  // The same noise with its exact gradient, in lattice units: n = √3·N/W with N = Σ w·(g·d), W = Σ w, and
+  // ∇w = −8·(r₀² − d²)³·d, ∇(g·d) = g, so ∇n = √3·(∇N·W − N·∇W)/W². Value identical to hexNoise.
+  function hexNoiseGrad(x, y, seed) {
+    let N = 0, W = 0, Nx = 0, Ny = 0, Wx = 0, Wy = 0;
+    for (const c of hexTriangle(x, y)) {
+      const d2 = c.dx * c.dx + c.dy * c.dy, t = HEX_R2 - d2; if (t <= 0) continue;
+      const t3 = t * t * t, w = t3 * t, wx = -8 * t3 * c.dx, wy = -8 * t3 * c.dy;
+      const a = hash(c.q, c.r, c.s, seed) * (2 * Math.PI / 4294967296), gx = Math.cos(a), gy = Math.sin(a), f = gx * c.dx + gy * c.dy;
+      N += w * f; W += w; Nx += wx * f + w * gx; Ny += wy * f + w * gy; Wx += wx; Wy += wy;
+    }
+    const s3 = Math.sqrt(3);
+    return [s3 * N / W, s3 * (Nx * W - N * Wx) / (W * W), s3 * (Ny * W - N * Wy) / (W * W)];
+  }
   const octaveLambda = k => LAMBDA_0 / 2 ** k;                 // ri
   const octaveAmp = (k, st) => st.amp * 2 ** (-k * st.hurst);  // metres
   // The field in the world's own frame: origin at the world's centre, u along the arc's tangent there and shrunk by the
@@ -589,6 +610,24 @@ svg { width: 100%; height: auto; display: block; }
       let sum = 0;
       for (let k = 0; k < octaves; k++) { const lambda = octaveLambda(k); sum += octaveAmp(k, st) * hexNoise(u / lambda, w / lambda, st.seed * 64 + k); }
       return sum;
+    };
+  }
+  // Every structure octave at a point at once, value in metres and exact gradient in metres per ri, in the
+  // world's frame (the chain rule through the turn, the stretch and the wavelength). One call per point
+  // serves every erosion octave's base, which is what makes the erosion cheap.
+  function structureOctaves(centre, tangent, st, K, turn) {
+    const n = [-tangent[1], tangent[0]];
+    return p => {
+      const dx = p[0] - centre[0], dy = p[1] - centre[1];
+      const u = turn * (dx * tangent[0] + dy * tangent[1]) / st.stretch, w = turn * (dx * n[0] + dy * n[1]);
+      const vals = new Array(K), grads = new Array(K);
+      for (let k = 0; k < K; k++) {
+        const lambda = octaveLambda(k), A = octaveAmp(k, st), [v, dU, dW] = hexNoiseGrad(u / lambda, w / lambda, st.seed * 64 + k);
+        // U = u/λ: ∂U/∂x = turn·t₀/(stretch·λ), ∂U/∂y = turn·t₁/(stretch·λ); W = w/λ: ∂W/∂x = turn·n₀/λ, ∂W/∂y = turn·n₁/λ
+        vals[k] = A * v;
+        grads[k] = [A * (dU * turn * tangent[0] / st.stretch + dW * turn * n[0]) / lambda, A * (dU * turn * tangent[1] / st.stretch + dW * turn * n[1]) / lambda];
+      }
+      return { vals, grads };
     };
   }
   const NOISE_RAMP = [[-1, [35, 80, 150]], [-0.5, [120, 160, 200]], [0, [236, 234, 226]], [0.5, [200, 150, 95]], [1, [130, 70, 25]]];
@@ -746,24 +785,42 @@ svg { width: 100%; height: auto; display: block; }
   // ridge or crease and the base's relief elsewhere, t = R + (1 − |R|)·t_rel; its mask is the slope's times
   // (1 − |R|)^stack, so no new gullies sit on an existing ridge or in an existing crease; and R becomes the
   // shape this octave produced, m·g + (1 − m)·t. With stack = 0 it is 5b exactly.
-  function erodedSurface(fine, baseAt, frame, st, first, count, feed, stack, norm) {
-    const cache = new Map(), octs = []; stack = stack || 0; norm = norm === undefined ? 1 : norm;
+  // `struct(p)` is every structure octave's value and exact gradient at p; `fineOctaves` is how many of them the
+  // rung itself carries in h; `tect(p)` is the step-2 height. Octave k's base slope is the tectonic gradient
+  // (central differences 0.05 ri apart on the smooth spline) plus the exact gradients of structure octaves 0…k;
+  // its relief target is the octave's own noise in units of its swing plus the tectonic surface's four-sample
+  // relief a quarter cell out, in units of half the swing. With `baseStrength` > 0 (the video's final form),
+  // the pivots read the base slope's direction at a fixed strength, that many times the straight-gully slope
+  // of the octave above, so the branching angle no longer depends on how steep the ground is.
+  function erodedSurface(struct, fineOctaves, tect, frame, st, first, count, feed, stack, norm, baseStrength) {
+    const cache = new Map(), octs = []; stack = stack || 0; norm = norm === undefined ? 1 : norm; baseStrength = baseStrength || 0;
+    const tectGrad = p => gradientOf(tect, p, 0.05);
     for (let i = 0; i < count; i++) {
-      const k = first + i, base = baseAt(k), c = octaveLambda(k), amp = erosionAmp(k, st), prior = feed ? octs.slice() : [];
+      const k = first + i, c = octaveLambda(k), amp = erosionAmp(k, st), prior = feed ? octs.slice() : [];
       // pivots read the straight-gully slope (the video's branching); the mask reads the smooth one
       const priorGrad = p => { let gx = 0, gy = 0; for (const o of prior) { const q = o.grad(p); gx += q[0]; gy += q[1]; } return [gx, gy]; };
       const priorGradSmooth = p => { let gx = 0, gy = 0; for (const o of prior) { const q = o.gradSmooth(p); gx += q[0]; gy += q[1]; } return [gx, gy]; };
-      const slopeAt = p => { const g = gradientOf(base, p, c / 4), q = priorGrad(p); return [g[0] + q[0], g[1] + q[1]]; };
-      octs.push({ k, base, c, amp, swing: octaveAmp(k, st), priorGrad, priorGradSmooth, slopeAt, ...gullyOctave(slopeAt, frame, k, st, cache, amp, norm) });
+      const baseSlope = (p, S) => { const g = tectGrad(p); for (let j = 0; j <= k; j++) { g[0] += S.grads[j][0]; g[1] += S.grads[j][1]; } return g; };
+      const baseSlopeAt = p => baseSlope(p, struct(p));
+      const slopeAt = p => {
+        const g = baseSlope(p, struct(p)), q = priorGrad(p);
+        if (baseStrength > 0 && prior.length) { const mag = Math.hypot(g[0], g[1]), above = prior[prior.length - 1], want = baseStrength * 4 * above.amp * st.stripes / above.c; if (mag > 0) { g[0] *= want / mag; g[1] *= want / mag; } }
+        return [g[0] + q[0], g[1] + q[1]];
+      };
+      octs.push({ k, c, amp, swing: octaveAmp(k, st), priorGrad, priorGradSmooth, baseSlope, baseSlopeAt, slopeAt, ...gullyOctave(slopeAt, frame, k, st, cache, amp, norm) });
     }
     const parts = p => {
+      const S = struct(p), h0 = tect(p), tg = tectGrad(p);
+      let h = h0; for (let j = 0; j < fineOctaves; j++) h += S.vals[j];
       let delta = 0, g0 = 0, m0 = 0, t0 = 0, R = 0, room = 1, mLast = 0, mSlopeLast = 0, len0 = 1;
       octs.forEach((o, i) => {
-        const d = o.c / 4, hb = o.base(p), hE = o.base([p[0] + d, p[1]]), hW = o.base([p[0] - d, p[1]]), hN = o.base([p[0], p[1] + d]), hS = o.base([p[0], p[1] - d]);
-        const q = o.priorGradSmooth(p), gr = [(hE - hW) / (2 * d) + q[0], (hN - hS) / (2 * d) + q[1]], sigma = Math.hypot(gr[0], gr[1]) / RI_M;
+        const d = o.c / 4, q = o.priorGradSmooth(p);
+        let gx = tg[0] + q[0], gy = tg[1] + q[1]; for (let j = 0; j <= o.k; j++) { gx += S.grads[j][0]; gy += S.grads[j][1]; }
+        const sigma = Math.hypot(gx, gy) / RI_M;
         const mSlope = 1 - (1 - clamp01(sigma / st.sigmaRef)) ** 2, pr = o.pair(p), g = pr.g;
         if (i === 0) len0 = pr.len;
-        const tRel = o.swing > 0 ? Math.max(-1, Math.min(1, (hb - (hE + hW + hN + hS) / 4) / (o.swing / 2))) : 0;
+        const tectRelief = h0 - (tect([p[0] + d, p[1]]) + tect([p[0] - d, p[1]]) + tect([p[0], p[1] + d]) + tect([p[0], p[1] - d])) / 4;
+        const tRel = o.swing > 0 ? Math.max(-1, Math.min(1, S.vals[o.k] / o.swing + tectRelief / (o.swing / 2))) : 0;
         let m = mSlope, t = tRel;
         if (stack > 0) { room = (1 - Math.abs(R)) ** stack; t = R + (1 - Math.abs(R)) * tRel; m = mSlope * room; }
         const shape = m * g + (1 - m) * t;
@@ -771,7 +828,7 @@ svg { width: 100%; height: auto; display: block; }
         if (i === 0) { g0 = g; m0 = m; t0 = t; }
         mLast = m; mSlopeLast = mSlope;
       });
-      return { h: fine(p) + delta, delta, g: g0, m: m0, t: t0, room, mLast, mSlopeLast, len0 };
+      return { h: h + delta, delta, g: g0, m: m0, t: t0, room, mLast, mSlopeLast, len0 };
     };
     return { parts, at: p => parts(p).h, octaves: octs, pivots: cache, frame };
   }
@@ -781,7 +838,7 @@ svg { width: 100%; height: auto; display: block; }
     for (const [key, d] of eroded.pivots) {
       if (!key.startsWith(o.k + ":")) continue;
       const [q, r, s] = key.slice(key.indexOf(":") + 1).split(",").map(Number), p = eroded.frame.toWorld((q - s) / 2, -r * ROW, o.c);
-      const g = gradientOf(o.base, p, o.c / 4), m = Math.hypot(g[0], g[1]); if (m === 0) continue;
+      const g = o.baseSlopeAt(p), m = Math.hypot(g[0], g[1]); if (m === 0) continue;
       sum += Math.acos(Math.max(-1, Math.min(1, (g[0] * d[0] + g[1] * d[1]) / m))) * 180 / Math.PI; n++;
     }
     return { mean: n ? sum / n : 0, n };
@@ -1112,9 +1169,11 @@ svg { width: 100%; height: auto; display: block; }
     mark("step 4");
     // ---- Step 5a drawings: the gullies, the mask, the world after, one ri at chō resolution.
     const turn5 = turned ? -1 : 1, frame5 = erosionFrame(centre, tangent, turn5);
-    const structureAt = octs => structureField(centre, tangent, state, octs, turn5);
-    const baseAt = k => { const s = structureAt(k + 1); return p => height(p, v) + s(p); };
-    const eroded = erodedSurface(height4, baseAt, frame5, state, state.firstOctave, state.octaves5, false);
+    // one structure evaluation per point serves h and every erosion octave's base: K octaves, enough for the
+    // window's structure and for the finest erosion octave asked for
+    const structK = Math.max(WINDOW_OCTAVES, RI_OCTAVES, state.firstOctave + state.octaves5);
+    const struct5 = structureOctaves(centre, tangent, state, structK, turn5), tect = p => height(p, v);
+    const eroded = erodedSurface(struct5, RI_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, false);
     const height5 = eroded.at;
     const parts5 = RI_CELLS.map(([q, r, s]) => { const c = riCentre(q, r, s, centre); return { c, ...eroded.parts(c) }; });
     const firstOct = eroded.octaves[0];
@@ -1159,7 +1218,7 @@ svg { width: 100%; height: auto; display: block; }
     { const dirs = [...eroded.pivots.entries()].filter(([k]) => k.startsWith(firstOct.k + ":")).map(([, d]) => d), hs = headingSpread(dirs);
       row5("pivots at the first octave", dirs.length + " used · downhill headings " + hs.mean.toFixed(0) + "° ± " + hs.spread.toFixed(0) + "° (mod 180°): " + (hs.spread < 15 ? "nearly all agree, so the stripes join into one comb" : hs.spread < 40 ? "some disagreement, the stripes bend and break" : "widely spread")); }
     // ---- Step 5b drawings: the same octaves with the slope fed forward.
-    const eroded5b = erodedSurface(height4, baseAt, frame5, state, state.firstOctave, state.octaves5, true);
+    const eroded5b = erodedSurface(struct5, RI_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, 0, 1, state.baseStrength);
     const height5b = eroded5b.at;
     const parts5b = RI_CELLS.map(([q, r, s]) => { const c = riCentre(q, r, s, centre); return { c, ...eroded5b.parts(c) }; });
     const ampTotal5 = eroded5b.octaves.reduce((a, o) => a + o.amp, 0);
@@ -1193,7 +1252,7 @@ svg { width: 100%; height: auto; display: block; }
     for (const o of eroded5b.octaves.slice(1)) { const t = pivotTurn(eroded5b, o); row5b("octave " + o.k + " pivots turned by the gullies above", t.mean.toFixed(0) + "° on average over " + t.n + " nodes"); }
     if (eroded5b.octaves.length < 2) row5b("pivots turned", "one octave: nothing to feed forward yet; raise the octaves slider");
     // ---- Step 5c drawings: 5b with the stacking.
-    const eroded5c = erodedSurface(height4, baseAt, frame5, state, state.firstOctave, state.octaves5, true, state.stacking);
+    const eroded5c = erodedSurface(struct5, RI_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, 1, state.baseStrength);
     const height5c = eroded5c.at;
     const parts5c = RI_CELLS.map(([q, r, s]) => { const c = riCentre(q, r, s, centre); return { c, ...eroded5c.parts(c) }; });
     delta5cScene.replaceChildren();
@@ -1224,7 +1283,7 @@ svg { width: 100%; height: auto; display: block; }
     row5c("erosion over the world's ri, 5b → 5c", "mean |Δ| on land " + (dAbsN5b ? dAbs5b / dAbsN5b : 0).toFixed(0) + " → " + (dAbsN5c ? dAbs5c / dAbsN5c : 0).toFixed(0) + " m · range " + dMin5c.toFixed(0) + " to " + (dMax5c >= 0 ? "+" : "") + dMax5c.toFixed(0) + " m");
     row5c("room left for the last octave, on sloping land", roomN ? (100 * roomSum / roomN).toFixed(0) + "% of its slope mask on average over " + roomN + " ri · the stacking halved it or more on " + closed + " of them" : "no sloping land ri");
     // ---- Step 5d drawings: 5c with the blended pair normalised.
-    const eroded5d = erodedSurface(height4, baseAt, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, state.normAbove);
+    const eroded5d = erodedSurface(struct5, RI_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, state.normAbove, state.baseStrength);
     const height5d = eroded5d.at;
     const parts5d = RI_CELLS.map(([q, r, s]) => { const c = riCentre(q, r, s, centre); return { c, ...eroded5d.parts(c) }; });
     delta5dScene.replaceChildren();
@@ -1259,8 +1318,8 @@ svg { width: 100%; height: auto; display: block; }
     const runId = ++renderRun;
     setTimeout(() => { if (runId !== renderRun) return;
     // the windows: the picked ri and its six neighbours as their chō, one pair per erosion substep, on shared shade scales
-    const fineW = (s => p => height(p, v) + s(p))(structureAt(WINDOW_OCTAVES));
-    const erodedW = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, false);
+    const fineW = p => { const S = struct5(p); let h = tect(p); for (let j = 0; j < WINDOW_OCTAVES; j++) h += S.vals[j]; return h; };
+    const erodedW = erodedSurface(struct5, WINDOW_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, false);
     const clusterCentres = [[win.q, win.r, win.s], ...NEIGH.map(([dq, dr, ds]) => [win.q + dq, win.r + dr, win.s + ds])].map(([q, r, s]) => riCentre(q, r, s, centre));
     const choCells = clusterCells(clusterCentres);
     const choBefore = choCells.map(c => ({ c, h: fineW(c) })), choAfter = choCells.map(c => ({ c, h: erodedW.at(c) }));
@@ -1269,21 +1328,21 @@ svg { width: 100%; height: auto; display: block; }
     drawCluster(windowAfterScene, choAfter, wLo, wHi, win, clusterCentres, "after 5a · " + state.octaves5 + " gully octave" + (state.octaves5 > 1 ? "s" : ""));
     { const n = choBefore.length, bMean = choBefore.reduce((a, x) => a + x.h, 0) / n, aMean = choAfter.reduce((a, x) => a + x.h, 0) / n, [b0, b1] = heightRange(choBefore), [a0, a1] = heightRange(choAfter);
       row5("window round ri (" + win.q + ", " + win.r + ", " + win.s + ")" + (state.windowQRS ? ", picked" : ", 12 ri inland by default; click a ri on any step-5 map"), "mean " + bMean.toFixed(0) + " → " + aMean.toFixed(0) + " m · relief " + (b1 - b0).toFixed(0) + " → " + (a1 - a0).toFixed(0) + " m over " + n.toLocaleString() + " chō"); }
-    const erodedW5b = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, true);
+    const erodedW5b = erodedSurface(struct5, WINDOW_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, 0, 1, state.baseStrength);
     const choAfter5b = choCells.map(c => ({ c, h: erodedW5b.at(c) }));
     const [wLo2, wHi2] = heightRange(choAfter, choAfter5b);
     drawCluster(window5aScene, choAfter, wLo2, wHi2, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5a");
     drawCluster(window5bScene, choAfter5b, wLo2, wHi2, win, clusterCentres, "after 5b · 1 chō ≈ 109 m");
     { const [a0, a1] = heightRange(choAfter), [b0, b1] = heightRange(choAfter5b);
       row5b("window round ri (" + win.q + ", " + win.r + ", " + win.s + ") relief, 5a → 5b", (a1 - a0).toFixed(0) + " → " + (b1 - b0).toFixed(0) + " m over " + choAfter.length.toLocaleString() + " chō"); }
-    const erodedW5c = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, true, state.stacking);
+    const erodedW5c = erodedSurface(struct5, WINDOW_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, 1, state.baseStrength);
     const choAfter5c = choCells.map(c => ({ c, h: erodedW5c.at(c) }));
     const [wLo3, wHi3] = heightRange(choAfter5b, choAfter5c);
     drawCluster(window5bAgainScene, choAfter5b, wLo3, wHi3, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5b");
     drawCluster(window5cScene, choAfter5c, wLo3, wHi3, win, clusterCentres, "after 5c · p = " + state.stacking.toFixed(1) + " · 1 chō ≈ 109 m");
     { const [a0, a1] = heightRange(choAfter5b), [b0, b1] = heightRange(choAfter5c);
       row5c("window round ri (" + win.q + ", " + win.r + ", " + win.s + ") relief, 5b → 5c", (a1 - a0).toFixed(0) + " → " + (b1 - b0).toFixed(0) + " m over " + choAfter5c.length.toLocaleString() + " chō"); }
-    const erodedW5d = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, state.normAbove);
+    const erodedW5d = erodedSurface(struct5, WINDOW_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, state.normAbove, state.baseStrength);
     const choAfter5d = choCells.map(c => ({ c, h: erodedW5d.at(c) }));
     const [wLo4, wHi4] = heightRange(choAfter5c, choAfter5d);
     drawCluster(window5cAgainScene, choAfter5c, wLo4, wHi4, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5c");
