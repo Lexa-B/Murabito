@@ -342,7 +342,7 @@ svg { width: 100%; height: auto; display: block; }
         const input = document.createElement("input"); input.type = "range"; input.min = s.min; input.max = s.max; input.step = s.step; input.value = state[s.key];
         const out = document.createElement("output");
         label.append(name, input, out); container.appendChild(label);
-        input.addEventListener("input", () => { state[s.key] = +input.value; update(); });
+        input.addEventListener("input", () => { state[s.key] = +input.value; scheduleUpdate(); });
         return { s, input, out };
       });
       return { sync() { for (const b of bound) { b.input.value = state[b.s.key]; b.out.textContent = b.s.fmt(state[b.s.key]); } } };
@@ -386,6 +386,9 @@ svg { width: 100%; height: auto; display: block; }
   ];
   const controls = [...bindSliders(".controls-shared", SLIDERS), ...bindSliders(".controls-structure", STRUCTURE_SLIDERS), ...bindSliders(".controls-seed", SEED_SLIDERS), ...bindSliders(".controls-erosion", EROSION_SLIDERS), ...bindSliders(".controls-stacking", STACK_SLIDERS), ...bindSliders(".controls-norm", NORM_SLIDERS), ...bindSliders(".controls-gradient", GRADIENT_SLIDERS)];
   function update() { controls.forEach(c => c.sync()); render(); }
+  // A slider drag fires many input events; the readouts follow at once, the render waits until the drag pauses.
+  let pendingRender = null;
+  function scheduleUpdate() { controls.forEach(c => c.sync()); clearTimeout(pendingRender); pendingRender = setTimeout(render, 150); }
 
   // The outline as a dense polyline, anticlockwise from the outer apex. Coordinates are (east, north) in ri.
   function outline(R, A, w, phi) {
@@ -1147,15 +1150,6 @@ svg { width: 100%; height: auto; display: block; }
     heights5.appendChild(el("polygon", { points: hexAt(win.c, 1), fill: "none", stroke: "currentColor", "stroke-width": 2 }));
     heights5.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, landRi5 + " ri above sea level of 1,296 · window ri (" + win.q + ", " + win.r + ", " + win.s + ") outlined"));
     mark("5a maps");
-    // the window: the ri's 1,296 chō (the same packing as the world's ri), before and after, on one local shade scale
-    const fineW = (s => p => height(p, v) + s(p))(structureAt(WINDOW_OCTAVES));
-    const erodedW = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, false);
-    const clusterCentres = [[win.q, win.r, win.s], ...NEIGH.map(([dq, dr, ds]) => [win.q + dq, win.r + dr, win.s + ds])].map(([q, r, s]) => riCentre(q, r, s, centre));
-    const choCells = clusterCells(clusterCentres);
-    const choBefore = choCells.map(c => ({ c, h: fineW(c) })), choAfter = choCells.map(c => ({ c, h: erodedW.at(c) }));
-    const [wLo, wHi] = heightRange(choBefore, choAfter);
-    drawCluster(windowBeforeScene, choBefore, wLo, wHi, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · before · 1 chō ≈ 109 m");
-    drawCluster(windowAfterScene, choAfter, wLo, wHi, win, clusterCentres, "after 5a · " + state.octaves5 + " gully octave" + (state.octaves5 > 1 ? "s" : ""));
     facts5.replaceChildren();
     const row5 = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts5.appendChild(d); };
     row5("first octave", firstOct.k + " · cells " + firstOct.c.toFixed(2) + " ri · stripes " + (firstOct.c / state.stripes).toFixed(2) + " ri · E = " + firstOct.amp.toFixed(0) + " m ≈ " + Math.round(firstOct.amp / 0.15151).toLocaleString() + " layers");
@@ -1164,10 +1158,6 @@ svg { width: 100%; height: auto; display: block; }
     row5("erosion over the world's ri", dMin.toFixed(0) + " to " + (dMax >= 0 ? "+" : "") + dMax.toFixed(0) + " m · mean |Δ| on land " + (dAbsN ? dAbs / dAbsN : 0).toFixed(0) + " m");
     { const dirs = [...eroded.pivots.entries()].filter(([k]) => k.startsWith(firstOct.k + ":")).map(([, d]) => d), hs = headingSpread(dirs);
       row5("pivots at the first octave", dirs.length + " used · downhill headings " + hs.mean.toFixed(0) + "° ± " + hs.spread.toFixed(0) + "° (mod 180°): " + (hs.spread < 15 ? "nearly all agree, so the stripes join into one comb" : hs.spread < 40 ? "some disagreement, the stripes bend and break" : "widely spread")); }
-    { const n = choBefore.length, bMean = choBefore.reduce((a, x) => a + x.h, 0) / n, aMean = choAfter.reduce((a, x) => a + x.h, 0) / n, [b0, b1] = heightRange(choBefore), [a0, a1] = heightRange(choAfter);
-      row5("window round ri (" + win.q + ", " + win.r + ", " + win.s + ")" + (state.windowQRS ? ", picked" : ", 12 ri inland by default; click a ri on any step-5 map"), "mean " + bMean.toFixed(0) + " → " + aMean.toFixed(0) + " m · relief " + (b1 - b0).toFixed(0) + " → " + (a1 - a0).toFixed(0) + " m over " + n.toLocaleString() + " chō"); }
-
-    mark("5a window");
     // ---- Step 5b drawings: the same octaves with the slope fed forward.
     const eroded5b = erodedSurface(height4, baseAt, frame5, state, state.firstOctave, state.octaves5, true);
     const height5b = eroded5b.at;
@@ -1195,12 +1185,6 @@ svg { width: 100%; height: auto; display: block; }
     heights5b.appendChild(el("polygon", { points: hexAt(win.c, 1), fill: "none", stroke: "currentColor", "stroke-width": 2 }));
     heights5b.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, landRi5b + " ri above sea level of 1,296 · window ri (" + win.q + ", " + win.r + ", " + win.s + ") outlined"));
     mark("5b maps");
-    // the window: 5a on the left, 5b on the right, one shade scale
-    const erodedW5b = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, true);
-    const choAfter5b = choCells.map(c => ({ c, h: erodedW5b.at(c) }));
-    const [wLo2, wHi2] = heightRange(choAfter, choAfter5b);
-    drawCluster(window5aScene, choAfter, wLo2, wHi2, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5a");
-    drawCluster(window5bScene, choAfter5b, wLo2, wHi2, win, clusterCentres, "after 5b · 1 chō ≈ 109 m");
     facts5b.replaceChildren();
     const row5b = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts5b.appendChild(d); };
     row5b("octaves", eroded5b.octaves.map(o => o.k + " (" + o.c.toFixed(2) + " ri, E " + o.amp.toFixed(0) + " m)").join(" · "));
@@ -1208,10 +1192,6 @@ svg { width: 100%; height: auto; display: block; }
     row5b("erosion over the world's ri", dMin5b.toFixed(0) + " to " + (dMax5b >= 0 ? "+" : "") + dMax5b.toFixed(0) + " m · mean |Δ| on land " + (dAbsN5b ? dAbs5b / dAbsN5b : 0).toFixed(0) + " m");
     for (const o of eroded5b.octaves.slice(1)) { const t = pivotTurn(eroded5b, o); row5b("octave " + o.k + " pivots turned by the gullies above", t.mean.toFixed(0) + "° on average over " + t.n + " nodes"); }
     if (eroded5b.octaves.length < 2) row5b("pivots turned", "one octave: nothing to feed forward yet; raise the octaves slider");
-    { const [a0, a1] = heightRange(choAfter), [b0, b1] = heightRange(choAfter5b);
-      row5b("window round ri (" + win.q + ", " + win.r + ", " + win.s + ") relief, 5a → 5b", (a1 - a0).toFixed(0) + " → " + (b1 - b0).toFixed(0) + " m over " + choAfter.length.toLocaleString() + " chō"); }
-
-    mark("5b window");
     // ---- Step 5c drawings: 5b with the stacking.
     const eroded5c = erodedSurface(height4, baseAt, frame5, state, state.firstOctave, state.octaves5, true, state.stacking);
     const height5c = eroded5c.at;
@@ -1238,20 +1218,11 @@ svg { width: 100%; height: auto; display: block; }
     heights5c.appendChild(el("polygon", { points: hexAt(win.c, 1), fill: "none", stroke: "currentColor", "stroke-width": 2 }));
     heights5c.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, landRi5c + " ri above sea level of 1,296 · window ri (" + win.q + ", " + win.r + ", " + win.s + ") outlined"));
     mark("5c maps");
-    const erodedW5c = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, true, state.stacking);
-    const choAfter5c = choCells.map(c => ({ c, h: erodedW5c.at(c) }));
-    const [wLo3, wHi3] = heightRange(choAfter5b, choAfter5c);
-    drawCluster(window5bAgainScene, choAfter5b, wLo3, wHi3, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5b");
-    drawCluster(window5cScene, choAfter5c, wLo3, wHi3, win, clusterCentres, "after 5c · p = " + state.stacking.toFixed(1) + " · 1 chō ≈ 109 m");
     facts5c.replaceChildren();
     const row5c = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts5c.appendChild(d); };
     row5c("ri above sea level, step 4 → 5c", landRi4 + " → " + landRi5c + " of 1,296 (" + (100 * landRi4 / 1296).toFixed(0) + "% → " + (100 * landRi5c / 1296).toFixed(0) + "%)");
     row5c("erosion over the world's ri, 5b → 5c", "mean |Δ| on land " + (dAbsN5b ? dAbs5b / dAbsN5b : 0).toFixed(0) + " → " + (dAbsN5c ? dAbs5c / dAbsN5c : 0).toFixed(0) + " m · range " + dMin5c.toFixed(0) + " to " + (dMax5c >= 0 ? "+" : "") + dMax5c.toFixed(0) + " m");
     row5c("room left for the last octave, on sloping land", roomN ? (100 * roomSum / roomN).toFixed(0) + "% of its slope mask on average over " + roomN + " ri · the stacking halved it or more on " + closed + " of them" : "no sloping land ri");
-    { const [a0, a1] = heightRange(choAfter5b), [b0, b1] = heightRange(choAfter5c);
-      row5c("window round ri (" + win.q + ", " + win.r + ", " + win.s + ") relief, 5b → 5c", (a1 - a0).toFixed(0) + " → " + (b1 - b0).toFixed(0) + " m over " + choAfter5c.length.toLocaleString() + " chō"); }
-
-    mark("5c window");
     // ---- Step 5d drawings: 5c with the blended pair normalised.
     const eroded5d = erodedSurface(height4, baseAt, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, state.normAbove);
     const height5d = eroded5d.at;
@@ -1278,20 +1249,48 @@ svg { width: 100%; height: auto; display: block; }
     heights5d.appendChild(el("polygon", { points: hexAt(win.c, 1), fill: "none", stroke: "currentColor", "stroke-width": 2 }));
     heights5d.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, landRi5d + " ri above sea level of 1,296 · window ri (" + win.q + ", " + win.r + ", " + win.s + ") outlined"));
     mark("5d maps");
-    const erodedW5d = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, state.normAbove);
-    const choAfter5d = choCells.map(c => ({ c, h: erodedW5d.at(c) }));
-    const [wLo4, wHi4] = heightRange(choAfter5c, choAfter5d);
-    drawCluster(window5cAgainScene, choAfter5c, wLo4, wHi4, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5c");
-    drawCluster(window5dScene, choAfter5d, wLo4, wHi4, win, clusterCentres, "after 5d · normalise above " + (state.normAbove >= 1 ? "off" : state.normAbove.toFixed(2)) + " · 1 chō ≈ 109 m");
     facts5d.replaceChildren();
     const row5d = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts5d.appendChild(d); };
     row5d("ri above sea level, step 4 → 5d", landRi4 + " → " + landRi5d + " of 1,296 (" + (100 * landRi4 / 1296).toFixed(0) + "% → " + (100 * landRi5d / 1296).toFixed(0) + "%)");
     row5d("erosion over the world's ri, 5c → 5d", "mean |Δ| on land " + (dAbsN5c ? dAbs5c / dAbsN5c : 0).toFixed(0) + " → " + (dAbsN5d ? dAbs5d / dAbsN5d : 0).toFixed(0) + " m · range " + dMin5d.toFixed(0) + " to " + (dMax5d >= 0 ? "+" : "") + dMax5d.toFixed(0) + " m");
     row5d("how much the pivots agreed, first octave, sloping land", lenN ? "blended pair length " + (lenSum / lenN).toFixed(2) + " on average over " + lenN + " ri · normalised on " + lifted + ", left alone on " + left : "no sloping land ri");
+    // ---- Phase two, on a timeout so the maps above are on screen first: the four windows, then step 6,
+    // then the drainage in a third phase. A render that starts in the meantime cancels what has not run.
+    const runId = ++renderRun;
+    setTimeout(() => { if (runId !== renderRun) return;
+    // the windows: the picked ri and its six neighbours as their chō, one pair per erosion substep, on shared shade scales
+    const fineW = (s => p => height(p, v) + s(p))(structureAt(WINDOW_OCTAVES));
+    const erodedW = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, false);
+    const clusterCentres = [[win.q, win.r, win.s], ...NEIGH.map(([dq, dr, ds]) => [win.q + dq, win.r + dr, win.s + ds])].map(([q, r, s]) => riCentre(q, r, s, centre));
+    const choCells = clusterCells(clusterCentres);
+    const choBefore = choCells.map(c => ({ c, h: fineW(c) })), choAfter = choCells.map(c => ({ c, h: erodedW.at(c) }));
+    const [wLo, wHi] = heightRange(choBefore, choAfter);
+    drawCluster(windowBeforeScene, choBefore, wLo, wHi, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · before · 1 chō ≈ 109 m");
+    drawCluster(windowAfterScene, choAfter, wLo, wHi, win, clusterCentres, "after 5a · " + state.octaves5 + " gully octave" + (state.octaves5 > 1 ? "s" : ""));
+    { const n = choBefore.length, bMean = choBefore.reduce((a, x) => a + x.h, 0) / n, aMean = choAfter.reduce((a, x) => a + x.h, 0) / n, [b0, b1] = heightRange(choBefore), [a0, a1] = heightRange(choAfter);
+      row5("window round ri (" + win.q + ", " + win.r + ", " + win.s + ")" + (state.windowQRS ? ", picked" : ", 12 ri inland by default; click a ri on any step-5 map"), "mean " + bMean.toFixed(0) + " → " + aMean.toFixed(0) + " m · relief " + (b1 - b0).toFixed(0) + " → " + (a1 - a0).toFixed(0) + " m over " + n.toLocaleString() + " chō"); }
+    const erodedW5b = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, true);
+    const choAfter5b = choCells.map(c => ({ c, h: erodedW5b.at(c) }));
+    const [wLo2, wHi2] = heightRange(choAfter, choAfter5b);
+    drawCluster(window5aScene, choAfter, wLo2, wHi2, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5a");
+    drawCluster(window5bScene, choAfter5b, wLo2, wHi2, win, clusterCentres, "after 5b · 1 chō ≈ 109 m");
+    { const [a0, a1] = heightRange(choAfter), [b0, b1] = heightRange(choAfter5b);
+      row5b("window round ri (" + win.q + ", " + win.r + ", " + win.s + ") relief, 5a → 5b", (a1 - a0).toFixed(0) + " → " + (b1 - b0).toFixed(0) + " m over " + choAfter.length.toLocaleString() + " chō"); }
+    const erodedW5c = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, true, state.stacking);
+    const choAfter5c = choCells.map(c => ({ c, h: erodedW5c.at(c) }));
+    const [wLo3, wHi3] = heightRange(choAfter5b, choAfter5c);
+    drawCluster(window5bAgainScene, choAfter5b, wLo3, wHi3, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5b");
+    drawCluster(window5cScene, choAfter5c, wLo3, wHi3, win, clusterCentres, "after 5c · p = " + state.stacking.toFixed(1) + " · 1 chō ≈ 109 m");
+    { const [a0, a1] = heightRange(choAfter5b), [b0, b1] = heightRange(choAfter5c);
+      row5c("window round ri (" + win.q + ", " + win.r + ", " + win.s + ") relief, 5b → 5c", (a1 - a0).toFixed(0) + " → " + (b1 - b0).toFixed(0) + " m over " + choAfter5c.length.toLocaleString() + " chō"); }
+    const erodedW5d = erodedSurface(fineW, baseAt, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, state.normAbove);
+    const choAfter5d = choCells.map(c => ({ c, h: erodedW5d.at(c) }));
+    const [wLo4, wHi4] = heightRange(choAfter5c, choAfter5d);
+    drawCluster(window5cAgainScene, choAfter5c, wLo4, wHi4, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5c");
+    drawCluster(window5dScene, choAfter5d, wLo4, wHi4, win, clusterCentres, "after 5d · normalise above " + (state.normAbove >= 1 ? "off" : state.normAbove.toFixed(2)) + " · 1 chō ≈ 109 m");
     { const [a0, a1] = heightRange(choAfter5c), [b0, b1] = heightRange(choAfter5d);
       row5d("window round ri (" + win.q + ", " + win.r + ", " + win.s + ") relief, 5c → 5d", (a1 - a0).toFixed(0) + " → " + (b1 - b0).toFixed(0) + " m over " + choAfter5d.length.toLocaleString() + " chō"); }
-
-    mark("5d window");
+    mark("windows");
     // ---- Step 6: reading the coast of the 5d surface.
     // (1) land share against the inset, after step 2 and after step 4, the world re-placed at each d
     const shareAt = d => {
@@ -1369,9 +1368,10 @@ svg { width: 100%; height: auto; display: block; }
     // so the surface is evaluated once per point here. They also draw after the erosion maps are on screen,
     // on a timeout, and a render that starts in the meantime cancels them.
     const surfaceMemo = new Map();
+    for (const p of parts5d) surfaceMemo.set(p.c[0] + "," + p.c[1], p.h);      // the ri centres the 5d map already evaluated
     const surface = p => { const key = p[0] + "," + p[1]; let h = surfaceMemo.get(key); if (h === undefined) { h = height5d(p); surfaceMemo.set(key, h); } return h; };
-    const runId = ++renderRun;
-    setTimeout(() => { if (runId !== renderRun) return;
+    const runId3 = ++renderRun;
+    setTimeout(() => { if (runId3 !== renderRun) return;
     // The six faces of a pointy-top ri, Direction::ALL's order: E at 0°, then every 60° anticlockwise.
     const FACE_DIR = Array.from({ length: 6 }, (_, k) => [Math.cos(rad(60 * k)), Math.sin(rad(60 * k))]);
     const downhillFace = g => ((Math.round(Math.atan2(-g[1], -g[0]) / rad(60)) % 6) + 6) % 6;
@@ -1479,7 +1479,8 @@ svg { width: 100%; height: auto; display: block; }
       rowS("largest flow through a land ri", bi >= 0 ? S.flow[bi].toFixed(0) + " M m³ a year through ri (" + RI_CELLS[bi] + ") into " + to + " by its " + EDGE_NAMES[S.outFace[bi]] + " face" : "none"); }
     rowS("outlet faces used, all ri", EDGE_NAMES.map((nm, k) => nm + " " + S.outFace.filter(f => f === k).length).join(" · "));
     mark("n+1c");
-    rowS("render time by section, ms", T.slice(1).map(([n, t], i) => n + " " + (t - T[i][1]).toFixed(0)).join(" · ") + " · all " + (T[T.length - 1][1] - T[0][1]).toFixed(0) + " · the surface was evaluated at " + surfaceMemo.size.toLocaleString() + " points for the drainage");
+    rowS("render time by section, ms", T.slice(1).map(([n, t], i) => n + " " + (t - T[i][1]).toFixed(0)).join(" · ") + " · all " + (T[T.length - 1][1] - T[0][1]).toFixed(0) + " · the surface was evaluated at " + surfaceMemo.size.toLocaleString() + " points for the drainage, " + parts5d.length.toLocaleString() + " of them from the 5d map");
+    }, 0);
     }, 0);
 
   }
