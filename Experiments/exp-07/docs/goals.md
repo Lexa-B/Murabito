@@ -1,4 +1,4 @@
-# exp-06: what I want out of this
+# exp-07: what I want out of this
 
 Written 2026-09-29, before any code. These are my goals as I stated them; the spec and plan come later and have to fit inside these.
 
