@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Packing B</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+/* Layout: one panel with a slider for N, a live readout beside it. */
+:root {
+  --bg: #f6f5f0; --fg: #22261f; --muted: #6b7064; --line: #c9ccc2; --cell: #e6e8de;
+  --accent: #b7410e; --candidate: #2b6f8c;
+  --p0: #d8b26a; --p1: #9fc2d6; --p2: #b8cf9a; --p3: #d9a5a5; --p4: #c4b3d9; --p5: #a8d3c8; --p6: #e0c4a0;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif; --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23; --accent: #f0803a; --candidate: #6db3d1;
+  --p0: #8a6f34; --p1: #3f6f88; --p2: #5d7f3f; --p3: #8a4f4f; --p4: #6b5a8a; --p5: #3f7a6c; --p6: #8a6a45; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23; --accent: #f0803a; --candidate: #6db3d1;
+  --p0: #8a6f34; --p1: #3f6f88; --p2: #5d7f3f; --p3: #8a4f4f; --p4: #6b5a8a; --p5: #3f7a6c; --p6: #8a6a45; color-scheme: dark; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body); padding: 24px 16px 40px; }
+main { max-width: 1100px; margin: 0 auto; display: grid; gap: 18px; }
+h1 { font-size: 1.4rem; margin: 0; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 66ch; }
+.muted { color: var(--muted); }
+.row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+.row > div { min-width: 0; }
+.row > .fig { flex: 3 1 420px; }
+.row > .side { flex: 2 1 260px; display: grid; gap: 12px; }
+svg { width: 100%; height: auto; display: block; }
+.controls { display: grid; gap: 8px; font-family: var(--font-mono); font-size: 0.9rem; }
+.controls label { display: grid; grid-template-columns: 4ch 1fr 5ch; gap: 10px; align-items: center; }
+.controls input { width: 100%; min-width: 0; accent-color: var(--candidate); }
+.controls output { text-align: right; }
+.facts { font-family: var(--font-mono); font-size: 0.9rem; display: grid; gap: 4px; font-variant-numeric: tabular-nums; }
+.facts div { display: grid; grid-template-columns: 1fr auto; gap: 12px; border-bottom: 1px solid var(--line); padding: 3px 0; }
+.facts .ok { color: var(--candidate); }
+pre { font-family: var(--font-mono); font-size: 0.9rem; margin: 0; padding: 12px 14px; background: var(--cell); border-radius: 4px; overflow-x: auto; }
+</style>
+
+</head>
+<body>
+<main>
+  <h1>Packing B at any N</h1>
+  <p>Parent <code>(a, b)</code> is centred on child <code>(N·a, N·b)</code>; a child belongs to the nearest parent centre by <code>d² = dq² + dq·dr + dr²</code>, ties to the lexicographically greatest <code>(a, b)</code>. Exp-03 and exp-05 use <code>N</code> = 6, 60 and 36. Drag <code>N</code> and watch the battlements.</p>
+
+  <div class="row">
+    <div class="fig">
+      <svg id="fig" viewBox="0 0 640 560" role="img" aria-label="A field of small hexagons coloured by which parent owns them, with the parents' ideal hexagons drawn over them."><g id="scene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div class="side">
+      <div class="controls"><label><span>N</span><input id="n" type="range" min="2" max="12" step="1" value="6"><output id="nOut"></output></label></div>
+      <div class="facts" id="facts"></div>
+      <p class="muted">Tints are the seven parents nearest the centre; the heavy outlines are their ideal hexagons, which the owned territory follows with battlement edges. The centre parent's owned cells are counted live.</p>
+    </div>
+  </div>
+
+<pre>owner(c, N):
+    (a, b) near (q/N, r/N), the 3×3 candidates round it
+    d² = dq² + dq·dr + dr²   with (dq, dr) = (q − N·a, r − N·b)     // hex distance squared, integer
+    smallest d² wins; a tie goes to the greatest (a, b)
+
+every parent owns exactly N² children, for any N: all parents are alike under translation,
+and there is one parent per N² children on average, so each owns N² exactly
+
+corner children split three ways only when 3 | N: the parent's corner is at N·(2/3, −1/3, −1/3),
+a child centre when N is a multiple of 3, a child corner otherwise
+edge children are halved for every N: the edge midpoint N/2·e is a child centre (N even) or a
+half-integer offset whose line still runs through child centres in every other row (N odd)</pre>
+</main>
+
+<script>
+(function () {
+  const cube = (q, r) => [q, r, -q - r];
+  const hexDist = c => Math.max(Math.abs(c[0]), Math.abs(c[1]), Math.abs(c[2]));
+  const corners = [];
+  { let c = [2 / 3, -1 / 3, -1 / 3]; for (let i = 0; i < 6; i++) { corners.push(c); c = [-c[2], -c[0], -c[1]]; } }
+  const ROW = Math.sqrt(3) / 2;
+  const key = c => c[0] + "," + c[1];
+
+  // exp-03's owner(), as the spec states it.
+  function owner(c, N) {
+    const a0 = Math.round(c[0] / N), b0 = Math.round(c[1] / N);
+    let best = null, bestD = Infinity;
+    for (let a = a0 - 1; a <= a0 + 1; a++) for (let b = b0 - 1; b <= b0 + 1; b++) {
+      const dq = c[0] - N * a, dr = c[1] - N * b;
+      const d2 = dq * dq + dq * dr + dr * dr;
+      if (d2 < bestD || (d2 === bestD && (a > best[0] || (a === best[0] && b > best[1])))) { bestD = d2; best = [a, b]; }
+    }
+    return best;
+  }
+
+  const parentsShown = [[0, 0], [1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+  const svg = document.getElementById("fig"), scene = document.getElementById("scene");
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text !== undefined) e.textContent = text; return e; };
+  const n = document.getElementById("n"), nOut = document.getElementById("nOut"), facts = document.getElementById("facts");
+
+  function render() {
+    const N = +n.value;
+    nOut.textContent = N;
+    const radius = Math.ceil(N * 1.75);
+    const S = 270 / (radius + 0.8);                        // px per child width
+    const toScreen = p => ({ x: 320 + (p[0] + p[1] / 2) * S, y: 280 + p[1] * ROW * S });
+    const poly = (c, k) => corners.map(o => { const s = toScreen([c[0] + o[0] * k, c[1] + o[1] * k, 0]); return s.x + "," + s.y; }).join(" ");
+
+    scene.replaceChildren();
+    let owned = 0, halved = 0, threeWay = 0;
+    for (let q = -radius; q <= radius; q++) for (let r = -radius; r <= radius; r++) {
+      const c = cube(q, r);
+      if (hexDist(c) > radius) continue;
+      const P = owner(c, N);
+      const idx = parentsShown.findIndex(p => p[0] === P[0] && p[1] === P[1]);
+      const fill = idx < 0 ? "var(--cell)" : "var(--p" + idx + ")";
+      scene.appendChild(el("polygon", { points: poly(c, 1), fill, "fill-opacity": idx < 0 ? 1 : 0.85, stroke: "var(--line)", "stroke-width": 0.5 }));
+      if (P[0] === 0 && P[1] === 0) owned++;
+    }
+    // Count the ties: children equidistant from two or three parents (the halved and three-way children).
+    for (let q = -N; q <= N; q++) for (let r = -N; r <= N; r++) {
+      const c = cube(q, r);
+      const ds = [];
+      for (const [a, b] of parentsShown) { const dq = c[0] - N * a, dr = c[1] - N * b; ds.push(dq * dq + dq * dr + dr * dr); }
+      const m = Math.min(...ds), n0 = ds.filter(d => d === m).length;
+      if (n0 === 2 && ds[0] === m) halved++;
+      if (n0 === 3 && ds[0] === m) threeWay++;
+    }
+    for (const [a, b] of parentsShown) {
+      const centre = [N * a, N * b, 0];
+      scene.appendChild(el("polygon", { points: poly(centre, N), fill: "none", stroke: "currentColor", "stroke-width": 2 }));
+      const s = toScreen(centre);
+      scene.appendChild(el("circle", { cx: s.x, cy: s.y, r: 3, fill: "currentColor", stroke: "none" }));
+    }
+    scene.appendChild(el("text", { x: 12, y: 548, fill: "var(--muted)", stroke: "none", "font-size": 11, "font-family": "var(--font-mono)" }, "N = " + N + ": the centre parent owns " + owned + " children"));
+
+    const div3 = N % 3 === 0;
+    facts.innerHTML = "";
+    const row = (k, v, ok) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = v; if (ok) b.className = "ok"; d.append(a, b); facts.appendChild(d); };
+    row("children per parent, N²", String(N * N));
+    row("owned by the centre parent", String(owned), owned === N * N);
+    row("halved edge children of the centre parent", String(halved));
+    row("three-way corner children", div3 ? String(threeWay) + " (3 | N)" : "none: corners fall on child corners");
+    row("parent width, in children", String(N));
+    row("parent corner radius, in children", (N / Math.sqrt(3)).toFixed(3));
+  }
+  n.addEventListener("input", render);
+  render();
+})();
+</script>
+</body>
+</html>
