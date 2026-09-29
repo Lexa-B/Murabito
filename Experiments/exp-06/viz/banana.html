@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banana Placement</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+/* Layout: the whole banana on the left, the world's neighbourhood on the right, controls beneath. */
+:root { --bg: #f6f5f0; --fg: #22261f; --muted: #6b7064; --line: #c9ccc2; --cell: #e6e8de; --sea: #d3dfe3; --land: #e9e3cf;
+  --world: #b7410e; --shore: #2b6f8c; --mountain: #6f5a3a;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif; --font-mono: "IBM Plex Mono", ui-monospace, monospace; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23; --sea: #1f2a2e; --land: #2e2b22; --world: #f0803a; --shore: #6db3d1; --mountain: #c9a87a; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23; --sea: #1f2a2e; --land: #2e2b22; --world: #f0803a; --shore: #6db3d1; --mountain: #c9a87a; color-scheme: dark; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body); margin: 0; padding: 24px 16px 40px; }
+main { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-size: 1.4rem; margin: 0; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 70ch; }
+.muted { color: var(--muted); }
+.pair { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.pair > div { flex: 1 1 320px; min-width: 0; display: grid; gap: 4px; }
+.panel-title { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+svg { width: 100%; height: auto; display: block; }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 24px; font-family: var(--font-mono); font-size: 0.9rem; }
+.controls label { display: grid; grid-template-columns: 12ch 1fr 8ch; gap: 10px; align-items: center; }
+.controls input[type=range] { width: 100%; min-width: 0; accent-color: var(--shore); }
+.controls output { text-align: right; font-variant-numeric: tabular-nums; }
+.facts { font-family: var(--font-mono); font-size: 0.9rem; display: grid; gap: 4px; font-variant-numeric: tabular-nums; max-width: 560px; }
+.facts div { display: grid; grid-template-columns: 1fr auto; gap: 12px; border-bottom: 1px solid var(--line); padding: 3px 0; }
+.facts .bad { color: var(--world); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Step 1: the world on the banana</h1>
+  <p>The banana is a slot bent along a circular arc, sized like Honshu at its Kantō width: arc <code>A = 80°</code>, centreline radius <code>R = 237</code> ri (about 1,300 km along the axis), width <code>w = 60</code> ri (about 236 km, coast to coast across Kantō). It is turned so the top tip of the centreline heads due north (90°), which puts the outer apex facing ESE, the Pacific side. The outline is walked anticlockwise from the outer apex, and <code>θ</code> is the fraction of its length walked, in degrees. The world, 36 ri flat to flat and north-up, is centred on the outline point at <code>θ</code> moved inland by <code>d</code>. Units are ri.</p>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">the whole banana · θ marked every 30° · north up</div>
+      <svg id="wide" viewBox="0 0 560 560" role="img" aria-label="The bent slot shape with degree marks along its outline and the world hexagon placed on it."><g id="wideScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">round the world · edges read as sea, land or crossed</div>
+      <svg id="near" viewBox="0 0 560 560" role="img" aria-label="The world hexagon with the shoreline through it, each edge coloured by whether it is at sea, on land or crossed by the shore."><g id="nearScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+
+  <div class="controls">
+    <label><span>θ, degrees</span><input id="theta" type="range" min="0" max="359.5" step="0.5" value="12"><output id="thetaOut"></output></label>
+    <label><span>inset d, ri</span><input id="inset" type="range" min="-25" max="45" step="0.5" value="6"><output id="insetOut"></output></label>
+  </div>
+
+  <div class="facts" id="facts"></div>
+  <p class="muted">The edge reading: an edge the outline crosses is a shore edge; an edge it does not cross is sea or land by where its midpoint lies. The rule from the napkin, no more than four of either, is checked live. The two shore crossings are the ends of the captured edge, the seed of step 3's shoreline.</p>
+</main>
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (t, a, tx) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (tx !== undefined) e.textContent = tx; return e; };
+  const mono = { stroke: "none", "font-size": 11, "font-family": "var(--font-mono)" };
+  const rad = d => d * Math.PI / 180;
+  const WORLD = 36;                                   // ri, flat to flat
+  // Honshu-like at its Kantō width: an 80° arc about 1,300 km along the axis, 236 km wide, in ri. Fixed, not dialled.
+  const R_RI = 237, W_RI = 60, ARC_DEG = 80;
+  const ids = ["theta", "inset"];
+  const inputs = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
+  ids.forEach(id => inputs[id].addEventListener("input", render));
+
+  // The outline as a dense polyline, anticlockwise from the outer apex. Coordinates are (east, north) in ri.
+  function outline(R, A, w, phi) {
+    const pts = [];
+    const push = (x, y) => { const c = Math.cos(rad(phi)), s = Math.sin(rad(phi)); pts.push([x * c - y * s, x * s + y * c]); };
+    const half = rad(A) / 2, ro = R + w / 2, ri = R - w / 2, n = 180;
+    // outer arc, from the apex (angle 0) anticlockwise to +half, then the north cap, the inner arc back, the south cap, and the outer arc from −half to the apex
+    for (let i = 0; i <= n / 2; i++) { const a = (i / (n / 2)) * half; push(ro * Math.cos(a), ro * Math.sin(a)); }
+    for (let i = 1; i < 60; i++) { const a = half, t = (i / 60) * Math.PI; const cx = R * Math.cos(a), cy = R * Math.sin(a); const ux = Math.cos(a), uy = Math.sin(a), vx = -Math.sin(a), vy = Math.cos(a); const r = w / 2; push(cx + r * (Math.cos(t) * ux + Math.sin(t) * vx), cy + r * (Math.cos(t) * uy + Math.sin(t) * vy)); }
+    for (let i = 0; i <= n; i++) { const a = half - (i / n) * 2 * half; push(ri * Math.cos(a), ri * Math.sin(a)); }
+    for (let i = 1; i < 60; i++) { const a = -half, t = Math.PI + (i / 60) * Math.PI; const cx = R * Math.cos(a), cy = R * Math.sin(a); const ux = Math.cos(a), uy = Math.sin(a), vx = -Math.sin(a), vy = Math.cos(a); const r = w / 2; push(cx + r * (Math.cos(t) * ux + Math.sin(t) * vx), cy + r * (Math.cos(t) * uy + Math.sin(t) * vy)); }
+    for (let i = 0; i <= n / 2; i++) { const a = -half + (i / (n / 2)) * half; push(ro * Math.cos(a), ro * Math.sin(a)); }
+    // cumulative length
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    return { pts, cum, length: cum[cum.length - 1] };
+  }
+  function at(o, theta) {
+    const s = (theta / 360) * o.length;
+    let i = 1; while (i < o.cum.length - 1 && o.cum[i] < s) i++;
+    const t = (s - o.cum[i - 1]) / ((o.cum[i] - o.cum[i - 1]) || 1);
+    const a = o.pts[i - 1], b = o.pts[i];
+    const p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const tx = b[0] - a[0], ty = b[1] - a[1], L = Math.hypot(tx, ty) || 1;
+    // anticlockwise outline: the outward normal is the tangent turned clockwise
+    return { p, normal: [ty / L, -tx / L] };
+  }
+  function inside(o, p) {                              // even-odd point in polygon
+    let c = false; const P = o.pts;
+    for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+      if ((P[i][1] > p[1]) !== (P[j][1] > p[1]) && p[0] < (P[j][0] - P[i][0]) * (p[1] - P[i][1]) / (P[j][1] - P[i][1]) + P[i][0]) c = !c;
+    }
+    return c;
+  }
+  function segCross(a, b, c, d) {
+    const den = (b[0] - a[0]) * (d[1] - c[1]) - (b[1] - a[1]) * (d[0] - c[0]);
+    if (Math.abs(den) < 1e-12) return null;
+    const t = ((c[0] - a[0]) * (d[1] - c[1]) - (c[1] - a[1]) * (d[0] - c[0])) / den;
+    const u = ((c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])) / den;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])] : null;
+  }
+  // The world hexagon: pointy-top, corners at 30° + 60°·i, flat to flat WORLD. Edge k runs between corners k−1 and k,
+  // so edge 0 is the east edge, then NNE, NNW, W, SSW, SSE: Direction::ALL's even entries.
+  const EDGE_NAMES = ["E", "NNE", "NNW", "W", "SSW", "SSE"];
+  function hexCorners(c) { const r = WORLD / 2 / Math.cos(Math.PI / 6); return Array.from({ length: 6 }, (_, i) => { const a = rad(30 + 60 * i); return [c[0] + r * Math.cos(a), c[1] + r * Math.sin(a)]; }); }
+
+  const wide = document.getElementById("wideScene"), near = document.getElementById("nearScene"), facts = document.getElementById("facts");
+  function view(cx, cy, scale) { return p => ({ x: 280 + (p[0] - cx) * scale, y: 280 - (p[1] - cy) * scale }); }
+  const pts = (ps, f) => ps.map(p => { const s = f(p); return s.x + "," + s.y; }).join(" ");
+
+  function render() {
+    const v = Object.fromEntries(ids.map(id => [id, +inputs[id].value]));
+    v.R = R_RI; v.w = W_RI; v.A = ARC_DEG;
+    v.phi = -v.A / 2;                                 // the top tip of the centreline heads due north
+    document.getElementById("thetaOut").textContent = v.theta.toFixed(1) + "°";
+    document.getElementById("insetOut").textContent = (v.inset >= 0 ? "+" : "") + v.inset.toFixed(1);
+    const o = outline(v.R, v.A, v.w, v.phi);
+    const here = at(o, v.theta);
+    const centre = [here.p[0] - here.normal[0] * v.inset, here.p[1] - here.normal[1] * v.inset];
+    const corners = hexCorners(centre);
+
+    // Edge reading
+    const edges = [];
+    for (let k = 0; k < 6; k++) {
+      const a = corners[(k + 5) % 6], b = corners[k];
+      const crossings = [];
+      for (let i = 1; i < o.pts.length; i++) { const x = segCross(a, b, o.pts[i - 1], o.pts[i]); if (x) crossings.push(x); }
+      const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      edges.push({ name: EDGE_NAMES[k], a, b, crossings, kind: crossings.length ? "shore" : inside(o, mid) ? "land" : "sea" });
+    }
+    const seaN = edges.filter(e => e.kind === "sea").length, landN = edges.filter(e => e.kind === "land").length, shoreN = edges.filter(e => e.kind === "shore").length;
+    const crossings = edges.flatMap(e => e.crossings);
+
+    // Wide view: fit the whole banana
+    wide.replaceChildren();
+    const xs = o.pts.map(p => p[0]), ys = o.pts.map(p => p[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) + 60;
+    const W = view(cx, cy, 520 / span);
+    wide.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--sea)", stroke: "none" }));
+    wide.appendChild(el("polygon", { points: pts(o.pts, W), fill: "var(--land)", stroke: "currentColor", "stroke-width": 1.2 }));
+    // the centreline arc, and a north arrow at its top tip
+    { const ps = []; for (let i = 0; i <= 60; i++) { const a = -rad(v.A) / 2 + (i / 60) * rad(v.A); const x = v.R * Math.cos(a), y = v.R * Math.sin(a); const c = Math.cos(rad(v.phi)), s = Math.sin(rad(v.phi)); ps.push([x * c - y * s, x * s + y * c]); }
+      wide.appendChild(el("polyline", { points: pts(ps, W), stroke: "var(--mountain)", "stroke-width": 1, "stroke-dasharray": "4 4" }));
+      const tip = ps[ps.length - 1], t0 = W(tip), t1 = W([tip[0], tip[1] + 24]);
+      wide.appendChild(el("line", { x1: t0.x, y1: t0.y, x2: t1.x, y2: t1.y, stroke: "var(--mountain)", "stroke-width": 1.5 }));
+      wide.appendChild(el("text", { x: t1.x, y: t1.y - 4, "text-anchor": "middle", fill: "var(--mountain)", ...mono, "font-size": 10 }, "90°")); }
+    for (let deg = 0; deg < 360; deg += 30) {
+      const q = at(o, deg), s = W(q.p), out = W([q.p[0] + q.normal[0] * 14, q.p[1] + q.normal[1] * 14]);
+      wide.appendChild(el("line", { x1: s.x, y1: s.y, x2: out.x, y2: out.y, stroke: "var(--muted)" }));
+      wide.appendChild(el("text", { x: out.x + (out.x - s.x) * 0.9, y: out.y + (out.y - s.y) * 0.9 + 4, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, deg + "°"));
+    }
+    wide.appendChild(el("polygon", { points: pts(corners, W), fill: "var(--world)", "fill-opacity": 0.35, stroke: "var(--world)", "stroke-width": 1.5 }));
+    { const s = W(here.p); wide.appendChild(el("circle", { cx: s.x, cy: s.y, r: 3, fill: "var(--shore)", stroke: "none" })); }
+    wide.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "outline " + o.length.toFixed(0) + " ri round · 1° of θ = " + (o.length / 360).toFixed(2) + " ri · R " + v.R + ", w " + v.w + ", A " + v.A + "° · top tip heads north"));
+
+    // Near view: the world and its surroundings
+    near.replaceChildren();
+    const N = view(centre[0], centre[1], 520 / (WORLD * 2.2));
+    near.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--sea)", stroke: "none" }));
+    near.appendChild(el("polygon", { points: pts(o.pts, N), fill: "var(--land)", stroke: "currentColor", "stroke-width": 1.5 }));
+    for (const e of edges) {
+      const a = N(e.a), b = N(e.b);
+      const colour = e.kind === "shore" ? "var(--shore)" : e.kind === "land" ? "var(--mountain)" : "currentColor";
+      near.appendChild(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: colour, "stroke-width": e.kind === "sea" ? 2 : 4, opacity: e.kind === "sea" ? 0.5 : 1 }));
+      const m = N([(e.a[0] + e.b[0]) / 2, (e.a[1] + e.b[1]) / 2]), c = N(centre);
+      const lab = { x: m.x + (m.x - c.x) * 0.16, y: m.y + (m.y - c.y) * 0.16 + 4 };
+      near.appendChild(el("text", { x: lab.x, y: lab.y, "text-anchor": "middle", fill: colour, ...mono }, e.name + " · " + e.kind));
+    }
+    for (const x of crossings) { const s = N(x); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 5, fill: "var(--shore)", stroke: "var(--bg)", "stroke-width": 1.5 })); }
+    { const s = N(centre); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 4, fill: "var(--world)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y + 4, fill: "var(--world)", ...mono }, "日本橋")); }
+    { const s = N(here.p); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 3, fill: "var(--shore)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y - 6, fill: "var(--shore)", ...mono, "font-size": 10 }, "θ = " + v.theta.toFixed(1) + "°")); }
+    near.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "36 ri across · north up"));
+
+    facts.replaceChildren();
+    const row = (k, val, bad) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; if (bad) b.className = "bad"; d.append(a, b); facts.appendChild(d); };
+    row("sea edges", seaN + (seaN ? "  (" + edges.filter(e => e.kind === "sea").map(e => e.name).join(", ") + ")" : ""), seaN > 4);
+    row("land edges", landN + (landN ? "  (" + edges.filter(e => e.kind === "land").map(e => e.name).join(", ") + ")" : ""), landN > 4);
+    row("shore edges (crossed)", shoreN + (shoreN ? "  (" + edges.filter(e => e.kind === "shore").map(e => e.name).join(", ") + ")" : ""));
+    row("shore crossings", String(crossings.length), crossings.length !== 2 && crossings.length !== 0);
+    row("no more than four of either", seaN <= 4 && landN <= 4 ? "holds" : "broken", !(seaN <= 4 && landN <= 4));
+    row("world centre inside the banana", inside(o, centre) ? "yes" : "no: out to sea");
+  }
+  render();
+})();
+</script>
+</body>
+</html>
