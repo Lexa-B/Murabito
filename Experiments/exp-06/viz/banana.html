@@ -39,7 +39,7 @@ svg { width: 100%; height: auto; display: block; }
 .octaves td:first-child, .octaves th:first-child { text-align: left; }
 .octaves tr.drawn td { color: var(--fg); }
 .octaves tr.later td { color: var(--muted); }
-#gullies, #mask, #heights5, #delta5b, #heights5b, #delta5c, #heights5c, #delta5d, #heights5d { cursor: crosshair; }
+#gullies, #mask, #heights5, #delta5b, #heights5b, #delta5c, #heights5c, #delta5d, #heights5d, #coastMap { cursor: crosshair; }
 </style>
 </head>
 <body>
@@ -242,6 +242,34 @@ svg { width: 100%; height: auto; display: block; }
   <div class="facts" id="facts5d"></div>
   <p class="muted">The drainage steps below read this surface.</p>
 
+  <h1 id="step6">Step 6: reading the coast</h1>
+  <p>The coast is the zero set of the 5d surface; nothing here changes it, this step measures it. <strong>Land share against the inset:</strong> for every <code>d</code> from −10 to +30 ri, the world is placed there and its ri counted above sea level after step 2 and after step 4, which is cheap since neither has erosion; the share after 5d at the current <code>d</code> is marked, and since erosion costs a nearly constant few points, the <code>d</code> that gives 70% after erosion is read off the step-4 curve. <strong>The coast's dimension:</strong> a coast ri is a land ri with a sea neighbour; square boxes of 1, 2, 4, 8 and 16 ri are laid over the world and the boxes holding coast counted, and the box-counting dimension <code>D</code> is minus the slope of <code>log N</code> against <code>log s</code>, fitted over 1 to 8 ri. The same is done at chō scale inside the picked window cluster, boxes of 1 to 32 chō, when the coast passes through it. Kantō's coast measures 1.11 in Natural Earth's 1:10m data and is likely 1.1 to 1.15 in truth; the structure noise alone would give level sets of dimension <code>2 − H</code>.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">land share against the inset d · step 2 dashed, step 4 in ink · 70% marked · the 5d share at the current d</div>
+      <svg id="shareChart" viewBox="0 0 560 300" role="img" aria-label="Land share of the world's ri against the inset, after step 2 and after step 4, with the 70% line and the current placement's share after erosion."><g id="shareChartScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the coast at ri scale · land pale, sea blue, coast ri in ink · 4-ri boxes drawn · click a ri to move the window</div>
+      <svg id="coastMap" viewBox="0 0 560 560" role="img" aria-label="The world's ri as land, sea and coast, with the box grid used for the count."><g id="coastMapScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="pair">
+    <div>
+      <div class="panel-title">box counts · N against the box side, both on log scales · ri series in ink, chō series in blue · fitted slopes</div>
+      <svg id="boxChart" viewBox="0 0 560 300" role="img" aria-label="Box counts of the coast against box size on log-log axes, at ri scale and at chō scale, with fitted lines."><g id="boxChartScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the coast at chō scale · the window cluster · land pale, sea blue, coast chō in ink</div>
+      <svg id="coastCluster" viewBox="0 0 560 560" role="img" aria-label="The window cluster's chō as land, sea and coast."><g id="coastClusterScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="facts" id="facts6"></div>
+  <p class="muted">A box count on 36 ri of world has few scales to fit, so the ri-scale <code>D</code> is a coarse reading; the chō-scale one inside the window is the sharper one, but only where the coast crosses it, so click a coastal ri. The inset slider is the retune: set <code>d</code> and watch the 5d share.</p>
+
   <h1 id="stepGradient">Step n+1a: the downhill face of every ri</h1>
   <p>A step for later, drawn now: it reads whatever surface the last step left, step 5d's eroded one now. For each ri, the gradient at its centre by central differences half a ri either side, in metres per ri, then reversed, so it points downhill, the way water runs, and snapped to the nearest of the ri's six faces: <code>E, NNE, NNW, W, SSW, SSE</code>, the order of <code>Direction::ALL</code>. An arrow's length is the slope, capped at the slider's value, so the plain's few metres per ri show as short stubs and the mountainsides as full arrows.</p>
   <div class="controls controls-shared"></div>
@@ -335,7 +363,7 @@ svg { width: 100%; height: auto; display: block; }
   // world, so it stays the same ri when θ or d move the world. Until a click, it is the ri nearest 12 ri inland.
   const WINDOW_DEFAULT_INLAND = 12, RI_MAP_SCALE = 520 / (WORLD * 1.15);
   let mapCentre = null, renderRun = 0;
-  for (const id of ["gullies", "mask", "heights5", "delta5b", "heights5b", "delta5c", "heights5c", "delta5d", "heights5d"]) {
+  for (const id of ["gullies", "mask", "heights5", "delta5b", "heights5b", "delta5c", "heights5c", "delta5d", "heights5d", "coastMap"]) {
     const svg = document.getElementById(id); if (!svg) continue;
     svg.addEventListener("click", ev => {
       if (!mapCentre || !svg.getScreenCTM) return;
@@ -758,6 +786,19 @@ svg { width: 100%; height: auto; display: block; }
   const window5bAgainScene = document.getElementById("window5bAgainScene"), window5cScene = document.getElementById("window5cScene");
   const delta5dScene = document.getElementById("delta5dScene"), heights5d = document.getElementById("heights5dScene"), facts5d = document.getElementById("facts5d");
   const window5cAgainScene = document.getElementById("window5cAgainScene"), window5dScene = document.getElementById("window5dScene");
+  const shareChartScene = document.getElementById("shareChartScene"), coastMapScene = document.getElementById("coastMapScene"), boxChartScene = document.getElementById("boxChartScene"), coastClusterScene = document.getElementById("coastClusterScene"), facts6 = document.getElementById("facts6");
+  // ---- Step 6 helpers: box counting. Points fall in square boxes of side s anchored at `origin`; N is the
+  // number of distinct boxes touched. D is minus the least-squares slope of log N against log s.
+  function boxCount(points, origin, sizes) {
+    return sizes.map(s => { const set = new Set(); for (const p of points) set.add(Math.floor((p[0] - origin[0]) / s) + "," + Math.floor((p[1] - origin[1]) / s)); return { s, n: set.size }; });
+  }
+  function fitD(counts) {
+    const xs = counts.map(c => Math.log(c.s)), ys = counts.map(c => Math.log(Math.max(1, c.n))), n = xs.length;
+    const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+    let sxy = 0, sxx = 0; for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; }
+    return sxx > 0 ? { D: -sxy / sxx, b: my + (sxy / sxx) * mx } : { D: NaN, b: NaN };   // log N = b − D·log s
+  }
+  const COAST_FILL = { land: "var(--land)", sea: "var(--sea)", coast: "var(--fg)" };
   // The window cluster: the picked ri and its six neighbours, each as its 1,296 chō (the same packing as the
   // world's ri), drawn 170 px to the ri so the cluster fills the panel. The chō are batched into one path per
   // shade, 64 shades plus the sea, so a panel is a few dozen elements rather than nine thousand.
@@ -1237,6 +1278,78 @@ svg { width: 100%; height: auto; display: block; }
       row5d("window round ri (" + win.q + ", " + win.r + ") relief, 5c → 5d", (a1 - a0).toFixed(0) + " → " + (b1 - b0).toFixed(0) + " m over " + choAfter5d.length.toLocaleString() + " chō"); }
 
     mark("5d window");
+    // ---- Step 6: reading the coast of the 5d surface.
+    // (1) land share against the inset, after step 2 and after step 4, the world re-placed at each d
+    const shareAt = d => {
+      const c = [here.p[0] - here.normal[0] * d, here.p[1] - here.normal[1] * d], cs = RI_CELLS.map(([q, r]) => riCentre(q, r, c));
+      const inw = p => -((p[0] - c[0]) * here.normal[0] + (p[1] - c[1]) * here.normal[1]);
+      const f1 = structureField(c, tangent, state, RI_OCTAVES, 1);
+      let lean = 0; for (const p of cs) lean += f1(p) * inw(p);
+      const f = lean < 0 ? structureField(c, tangent, state, RI_OCTAVES, -1) : f1;
+      let l2 = 0, l4 = 0; for (const p of cs) { const h = height(p, v); if (h > 0) l2++; if (h + f(p) > 0) l4++; }
+      return { d, s2: 100 * l2 / RI_CELLS.length, s4: 100 * l4 / RI_CELLS.length };
+    };
+    const D_LO = -10, D_HI = 30, shares = []; for (let d = D_LO; d <= D_HI; d += 2) shares.push(shareAt(d));
+    const share4Now = 100 * landRi4 / RI_CELLS.length, share5dNow = 100 * landRi5d / RI_CELLS.length, erosionCost = share4Now - share5dNow, target4 = 70 + erosionCost;
+    let d70 = null;
+    for (let i = 1; i < shares.length; i++) { const a = shares[i - 1], b = shares[i]; if ((a.s4 - target4) * (b.s4 - target4) <= 0 && a.s4 !== b.s4) { d70 = a.d + (target4 - a.s4) / (b.s4 - a.s4) * (b.d - a.d); break; } }
+    shareChartScene.replaceChildren();
+    { const CX = d => 50 + ((d - D_LO) / (D_HI - D_LO)) * 480, CY = s => 30 + ((100 - s) / 100) * 240;
+      shareChartScene.appendChild(el("rect", { x: 50, y: 30, width: 480, height: 240, fill: "var(--cell)", stroke: "none" }));
+      for (let s = 0; s <= 100; s += 25) { shareChartScene.appendChild(el("line", { x1: 50, y1: CY(s), x2: 530, y2: CY(s), stroke: "var(--line)" })); shareChartScene.appendChild(el("text", { x: 46, y: CY(s) + 4, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, s + "%")); }
+      for (let d = D_LO; d <= D_HI; d += 10) shareChartScene.appendChild(el("text", { x: CX(d), y: 288, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, "d " + (d >= 0 ? "+" : "") + d));
+      shareChartScene.appendChild(el("line", { x1: 50, y1: CY(70), x2: 530, y2: CY(70), stroke: "var(--shore)", "stroke-width": 1.5 }));
+      shareChartScene.appendChild(el("text", { x: 530, y: CY(70) - 4, "text-anchor": "end", fill: "var(--shore)", ...mono, "font-size": 10 }, "70% land"));
+      shareChartScene.appendChild(el("polyline", { points: shares.map(x => CX(x.d) + "," + CY(x.s2)).join(" "), stroke: "var(--mountain)", "stroke-width": 1.5, "stroke-dasharray": "5 3" }));
+      shareChartScene.appendChild(el("polyline", { points: shares.map(x => CX(x.d) + "," + CY(x.s4)).join(" "), stroke: "currentColor", "stroke-width": 1.5 }));
+      shareChartScene.appendChild(el("circle", { cx: CX(state.inset), cy: CY(share5dNow), r: 5, fill: "var(--world)", stroke: "var(--bg)", "stroke-width": 1.5 }));
+      shareChartScene.appendChild(el("text", { x: CX(state.inset) + 8, y: CY(share5dNow) + 4, fill: "var(--world)", ...mono, "font-size": 10 }, "after 5d, d " + (state.inset >= 0 ? "+" : "") + state.inset.toFixed(1) + ": " + share5dNow.toFixed(0) + "%"));
+      if (d70 !== null) { shareChartScene.appendChild(el("line", { x1: CX(d70), y1: 30, x2: CX(d70), y2: 270, stroke: "var(--world)", "stroke-dasharray": "3 3" })); shareChartScene.appendChild(el("text", { x: CX(d70), y: 24, "text-anchor": "middle", fill: "var(--world)", ...mono, "font-size": 10 }, "d " + (d70 >= 0 ? "+" : "") + d70.toFixed(1) + " for 70% after erosion")); }
+      shareChartScene.appendChild(el("text", { x: 530, y: 24, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, "erosion costs " + erosionCost.toFixed(1) + " points here")); }
+    // (2) the coast at ri scale: coast ri = land ri with a sea neighbour; boxes of 1…16 ri anchored at the origin
+    const idxRi = new Map(RI_CELLS.map(([q, r], i) => [q + "," + r, i])), landMask = parts5d.map(p => p.h > 0);
+    const coastRi = [], coastKind = parts5d.map(() => "sea");
+    RI_CELLS.forEach(([q, r], i) => { if (!landMask[i]) return; coastKind[i] = "land"; for (const [dq, dr] of NEIGH) { const j = idxRi.get((q + dq) + "," + (r + dr)); if (j !== undefined && !landMask[j]) { coastRi.push(parts5d[i].c); coastKind[i] = "coast"; break; } } });
+    const riCounts = boxCount(coastRi, centre, [1, 2, 4, 8, 16]), riFit = fitD(riCounts.slice(0, 4));
+    coastMapScene.replaceChildren();
+    coastMapScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    parts5d.forEach((p, i) => coastMapScene.appendChild(el("polygon", { points: hexAt(p.c, 1), fill: COAST_FILL[coastKind[i]], stroke: "none" })));
+    { const s = 4, lines = []; for (let k = -6; k <= 6; k++) { const a = HV([centre[0] + k * s, centre[1] - 24]), b = HV([centre[0] + k * s, centre[1] + 24]); lines.push("M" + a.x.toFixed(1) + " " + a.y.toFixed(1) + "L" + b.x.toFixed(1) + " " + b.y.toFixed(1)); const c2 = HV([centre[0] - 24, centre[1] + k * s]), d2 = HV([centre[0] + 24, centre[1] + k * s]); lines.push("M" + c2.x.toFixed(1) + " " + c2.y.toFixed(1) + "L" + d2.x.toFixed(1) + " " + d2.y.toFixed(1)); }
+      coastMapScene.appendChild(el("path", { d: lines.join(""), stroke: "var(--world)", "stroke-width": 0.6, opacity: 0.7 })); }
+    coastMapScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    coastMapScene.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, coastRi.length + " coast ri · boxes touched: " + riCounts.map(c => c.s + " ri → " + c.n).join(", ")));
+    // (3) the coast at chō scale inside the window cluster; chō axial keys are 36·(ri offset) + (q, r), the packing
+    const clusterOff = [[0, 0], ...NEIGH], nCho = RI_CELLS.length, choLand = choAfter5d.map(x => x.h > 0), choIdx = new Map();
+    choAfter5d.forEach((x, i) => { const j = Math.floor(i / nCho), [q, r] = RI_CELLS[i % nCho], [dq, dr] = clusterOff[j]; choIdx.set((36 * dq + q) + "," + (36 * dr + r), i); });
+    const coastCho = [], choKind = choAfter5d.map(() => "sea");
+    choAfter5d.forEach((x, i) => { if (!choLand[i]) return; choKind[i] = "land"; const j = Math.floor(i / nCho), [q, r] = RI_CELLS[i % nCho], [dq, dr] = clusterOff[j], aq = 36 * dq + q, ar = 36 * dr + r; for (const [nq, nr] of NEIGH) { const k = choIdx.get((aq + nq) + "," + (ar + nr)); if (k !== undefined && !choLand[k]) { coastCho.push(x.c); choKind[i] = "coast"; break; } } });
+    const choSizes = [1, 2, 4, 8, 16, 32], choCounts = boxCount(coastCho, win.c, choSizes.map(s => s / 36)).map((c, i) => ({ s: choSizes[i], n: c.n })), choFit = coastCho.length >= 30 ? fitD(choCounts.slice(0, 5)) : { D: NaN, b: NaN };
+    coastClusterScene.replaceChildren();
+    coastClusterScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    { const V = p => ({ x: 280 + (p[0] - win.c[0]) * CLUSTER_SCALE, y: 280 - (p[1] - win.c[1]) * CLUSTER_SCALE }), byKind = new Map();
+      choAfter5d.forEach((cell, i) => { const d = "M" + RI_HEX.map(k => { const s = V([cell.c[0] + k[0] / 36, cell.c[1] + k[1] / 36]); return s.x.toFixed(1) + " " + s.y.toFixed(1); }).join("L") + "Z"; const key = choKind[i]; if (!byKind.has(key)) byKind.set(key, []); byKind.get(key).push(d); });
+      for (const [key, ds] of byKind) coastClusterScene.appendChild(el("path", { d: ds.join(""), fill: COAST_FILL[key], stroke: "none" }));
+      clusterCentres.forEach((rc, i) => coastClusterScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [rc[0] + k[0], rc[1] + k[1]]), V), fill: "none", stroke: "var(--world)", "stroke-width": i === 0 ? 1.5 : 0.6, opacity: i === 0 ? 1 : 0.6 })));
+      coastClusterScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, coastCho.length ? coastCho.length + " coast chō in the cluster · boxes: " + choCounts.map(c => c.s + " → " + c.n).join(", ") : "the coast does not cross the window · click a coastal ri")); }
+    // (4) the box-count chart, log-log, both series
+    boxChartScene.replaceChildren();
+    { const X = s => 50 + (Math.log2(s) / 5) * 480, Y = n => 270 - (Math.log2(Math.max(1, n)) / 12) * 240;
+      boxChartScene.appendChild(el("rect", { x: 50, y: 30, width: 480, height: 240, fill: "var(--cell)", stroke: "none" }));
+      for (let e = 0; e <= 12; e += 2) { boxChartScene.appendChild(el("line", { x1: 50, y1: Y(2 ** e), x2: 530, y2: Y(2 ** e), stroke: "var(--line)" })); boxChartScene.appendChild(el("text", { x: 46, y: Y(2 ** e) + 4, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, String(2 ** e))); }
+      for (let e = 0; e <= 5; e++) boxChartScene.appendChild(el("text", { x: X(2 ** e), y: 288, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, (2 ** e) + " cells"));
+      const series = [[riCounts, riFit, "currentColor", "ri"], [choCounts, choFit, "var(--shore)", "chō"]];
+      for (const [counts, fit, colour, name] of series) {
+        for (const c of counts) boxChartScene.appendChild(el("circle", { cx: X(c.s), cy: Y(c.n), r: 4, fill: colour, stroke: "none" }));
+        if (!isNaN(fit.D)) { const s0 = 1, s1 = name === "ri" ? 8 : 16, n0 = Math.exp(fit.b - fit.D * Math.log(s0)), n1 = Math.exp(fit.b - fit.D * Math.log(s1)); boxChartScene.appendChild(el("line", { x1: X(s0), y1: Y(n0), x2: X(s1), y2: Y(n1), stroke: colour, "stroke-width": 1.5 })); boxChartScene.appendChild(el("text", { x: X(s1) + 6, y: Y(n1) + 4, fill: colour, ...mono, "font-size": 10 }, name + " D ≈ " + fit.D.toFixed(2))); }
+      }
+      boxChartScene.appendChild(el("text", { x: 530, y: 24, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, "N boxes holding coast, by box side in cells of each scale · Kantō 1.1–1.15 · structure alone 2 − H = " + (2 - state.hurst).toFixed(2))); }
+    facts6.replaceChildren();
+    const row6 = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts6.appendChild(d); };
+    row6("land share, step 2 → 4 → 5d, at d " + (state.inset >= 0 ? "+" : "") + state.inset.toFixed(1), (100 * landRi / RI_CELLS.length).toFixed(0) + "% → " + share4Now.toFixed(0) + "% → " + share5dNow.toFixed(0) + "% · erosion costs " + erosionCost.toFixed(1) + " points");
+    row6("inset for 70% land after erosion", d70 !== null ? "d ≈ " + (d70 >= 0 ? "+" : "") + d70.toFixed(1) + " ri, where step 4 gives " + target4.toFixed(0) + "% · set the inset slider there" : "not reached between d " + D_LO + " and +" + D_HI);
+    row6("coast at ri scale", coastRi.length + " coast ri · D ≈ " + (isNaN(riFit.D) ? "—" : riFit.D.toFixed(2)) + " over 1–8 ri boxes · Kantō 1.1–1.15 · structure alone " + (2 - state.hurst).toFixed(2));
+    row6("coast at chō scale, window round ri (" + win.q + ", " + win.r + ")", coastCho.length >= 30 ? coastCho.length + " coast chō · D ≈ " + choFit.D.toFixed(2) + " over 1–16 chō boxes" : coastCho.length ? "only " + coastCho.length + " coast chō, too few to fit · click a ri the coast runs through" : "the coast does not cross the window · click a coastal ri");
+    mark("step 6");
     // ---- Step n+1a: the gradient of every ri, on whatever surface the last step left.
     // The drainage steps read the eroded surface at a few thousand points, several of them more than once,
     // so the surface is evaluated once per point here. They also draw after the erosion maps are on screen,
