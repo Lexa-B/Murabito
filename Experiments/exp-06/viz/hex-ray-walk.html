@@ -208,6 +208,47 @@ loop:
     <pre id="runSample"></pre>
   </div>
   <p class="muted">Compared with bite three, the vertical family has changed character: <code>t_y</code> is no longer the next integer layer at a fixed stride, it is the next run boundary, one division per boundary. The hex family is untouched. The cost of a column is now the number of runs the ray passes through, not the number of layers, and the block of data above is the whole of what the shader needs to read for that column.</p>
+
+  <h1 id="skip">Bite five: skipping columns</h1>
+  <p>Skimming over open ground, bite four still spends a step on every column. To jump several at once the ray needs one coarser fact per <em>group</em> of columns: <code>hi(P)</code>, the top of the highest solid run in the group. If the ray is at or above <code>hi(P)</code> where it enters the group and where it leaves, nothing in there can be under it, and the whole span is one step. The groups are the hex hierarchy: a parent cell is the same lattice scaled by <code>k</code> (exp-05's ken is <code>k = 6</code>; here <code>k = 3</code> so several fit the picture), so the parent walk is bite two's walk with <code>o</code> and <code>d</code> divided by <code>k</code>, and its <code>t</code> values are the same numbers. Same controls; a wider, gentler patch so there is sky to skim through.</p>
+
+  <div class="controls" id="controls5"></div>
+
+  <figure>
+    <div class="pair">
+      <div>
+        <div class="panel-title">from above, east up, tilted by the climb</div>
+        <svg id="fig5plan" viewBox="0 0 400 380" role="img" aria-label="A wide hex patch from above with the parent cells outlined. Parents the ray skips whole are shaded grey; parents it walks column by column are outlined in blue with the visited columns marked; the hit column is orange.">
+          <g id="scene5plan" fill="none" stroke="currentColor" stroke-width="1"></g>
+        </svg>
+      </div>
+      <div>
+        <div class="panel-title">from the side, layers level</div>
+        <svg id="fig5" viewBox="0 0 640 380" role="img" aria-label="The section along the ray with the ground faint, each parent's span marked by its hi ceiling, skipped spans shaded grey, and the fine steps outlined where the ray had to drop down.">
+          <g id="scene5" fill="none" stroke="currentColor" stroke-width="1"></g>
+        </svg>
+      </div>
+    </div>
+    <figcaption><strong>Left,</strong> from above: the fine cells coloured by their top material, the parent hexagons over them. A parent the ray skips whole is shaded grey; one it has to walk is outlined in blue with the columns it visits marked; the hit column is orange. Rings on the ray are parent boundaries. <strong>Right,</strong> the section: the ground faint all along the track, and over each parent's span a heavy line at its <code>hi</code>. Where the ray stays above that line across the span, the span is grey and costs one step; where it dips under, the columns come up at full strength and bite four takes over, air run by air run, until the parent's far boundary. The heavy <code>hi</code> line sits above the ground under it because a parent's <code>hi</code> covers every cell that overlaps its hexagon, owned or not, so a child straddling two parents counts for both.</figcaption>
+  </figure>
+
+<pre>parents: bite two's walk on the parent lattice, o/k and d/k          // same t values
+for each parent P the ray crosses, from t_in to t_out:
+    if layer(t_in) ≥ hi(P) and layer(t_out) ≥ hi(P):                    // nothing can be under the ray in here
+        one step: t = t_out
+    else:
+        bite four across the fine columns from t to t_out, then back up  // hit, or the parent's far boundary
+
+hi(P) = max top of any solid run in any cell whose hexagon overlaps P's  // owned or straddling, so a skip is always safe</pre>
+
+  <div class="readout">
+    <div id="skipSummary" class="summary"></div>
+    <div class="wrap"><table>
+      <thead><tr><th>#</th><th>step</th><th>what</th><th>t in</th><th>exit</th><th>t out</th></tr></thead>
+      <tbody id="rows5"></tbody>
+    </table></div>
+  </div>
+  <p class="muted">Set climb to 0 and the start layer to 4.5 to skim the whole patch: everything skips except the parents round the floating slab, whose <code>hi</code> reaches 7. The same test runs the other way for caves, with a <code>lo(P)</code> under which a ray below everything solid can skip; it is the same idea and is left out of the picture. Deeper hierarchies stack the same step: a grandparent at <code>k²</code> with its own <code>hi</code>, checked first.</p>
 </main>
 
 <script>
@@ -551,8 +592,8 @@ loop:
   }
   const corners = [];
   { let c = [2 / 3, -1 / 3, -1 / 3]; for (let i = 0; i < 6; i++) { corners.push(c); c = [-c[2], -c[0], -c[1]]; } }
-  const cells = [];
-  for (let q = -R; q <= R; q++) for (let r = -R; r <= R; r++) { const c = cube(q, r); if (hexDist(c) <= R) cells.push(c); }
+  const cellsOf = radius => { const out = []; for (let q = -radius; q <= radius; q++) for (let r = -radius; r <= radius; r++) { const c = cube(q, r); if (hexDist(c) <= radius) out.push(c); } return out; };
+  const cells = cellsOf(R);
   const key = c => c[0] + "," + c[1];
 
   // The horizontal ray starts near the west edge of the patch and travels one shaku per unit t.
@@ -565,14 +606,15 @@ loop:
   }
 
   // Bite two's walk, reduced to the column list: which cell, from which t to which t, out through which face.
-  function columns(d) {
+  // Any lattice: pass origin and direction in that lattice's units and the t values come out the same.
+  function columnsFrom(origin, d, radius) {
     const cand = faces.filter(f => dot3(f.e, d) > 1e-9);
     const inv = cand.map(f => 1 / dot3(f.e, d));
-    let c = cubeRound(o);
-    let t = cand.map((f, j) => (1 - dot3(f.e, sub(o, c))) * inv[j]);
+    let c = cubeRound(origin);
+    let t = cand.map((f, j) => (1 - dot3(f.e, sub(origin, c))) * inv[j]);
     const cols = [];
     let tIn = 0;
-    for (let n = 0; n < MAX_STEPS && hexDist(c) <= R; n++) {
+    for (let n = 0; n < MAX_STEPS && hexDist(c) <= radius; n++) {
       let i = 0; for (let j = 1; j < t.length; j++) if (t[j] < t[i]) i = j;
       cols.push({ cell: c, tIn, tOut: t[i], face: cand[i].name });
       c = add(c, cand[i].e);
@@ -613,8 +655,8 @@ loop:
   }
   const overhang = c => (key(c) === "0,0" || key(c) === "1,0" || key(c) === "0,1") && surface(c) <= 5;
   // The column as the video stores it, (material, height) from the bottom up, then with run tops.
-  function runsFor(c) {
-    const h = surface(c);
+  function runsFor(c, surfaceOf) {
+    const h = surfaceOf(c);
     const rle = h >= 3 ? [[ROCK, h - 2], [DIRT, 1], [GRASS, 1]] : h === 2 ? [[DIRT, 1], [GRASS, 1]] : [[GRASS, 1]];
     if (overhang(c)) rle.push([AIR, 2], [ROCK, 1]);            // a slab floating two layers above the ground
     const filled = rle.reduce((a, r) => a + r[1], 0);
@@ -623,15 +665,18 @@ loop:
     const runs = rle.map(([mat, height]) => { const run = { mat, bottom, top: bottom + height }; bottom += height; return run; });
     return { rle, runs };
   }
-  const world = new Map(cells.map(c => [key(c), runsFor(c)]));
+  const memo = surfaceOf => { const m = new Map(); return c => { const k = key(c); if (!m.has(k)) m.set(k, runsFor(c, surfaceOf)); return m.get(k); }; };
+  const worldAt = memo(surface);
 
   // Bite four: the same ray over the runs. A visit is (column, run); an air run is one step however tall.
-  function runWalk(cols, layer0, dl) {
+  // From tStart, over the columns still ahead, stopping once past tUntil (bite five hands it one parent's span).
+  function runWalk(cols, layer0, dl, world = worldAt, tStart = 0, tUntil = Infinity) {
     const out = [];
     const sign = dl > 0 ? 1 : dl < 0 ? -1 : 0;
-    let tNow = 0, hit = null, left = null;
+    let tNow = tStart, hit = null, left = null;
     for (const col of cols) {
-      const { runs } = world.get(key(col.cell));
+      if (col.tOut <= tNow + 1e-9) continue;
+      const { runs } = world(col.cell);
       const layerIn = layer0 + dl * tNow;
       let k = runs.findIndex(r => layerIn >= r.bottom && layerIn < r.top);
       if (k < 0) { left = layerIn >= LAYERS ? "sky" : "bedrock"; break; }
@@ -653,12 +698,13 @@ loop:
         if (k < 0 || k >= runs.length) { left = sign > 0 ? "sky" : "bedrock"; break; }
       }
       if (hit || left) break;
+      if (tNow >= tUntil - 1e-9) break;
     }
     return { steps: out, hit, left, tStop: hit ? hit.t : tNow };
   }
 
   // ---- The ray's own frame, in shaku. World here is (east, up, north); a layer is half a shaku.
-  function frame(headingDeg, layer0, dl) {
+  function frame(headingDeg, layer0, dl, origin) {
     const a = headingDeg * Math.PI / 180;
     const D = [Math.cos(a), 0.5 * dl, Math.sin(a)];
     const len = Math.hypot(D[0], D[1], D[2]);
@@ -666,7 +712,7 @@ loop:
     const w = [-Math.sin(a), 0, Math.cos(a)];
     const sinPhi = 0.5 * dl / len, cosPhi = 1 / len;
     const v = [-sinPhi * Math.cos(a), cosPhi, -sinPhi * Math.sin(a)];
-    const O3 = [o[0] + o[1] / 2, 0.5 * layer0, -o[1] * ROW];
+    const O3 = [origin[0] + origin[1] / 2, 0.5 * layer0, -origin[1] * ROW];
     const d3 = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
     const proj = P => { const rel = [P[0] - O3[0], P[1] - O3[1], P[2] - O3[2]]; return { along: d3(rel, u), across: d3(rel, w), rise: d3(rel, v) }; };
     const at = (c, layer) => [c[0] + c[1] / 2, 0.5 * layer, -c[1] * ROW];
@@ -750,17 +796,17 @@ loop:
       ranges[1].value = state.dl; outs[2].textContent = (state.dl >= 0 ? "+" : "") + state.dl.toFixed(2);
     } };
   }
-  const controls = [document.getElementById("controls3"), document.getElementById("controls4")].map(buildControls);
+  const controls = [document.getElementById("controls3"), document.getElementById("controls4"), document.getElementById("controls5")].map(buildControls);
 
-  // ---- Drawing shared by both bites: the two views.
-  function views(F, tStop, tEnd) {
+  // ---- Drawing shared by the bites: the two views.
+  function views(F, tStop, tEnd, patch) {
     const raw = P => { const p = F.proj(P); return { x: p.along, y: -p.across }; };
     const e0 = raw(F.at([0, 0, 0], 0)), e1 = raw(F.at(cube(1, 0), 0));
     const th = -Math.PI / 2 - Math.atan2(e1.y - e0.y, e1.x - e0.x), cth = Math.cos(th), sth = Math.sin(th);
     const above = P => { const p = raw(P); return { x: p.x * cth - p.y * sth, y: p.x * sth + p.y * cth }; };
     const groundHex = c => corners.map(k => above(F.at(add(c, k), 0)));
     const rayAbove = t => above(F.track(t, state.layer0 + state.dl * t));
-    const fitL = fitter(cells.flatMap(groundHex).concat([rayAbove(0), rayAbove(tStop + 0.8)]), 400, 380, 22);
+    const fitL = fitter(patch.flatMap(groundHex).concat([rayAbove(0), rayAbove(tStop + 0.8)]), 400, 380, 22);
     const sec = (s, layer) => ({ x: s, y: -0.5 * (layer - state.layer0) });
     const box = [sec(0, 0), sec(tEnd, 0), sec(tEnd, LAYERS), sec(0, LAYERS)];
     const fitR = fitter(box.concat([sec(-0.35, LAYERS / 2), sec(tEnd, -0.6)]), 640, 380, 22);
@@ -809,7 +855,7 @@ loop:
   function render3(cols, F, tEnd) {
     const vs = visits(cols, state.layer0, state.dl);
     const tStop = vs.length ? vs[vs.length - 1].tOut : tEnd;
-    const V = views(F, tStop, tEnd);
+    const V = views(F, tStop, tEnd, cells);
 
     scene3plan.replaceChildren();
     for (const c of cells) scene3plan.appendChild(el("polygon", { points: pts(V.groundHex(c).map(V.fitL)), fill: "var(--cell)", stroke: "var(--line)" }));
@@ -851,12 +897,12 @@ loop:
   function render4(cols, F, tEnd, vs) {
     const walk = runWalk(cols, state.layer0, state.dl);
     const tStop = walk.tStop;
-    const V = views(F, tStop, tEnd);
+    const V = views(F, tStop, tEnd, cells);
     const hitKey = walk.hit ? key(walk.hit.cell) : null;
 
     scene4plan.replaceChildren();
     for (const c of cells) {
-      const { runs } = world.get(key(c));
+      const { runs } = worldAt(c);
       const topSolid = [...runs].reverse().find(r => r.mat !== AIR);
       scene4plan.appendChild(el("polygon", { points: pts(V.groundHex(c).map(V.fitL)), fill: MAT[topSolid.mat].fill, "fill-opacity": 0.55, stroke: "var(--line)" }));
     }
@@ -873,7 +919,7 @@ loop:
     scene4.replaceChildren();
     drawSectionFrame(scene4, V, cols, tEnd, 0.25);
     for (const col of cols) {
-      for (const run of world.get(key(col.cell)).runs) {
+      for (const run of worldAt(col.cell).runs) {
         if (run.mat === AIR) continue;
         scene4.appendChild(el("polygon", { points: pts([V.sec(col.tIn, run.bottom), V.sec(col.tOut, run.bottom), V.sec(col.tOut, run.top), V.sec(col.tIn, run.top)].map(V.fitR)), fill: MAT[run.mat].fill, "fill-opacity": 0.75, stroke: "none" }));
       }
@@ -907,19 +953,173 @@ loop:
 
     // One column's data, in the video's notation and as run tops.
     const shownCell = walk.hit ? walk.hit.cell : (cols[0] ? cols[0].cell : [0, 0, 0]);
-    const { rle, runs } = world.get(key(shownCell));
+    const { rle, runs } = worldAt(shownCell);
     sample.textContent = "column " + fmtCell(shownCell) + ":  " + rle.map(([m, h]) => MAT[m].name + " " + h).join(", ") + "\n" +
       "run tops:  [" + runs.map(r => r.top).join(", ") + "]   run k covers layers [top[k−1], top[k])";
+  }
+
+  // ---- Bite five: a wider patch, parents at scale K, and the horizontal skip.
+  const R5 = 7, K = 3, RP = 4;
+  const o5 = cube(-6.3, 1.4);
+  const cells5 = cellsOf(R5);
+  // Gentler ground than bite four's, one to four layers, so there is sky to skim through.
+  const surface5 = c => Math.max(1, Math.min(4, Math.round(2.3 + 1.0 * Math.sin(c[0] * 0.7 + 0.4) + 0.9 * Math.cos(c[1] * 0.6 + c[0] * 0.3))));
+  const worldAt5 = memo(surface5);
+  // The parent lattice is this lattice scaled by K, same orientation: a cell's parent is cube_round(c / K).
+  const parentOf = c => cubeRound(c.map(v => v / K));
+  const parents5 = [...new Map(cells5.map(c => { const P = parentOf(c); return [key(P), P]; })).values()];
+  // hi(P): the top of the highest solid run over every cell whose hexagon can overlap P's, owned by P or not.
+  // Conservative: any cell whose centre lies within P's corner radius plus a cell's own corner radius.
+  const hiCache = new Map();
+  function hi(P) {
+    const k = key(P);
+    if (!hiCache.has(k)) {
+      const centre = P.map(v => v * K), reach = (K + 1) / Math.sqrt(3) + 1e-6;
+      let h = 0;
+      for (const c of cells5) {
+        const d = sub(c, centre);
+        if (Math.hypot(d[0] + d[1] / 2, d[1] * ROW) > reach) continue;
+        for (const r of worldAt5(c).runs) if (r.mat !== AIR) h = Math.max(h, r.top);
+      }
+      hiCache.set(k, h);
+    }
+    return hiCache.get(k);
+  }
+  // Two levels: walk the parents; skip one whole if the ray stays at or above hi(P) across it, else
+  // drop to bite four's fine walk for that span and come back up at the parent's far boundary.
+  function twoLevel(parents, fine, layer0, dl, tEnd) {
+    const events = [];
+    const layerAt = t => layer0 + dl * t;
+    let tNow = 0, hit = null, left = null;
+    for (const P of parents) {
+      if (P.tIn >= tEnd - 1e-9) break;
+      if (P.tOut <= tNow + 1e-9) continue;
+      const start = Math.max(tNow, P.tIn), end = Math.min(P.tOut, tEnd);
+      const h = hi(P.cell);
+      if (layerAt(start) >= h && layerAt(end) >= h) {
+        events.push({ kind: "skip", parent: P.cell, tIn: start, tOut: end, hi: h });
+        tNow = end; continue;
+      }
+      const w = runWalk(fine, layer0, dl, worldAt5, tNow, end);
+      for (const s of w.steps) events.push({ kind: "fine", parent: P.cell, cell: s.cell, run: s.run, tIn: s.tIn, tOut: s.tOut, exit: s.exit });
+      tNow = w.tStop;
+      if (w.hit) { hit = w.hit; break; }
+      if (w.left) { left = w.left; break; }
+    }
+    return { events, hit, left, tStop: hit ? hit.t : tNow };
+  }
+
+  const scene5plan = document.getElementById("scene5plan"), scene5 = document.getElementById("scene5");
+  const rows5 = document.getElementById("rows5"), summary5 = document.getElementById("skipSummary");
+  function render5() {
+    const d = horizontal(state.heading);
+    const fine = columnsFrom(o5, d, R5);
+    const parents = columnsFrom(o5.map(v => v / K), d.map(v => v / K), RP);
+    const tEnd = fine.length ? fine[fine.length - 1].tOut : 12;
+    const F = frame(state.heading, state.layer0, state.dl, o5);
+    const walk = twoLevel(parents, fine, state.layer0, state.dl, tEnd);
+    const flat = runWalk(fine, state.layer0, state.dl, worldAt5);                 // bite four alone, for the count
+    const tStop = walk.tStop;
+    const V = views(F, tStop, tEnd, cells5);
+    const skips = walk.events.filter(e => e.kind === "skip"), fines = walk.events.filter(e => e.kind === "fine");
+    const parentHex = P => corners.map(k => V.fitL(V.above(F.at(P.map(v => v * K).map((v, i) => v + k[i] * K), 0))));
+    const walkedParents = new Set(fines.map(e => key(e.parent))), skippedParents = new Set(skips.map(e => key(e.parent)));
+
+    scene5plan.replaceChildren();
+    for (const c of cells5) {
+      const topSolid = [...worldAt5(c).runs].reverse().find(r => r.mat !== AIR);
+      scene5plan.appendChild(el("polygon", { points: pts(V.groundHex(c).map(V.fitL)), fill: MAT[topSolid.mat].fill, "fill-opacity": 0.4, stroke: "var(--line)", "stroke-width": 0.5 }));
+    }
+    for (const P of parents5) {
+      const k = key(P);
+      scene5plan.appendChild(el("polygon", { points: pts(parentHex(P)), fill: skippedParents.has(k) ? "var(--muted)" : "none", "fill-opacity": 0.2, stroke: walkedParents.has(k) ? "var(--candidate)" : "currentColor", "stroke-width": walkedParents.has(k) ? 2 : 1, opacity: walkedParents.has(k) ? 1 : 0.6 }));
+    }
+    for (const e of fines) scene5plan.appendChild(el("polygon", { points: pts(V.groundHex(e.cell).map(V.fitL)), fill: "none", stroke: "var(--candidate)", "stroke-width": 1.3 }));
+    if (walk.hit) scene5plan.appendChild(el("polygon", { points: pts(V.groundHex(walk.hit.cell).map(V.fitL)), fill: "none", stroke: "var(--accent)", "stroke-width": 2.5 }));
+    const dots = walk.events.map(e => e.kind === "skip" ? { t: e.tOut, fill: "var(--bg)", r: 4.5, ring: true } : { t: e.tOut, fill: e.exit === "top" || e.exit === "bottom" ? "var(--cap)" : "var(--accent)", r: 2.5 });
+    if (walk.hit) dots.push({ t: walk.hit.t, fill: "var(--accent)", r: 6 });
+    drawRayAbove(scene5plan, V, tStop, dots, walk.hit ? 1.5 : 1);
+    for (const dt of dots.filter(x => x.ring)) { const h = V.fitL(V.rayAbove(dt.t)); scene5plan.appendChild(el("circle", { cx: h.x, cy: h.y, r: 4.5, fill: "none", stroke: "currentColor", "stroke-width": 1.5 })); }
+    drawNorth(scene5plan, V, F);
+    scene5plan.appendChild(el("text", { x: 12, y: 370, fill: "var(--muted)", ...mono }, "parents at k = " + K + " · grey: skipped whole · blue: walked column by column · rings: parent boundaries"));
+
+    scene5.replaceChildren();
+    scene5.appendChild(el("polygon", { points: pts(V.box.map(V.fitR)), fill: "var(--cell)", stroke: "none" }));
+    for (let l = 0; l <= LAYERS; l++) {
+      const a = V.fitR(V.sec(0, l)), b = V.fitR(V.sec(tEnd, l));
+      scene5.appendChild(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "var(--cap)", "stroke-width": l === 0 || l === LAYERS ? 1.5 : 1, opacity: 0.2 }));
+      if (l < LAYERS) { const m = V.fitR(V.sec(-0.18, l + 0.5)); scene5.appendChild(el("text", { x: m.x, y: m.y + 4, "text-anchor": "end", fill: "var(--muted)", ...mono }, String(l))); }
+    }
+    for (const col of fine) {                      // the ground everywhere, faint, so a skip can be seen to clear it
+      for (const run of worldAt5(col.cell).runs) {
+        if (run.mat === AIR) continue;
+        scene5.appendChild(el("polygon", { points: pts([V.sec(col.tIn, run.bottom), V.sec(col.tOut, run.bottom), V.sec(col.tOut, run.top), V.sec(col.tIn, run.top)].map(V.fitR)), fill: MAT[run.mat].fill, "fill-opacity": 0.3, stroke: "none" }));
+      }
+    }
+    for (const P of parents) {                     // parent spans: boundary, and the hi(P) ceiling
+      if (P.tIn >= tEnd) break;
+      const end = Math.min(P.tOut, tEnd), h = hi(P.cell);
+      const a = V.fitR(V.sec(P.tIn, h)), b = V.fitR(V.sec(end, h));
+      const skipped = skippedParents.has(key(P.cell)), walked = walkedParents.has(key(P.cell));
+      if (skipped) scene5.appendChild(el("polygon", { points: pts([V.sec(P.tIn, 0), V.sec(end, 0), V.sec(end, h), V.sec(P.tIn, h)].map(V.fitR)), fill: "var(--muted)", "fill-opacity": 0.25, stroke: "none" }));
+      scene5.appendChild(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "currentColor", "stroke-width": 2, opacity: walked || skipped ? 0.8 : 0.3 }));
+      const bx = V.fitR(V.sec(end, 0)), by = V.fitR(V.sec(end, LAYERS));
+      scene5.appendChild(el("line", { x1: bx.x, y1: bx.y, x2: by.x, y2: by.y, stroke: "currentColor", "stroke-dasharray": "3 4", opacity: 0.5 }));
+      const lab = V.fitR(V.sec((P.tIn + end) / 2, h + 0.35));
+      if ((b.x - a.x) > 30) scene5.appendChild(el("text", { x: lab.x, y: lab.y, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, "hi " + h));
+    }
+    for (const e of fines) {                       // fine steps: the columns' runs at full strength, the air run visited outlined
+      for (const run of worldAt5(e.cell).runs) {
+        if (run.mat === AIR) continue;
+        const col = fine.find(c => key(c.cell) === key(e.cell));
+        scene5.appendChild(el("polygon", { points: pts([V.sec(col.tIn, run.bottom), V.sec(col.tOut, run.bottom), V.sec(col.tOut, run.top), V.sec(col.tIn, run.top)].map(V.fitR)), fill: MAT[run.mat].fill, "fill-opacity": 0.85, stroke: "none" }));
+      }
+    }
+    walk.events.forEach((e, n) => {
+      if (e.kind !== "fine") return;
+      const quad = [V.sec(e.tIn, e.run.bottom), V.sec(e.tOut, e.run.bottom), V.sec(e.tOut, e.run.top), V.sec(e.tIn, e.run.top)].map(V.fitR);
+      scene5.appendChild(el("polygon", { points: pts(quad), fill: "var(--candidate)", "fill-opacity": 0.22, stroke: "var(--candidate)", "stroke-width": 1 }));
+      const cx = quad.reduce((a, p) => a + p.x, 0) / 4, cy = quad.reduce((a, p) => a + p.y, 0) / 4;
+      if ((quad[1].x - quad[0].x) > 12) scene5.appendChild(el("text", { x: cx, y: cy + 4, "text-anchor": "middle", fill: "currentColor", ...mono, "font-size": 10 }, String(n)));
+    });
+    walk.events.forEach((e, n) => {
+      if (e.kind !== "skip") return;
+      const m = V.fitR(V.sec((e.tIn + e.tOut) / 2, state.layer0 + state.dl * (e.tIn + e.tOut) / 2));
+      scene5.appendChild(el("text", { x: m.x, y: m.y - 8, "text-anchor": "middle", fill: "currentColor", ...mono, "font-size": 10 }, n + " skip"));
+    });
+    drawRaySide(scene5, V, tStop, tEnd, dots);
+    for (const dt of dots.filter(x => x.ring)) { const h = V.fitR(V.sec(dt.t, state.layer0 + state.dl * dt.t)); scene5.appendChild(el("circle", { cx: h.x, cy: h.y, r: 4.5, fill: "none", stroke: "currentColor", "stroke-width": 1.5 })); }
+    scene5.appendChild(el("text", { x: 12, y: 370, fill: "var(--muted)", ...mono },
+      (walk.hit ? "hit " + MAT[walk.hit.run.mat].name + " at t = " + walk.hit.t.toFixed(2) : walk.left ? "no hit: left through the " + walk.left : "no hit: left the patch") +
+      " · " + skips.length + " parent skips + " + fines.length + " fine steps = " + walk.events.length + ", against " + flat.steps.length + " fine steps alone"));
+
+    rows5.replaceChildren();
+    walk.events.slice(0, 14).forEach((e, n) => {
+      const tr = document.createElement("tr");
+      const cols = e.kind === "skip"
+        ? [String(n), "skip parent " + fmtCell(e.parent), "hi " + e.hi + ", ray at " + (state.layer0 + state.dl * e.tIn).toFixed(2) + " → " + (state.layer0 + state.dl * e.tOut).toFixed(2), fmt(e.tIn), "parent boundary", fmt(e.tOut)]
+        : [String(n), "column " + fmtCell(e.cell) + " in " + fmtCell(e.parent), MAT[e.run.mat].name + " " + e.run.bottom + "–" + e.run.top, fmt(e.tIn), e.exit, fmt(e.tOut)];
+      cols.forEach((s, i) => { const td = document.createElement("td"); td.textContent = s; if (i === 4) td.style.color = e.kind === "skip" ? "var(--fg)" : e.exit === "top" || e.exit === "bottom" ? "var(--cap)" : "var(--accent)"; if (e.kind === "skip") td.style.fontWeight = "500"; tr.appendChild(td); });
+      rows5.appendChild(tr);
+    });
+    if (walk.hit && walk.events.length < 14) {
+      const tr = document.createElement("tr"); tr.className = "win";
+      [String(walk.events.length), "column " + fmtCell(walk.hit.cell), MAT[walk.hit.run.mat].name + " " + walk.hit.run.bottom + "–" + walk.hit.run.top, fmt(walk.hit.t), "hit, through the " + walk.hit.through, ""].forEach(s => { const td = document.createElement("td"); td.textContent = s; tr.appendChild(td); });
+      rows5.appendChild(tr);
+    }
+    padRows(rows5, 15, 6);
+    summary5.textContent = walk.events.length + " steps to " + (walk.hit ? "the hit" : "the end") + " (" + skips.length + " whole parents skipped, " + fines.length + " fine) · bite four alone: " + flat.steps.length + " steps" + (flat.hit ? "" : " (no hit)");
   }
 
   function update() {
     controls.forEach(c => c.sync());
     const d = horizontal(state.heading);
-    const cols = columns(d);
-    const F = frame(state.heading, state.layer0, state.dl);
+    const cols = columnsFrom(o, d, R);
+    const F = frame(state.heading, state.layer0, state.dl, o);
     const tEnd = cols.length ? cols[cols.length - 1].tOut : 6;
     const vs = render3(cols, F, tEnd);
     render4(cols, F, tEnd, vs);
+    render5();
   }
   update();
 })();
