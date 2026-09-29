@@ -16,26 +16,29 @@
   --accent: #b7410e;      /* the face the ray leaves through */
   --candidate: #2b6f8c;   /* faces the ray could leave through */
   --cap: #5c7f2b;         /* a layer plane: the top or bottom of a voxel */
+  --rock: #8a8578;        /* the materials of bite four's columns */
+  --dirt: #a4713f;
+  --grass: #7fae4a;
   --font-body: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23;
-    --accent: #f0803a; --candidate: #6db3d1; --cap: #a3c95e; color-scheme: dark;
+    --accent: #f0803a; --candidate: #6db3d1; --cap: #a3c95e; --rock: #6f6b60; --dirt: #8d5f33; --grass: #6f9a3e; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23;
-  --accent: #f0803a; --candidate: #6db3d1; --cap: #a3c95e; color-scheme: dark;
+  --accent: #f0803a; --candidate: #6db3d1; --cap: #a3c95e; --rock: #6f6b60; --dirt: #8d5f33; --grass: #6f9a3e; color-scheme: dark;
 }
 .controls { display: grid; gap: 8px; font-family: var(--font-mono); font-size: 0.9rem; max-width: 480px; }
 .controls label { display: grid; grid-template-columns: 11ch 1fr 7ch; gap: 10px; align-items: center; }
 .controls input[type=range] { width: 100%; min-width: 0; accent-color: var(--candidate); }
 .controls output { text-align: right; font-variant-numeric: tabular-nums; }
 .controls .dial-row { display: grid; grid-template-columns: 11ch 1fr 7ch; gap: 10px; align-items: center; }
-.controls #dial { width: 120px; height: 120px; cursor: grab; touch-action: none; user-select: none; outline: none; }
-.controls #dial:focus-visible circle:first-child { stroke: var(--candidate); stroke-width: 2; }
+.controls .dial { width: 120px; height: 120px; cursor: grab; touch-action: none; user-select: none; outline: none; }
+.controls .dial:focus-visible circle:first-child { stroke: var(--candidate); stroke-width: 2; }
 .pair { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
 .pair > div { flex: 2 1 280px; min-width: 0; display: grid; gap: 4px; }
 .pair > div:last-child { flex: 3 1 360px; }
@@ -56,6 +59,8 @@ svg { width: 100%; max-width: 100%; height: auto; display: block; touch-action: 
 .readout th { font-weight: 500; color: var(--muted); }
 .readout tr.win td { color: var(--accent); font-weight: 500; }
 .readout tr.off td { color: var(--muted); }
+.readout tr.pad td { color: transparent; border-bottom-color: transparent; }
+.readout .summary { min-height: 3em; }
 .wrap { overflow-x: auto; }
 code, pre { font-family: var(--font-mono); font-size: 0.9rem; }
 pre { margin: 0; padding: 12px 14px; background: var(--cell); border-radius: 4px; overflow-x: auto; }
@@ -114,7 +119,7 @@ loop:
     t_in = t_i</pre>
 
   <div class="readout">
-    <div id="walkSummary"></div>
+    <div id="walkSummary" class="summary"></div>
     <div class="wrap"><table>
       <thead><tr><th>#</th><th>cell (q, r, s)</th><th>t in</th><th>exit</th><th>t out</th><th id="h0"></th><th id="h1"></th><th id="h2"></th></tr></thead>
       <tbody id="rows2"></tbody>
@@ -125,18 +130,7 @@ loop:
   <h1 id="layers">Bite three: the vertical</h1>
   <p>A voxel is a layer thick: <code>layer = y / 0.5</code>, and voxel <code>L</code> is <code>[L, L+1)</code>. The layer planes sit at every integer, in every column, so they are one global stack: the video's case exactly, with no nudging. The ray gets a fourth candidate, <code>t_y</code>, and each step takes the smallest of four.</p>
 
-  <div class="controls">
-    <div class="dial-row"><span>heading</span>
-      <svg id="dial" viewBox="0 0 120 120" role="slider" aria-label="heading, degrees anticlockwise from east; drag to turn" tabindex="0">
-        <circle cx="60" cy="60" r="52" fill="var(--cell)" stroke="var(--line)"/>
-        <g id="dialTicks" stroke="var(--muted)"></g>
-        <line id="dialNeedle" x1="60" y1="60" x2="108" y2="60" stroke="var(--candidate)" stroke-width="3" stroke-linecap="round"/>
-        <circle cx="60" cy="60" r="4" fill="var(--candidate)"/>
-      </svg>
-      <output id="headingOut"></output></div>
-    <label><span>start layer</span><input id="layer0" type="range" min="0.05" max="7.95" step="0.05" value="5.3"><output id="layer0Out"></output></label>
-    <label><span>climb</span><input id="climb" type="range" min="-2" max="2" step="0.05" value="-0.55"><output id="climbOut"></output></label>
-  </div>
+  <div class="controls" id="controls3"></div>
 
   <figure>
     <div class="pair">
@@ -165,13 +159,55 @@ loop:
         visit (c, layer) until t_i;   c += e_i;   nudge the three hex t (bite two)</pre>
 
   <div class="readout">
-    <div id="layerSummary"></div>
+    <div id="layerSummary" class="summary"></div>
     <div class="wrap"><table>
       <thead><tr><th>#</th><th>voxel (q, r, s | layer)</th><th>t in</th><th>exit</th><th>t out</th></tr></thead>
       <tbody id="rows3"></tbody>
     </table></div>
   </div>
   <p class="muted">The two families never touch: a cap crossing changes <code>layer</code> and <code>t_y</code> only, a face crossing changes <code>c</code> and the three hex <code>t</code> only. The section is eight layers tall and the ray stops at the patch edge or at the top or bottom, whichever comes first.</p>
+
+  <h1 id="runs">Bite four: the columns are runs</h1>
+  <p>Now the patch has ground in it. A column is stored the way the second video stores it: a list of <code>(material, height)</code> from the bottom up, and for lookup the run <em>tops</em>, so run <code>k</code> covers layers <code>[top[k−1], top[k])</code>. The same ray as bite three, with the same controls, now walks <strong>runs</strong> instead of layers: an air run is one step however tall it is, and the first solid run it reaches is the hit.</p>
+
+  <div class="controls" id="controls4"></div>
+
+  <figure>
+    <div class="pair">
+      <div>
+        <div class="panel-title">from above, east up, tilted by the climb</div>
+        <svg id="fig4plan" viewBox="0 0 400 380" role="img" aria-label="The hex patch from above with each column coloured by its top material. The columns the ray crosses are outlined and the column it hits is marked.">
+          <g id="scene4plan" fill="none" stroke="currentColor" stroke-width="1"></g>
+        </svg>
+      </div>
+      <div>
+        <div class="panel-title">from the side, layers level</div>
+        <svg id="fig4" viewBox="0 0 640 380" role="img" aria-label="The section along the ray with each column's runs drawn as coloured bands. The air runs the ray passes through are outlined and numbered, and the hit is a large dot.">
+          <g id="scene4" fill="none" stroke="currentColor" stroke-width="1"></g>
+        </svg>
+      </div>
+    </div>
+    <figcaption>The world: a gentle surface of <span style="color:var(--rock)">rock</span>, <span style="color:var(--dirt)">dirt</span> and <span style="color:var(--grass)">grass</span>, with a rock slab floating over three cells near the middle, so some columns have two solid runs with air between. <strong>Left,</strong> from above: columns coloured by their highest solid run, the ones the ray passes over outlined in blue, the hit column in orange. <strong>Right,</strong> the section: the runs of each crossed column as bands, the air runs the ray actually visits outlined and numbered, and the hit as the large dot. Dots on the ray are the steps taken: orange a face, green a run boundary. After the hit the ray is dashed: nothing beyond it is ever looked at.</figcaption>
+  </figure>
+
+<pre>on entering a column at t_in:
+    k = the run holding layer(t_in)                        // a scan of three to six entries
+    loop:
+        if run[k] is solid:  HIT at t_in, through the face or cap just crossed
+        boundary = climbing ? top[k] : top[k−1]             // where this air run ends, my way
+        t_b = (boundary − o_layer) / d_layer                // one division; ∞ when d_layer = 0
+        if t_b ≥ t_out:  leave the column, one step for the whole run
+        else:            t_in = t_b;  k += sign(d_layer)    // next run up or down; off the ends is sky or bedrock</pre>
+
+  <div class="readout">
+    <div id="runSummary" class="summary"></div>
+    <div class="wrap"><table>
+      <thead><tr><th>#</th><th>column</th><th>run</th><th>t in</th><th>exit</th><th>t out</th><th></th></tr></thead>
+      <tbody id="rows4"></tbody>
+    </table></div>
+    <pre id="runSample"></pre>
+  </div>
+  <p class="muted">Compared with bite three, the vertical family has changed character: <code>t_y</code> is no longer the next integer layer at a fixed stride, it is the next run boundary, one division per boundary. The hex family is untouched. The cost of a column is now the number of runs the ray passes through, not the number of layers, and the block of data above is the whole of what the shader needs to read for that column.</p>
 </main>
 
 <script>
@@ -455,6 +491,12 @@ loop:
       cols.forEach((s, i) => { const td = document.createElement("td"); td.textContent = s; if (i === 3 || (i >= 5 && cand[i - 5] === st.exit)) td.style.color = "var(--accent)"; tr.appendChild(td); });
       rows.appendChild(tr);
     });
+    // A fixed row count, so the controls below never move under a drag.
+    while (rows.children.length < 10) {
+      const tr = document.createElement("tr"); tr.className = "pad";
+      for (let i = 0; i < 8; i++) { const td = document.createElement("td"); td.textContent = "·"; tr.appendChild(td); }
+      rows.appendChild(tr);
+    }
     summary.textContent = steps.length + " cells visited" + (steps.length > shown.length ? " (first " + shown.length + " listed)" : "") + " · " + cand.length + " candidate faces: " + cand.map(f => f.name).join(", ") + " · incremental vs direct t, worst gap: " + worst.toExponential(1);
   }
 
@@ -483,7 +525,8 @@ loop:
 </script>
 
 <script>
-// Bite three: the vertical. The hex walk of bite two gives the columns; the layer stack is merged in.
+// Bites three and four share one ray: bite three walks it layer by layer, bite four walks the same
+// ray over run-length encoded columns. Two control blocks, one state, both figures redraw together.
 (function () {
   const R = 3, LAYERS = 8, MAX_STEPS = 80;
   const ROW = Math.sqrt(3) / 2;
@@ -506,6 +549,11 @@ loop:
     if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s; else s = -q - r;
     return [q, r, s];
   }
+  const corners = [];
+  { let c = [2 / 3, -1 / 3, -1 / 3]; for (let i = 0; i < 6; i++) { corners.push(c); c = [-c[2], -c[0], -c[1]]; } }
+  const cells = [];
+  for (let q = -R; q <= R; q++) for (let r = -R; r <= R; r++) { const c = cube(q, r); if (hexDist(c) <= R) cells.push(c); }
+  const key = c => c[0] + "," + c[1];
 
   // The horizontal ray starts near the west edge of the patch and travels one shaku per unit t.
   const o = cube(-2.4, 0.6);
@@ -534,7 +582,7 @@ loop:
     return cols;
   }
 
-  // Merge the layer stack into the column list.
+  // Bite three: merge the layer stack into the column list, one voxel at a time.
   function visits(cols, layer0, dl) {
     const out = [];
     let layer = Math.floor(layer0);
@@ -555,18 +603,64 @@ loop:
     return out;
   }
 
-  const corners = [];
-  { let c = [2 / 3, -1 / 3, -1 / 3]; for (let i = 0; i < 6; i++) { corners.push(c); c = [-c[2], -c[0], -c[1]]; } }
-  const cells = [];
-  for (let q = -R; q <= R; q++) for (let r = -R; r <= R; r++) { const c = cube(q, r); if (hexDist(c) <= R) cells.push(c); }
+  // ---- Bite four's world: run-length encoded columns over the patch.
+  const AIR = 0, ROCK = 1, DIRT = 2, GRASS = 3;
+  const MAT = { [AIR]: { name: "air", fill: "none" }, [ROCK]: { name: "rock", fill: "var(--rock)" }, [DIRT]: { name: "dirt", fill: "var(--dirt)" }, [GRASS]: { name: "grass", fill: "var(--grass)" } };
+  // A gentle, deterministic surface: one to six layers of ground.
+  function surface(c) {
+    const h = Math.round(3.2 + 1.4 * Math.sin(c[0] * 0.9 + 0.4) + 1.1 * Math.cos(c[1] * 0.8 + c[0] * 0.35));
+    return Math.max(1, Math.min(6, h));
+  }
+  const overhang = c => (key(c) === "0,0" || key(c) === "1,0" || key(c) === "0,1") && surface(c) <= 5;
+  // The column as the video stores it, (material, height) from the bottom up, then with run tops.
+  function runsFor(c) {
+    const h = surface(c);
+    const rle = h >= 3 ? [[ROCK, h - 2], [DIRT, 1], [GRASS, 1]] : h === 2 ? [[DIRT, 1], [GRASS, 1]] : [[GRASS, 1]];
+    if (overhang(c)) rle.push([AIR, 2], [ROCK, 1]);            // a slab floating two layers above the ground
+    const filled = rle.reduce((a, r) => a + r[1], 0);
+    rle.push([AIR, LAYERS - filled]);
+    let bottom = 0;
+    const runs = rle.map(([mat, height]) => { const run = { mat, bottom, top: bottom + height }; bottom += height; return run; });
+    return { rle, runs };
+  }
+  const world = new Map(cells.map(c => [key(c), runsFor(c)]));
 
-  // The ray's own frame, in shaku. World here is (east, up, north); a layer is half a shaku.
-  // u runs along the ray in 3D, w is horizontal and to the ray's left, v is normal to both and
-  // upward-ish. Both panels look along an axis normal to the ray: the left one along −v (from
-  // above, tilted by the climb), the right one along w (from the side, tilted the same way).
+  // Bite four: the same ray over the runs. A visit is (column, run); an air run is one step however tall.
+  function runWalk(cols, layer0, dl) {
+    const out = [];
+    const sign = dl > 0 ? 1 : dl < 0 ? -1 : 0;
+    let tNow = 0, hit = null, left = null;
+    for (const col of cols) {
+      const { runs } = world.get(key(col.cell));
+      const layerIn = layer0 + dl * tNow;
+      let k = runs.findIndex(r => layerIn >= r.bottom && layerIn < r.top);
+      if (k < 0) { left = layerIn >= LAYERS ? "sky" : "bedrock"; break; }
+      let entered = out.length === 0 ? "start" : out[out.length - 1].exit === "top" || out[out.length - 1].exit === "bottom" ? out[out.length - 1].exit : "face";
+      for (;;) {
+        const run = runs[k];
+        if (run.mat !== AIR) {                                   // solid: the ray stops here
+          hit = { cell: col.cell, run, t: tNow, through: entered === "start" ? "inside" : entered === "face" ? col.face + " face" : entered === "top" ? "bottom cap" : "top cap" };
+          break;
+        }
+        const boundary = sign > 0 ? run.top : run.bottom;
+        const tB = sign === 0 ? Infinity : (boundary - layer0) / dl;
+        if (tB >= col.tOut) {                                     // leave the column still in this air run
+          out.push({ cell: col.cell, run, tIn: tNow, tOut: col.tOut, exit: col.face });
+          tNow = col.tOut; break;
+        }
+        out.push({ cell: col.cell, run, tIn: tNow, tOut: tB, exit: sign > 0 ? "top" : "bottom" });
+        tNow = tB; k += sign; entered = sign > 0 ? "top" : "bottom";
+        if (k < 0 || k >= runs.length) { left = sign > 0 ? "sky" : "bedrock"; break; }
+      }
+      if (hit || left) break;
+    }
+    return { steps: out, hit, left, tStop: hit ? hit.t : tNow };
+  }
+
+  // ---- The ray's own frame, in shaku. World here is (east, up, north); a layer is half a shaku.
   function frame(headingDeg, layer0, dl) {
     const a = headingDeg * Math.PI / 180;
-    const D = [Math.cos(a), 0.5 * dl, Math.sin(a)];             // per unit t: one shaku across the ground, dl layers up
+    const D = [Math.cos(a), 0.5 * dl, Math.sin(a)];
     const len = Math.hypot(D[0], D[1], D[2]);
     const u = D.map(v => v / len);
     const w = [-Math.sin(a), 0, Math.cos(a)];
@@ -575,28 +669,18 @@ loop:
     const O3 = [o[0] + o[1] / 2, 0.5 * layer0, -o[1] * ROW];
     const d3 = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
     const proj = P => { const rel = [P[0] - O3[0], P[1] - O3[1], P[2] - O3[2]]; return { along: d3(rel, u), across: d3(rel, w), rise: d3(rel, v) }; };
-    // A point on the ground grid at a height, from cube coordinates and a layer.
     const at = (c, layer) => [c[0] + c[1] / 2, 0.5 * layer, -c[1] * ROW];
-    // A point s shaku along the ray's ground track, at a height.
     const track = (s, layer) => [O3[0] + s * Math.cos(a), 0.5 * layer, O3[2] + s * Math.sin(a)];
     return { len, proj, at, track, phi: Math.atan2(0.5 * dl, 1) };
   }
-
-  // Fit a set of 2D points into a panel with equal scale on both axes.
   function fitter(points, W, H, margin) {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const p of points) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
     const S = Math.min((W - 2 * margin) / (x1 - x0 || 1), (H - 2 * margin) / (y1 - y0 || 1));
     const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    const f = p => ({ x: W / 2 + (p.x - cx) * S, y: H / 2 + (p.y - cy) * S });
-    f.S = S;
-    return f;
+    return p => ({ x: W / 2 + (p.x - cx) * S, y: H / 2 + (p.y - cy) * S });
   }
 
-  const scenePlan = document.getElementById("scene3plan");
-  const scene = document.getElementById("scene3");
-  const rows = document.getElementById("rows3");
-  const summary = document.getElementById("layerSummary");
   const NS = "http://www.w3.org/2000/svg";
   function el(tag, attrs, text) {
     const e = document.createElementNS(NS, tag);
@@ -604,147 +688,240 @@ loop:
     if (text !== undefined) e.textContent = text;
     return e;
   }
+  const mono = { stroke: "none", "font-size": 11, "font-family": "var(--font-mono)" };
+  const pts = ps => ps.map(p => p.x + "," + p.y).join(" ");
   const fmt = v => (v >= 0 ? " " : "") + v.toFixed(3);
   const fmtCell = c => "(" + c.map(v => (v >= 0 ? " " : "") + v).join(",") + ")";
+  // Tables keep a fixed number of rows, so nothing below them (the next bite's dial) jumps while dragging.
+  function padRows(tbody, count, width) {
+    while (tbody.children.length < count) {
+      const tr = document.createElement("tr"); tr.className = "pad";
+      for (let i = 0; i < width; i++) { const td = document.createElement("td"); td.textContent = "·"; tr.appendChild(td); }
+      tbody.appendChild(tr);
+    }
+  }
 
-  const inputs = ["layer0", "climb"].map(id => document.getElementById(id));
-  inputs.forEach(i => i.addEventListener("input", render));
-
-  // The heading dial: drag anywhere on it and the heading follows the turn of the pointer about the
-  // centre, so it goes round and round. Arrow keys nudge it by a degree; the wheel by a degree a notch.
-  let heading = 20;
-  const dial = document.getElementById("dial");
-  const needle = document.getElementById("dialNeedle");
-  { const ticks = document.getElementById("dialTicks");
+  // ---- One ray, two control blocks kept in step.
+  const state = { heading: 20, layer0: 5.3, dl: -0.55 };
+  function buildControls(container) {
+    container.innerHTML =
+      '<div class="dial-row"><span>heading</span>' +
+      '<svg class="dial" viewBox="0 0 120 120" role="slider" aria-label="heading, degrees anticlockwise from east; drag to turn" tabindex="0">' +
+      '<circle cx="60" cy="60" r="52" fill="var(--cell)" stroke="var(--line)"/><g class="ticks" stroke="var(--muted)"></g>' +
+      '<line class="needle" x1="60" y1="60" x2="108" y2="60" stroke="var(--candidate)" stroke-width="3" stroke-linecap="round"/>' +
+      '<circle cx="60" cy="60" r="4" fill="var(--candidate)"/></svg><output></output></div>' +
+      '<label><span>start layer</span><input type="range" min="0.05" max="7.95" step="0.05"><output></output></label>' +
+      '<label><span>climb</span><input type="range" min="-2" max="2" step="0.05"><output></output></label>';
+    const dial = container.querySelector(".dial"), needle = container.querySelector(".needle"), ticks = container.querySelector(".ticks");
+    const outs = container.querySelectorAll("output"), ranges = container.querySelectorAll("input");
     [["E", 0], ["N", 90], ["W", 180], ["S", 270]].forEach(([name, deg]) => {
       const a = deg * Math.PI / 180, c = Math.cos(a), s = -Math.sin(a);
-      const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      l.setAttribute("x1", 60 + 44 * c); l.setAttribute("y1", 60 + 44 * s); l.setAttribute("x2", 60 + 52 * c); l.setAttribute("y2", 60 + 52 * s);
-      ticks.appendChild(l);
-      const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      t.setAttribute("x", 60 + 34 * c); t.setAttribute("y", 60 + 34 * s + 4); t.setAttribute("text-anchor", "middle");
-      t.setAttribute("fill", "var(--muted)"); t.setAttribute("stroke", "none"); t.setAttribute("font-size", "11"); t.setAttribute("font-family", "var(--font-mono)");
-      t.textContent = name; ticks.appendChild(t);
+      ticks.appendChild(el("line", { x1: 60 + 44 * c, y1: 60 + 44 * s, x2: 60 + 52 * c, y2: 60 + 52 * s }));
+      ticks.appendChild(el("text", { x: 60 + 34 * c, y: 60 + 34 * s + 4, "text-anchor": "middle", fill: "var(--muted)", ...mono }, name));
     });
-    for (let deg = 0; deg < 360; deg += 30) { if (deg % 90 === 0) continue;
+    for (let deg = 30; deg < 360; deg += 30) { if (deg % 90 === 0) continue;
       const a = deg * Math.PI / 180, c = Math.cos(a), s = -Math.sin(a);
-      const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      l.setAttribute("x1", 60 + 48 * c); l.setAttribute("y1", 60 + 48 * s); l.setAttribute("x2", 60 + 52 * c); l.setAttribute("y2", 60 + 52 * s);
-      ticks.appendChild(l); } }
-  const dialAngle = ev => { const r = dial.getBoundingClientRect(); return Math.atan2(-(ev.clientY - r.top - r.height / 2), ev.clientX - r.left - r.width / 2); };
-  let lastAngle = null;
-  dial.addEventListener("pointerdown", ev => { lastAngle = dialAngle(ev); dial.setPointerCapture(ev.pointerId); dial.style.cursor = "grabbing"; });
-  dial.addEventListener("pointermove", ev => {
-    if (lastAngle === null) return;
-    const a = dialAngle(ev);
-    let delta = a - lastAngle; if (delta > Math.PI) delta -= 2 * Math.PI; if (delta < -Math.PI) delta += 2 * Math.PI;
-    heading = (heading + delta * 180 / Math.PI + 360) % 360; lastAngle = a; render();
-  });
-  dial.addEventListener("pointerup", () => { lastAngle = null; dial.style.cursor = "grab"; });
-  dial.addEventListener("pointercancel", () => { lastAngle = null; dial.style.cursor = "grab"; });
-  dial.addEventListener("wheel", ev => { ev.preventDefault(); heading = (heading - Math.sign(ev.deltaY) + 360) % 360; render(); }, { passive: false });
-  dial.addEventListener("keydown", ev => {
-    const step = ev.shiftKey ? 15 : 1;
-    if (ev.key === "ArrowLeft" || ev.key === "ArrowUp") { heading = (heading + step) % 360; ev.preventDefault(); render(); }
-    if (ev.key === "ArrowRight" || ev.key === "ArrowDown") { heading = (heading - step + 360) % 360; ev.preventDefault(); render(); }
-  });
+      ticks.appendChild(el("line", { x1: 60 + 48 * c, y1: 60 + 48 * s, x2: 60 + 52 * c, y2: 60 + 52 * s })); }
+    const dialAngle = ev => { const r = dial.getBoundingClientRect(); return Math.atan2(-(ev.clientY - r.top - r.height / 2), ev.clientX - r.left - r.width / 2); };
+    let last = null;
+    dial.addEventListener("pointerdown", ev => { last = dialAngle(ev); dial.setPointerCapture(ev.pointerId); dial.style.cursor = "grabbing"; });
+    dial.addEventListener("pointermove", ev => {
+      if (last === null) return;
+      const a = dialAngle(ev);
+      let delta = a - last; if (delta > Math.PI) delta -= 2 * Math.PI; if (delta < -Math.PI) delta += 2 * Math.PI;
+      state.heading = (state.heading + delta * 180 / Math.PI + 360) % 360; last = a; update();
+    });
+    const release = () => { last = null; dial.style.cursor = "grab"; };
+    dial.addEventListener("pointerup", release); dial.addEventListener("pointercancel", release);
+    dial.addEventListener("wheel", ev => { ev.preventDefault(); state.heading = (state.heading - Math.sign(ev.deltaY) + 360) % 360; update(); }, { passive: false });
+    dial.addEventListener("keydown", ev => {
+      const step = ev.shiftKey ? 15 : 1;
+      if (ev.key === "ArrowLeft" || ev.key === "ArrowUp") { state.heading = (state.heading + step) % 360; ev.preventDefault(); update(); }
+      if (ev.key === "ArrowRight" || ev.key === "ArrowDown") { state.heading = (state.heading - step + 360) % 360; ev.preventDefault(); update(); }
+    });
+    ranges[0].addEventListener("input", () => { state.layer0 = +ranges[0].value; update(); });
+    ranges[1].addEventListener("input", () => { state.dl = +ranges[1].value; update(); });
+    return { sync() {
+      const a = state.heading * Math.PI / 180;
+      needle.setAttribute("x2", 60 + 48 * Math.cos(a)); needle.setAttribute("y2", 60 - 48 * Math.sin(a));
+      dial.setAttribute("aria-valuenow", state.heading.toFixed(0));
+      outs[0].textContent = state.heading.toFixed(1) + "°";
+      ranges[0].value = state.layer0; outs[1].textContent = state.layer0.toFixed(2);
+      ranges[1].value = state.dl; outs[2].textContent = (state.dl >= 0 ? "+" : "") + state.dl.toFixed(2);
+    } };
+  }
+  const controls = [document.getElementById("controls3"), document.getElementById("controls4")].map(buildControls);
 
-  function render() {
-    const layer0 = +inputs[0].value, dl = +inputs[1].value;
-    { const a = heading * Math.PI / 180; needle.setAttribute("x2", 60 + 48 * Math.cos(a)); needle.setAttribute("y2", 60 - 48 * Math.sin(a)); }
-    dial.setAttribute("aria-valuenow", heading.toFixed(0));
-    document.getElementById("headingOut").textContent = heading.toFixed(1) + "°";
-    document.getElementById("layer0Out").textContent = layer0.toFixed(2);
-    document.getElementById("climbOut").textContent = (dl >= 0 ? "+" : "") + dl.toFixed(2);
-
-    const d = horizontal(heading);
-    const cols = columns(d);
-    const vs = visits(cols, layer0, dl);
-    const tEnd = cols.length ? cols[cols.length - 1].tOut : 6;
-    const tStop = vs.length ? vs[vs.length - 1].tOut : tEnd;
-
-    const F = frame(heading, layer0, dl);
-    const mono = { stroke: "none", "font-size": 11, "font-family": "var(--font-mono)" };
-    const pts = ps => ps.map(p => p.x + "," + p.y).join(" ");
-
-    // ---- Left panel: looking along −v, from above, tilted by the climb. The picture is turned so that
-    // heading 0° (east) points up the screen whatever the ray does; the ray swings with the slider.
+  // ---- Drawing shared by both bites: the two views.
+  function views(F, tStop, tEnd) {
     const raw = P => { const p = F.proj(P); return { x: p.along, y: -p.across }; };
-    const turn = (() => {
-      const e0 = raw(F.at([0, 0, 0], 0)), e1 = raw(F.at(cube(1, 0), 0));            // one cell east, as this view sees it
-      const th = -Math.PI / 2 - Math.atan2(e1.y - e0.y, e1.x - e0.x);                 // rotate that to straight up
-      const c = Math.cos(th), s = Math.sin(th);
-      return p => ({ x: p.x * c - p.y * s, y: p.x * s + p.y * c });
-    })();
-    const above = P => turn(raw(P));
+    const e0 = raw(F.at([0, 0, 0], 0)), e1 = raw(F.at(cube(1, 0), 0));
+    const th = -Math.PI / 2 - Math.atan2(e1.y - e0.y, e1.x - e0.x), cth = Math.cos(th), sth = Math.sin(th);
+    const above = P => { const p = raw(P); return { x: p.x * cth - p.y * sth, y: p.x * sth + p.y * cth }; };
     const groundHex = c => corners.map(k => above(F.at(add(c, k), 0)));
-    const rayAbove = t => above(F.track(t, layer0 + dl * t));
+    const rayAbove = t => above(F.track(t, state.layer0 + state.dl * t));
     const fitL = fitter(cells.flatMap(groundHex).concat([rayAbove(0), rayAbove(tStop + 0.8)]), 400, 380, 22);
-
-    scenePlan.replaceChildren();
-    for (const c of cells) scenePlan.appendChild(el("polygon", { points: pts(groundHex(c).map(fitL)), fill: "var(--cell)", stroke: "var(--line)" }));
-    // Each visited voxel: its bottom face filled, its top face outlined. With climb, higher voxels
-    // sit further along than the ground cell beneath them: that offset is the tilt of the view.
-    for (const v of vs) {
-      scenePlan.appendChild(el("polygon", { points: pts(corners.map(k => fitL(above(F.at(add(v.cell, k), v.layer))))), fill: "var(--candidate)", "fill-opacity": 0.22, stroke: "var(--candidate)", "stroke-width": 1.2 }));
-      scenePlan.appendChild(el("polygon", { points: pts(corners.map(k => fitL(above(F.at(add(v.cell, k), v.layer + 1))))), fill: "none", stroke: "var(--candidate)", "stroke-width": 0.8, "stroke-dasharray": "3 3" }));
-    }
-    { const p0 = fitL(rayAbove(0)), pStop = fitL(rayAbove(tStop)), pFar = fitL(rayAbove(tStop + 0.8));
-      scenePlan.appendChild(el("line", { x1: pStop.x, y1: pStop.y, x2: pFar.x, y2: pFar.y, stroke: "currentColor", "stroke-dasharray": "4 4", opacity: 0.4 }));
-      scenePlan.appendChild(el("line", { x1: p0.x, y1: p0.y, x2: pStop.x, y2: pStop.y, stroke: "currentColor", "stroke-width": 2 }));
-      for (const v of vs) { const h = fitL(rayAbove(v.tOut)); scenePlan.appendChild(el("circle", { cx: h.x, cy: h.y, r: v.cap ? 3 : 3.5, fill: v.cap ? "var(--cap)" : "var(--accent)", stroke: "none" })); }
-      scenePlan.appendChild(el("circle", { cx: p0.x, cy: p0.y, r: 5, fill: "currentColor", stroke: "none" }));
-      scenePlan.appendChild(el("text", { x: p0.x - 9, y: p0.y + 4, "text-anchor": "end", fill: "currentColor", ...mono, "font-size": 12 }, "o")); }
-    // North, as this view sees it
-    { const n0 = above(F.at([0, 0, 0], 0)), n1 = above(F.at(cube(1, -2), 0));   // Direction::N is the corner neighbour (1, −2, 1)
-      const dx = n1.x - n0.x, dy = n1.y - n0.y, k = 22 / Math.hypot(dx, dy);
-      const base = { x: 360, y: 40 }, tip = { x: base.x + dx * k, y: base.y + dy * k };
-      scenePlan.appendChild(el("line", { x1: base.x, y1: base.y, x2: tip.x, y2: tip.y, stroke: "var(--muted)", "stroke-width": 1.5, "marker-end": "url(#arrow)", style: "color: var(--muted)" }));
-      scenePlan.appendChild(el("text", { x: tip.x + dx * k * 0.55, y: tip.y + dy * k * 0.55 + 4, "text-anchor": "middle", fill: "var(--muted)", ...mono }, "N")); }
-    scenePlan.appendChild(el("text", { x: 12, y: 370, fill: "var(--muted)", ...mono }, "east up · view tilted " + (F.phi * 180 / Math.PI).toFixed(0) + "° off vertical, ground foreshortened ×" + (1 / F.len).toFixed(2) + " along the ray"));
-
-    // ---- Right panel: looking along w, from the side. Layers stay horizontal; the ray climbs on screen.
-    // (Turning this view so the ray is horizontal instead is a pure rotation of the same picture.)
-    const sec = (s, layer) => ({ x: s, y: -0.5 * (layer - layer0) });
+    const sec = (s, layer) => ({ x: s, y: -0.5 * (layer - state.layer0) });
     const box = [sec(0, 0), sec(tEnd, 0), sec(tEnd, LAYERS), sec(0, LAYERS)];
     const fitR = fitter(box.concat([sec(-0.35, LAYERS / 2), sec(tEnd, -0.6)]), 640, 380, 22);
-
-    scene.replaceChildren();
-    scene.appendChild(el("polygon", { points: pts(box.map(fitR)), fill: "var(--cell)", stroke: "none" }));
-    vs.forEach((v, n) => {
-      const quad = [sec(v.tIn, v.layer), sec(v.tOut, v.layer), sec(v.tOut, v.layer + 1), sec(v.tIn, v.layer + 1)].map(fitR);
-      scene.appendChild(el("polygon", { points: pts(quad), fill: "var(--candidate)", "fill-opacity": 0.22, stroke: "none" }));
-      const cx = quad.reduce((a, p) => a + p.x, 0) / 4, cy = quad.reduce((a, p) => a + p.y, 0) / 4;
-      if ((quad[1].x - quad[0].x) > 14) scene.appendChild(el("text", { x: cx, y: cy + 4, "text-anchor": "middle", fill: "currentColor", ...mono }, String(n)));
-    });
+    return { above, groundHex, rayAbove, fitL, sec, box, fitR };
+  }
+  function drawNorth(scene, V, F) {
+    const n0 = V.above(F.at([0, 0, 0], 0)), n1 = V.above(F.at(cube(1, -2), 0));   // Direction::N is the corner neighbour (1, −2, 1)
+    const dx = n1.x - n0.x, dy = n1.y - n0.y, k = 22 / Math.hypot(dx, dy);
+    const base = { x: 360, y: 40 }, tip = { x: base.x + dx * k, y: base.y + dy * k };
+    scene.appendChild(el("line", { x1: base.x, y1: base.y, x2: tip.x, y2: tip.y, stroke: "var(--muted)", "stroke-width": 1.5, "marker-end": "url(#arrow)", style: "color: var(--muted)" }));
+    scene.appendChild(el("text", { x: tip.x + dx * k * 0.55, y: tip.y + dy * k * 0.55 + 4, "text-anchor": "middle", fill: "var(--muted)", ...mono }, "N"));
+  }
+  function drawRayAbove(scene, V, tStop, dots, beyond) {
+    const p0 = V.fitL(V.rayAbove(0)), pStop = V.fitL(V.rayAbove(tStop)), pFar = V.fitL(V.rayAbove(tStop + beyond));
+    scene.appendChild(el("line", { x1: pStop.x, y1: pStop.y, x2: pFar.x, y2: pFar.y, stroke: "currentColor", "stroke-dasharray": "4 4", opacity: 0.4 }));
+    scene.appendChild(el("line", { x1: p0.x, y1: p0.y, x2: pStop.x, y2: pStop.y, stroke: "currentColor", "stroke-width": 2 }));
+    for (const d of dots) { const h = V.fitL(V.rayAbove(d.t)); scene.appendChild(el("circle", { cx: h.x, cy: h.y, r: d.r || 3.5, fill: d.fill, stroke: "none" })); }
+    scene.appendChild(el("circle", { cx: p0.x, cy: p0.y, r: 5, fill: "currentColor", stroke: "none" }));
+    scene.appendChild(el("text", { x: p0.x - 9, y: p0.y + 4, "text-anchor": "end", fill: "currentColor", ...mono, "font-size": 12 }, "o"));
+  }
+  function drawSectionFrame(scene, V, cols, tEnd, layerOpacity) {
+    scene.appendChild(el("polygon", { points: pts(V.box.map(V.fitR)), fill: "var(--cell)", stroke: "none" }));
     for (let l = 0; l <= LAYERS; l++) {
-      const a = fitR(sec(0, l)), b = fitR(sec(tEnd, l));
-      scene.appendChild(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "var(--cap)", "stroke-width": l === 0 || l === LAYERS ? 1.5 : 1, opacity: 0.7 }));
-      if (l < LAYERS) { const m = fitR(sec(-0.18, l + 0.5)); scene.appendChild(el("text", { x: m.x, y: m.y + 4, "text-anchor": "end", fill: "var(--muted)", ...mono }, String(l))); }
+      const a = V.fitR(V.sec(0, l)), b = V.fitR(V.sec(tEnd, l));
+      scene.appendChild(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "var(--cap)", "stroke-width": l === 0 || l === LAYERS ? 1.5 : 1, opacity: layerOpacity }));
+      if (l < LAYERS) { const m = V.fitR(V.sec(-0.18, l + 0.5)); scene.appendChild(el("text", { x: m.x, y: m.y + 4, "text-anchor": "end", fill: "var(--muted)", ...mono }, String(l))); }
     }
     for (const col of cols) {
-      const a = fitR(sec(col.tOut, 0)), b = fitR(sec(col.tOut, LAYERS)), lab = fitR(sec(col.tOut, -0.35));
+      const a = V.fitR(V.sec(col.tOut, 0)), b = V.fitR(V.sec(col.tOut, LAYERS)), lab = V.fitR(V.sec(col.tOut, -0.35));
       scene.appendChild(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "var(--accent)", "stroke-width": 1.5 }));
       scene.appendChild(el("text", { x: lab.x, y: lab.y + 4, "text-anchor": "middle", fill: "var(--accent)", ...mono, "font-size": 10 }, col.face));
     }
-    { const p0 = fitR(sec(0, layer0)), pStop = fitR(sec(tStop, layer0 + dl * tStop));   // the ray, climbing at φ
-      scene.appendChild(el("line", { x1: p0.x, y1: p0.y, x2: pStop.x, y2: pStop.y, stroke: "currentColor", "stroke-width": 2 }));
-      scene.appendChild(el("circle", { cx: p0.x, cy: p0.y, r: 5, fill: "currentColor", stroke: "none" }));
-      for (const v of vs) { const h = fitR(sec(v.tOut, layer0 + dl * v.tOut)); scene.appendChild(el("circle", { cx: h.x, cy: h.y, r: 3.5, fill: v.cap ? "var(--cap)" : "var(--accent)", stroke: "none" })); } }
-    scene.appendChild(el("text", { x: 12, y: 370, fill: "var(--muted)", ...mono }, "layers level · ray climbs at " + (F.phi * 180 / Math.PI).toFixed(0) + "° · " + (tStop * F.len).toFixed(2) + " shaku travelled to t = " + tStop.toFixed(2) + " · patch edge at t = " + tEnd.toFixed(2)));
+  }
+  function drawRaySide(scene, V, tStop, tEnd, dots) {
+    const at = t => V.fitR(V.sec(t, state.layer0 + state.dl * t));
+    const p0 = at(0), pStop = at(tStop), pEnd = at(Math.min(tEnd, tStop + 1.5));
+    scene.appendChild(el("line", { x1: pStop.x, y1: pStop.y, x2: pEnd.x, y2: pEnd.y, stroke: "currentColor", "stroke-dasharray": "4 4", opacity: 0.4 }));
+    scene.appendChild(el("line", { x1: p0.x, y1: p0.y, x2: pStop.x, y2: pStop.y, stroke: "currentColor", "stroke-width": 2 }));
+    scene.appendChild(el("circle", { cx: p0.x, cy: p0.y, r: 5, fill: "currentColor", stroke: "none" }));
+    for (const d of dots) { const h = at(d.t); scene.appendChild(el("circle", { cx: h.x, cy: h.y, r: d.r || 3.5, fill: d.fill, stroke: "none" })); }
+  }
 
-    rows.replaceChildren();
+  // ---- Bite three's figure.
+  const scene3plan = document.getElementById("scene3plan"), scene3 = document.getElementById("scene3");
+  const rows3 = document.getElementById("rows3"), summary3 = document.getElementById("layerSummary");
+  function render3(cols, F, tEnd) {
+    const vs = visits(cols, state.layer0, state.dl);
+    const tStop = vs.length ? vs[vs.length - 1].tOut : tEnd;
+    const V = views(F, tStop, tEnd);
+
+    scene3plan.replaceChildren();
+    for (const c of cells) scene3plan.appendChild(el("polygon", { points: pts(V.groundHex(c).map(V.fitL)), fill: "var(--cell)", stroke: "var(--line)" }));
+    for (const v of vs) {
+      scene3plan.appendChild(el("polygon", { points: pts(corners.map(k => V.fitL(V.above(F.at(add(v.cell, k), v.layer))))), fill: "var(--candidate)", "fill-opacity": 0.22, stroke: "var(--candidate)", "stroke-width": 1.2 }));
+      scene3plan.appendChild(el("polygon", { points: pts(corners.map(k => V.fitL(V.above(F.at(add(v.cell, k), v.layer + 1))))), fill: "none", stroke: "var(--candidate)", "stroke-width": 0.8, "stroke-dasharray": "3 3" }));
+    }
+    drawRayAbove(scene3plan, V, tStop, vs.map(v => ({ t: v.tOut, fill: v.cap ? "var(--cap)" : "var(--accent)", r: v.cap ? 3 : 3.5 })), 0.8);
+    drawNorth(scene3plan, V, F);
+    scene3plan.appendChild(el("text", { x: 12, y: 370, fill: "var(--muted)", ...mono }, "east up · view tilted " + (F.phi * 180 / Math.PI).toFixed(0) + "° off vertical, ground foreshortened ×" + (1 / F.len).toFixed(2) + " along the ray"));
+
+    scene3.replaceChildren();
+    drawSectionFrame(scene3, V, cols, tEnd, 0.7);
+    vs.forEach((v, n) => {
+      const quad = [V.sec(v.tIn, v.layer), V.sec(v.tOut, v.layer), V.sec(v.tOut, v.layer + 1), V.sec(v.tIn, v.layer + 1)].map(V.fitR);
+      scene3.appendChild(el("polygon", { points: pts(quad), fill: "var(--candidate)", "fill-opacity": 0.22, stroke: "none" }));
+      const cx = quad.reduce((a, p) => a + p.x, 0) / 4, cy = quad.reduce((a, p) => a + p.y, 0) / 4;
+      if ((quad[1].x - quad[0].x) > 14) scene3.appendChild(el("text", { x: cx, y: cy + 4, "text-anchor": "middle", fill: "currentColor", ...mono }, String(n)));
+    });
+    drawRaySide(scene3, V, tStop, tEnd, vs.map(v => ({ t: v.tOut, fill: v.cap ? "var(--cap)" : "var(--accent)" })));
+    scene3.appendChild(el("text", { x: 12, y: 370, fill: "var(--muted)", ...mono }, "layers level · ray climbs at " + (F.phi * 180 / Math.PI).toFixed(0) + "° · " + (tStop * F.len).toFixed(2) + " shaku travelled to t = " + tStop.toFixed(2) + " · patch edge at t = " + tEnd.toFixed(2)));
+
+    rows3.replaceChildren();
     const shown = vs.slice(0, 12);
     shown.forEach((v, n) => {
       const tr = document.createElement("tr");
-      const cols = [String(n), fmtCell(v.cell) + " | " + v.layer, fmt(v.tIn), v.exit, fmt(v.tOut)];
-      cols.forEach((s, i) => { const td = document.createElement("td"); td.textContent = s; if (i === 3) td.style.color = v.cap ? "var(--cap)" : "var(--accent)"; tr.appendChild(td); });
-      rows.appendChild(tr);
+      [String(n), fmtCell(v.cell) + " | " + v.layer, fmt(v.tIn), v.exit, fmt(v.tOut)].forEach((s, i) => { const td = document.createElement("td"); td.textContent = s; if (i === 3) td.style.color = v.cap ? "var(--cap)" : "var(--accent)"; tr.appendChild(td); });
+      rows3.appendChild(tr);
     });
+    padRows(rows3, 12, 5);
     const caps = vs.filter(v => v.cap).length;
-    summary.textContent = vs.length + " voxels visited" + (vs.length > shown.length ? " (first " + shown.length + " listed)" : "") + " · " + cols.length + " columns · " + caps + " cap crossings, " + (vs.length - caps) + " face crossings" + (dl === 0 ? " · d_layer = 0: t_y is ∞, the ray stays in its layer" : "");
+    summary3.textContent = vs.length + " voxels visited" + (vs.length > shown.length ? " (first " + shown.length + " listed)" : "") + " · " + cols.length + " columns · " + caps + " cap crossings, " + (vs.length - caps) + " face crossings" + (state.dl === 0 ? " · d_layer = 0: t_y is ∞, the ray stays in its layer" : "");
+    return vs;
   }
-  render();
+
+  // ---- Bite four's figure.
+  const scene4plan = document.getElementById("scene4plan"), scene4 = document.getElementById("scene4");
+  const rows4 = document.getElementById("rows4"), summary4 = document.getElementById("runSummary"), sample = document.getElementById("runSample");
+  function render4(cols, F, tEnd, vs) {
+    const walk = runWalk(cols, state.layer0, state.dl);
+    const tStop = walk.tStop;
+    const V = views(F, tStop, tEnd);
+    const hitKey = walk.hit ? key(walk.hit.cell) : null;
+
+    scene4plan.replaceChildren();
+    for (const c of cells) {
+      const { runs } = world.get(key(c));
+      const topSolid = [...runs].reverse().find(r => r.mat !== AIR);
+      scene4plan.appendChild(el("polygon", { points: pts(V.groundHex(c).map(V.fitL)), fill: MAT[topSolid.mat].fill, "fill-opacity": 0.55, stroke: "var(--line)" }));
+    }
+    for (const st of walk.steps) {
+      scene4plan.appendChild(el("polygon", { points: pts(V.groundHex(st.cell).map(V.fitL)), fill: "none", stroke: "var(--candidate)", "stroke-width": 1.5 }));
+    }
+    if (walk.hit) scene4plan.appendChild(el("polygon", { points: pts(corners.map(k => V.fitL(V.above(F.at(add(walk.hit.cell, k), walk.hit.run.top))))), fill: "none", stroke: "var(--accent)", "stroke-width": 2.5 }));
+    const dots4 = walk.steps.map(s => ({ t: s.tOut, fill: s.exit === "top" || s.exit === "bottom" ? "var(--cap)" : "var(--accent)", r: 3 }));
+    if (walk.hit) dots4.push({ t: walk.hit.t, fill: "var(--accent)", r: 6 });
+    drawRayAbove(scene4plan, V, tStop, dots4, walk.hit ? 1.2 : 0.8);
+    drawNorth(scene4plan, V, F);
+    scene4plan.appendChild(el("text", { x: 12, y: 370, fill: "var(--muted)", ...mono }, "columns coloured by their highest solid run · " + (walk.hit ? "hit outlined" : "no hit")));
+
+    scene4.replaceChildren();
+    drawSectionFrame(scene4, V, cols, tEnd, 0.25);
+    for (const col of cols) {
+      for (const run of world.get(key(col.cell)).runs) {
+        if (run.mat === AIR) continue;
+        scene4.appendChild(el("polygon", { points: pts([V.sec(col.tIn, run.bottom), V.sec(col.tOut, run.bottom), V.sec(col.tOut, run.top), V.sec(col.tIn, run.top)].map(V.fitR)), fill: MAT[run.mat].fill, "fill-opacity": 0.75, stroke: "none" }));
+      }
+    }
+    walk.steps.forEach((st, n) => {
+      const quad = [V.sec(st.tIn, st.run.bottom), V.sec(st.tOut, st.run.bottom), V.sec(st.tOut, st.run.top), V.sec(st.tIn, st.run.top)].map(V.fitR);
+      scene4.appendChild(el("polygon", { points: pts(quad), fill: "var(--candidate)", "fill-opacity": 0.22, stroke: "var(--candidate)", "stroke-width": 1 }));
+      const cx = quad.reduce((a, p) => a + p.x, 0) / 4, cy = quad.reduce((a, p) => a + p.y, 0) / 4;
+      if ((quad[1].x - quad[0].x) > 14) scene4.appendChild(el("text", { x: cx, y: cy + 4, "text-anchor": "middle", fill: "currentColor", ...mono }, String(n)));
+    });
+    drawRaySide(scene4, V, tStop, tEnd, dots4);
+    const layerSteps = vs.filter(v => v.tIn < tStop - 1e-9).length;
+    scene4.appendChild(el("text", { x: 12, y: 370, fill: "var(--muted)", ...mono },
+      (walk.hit ? "hit " + MAT[walk.hit.run.mat].name + " at t = " + walk.hit.t.toFixed(2) + " through the " + walk.hit.through : walk.left ? "no hit: left through the " + walk.left : "no hit: left the patch") +
+      " · " + walk.steps.length + " run steps where the layer walk takes " + layerSteps));
+
+    rows4.replaceChildren();
+    walk.steps.slice(0, 12).forEach((st, n) => {
+      const tr = document.createElement("tr");
+      const skipped = st.run.top - st.run.bottom;
+      [String(n), fmtCell(st.cell), MAT[st.run.mat].name + " " + st.run.bottom + "–" + st.run.top, fmt(st.tIn), st.exit, fmt(st.tOut), skipped > 1 ? skipped + " layers in one step" : ""].forEach((s, i) => { const td = document.createElement("td"); td.textContent = s; if (i === 4) td.style.color = st.exit === "top" || st.exit === "bottom" ? "var(--cap)" : "var(--accent)"; tr.appendChild(td); });
+      rows4.appendChild(tr);
+    });
+    if (walk.hit) {
+      const tr = document.createElement("tr"); tr.className = "win";
+      [String(walk.steps.length), fmtCell(walk.hit.cell), MAT[walk.hit.run.mat].name + " " + walk.hit.run.bottom + "–" + walk.hit.run.top, fmt(walk.hit.t), "hit, through the " + walk.hit.through, "", ""].forEach(s => { const td = document.createElement("td"); td.textContent = s; tr.appendChild(td); });
+      rows4.appendChild(tr);
+    }
+    padRows(rows4, 13, 7);
+    summary4.textContent = (walk.hit ? "hit at t = " + walk.hit.t.toFixed(3) + " after " + walk.steps.length + " air steps" : "no hit after " + walk.steps.length + " steps") + " · bite three's layer walk needs " + layerSteps + " steps to the same point";
+
+    // One column's data, in the video's notation and as run tops.
+    const shownCell = walk.hit ? walk.hit.cell : (cols[0] ? cols[0].cell : [0, 0, 0]);
+    const { rle, runs } = world.get(key(shownCell));
+    sample.textContent = "column " + fmtCell(shownCell) + ":  " + rle.map(([m, h]) => MAT[m].name + " " + h).join(", ") + "\n" +
+      "run tops:  [" + runs.map(r => r.top).join(", ") + "]   run k covers layers [top[k−1], top[k])";
+  }
+
+  function update() {
+    controls.forEach(c => c.sync());
+    const d = horizontal(state.heading);
+    const cols = columns(d);
+    const F = frame(state.heading, state.layer0, state.dl);
+    const tEnd = cols.length ? cols[cols.length - 1].tOut : 6;
+    const vs = render3(cols, F, tEnd);
+    render4(cols, F, tEnd, vs);
+  }
+  update();
 })();
 </script>
 </body>
