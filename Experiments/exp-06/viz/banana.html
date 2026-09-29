@@ -322,7 +322,7 @@ svg { width: 100%; height: auto; display: block; }
   // Honshu-like at its Kantō width: an 80° arc about 1,300 km along the axis, 236 km wide, in ri. Fixed, not dialled.
   const R_RI = 237, W_RI = 60, ARC_DEG = 80;
   // One θ and one d, with a copy of the sliders under every step, all kept in step.
-  const state = { theta: 12, inset: 6, seed: 1, amp: 250, hurst: 0.65, stretch: 2, gref: 150, erosion: 300, firstOctave: 2, octaves5: 8, stripes: 1.5, sigmaRef: 0.03, windowQR: null, stacking: 1, normAbove: 0.3 };
+  const state = { theta: 12, inset: 12.5, seed: 1, amp: 250, hurst: 0.65, stretch: 2, gref: 150, erosion: 300, firstOctave: 2, octaves5: 8, stripes: 1.5, sigmaRef: 0.03, windowQR: null, stacking: 1, normAbove: 0.3 };
   const SLIDERS = [
     { key: "theta", label: "θ, degrees", min: 0, max: 359.5, step: 0.5, fmt: x => x.toFixed(1) + "°" },
     { key: "inset", label: "inset d, ri", min: -25, max: 45, step: 0.5, fmt: x => (x >= 0 ? "+" : "") + x.toFixed(1) },
