@@ -19,19 +19,33 @@
   --rock: #8a8578;        /* the materials of bite four's columns */
   --dirt: #a4713f;
   --grass: #7fae4a;
+  --p0: #d8b26a; --p1: #9fc2d6; --p2: #b8cf9a; --p3: #d9a5a5; --p4: #c4b3d9; --p5: #a8d3c8; --p6: #e0c4a0;   /* seven parents, bite six */
   --font-body: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23;
-    --accent: #f0803a; --candidate: #6db3d1; --cap: #a3c95e; --rock: #6f6b60; --dirt: #8d5f33; --grass: #6f9a3e; color-scheme: dark;
+    --accent: #f0803a; --candidate: #6db3d1; --cap: #a3c95e; --rock: #6f6b60; --dirt: #8d5f33; --grass: #6f9a3e;
+    --p0: #8a6f34; --p1: #3f6f88; --p2: #5d7f3f; --p3: #8a4f4f; --p4: #6b5a8a; --p5: #3f7a6c; --p6: #8a6a45; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23;
-  --accent: #f0803a; --candidate: #6db3d1; --cap: #a3c95e; --rock: #6f6b60; --dirt: #8d5f33; --grass: #6f9a3e; color-scheme: dark;
+  --accent: #f0803a; --candidate: #6db3d1; --cap: #a3c95e; --rock: #6f6b60; --dirt: #8d5f33; --grass: #6f9a3e;
+  --p0: #8a6f34; --p1: #3f6f88; --p2: #5d7f3f; --p3: #8a4f4f; --p4: #6b5a8a; --p5: #3f7a6c; --p6: #8a6a45; color-scheme: dark;
 }
+.facts { font-family: var(--font-mono); font-size: 0.9rem; display: grid; gap: 4px; font-variant-numeric: tabular-nums; max-width: 480px; }
+.facts div { display: grid; grid-template-columns: 1fr auto; gap: 12px; border-bottom: 1px solid var(--line); padding: 3px 0; }
+.facts .ok { color: var(--candidate); }
+.ladder { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.ladder > div { display: grid; gap: 4px; min-width: 0; }
+.ladder .panel-title { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+.ladder svg { width: 100%; height: auto; display: block; }
+table.units { border-collapse: collapse; font-family: var(--font-mono); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+table.units th, table.units td { text-align: right; padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.units th:first-child, table.units td:first-child { text-align: left; }
+table.units th { font-weight: 500; color: var(--muted); }
 .controls { display: grid; gap: 8px; font-family: var(--font-mono); font-size: 0.9rem; max-width: 480px; }
 .controls label { display: grid; grid-template-columns: 11ch 1fr 7ch; gap: 10px; align-items: center; }
 .controls input[type=range] { width: 100%; min-width: 0; accent-color: var(--candidate); }
@@ -249,6 +263,68 @@ hi(P) = max top of any solid run in any cell whose hexagon overlaps P's  // owne
     </table></div>
   </div>
   <p class="muted">Set climb to 0 and the start layer to 4.5 to skim the whole patch: everything skips except the parents round the floating slab, whose <code>hi</code> reaches 7. The same test runs the other way for caves, with a <code>lo(P)</code> under which a ray below everything solid can skip; it is the same idea and is left out of the picture. Deeper hierarchies stack the same step: a grandparent at <code>k²</code> with its own <code>hi</code>, checked first.</p>
+
+  <h1 id="nesting">Bite six: the nesting</h1>
+  <p>Packing B, from exp-03: parent <code>(a, b)</code> is centred on child <code>(N·a, N·b)</code>, and a child belongs to the nearest parent centre by <code>d² = dq² + dq·dr + dr²</code>, ties to the lexicographically greatest <code>(a, b)</code>. It works for any <code>N</code>. Drag <code>N</code> and watch the battlements; the centre parent's owned children are counted live against <code>N²</code>.</p>
+
+  <div class="pair">
+    <div>
+      <svg id="fig6pack" viewBox="0 0 640 560" role="img" aria-label="A field of small hexagons coloured by which parent owns them, with the parents' ideal hexagons drawn over them."><g id="scene6pack" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div style="flex: 1 1 260px; display: grid; gap: 12px; align-content: start;">
+      <div class="controls"><label><span>N</span><input id="n6" type="range" min="2" max="12" step="1" value="6"><output id="n6Out"></output></label></div>
+      <div class="facts" id="facts6"></div>
+      <p class="muted">Tints are the seven parents nearest the centre; heavy outlines are their ideal hexagons, which the owned territory follows with battlement edges. A parent's corner is at <code>N·(2/3, −1/3, −1/3)</code>: a child centre when <code>3 | N</code>, hence the three-way corner children at 6, 60 and 36; a child corner otherwise, so at 10 the corners are clean and only edge children are halved.</p>
+    </div>
+  </div>
+
+  <h2 style="font-size:1.1rem;margin:0;font-weight:600">The ladder</h2>
+  <p>Decided 2026-09-29: the ×60 between ken and chō is split ×6 then ×10, so cells grow as they recede. Each panel is one cell of a level with the children it owns, coloured, and its neighbours' children round it; the outline is the ideal hexagon. The tiles are drawn to fill their panel, so the scale changes from panel to panel; the table has the real sizes.</p>
+  <div class="ladder" id="ladder"></div>
+  <div class="wrap"><table class="units">
+    <thead><tr><th>level</th><th>made of</th><th>N</th><th>width, shaku</th><th>width, m</th><th>shaku columns</th></tr></thead>
+    <tbody>
+      <tr><td>shaku 尺</td><td>—</td><td>—</td><td>1</td><td>0.303</td><td>1</td></tr>
+      <tr><td>ken 間</td><td>36 shaku</td><td>6</td><td>6</td><td>1.818</td><td>36</td></tr>
+      <tr><td>decichō</td><td>36 ken</td><td>6</td><td>36</td><td>10.909</td><td>1,296</td></tr>
+      <tr><td>chō 町</td><td>100 decichō</td><td>10</td><td>360</td><td>109.091</td><td>129,600</td></tr>
+      <tr><td>ri 里</td><td>1,296 chō</td><td>36</td><td>12,960</td><td>3,927.273</td><td>167,961,600</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">One shaku is 10/33 m exactly. Centres compose through the chain, so inserting the decichō moves no ken, chō or ri centre; what changes is ownership near chō borders, which now has battlements at decichō scale rather than ken scale. The name is an invention: the historical ladder has no unit of six ken.</p>
+
+  <h1 id="windows">Bite seven: fine and coarse are relative</h1>
+  <p>No level is <em>the</em> fine one. Detail at level <code>k</code> is held throughout a window round the camera, and outside that window the level above is the surface the ray hits. The candidate rule: <strong>level <code>k</code> detail fills the camera's level <code>k+2</code> cell</strong>, its grandparent: shaku columns across the decichō the camera is in, ken columns across its chō, decichō columns across its ri. Drag the camera (the dot) in either panel; the panels share it. Pick the window's shape below.</p>
+
+  <div class="controls" id="controls7" style="max-width:none">
+    <label style="grid-template-columns: 11ch 1fr"><span>window</span>
+      <span style="display:flex;gap:16px;flex-wrap:wrap">
+        <label style="display:flex;gap:6px;align-items:center;grid-template-columns:none"><input type="radio" name="win" value="own" checked> the grandparent's own territory</label>
+        <label style="display:flex;gap:6px;align-items:center;grid-template-columns:none"><input type="radio" name="win" value="nbr"> the grandparent and its six neighbours</label>
+        <label style="display:flex;gap:6px;align-items:center;grid-template-columns:none"><input type="radio" name="win" value="rings"> the parent plus 3 rings of parents (exp-05)</label>
+      </span>
+    </label>
+  </div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">shaku detail · drawn in ken · decichō outlined</div>
+      <svg id="fig7a" viewBox="0 0 480 440" role="img" aria-label="Ken cells round the camera, those holding shaku detail tinted, with decichō hexagons outlined."><g id="scene7a" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">ken detail · drawn in decichō · chō outlined</div>
+      <svg id="fig7b" viewBox="0 0 480 440" role="img" aria-label="Decichō cells round the camera, those holding ken detail tinted, with chō hexagons outlined."><g id="scene7b" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <p class="muted" style="max-width:none">Left is 36 times finer than right. The same camera, the same rule, one rung apart: what is a tinted <em>ken</em> chunk on the left is a fraction of one tinted <em>decichō</em> cell on the right. The third rung, decichō detail across the camera's ri, is the whole world when the world is one ri, so it is not drawn. Tints: <span style="color:var(--candidate)">resident at this detail</span>; the heavy outlines are the grandparents' ideal hexagons, battlemented in truth; the dashed hexagon is the camera's own parent.</p>
+
+  <div class="readout">
+    <div class="wrap"><table class="units" id="table7">
+      <thead><tr><th>detail</th><th>chunks resident</th><th>columns resident</th><th>nearest edge, shaku</th><th>a cell at that edge</th></tr></thead>
+      <tbody id="rows7"></tbody>
+    </table></div>
+  </div>
+  <p class="muted">"A cell at that edge" is the angular width of one level-<code>k</code> cell seen at the window's nearest edge, and its width in pixels at 1080p with a 60° field of view: the size of the step a viewer sees where detail drops a rung. The walk gains one branch over bite five: at every level a cell is skipped (<code>hi</code> clears the ray), descended into (a finer level is resident here), or hit (nothing finer is resident, so this column is the surface). Skip structure and distance detail are one thing, and residency alone decides which a cell is right now.</p>
 </main>
 
 <script>
@@ -1122,6 +1198,217 @@ hi(P) = max top of any solid run in any cell whose hexagon overlaps P's  // owne
     render5();
   }
   update();
+})();
+</script>
+
+<script>
+// Bite six: packing B at any N, and the ladder shaku → ken → decichō → chō → ri.
+(function () {
+  const cube = (q, r) => [q, r, -q - r];
+  const hexDist = c => Math.max(Math.abs(c[0]), Math.abs(c[1]), Math.abs(c[2]));
+  const corners = [];
+  { let c = [2 / 3, -1 / 3, -1 / 3]; for (let i = 0; i < 6; i++) { corners.push(c); c = [-c[2], -c[0], -c[1]]; } }
+  const ROW = Math.sqrt(3) / 2;
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text !== undefined) e.textContent = text; return e; };
+  const mono = { stroke: "none", "font-size": 11, "font-family": "var(--font-mono)" };
+
+  // exp-03's owner(), as the spec states it.
+  function owner(c, N) {
+    const a0 = Math.round(c[0] / N), b0 = Math.round(c[1] / N);
+    let best = null, bestD = Infinity;
+    for (let a = a0 - 1; a <= a0 + 1; a++) for (let b = b0 - 1; b <= b0 + 1; b++) {
+      const dq = c[0] - N * a, dr = c[1] - N * b;
+      const d2 = dq * dq + dq * dr + dr * dr;
+      if (d2 < bestD || (d2 === bestD && (a > best[0] || (a === best[0] && b > best[1])))) { bestD = d2; best = [a, b]; }
+    }
+    return best;
+  }
+  const parentsShown = [[0, 0], [1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+  const tintOf = P => { const i = parentsShown.findIndex(p => p[0] === P[0] && p[1] === P[1]); return i < 0 ? null : "var(--p" + i + ")"; };
+
+  // Draw a field of children round the centre parent at scale N into a scene, fitted to (W, H).
+  function drawField(scene, N, radius, W, H, footer) {
+    const S = Math.min(W, H) * 0.48 / (radius + 0.8);
+    const cx = W / 2, cy = H / 2 - (footer ? 8 : 0);
+    const toScreen = p => ({ x: cx + (p[0] + p[1] / 2) * S, y: cy + p[1] * ROW * S });
+    const poly = (c, k) => corners.map(o => { const s = toScreen([c[0] + o[0] * k, c[1] + o[1] * k, 0]); return s.x + "," + s.y; }).join(" ");
+    scene.replaceChildren();
+    let owned = 0;
+    for (let q = -radius; q <= radius; q++) for (let r = -radius; r <= radius; r++) {
+      const c = cube(q, r);
+      if (hexDist(c) > radius) continue;
+      const P = owner(c, N), tint = tintOf(P);
+      scene.appendChild(el("polygon", { points: poly(c, 1), fill: tint || "var(--cell)", "fill-opacity": tint ? 0.85 : 1, stroke: "var(--line)", "stroke-width": S > 6 ? 0.5 : 0.25 }));
+      if (P[0] === 0 && P[1] === 0) owned++;
+    }
+    for (const [a, b] of parentsShown) {
+      const centre = [N * a, N * b, 0];
+      scene.appendChild(el("polygon", { points: poly(centre, N), fill: "none", stroke: "currentColor", "stroke-width": 2 }));
+      const s = toScreen(centre);
+      scene.appendChild(el("circle", { cx: s.x, cy: s.y, r: 3, fill: "currentColor", stroke: "none" }));
+    }
+    return owned;
+  }
+
+  // The interactive packing tool.
+  const scenePack = document.getElementById("scene6pack"), n6 = document.getElementById("n6"), n6Out = document.getElementById("n6Out"), facts = document.getElementById("facts6");
+  function renderPack() {
+    const N = +n6.value;
+    n6Out.textContent = N;
+    const owned = drawField(scenePack, N, Math.ceil(N * 1.75), 640, 560, true);
+    scenePack.appendChild(el("text", { x: 12, y: 548, fill: "var(--muted)", ...mono }, "N = " + N + ": the centre parent owns " + owned + " children"));
+    let halved = 0, threeWay = 0;
+    for (let q = -N; q <= N; q++) for (let r = -N; r <= N; r++) {
+      const c = cube(q, r), ds = [];
+      for (const [a, b] of parentsShown) { const dq = c[0] - N * a, dr = c[1] - N * b; ds.push(dq * dq + dq * dr + dr * dr); }
+      const m = Math.min(...ds), ties = ds.filter(d => d === m).length;
+      if (ds[0] === m && ties === 2) halved++;
+      if (ds[0] === m && ties === 3) threeWay++;
+    }
+    facts.replaceChildren();
+    const row = (k, v, ok) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = v; if (ok) b.className = "ok"; d.append(a, b); facts.appendChild(d); };
+    row("children per parent, N²", String(N * N));
+    row("owned by the centre parent", String(owned), owned === N * N);
+    row("halved edge children of the centre parent", String(halved));
+    row("three-way corner children", N % 3 === 0 ? threeWay + " (3 | N)" : "none: corners fall on child corners");
+    row("parent width, in children", String(N));
+    row("parent corner radius, in children", (N / Math.sqrt(3)).toFixed(3));
+  }
+  n6.addEventListener("input", renderPack);
+  renderPack();
+
+  // The ladder: one panel per step, each a parent with its owned children and the neighbours' round it.
+  const steps = [
+    { title: "ken = 6 shaku · owns 36", N: 6 },
+    { title: "decichō = 6 ken · owns 36", N: 6 },
+    { title: "chō = 10 decichō · owns 100", N: 10 },
+    { title: "ri = 36 chō · owns 1,296", N: 36 },
+  ];
+  const ladder = document.getElementById("ladder");
+  for (const st of steps) {
+    const wrap = document.createElement("div");
+    const title = document.createElement("div"); title.className = "panel-title"; title.textContent = st.title; wrap.appendChild(title);
+    const svg = el("svg", { viewBox: "0 0 300 280", role: "img", "aria-label": st.title });
+    const g = el("g", { fill: "none", stroke: "currentColor" });
+    svg.appendChild(g); wrap.appendChild(svg); ladder.appendChild(wrap);
+    const owned = drawField(g, st.N, Math.ceil(st.N * 0.75), 300, 280, true);
+    g.appendChild(el("text", { x: 8, y: 272, fill: "var(--muted)", ...mono, "font-size": 10 }, "N = " + st.N + " · " + owned + " owned · " + (st.N % 3 === 0 ? "three-way corners" : "clean corners")));
+  }
+})();
+</script>
+
+<script>
+// Bite seven: detail windows relative to the camera, one rung at a time.
+(function () {
+  const cube = (q, r) => [q, r, -q - r];
+  const hexDist = c => Math.max(Math.abs(c[0]), Math.abs(c[1]), Math.abs(c[2]));
+  const sub = (a, b) => a.map((v, i) => v - b[i]);
+  const corners = [];
+  { let c = [2 / 3, -1 / 3, -1 / 3]; for (let i = 0; i < 6; i++) { corners.push(c); c = [-c[2], -c[0], -c[1]]; } }
+  const ROW = Math.sqrt(3) / 2;
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text !== undefined) e.textContent = text; return e; };
+  const mono = { stroke: "none", "font-size": 11, "font-family": "var(--font-mono)" };
+  const key = c => c[0] + "," + c[1];
+  function cubeRound(p) {
+    let q = Math.round(p[0]), r = Math.round(p[1]), s = Math.round(p[2]);
+    const dq = Math.abs(q - p[0]), dr = Math.abs(r - p[1]), ds = Math.abs(s - p[2]);
+    if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s; else s = -q - r;
+    return [q, r, s];
+  }
+  function owner(c, N) {
+    const a0 = Math.round(c[0] / N), b0 = Math.round(c[1] / N);
+    let best = null, bestD = Infinity;
+    for (let a = a0 - 1; a <= a0 + 1; a++) for (let b = b0 - 1; b <= b0 + 1; b++) {
+      const dq = c[0] - N * a, dr = c[1] - N * b, d2 = dq * dq + dq * dr + dr * dr;
+      if (d2 < bestD || (d2 === bestD && (a > best[0] || (a === best[0] && b > best[1])))) { bestD = d2; best = cube(a, b); }
+    }
+    return best;
+  }
+  const hexNeighbours = c => [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]].map(([dq, dr]) => cube(c[0] + dq, c[1] + dr));
+
+  // The ladder: widths in shaku, and N up from each level.
+  const NAMES = ["shaku", "ken", "decichō", "chō", "ri"];
+  const W = [1, 6, 36, 360, 12960];
+  const N = [6, 6, 10, 36];
+
+  // Camera position in shaku, fractional cube; its cell at every level by the ownership chain.
+  let cam = [7.3, -3.1, -4.2];
+  function chain(p) { const c = [cubeRound(p)]; for (let k = 0; k < N.length; k++) c.push(owner(c[k], N[k])); return c; }
+
+  // Which level-(k+1) chunks hold level-k detail, under each rule.
+  function resident(rule, k, cells) {
+    const parent = cells[k + 1], grand = cells[k + 2];
+    if (rule === "rings") return c => hexDist(sub(c, parent)) <= 3;
+    if (rule === "own") return c => key(owner(c, N[k + 1])) === key(grand);
+    const set = new Set([key(grand), ...hexNeighbours(grand).map(key)]);
+    return c => set.has(key(owner(c, N[k + 1])));
+  }
+
+  const rule = () => document.querySelector('#controls7 input[name="win"]:checked').value;
+  const panels = [
+    { k: 0, svg: document.getElementById("fig7a"), scene: document.getElementById("scene7a"), radius: 12 },
+    { k: 1, svg: document.getElementById("fig7b"), scene: document.getElementById("scene7b"), radius: 20 },
+  ];
+  const rows7 = document.getElementById("rows7");
+
+  function render() {
+    const r = rule(), cells = chain(cam);
+    const facts = [];
+    for (const P of panels) {
+      const k = P.k, unit = W[k + 1];                       // the panel is drawn in level-(k+1) cells
+      const camU = cam.map(v => v / unit);                  // camera in those units
+      const S = 200 / (P.radius + 0.5);
+      const toScreen = p => ({ x: 240 + (p[0] - camU[0] + (p[1] - camU[1]) / 2) * S, y: 220 + (p[1] - camU[1]) * ROW * S });
+      P.toShaku = s => { const rr = (s.y - 220) / S / ROW + camU[1]; const qq = (s.x - 240) / S - (rr - camU[1]) / 2 + camU[0]; return cube(qq * unit, rr * unit); };
+      const poly = (c, size) => corners.map(o => { const s = toScreen([c[0] + o[0] * size, c[1] + o[1] * size, 0]); return s.x + "," + s.y; }).join(" ");
+      const isResident = resident(r, k, cells);
+      const centre = cells[k + 1];
+      P.scene.replaceChildren();
+      let count = 0, nearest = Infinity;
+      for (let q = -P.radius; q <= P.radius; q++) for (let rr = -P.radius; rr <= P.radius; rr++) {
+        const c = cube(centre[0] + q, centre[1] + rr);
+        if (hexDist(sub(c, centre)) > P.radius) continue;
+        const res = isResident(c);
+        P.scene.appendChild(el("polygon", { points: poly(c, 1), fill: res ? "var(--candidate)" : "var(--cell)", "fill-opacity": res ? 0.35 : 1, stroke: "var(--line)", "stroke-width": 0.5 }));
+        if (res) count++;
+        else { const d = Math.hypot((c[0] - camU[0]) + (c[1] - camU[1]) / 2, (c[1] - camU[1]) * ROW) - 0.5; nearest = Math.min(nearest, d); }
+      }
+      // Grandparent hexagons near the camera, and the camera's own parent dashed.
+      const grand = cells[k + 2];
+      for (let q = -2; q <= 2; q++) for (let rr = -2; rr <= 2; rr++) {
+        const G = cube(grand[0] + q, grand[1] + rr);
+        if (hexDist(sub(G, grand)) > 2) continue;
+        P.scene.appendChild(el("polygon", { points: poly(G.map(v => v * N[k + 1]), N[k + 1]), fill: "none", stroke: "currentColor", "stroke-width": key(G) === key(grand) ? 2.2 : 1.2, opacity: key(G) === key(grand) ? 1 : 0.55 }));
+      }
+      P.scene.appendChild(el("polygon", { points: poly(centre, 1), fill: "none", stroke: "currentColor", "stroke-width": 1.5, "stroke-dasharray": "3 3" }));
+      const s = toScreen(camU);
+      P.scene.appendChild(el("circle", { cx: s.x, cy: s.y, r: 6, fill: "var(--accent)", stroke: "var(--bg)", "stroke-width": 2, class: "handle" }));
+      P.scene.appendChild(el("text", { x: 10, y: 430, fill: "var(--muted)", ...mono }, count + " " + NAMES[k + 1] + " chunks of " + NAMES[k] + " detail · one cell here is " + unit + " shaku"));
+      // Counts and the step size at the edge.
+      const columns = count * N[k] * N[k];
+      const edge = nearest === Infinity ? null : nearest * unit;
+      const deg = edge ? Math.atan(W[k] / edge) * 180 / Math.PI : null;
+      facts.push([NAMES[k] + " in " + NAMES[k + 1] + " chunks", count.toLocaleString(), columns.toLocaleString(), edge ? edge.toFixed(1) : "beyond view", deg ? deg.toFixed(2) + "° ≈ " + Math.round(deg * 32) + " px" : "—"]);
+    }
+    // The rung not drawn: decichō detail across the camera's ri, the whole world at one ri.
+    facts.push(["decichō in chō chunks", r === "rings" ? "37" : r === "own" ? "1,296" : "9,072 (7 ri)", r === "rings" ? (37 * 100).toLocaleString() : r === "own" ? (1296 * 100).toLocaleString() : (9072 * 100).toLocaleString(), r === "rings" ? "≥ " + (3 * 360).toLocaleString() : "the world's edge", r === "rings" ? (Math.atan(36 / 1080) * 180 / Math.PI).toFixed(2) + "° ≈ " + Math.round(Math.atan(36 / 1080) * 180 / Math.PI * 32) + " px" : "—"]);
+    rows7.replaceChildren();
+    for (const f of facts) { const tr = document.createElement("tr"); f.forEach(v => { const td = document.createElement("td"); td.textContent = v; tr.appendChild(td); }); rows7.appendChild(tr); }
+  }
+
+  for (const P of panels) {
+    let dragging = false;
+    const pointer = ev => { const r = P.svg.getBoundingClientRect(); return { x: (ev.clientX - r.left) * 480 / r.width, y: (ev.clientY - r.top) * 440 / r.height }; };
+    P.svg.style.touchAction = "none";
+    P.svg.addEventListener("pointerdown", ev => { dragging = true; P.svg.setPointerCapture(ev.pointerId); cam = P.toShaku(pointer(ev)); render(); });
+    P.svg.addEventListener("pointermove", ev => { if (dragging) { cam = P.toShaku(pointer(ev)); render(); } });
+    P.svg.addEventListener("pointerup", () => { dragging = false; });
+    P.svg.addEventListener("pointercancel", () => { dragging = false; });
+  }
+  document.querySelectorAll('#controls7 input[name="win"]').forEach(i => i.addEventListener("change", render));
+  render();
 })();
 </script>
 </body>
