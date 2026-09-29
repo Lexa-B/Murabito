@@ -33,6 +33,12 @@ svg { width: 100%; height: auto; display: block; }
 .profiles .panel-title { font-size: 0.75rem; }
 .climate { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
 .climate > div { display: grid; gap: 2px; min-width: 0; }
+.octaves { font-family: var(--font-mono); font-size: 0.8rem; border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; }
+.octaves th, .octaves td { text-align: right; padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.octaves th { color: var(--muted); font-weight: 500; }
+.octaves td:first-child, .octaves th:first-child { text-align: left; }
+.octaves tr.drawn td { color: var(--fg); }
+.octaves tr.later td { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -83,6 +89,35 @@ svg { width: 100%; height: auto; display: block; }
   <div class="facts" id="facts3"></div>
   <p class="muted">Every term is a coefficient in the script, stylised from Honshu's stations: Tokyo 15.4 °C and 1,600 mm, Niigata 13.6 °C and 1,800 mm, Matsumoto 11.8 °C and 1,030 mm, Aomori 10.4 °C. The slope term needs a gradient, taken here by finite differences half a ri apart; the erosion filter later will want the same gradient, analytically. Sea ri are left blank.</p>
 
+  <h1 id="step4">Step 4: structure, fractal noise on the tectonic surface</h1>
+  <p>Seeded gradient noise, summed over octaves, added to the step-2 height in metres everywhere, above and below the sea. The octaves are their own ladder: the coarsest spans the world, 36 ri, and each one halves, so every finer lattice nests in the coarser and a finer rung only adds octaves. The lattice is anchored to the origin, the world's centre, and turned so one axis runs along the arc's tangent there; that axis is stretched, so lumps come out as ridges with the tectonic grain. A seed's field leans one way across the arc; if its heavy side would fall seaward, the lattice is turned half a circle about the origin so the heavy side is inland. Octave <code>k</code> has wavelength <code>36 / 2ᵏ</code> ri and amplitude <code>A₀ · 2^(−kH)</code>: <code>H</code> is the Hurst exponent, and the coast this surface will have after erosion is a level set of dimension <code>2 − H</code>. At the ri scale the five octaves down to 2¼ ri are evaluated; the table shows where the ladder goes below that.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-structure"></div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">the noise alone, ri by ri · metres · the arc's tangent marked</div>
+      <svg id="noise" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by the structure noise in metres, with the along-arc axis marked."><g id="noiseScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the world, ri by ri, coloured by height after step 4 · step-2 shore dotted</div>
+      <svg id="heights4" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by height with the structure noise added, the step-2 shoreline dotted for reference."><g id="heights4Scene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">the band cut across at the world's θ · step 2 in brown, step 4 in ink</div>
+      <svg id="section4" viewBox="0 0 560 300" role="img" aria-label="The height cross-section at the world's position, before and after the structure noise."><g id="section4Scene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the octave ladder · drawn at ri scale in ink, finer rungs in grey</div>
+      <div style="overflow-x: auto"><table class="octaves" id="octaves"></table></div>
+    </div>
+  </div>
+  <div class="facts" id="facts4"></div>
+  <p class="muted">The noise is Perlin's lattice noise with a seeded hash for the gradients, scaled to run about −1…1, so <code>A₀</code> is the coarsest octave's swing in metres. Nothing here reads the coast: the shore, its land share, and the box-count against Kantō's 1.1–1.15 are read after erosion.</p>
+
 </main>
 <script>
 (function () {
@@ -94,23 +129,33 @@ svg { width: 100%; height: auto; display: block; }
   // Honshu-like at its Kantō width: an 80° arc about 1,300 km along the axis, 236 km wide, in ri. Fixed, not dialled.
   const R_RI = 237, W_RI = 60, ARC_DEG = 80;
   // One θ and one d, with a copy of the sliders under every step, all kept in step.
-  const state = { theta: 12, inset: 6 };
+  const state = { theta: 12, inset: 6, seed: 1, amp: 250, hurst: 0.65, stretch: 2 };
   const SLIDERS = [
     { key: "theta", label: "θ, degrees", min: 0, max: 359.5, step: 0.5, fmt: x => x.toFixed(1) + "°" },
     { key: "inset", label: "inset d, ri", min: -25, max: 45, step: 0.5, fmt: x => (x >= 0 ? "+" : "") + x.toFixed(1) },
   ];
-  const controls = [...document.querySelectorAll(".controls-shared")].map(container => {
-    const bound = SLIDERS.map(s => {
-      const label = document.createElement("label");
-      const name = document.createElement("span"); name.textContent = s.label;
-      const input = document.createElement("input"); input.type = "range"; input.min = s.min; input.max = s.max; input.step = s.step; input.value = state[s.key];
-      const out = document.createElement("output");
-      label.append(name, input, out); container.appendChild(label);
-      input.addEventListener("input", () => { state[s.key] = +input.value; update(); });
-      return { s, input, out };
+  // Step 4's own dials, shown once under step 4.
+  const STRUCTURE_SLIDERS = [
+    { key: "seed", label: "seed", min: 0, max: 99, step: 1, fmt: x => String(x) },
+    { key: "amp", label: "A₀ at 36 ri, m", min: 0, max: 400, step: 5, fmt: x => x.toFixed(0) + " m" },
+    { key: "hurst", label: "H", min: 0.5, max: 1, step: 0.01, fmt: x => x.toFixed(2) },
+    { key: "stretch", label: "stretch along", min: 1, max: 4, step: 0.1, fmt: x => x.toFixed(1) + "×" },
+  ];
+  function bindSliders(selector, sliders) {
+    return [...document.querySelectorAll(selector)].map(container => {
+      const bound = sliders.map(s => {
+        const label = document.createElement("label");
+        const name = document.createElement("span"); name.textContent = s.label;
+        const input = document.createElement("input"); input.type = "range"; input.min = s.min; input.max = s.max; input.step = s.step; input.value = state[s.key];
+        const out = document.createElement("output");
+        label.append(name, input, out); container.appendChild(label);
+        input.addEventListener("input", () => { state[s.key] = +input.value; update(); });
+        return { s, input, out };
+      });
+      return { sync() { for (const b of bound) { b.input.value = state[b.s.key]; b.out.textContent = b.s.fmt(state[b.s.key]); } } };
     });
-    return { sync() { for (const b of bound) { b.input.value = state[b.s.key]; b.out.textContent = b.s.fmt(state[b.s.key]); } } };
-  });
+  }
+  const controls = [...bindSliders(".controls-shared", SLIDERS), ...bindSliders(".controls-structure", STRUCTURE_SLIDERS)];
   function update() { controls.forEach(c => c.sync()); render(); }
 
   // The outline as a dense polyline, anticlockwise from the outer apex. Coordinates are (east, north) in ri.
@@ -261,9 +306,46 @@ svg { width: 100%; height: auto; display: block; }
   const TEMP_RAMP = [[-10, [40, 60, 140]], [0, [120, 160, 220]], [10, [235, 235, 225]], [20, [235, 160, 90]], [30, [170, 40, 40]]];
   const PRECIP_RAMP = [[600, [235, 225, 190]], [1200, [190, 215, 205]], [1800, [110, 165, 200]], [2600, [50, 100, 170]], [3400, [25, 50, 120]]];
 
+  // ---- Step 4: structure. Seeded gradient noise over halving octaves, anchored to the origin, added in metres.
+  const LAMBDA_0 = WORLD;                                      // ri: the coarsest octave spans the world
+  const RI_OCTAVES = 5;                                        // evaluated at the ri scale: 36, 18, 9, 4.5, 2.25 ri
+  const LADDER_ROWS = 11;                                      // octaves listed in the table, down past the chō
+  const hash = (x, y, seed) => {                               // a seeded integer hash of a lattice point, 32 bits
+    let h = Math.imul(x, 0x27d4eb2d) ^ Math.imul(y, 0x165667b1) ^ Math.imul(seed + 1, 0x9e3779b1);
+    h = Math.imul(h ^ (h >>> 15), 0x85ebca6b); h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+    return (h ^ (h >>> 16)) >>> 0;
+  };
+  const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+  function gradientNoise(x, y, seed) {                         // Perlin's lattice noise with unit gradients, scaled to about −1…1
+    const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+    const g = (i, j, dx, dy) => { const a = hash(i, j, seed) * (2 * Math.PI / 4294967296); return Math.cos(a) * dx + Math.sin(a) * dy; };
+    const u = fade(fx), w = fade(fy);
+    const bottom = g(x0, y0, fx, fy) + (g(x0 + 1, y0, fx - 1, fy) - g(x0, y0, fx, fy)) * u;
+    const top = g(x0, y0 + 1, fx, fy - 1) + (g(x0 + 1, y0 + 1, fx - 1, fy - 1) - g(x0, y0 + 1, fx, fy - 1)) * u;
+    return Math.SQRT2 * (bottom + (top - bottom) * w);
+  }
+  const octaveLambda = k => LAMBDA_0 / 2 ** k;                 // ri
+  const octaveAmp = (k, st) => st.amp * 2 ** (-k * st.hurst);  // metres
+  // The field in the world's own frame: origin at the world's centre, u along the arc's tangent there and shrunk by the
+  // stretch, w across it. Each octave's lattice is the coarser one's halved, so a point lands in the same
+  // cells whatever rung evaluates it, and a finer rung only adds terms.
+  // `turn` is +1 or −1: −1 turns the lattice half a circle about the origin, which keeps every node a node
+  // and swaps which side of the arc the field leans to.
+  function structureField(centre, tangent, st, octaves, turn) {
+    return p => {
+      const dx = p[0] - centre[0], dy = p[1] - centre[1];
+      const u = turn * (dx * tangent[0] + dy * tangent[1]) / st.stretch, w = turn * (-dx * tangent[1] + dy * tangent[0]);
+      let sum = 0;
+      for (let k = 0; k < octaves; k++) { const lambda = octaveLambda(k); sum += octaveAmp(k, st) * gradientNoise(u / lambda, w / lambda, st.seed * 64 + k); }
+      return sum;
+    };
+  }
+  const NOISE_RAMP = [[-1, [35, 80, 150]], [-0.5, [120, 160, 200]], [0, [236, 234, 226]], [0.5, [200, 150, 95]], [1, [130, 70, 25]]];
+
   const wide = document.getElementById("wideScene"), near = document.getElementById("nearScene"), facts = document.getElementById("facts");
   const section = document.getElementById("sectionScene"), heights = document.getElementById("heightsScene"), profiles = document.getElementById("profiles"), facts2 = document.getElementById("facts2");
   const climateGrid = document.getElementById("climate"), facts3 = document.getElementById("facts3");
+  const noiseScene = document.getElementById("noiseScene"), heights4 = document.getElementById("heights4Scene"), section4 = document.getElementById("section4Scene"), octaveTable = document.getElementById("octaves"), facts4 = document.getElementById("facts4");
   function view(cx, cy, scale) { return p => ({ x: 280 + (p[0] - cx) * scale, y: 280 - (p[1] - cy) * scale }); }
   const pts = (ps, f) => ps.map(p => { const s = f(p); return s.x + "," + s.y; }).join(" ");
 
@@ -324,7 +406,7 @@ svg { width: 100%; height: auto; display: block; }
       near.appendChild(el("text", { x: lab.x, y: lab.y, "text-anchor": "middle", fill: colour, ...mono }, e.name + " · " + e.kind));
     }
     for (const x of crossings) { const s = N(x); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 5, fill: "var(--shore)", stroke: "var(--bg)", "stroke-width": 1.5 })); }
-    { const s = N(centre); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 4, fill: "var(--world)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y + 4, fill: "var(--world)", ...mono }, "日本橋")); }
+    { const s = N(centre); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 4, fill: "var(--world)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y + 4, fill: "var(--world)", ...mono }, "origin")); }
     { const s = N(here.p); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 3, fill: "var(--shore)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y - 6, fill: "var(--shore)", ...mono, "font-size": 10 }, "θ = " + v.theta.toFixed(1) + "°")); }
     near.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "36 ri across · north up"));
 
@@ -400,7 +482,7 @@ svg { width: 100%; height: auto; display: block; }
     const row2 = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts2.appendChild(d); };
     row2("spine height here, H(s)", Hs.toFixed(0) + " m ≈ " + Math.round(Hs / 0.15151).toLocaleString() + " layers");
     row2("world centre: a across, s along", bc.a.toFixed(2) + ", " + bc.s.toFixed(2));
-    row2("height at 日本橋", height(centre, v).toFixed(0) + " m");
+    row2("height at the origin", height(centre, v).toFixed(0) + " m");
     row2("edge ranges, m", edgeFacts.join(" · "));
     { const coastPt = at(o, v.theta), gIn = gradient([coastPt.p[0] - coastPt.normal[0] * 0.5, coastPt.p[1] - coastPt.normal[1] * 0.5], v), slopeIn = Math.hypot(gIn[0], gIn[1]);
       row2("slope just inland of the coast here", slopeIn.toFixed(1) + " m per ri: 100 m of height is " + (slopeIn > 0 ? (100 / slopeIn).toFixed(1) : "—") + " ri of coast"); }
@@ -440,9 +522,93 @@ svg { width: 100%; height: auto; display: block; }
     facts3.replaceChildren();
     const row3 = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts3.appendChild(d); };
     const kc = climate(centre, v, apexNorth);
-    row3("at 日本橋: coldest / mean / warmest month", kc.tMin.toFixed(1) + " / " + kc.tMean.toFixed(1) + " / " + kc.tMax.toFixed(1) + " °C");
-    row3("at 日本橋: precipitation", kc.precip.toFixed(0) + " mm");
+    row3("at the origin: coldest / mean / warmest month", kc.tMin.toFixed(1) + " / " + kc.tMean.toFixed(1) + " / " + kc.tMax.toFixed(1) + " °C");
+    row3("at the origin: precipitation", kc.precip.toFixed(0) + " mm");
     row3("across the world's land ri", summary.join(" · "));
+
+    // ---- Step 4 drawings: the noise, the world after it, the section before and after, the ladder.
+    const tangent = [-here.normal[1], here.normal[0]];          // the outline's tangent at θ: the arc's grain here
+    // Which way the field leans across the arc: its first moment along the inward normal over the world's ri.
+    // If the heavy side is seaward, turn the lattice half a circle so it is inland.
+    const inward = p => -((p[0] - centre[0]) * here.normal[0] + (p[1] - centre[1]) * here.normal[1]);
+    const lean = field => RI_CELLS.reduce((m, [q, r]) => { const c = riCentre(q, r, centre); return m + field(c) * inward(c); }, 0);
+    const seeded = structureField(centre, tangent, state, RI_OCTAVES, 1);
+    const turned = lean(seeded) < 0;
+    const noise = turned ? structureField(centre, tangent, state, RI_OCTAVES, -1) : seeded;
+    let inMean = 0, inN = 0, outMean = 0, outN = 0;
+    for (const [q, r] of RI_CELLS) { const c = riCentre(q, r, centre), n = noise(c); if (inward(c) > 0) { inMean += n; inN++; } else { outMean += n; outN++; } }
+    inMean /= inN || 1; outMean /= outN || 1;
+    const height4 = p => height(p, v) + noise(p);
+    const ampTotal = Array.from({ length: RI_OCTAVES }, (_, k) => octaveAmp(k, state)).reduce((a, b) => a + b, 0);
+
+    noiseScene.replaceChildren();
+    noiseScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let nMin = Infinity, nMax = -Infinity;
+    for (const [q, r] of RI_CELLS) {
+      const c = riCentre(q, r, centre), n = noise(c);
+      nMin = Math.min(nMin, n); nMax = Math.max(nMax, n);
+      noiseScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: ampTotal > 0 ? ramp(NOISE_RAMP, n / ampTotal) : "var(--cell)", stroke: "none" }));
+    }
+    noiseScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    { const a = HV([centre[0] - tangent[0] * 16, centre[1] - tangent[1] * 16]), b = HV([centre[0] + tangent[0] * 16, centre[1] + tangent[1] * 16]);
+      noiseScene.appendChild(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "6 4" }));
+      noiseScene.appendChild(el("text", { x: b.x, y: b.y - 6, "text-anchor": "middle", fill: "var(--shore)", ...mono, "font-size": 10 }, "along the arc")); }
+    for (let i = 0; i < 40; i++) noiseScene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(NOISE_RAMP, -1 + 2 * i / 39), stroke: "none" }));
+    noiseScene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, "−" + ampTotal.toFixed(0) + " m"));
+    noiseScene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, "+" + ampTotal.toFixed(0) + " m"));
+    noiseScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, "over the world's ri: " + nMin.toFixed(0) + " to " + nMax.toFixed(0) + " m"));
+
+    heights4.replaceChildren();
+    heights4.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let hMax4 = 0, hMin4 = 0, landRi4 = 0;
+    for (const [q, r] of RI_CELLS) {
+      const c = riCentre(q, r, centre), h = height4(c);
+      if (h > 0) { landRi4++; hMax4 = Math.max(hMax4, h); } else hMin4 = Math.min(hMin4, h);
+      heights4.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: heightColour(h), stroke: "none" }));
+    }
+    heights4.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    heights4.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    heights4.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, landRi4 + " ri above sea level of 1,296 · highest " + hMax4.toFixed(0) + " m, deepest " + hMin4.toFixed(0) + " m"));
+
+    // The section along the local normal through the world's centre, evaluated point by point this time.
+    section4.replaceChildren();
+    section4.appendChild(el("rect", { x: 50, y: 30, width: 480, height: 240, fill: "var(--cell)", stroke: "none" }));
+    for (let m = -3000; m <= 3000; m += 1000) { section4.appendChild(el("line", { x1: 50, y1: SY(m), x2: 530, y2: SY(m), stroke: m === 0 ? "var(--shore)" : "var(--line)" })); section4.appendChild(el("text", { x: 46, y: SY(m) + 4, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, m + " m")); }
+    { const hw = v.w / 2, along = a => [here.p[0] + here.normal[0] * (a - 1) * hw, here.p[1] + here.normal[1] * (a - 1) * hw];
+      const before = [], after = [];
+      for (let i = 0; i <= 480; i++) { const a = A_LO + (i / 480) * (A_HI - A_LO), p = along(a); before.push(SX(a) + "," + SY(height(p, v))); after.push(SX(a) + "," + SY(height4(p))); }
+      section4.appendChild(el("polygon", { points: SX(A_LO) + "," + SY(M_LO) + " " + after.join(" ") + " " + SX(A_HI) + "," + SY(M_LO), fill: "var(--land)", stroke: "none" }));
+      section4.appendChild(el("polygon", { points: SX(A_LO) + "," + SY(0) + " " + SX(A_HI) + "," + SY(0) + " " + SX(A_HI) + "," + SY(M_LO) + " " + SX(A_LO) + "," + SY(M_LO), fill: "var(--sea)", "fill-opacity": 0.55, stroke: "none" }));
+      section4.appendChild(el("polyline", { points: before.join(" "), stroke: "var(--mountain)", "stroke-width": 1.5, "stroke-dasharray": "5 3" }));
+      section4.appendChild(el("polyline", { points: after.join(" "), stroke: "currentColor", "stroke-width": 1.5 }));
+      const aC = bc.a, halfSpan = 18 / hw;
+      section4.appendChild(el("rect", { x: SX(aC - halfSpan), y: 30, width: SX(aC + halfSpan) - SX(aC - halfSpan), height: 240, fill: "var(--world)", "fill-opacity": 0.12, stroke: "var(--world)", "stroke-dasharray": "4 3" }));
+      section4.appendChild(el("text", { x: SX(aC), y: 24, "text-anchor": "middle", fill: "var(--world)", ...mono, "font-size": 10 }, "the world, 36 ri")); }
+    for (const [a, name] of [[-2, "basin"], [-1, "inner coast"], [0, "spine"], [1, "outer coast"], [2, "trench"]]) section4.appendChild(el("text", { x: SX(a), y: 288, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, name + " · " + (a * v.w / 2 >= 0 ? "+" : "") + (a * v.w / 2).toFixed(0) + " ri"));
+    section4.appendChild(el("text", { x: 530, y: 24, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, "along the normal through the origin · noise laid in the world's frame"));
+
+    // The octave ladder, from the world's width down past the chō.
+    octaveTable.replaceChildren();
+    { const head = document.createElement("tr");
+      for (const t of ["octave", "wavelength, ri", "in the ladder", "amplitude, m", "layers"]) { const th = document.createElement("th"); th.textContent = t; head.appendChild(th); }
+      octaveTable.appendChild(head);
+      for (let k = 0; k < LADDER_ROWS; k++) {
+        const lambda = octaveLambda(k), amp = octaveAmp(k, state), tr = document.createElement("tr");
+        tr.className = k < RI_OCTAVES ? "drawn" : "later";
+        const inLadder = lambda >= 1 ? lambda.toFixed(2) + " ri" : lambda * 36 >= 1 ? (lambda * 36).toFixed(2) + " chō" : (lambda * 360).toFixed(1) + " decichō";
+        for (const t of [String(k) + (k < RI_OCTAVES ? " · drawn" : ""), lambda.toFixed(3), inLadder, amp.toFixed(1), (amp / 0.15151).toFixed(1)]) { const td = document.createElement("td"); td.textContent = t; tr.appendChild(td); }
+        octaveTable.appendChild(tr);
+      } }
+
+    facts4.replaceChildren();
+    const row4 = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts4.appendChild(d); };
+    row4("ri above sea level, step 2 → step 4", landRi + " → " + landRi4 + " of 1,296 (" + (100 * landRi / 1296).toFixed(0) + "% → " + (100 * landRi4 / 1296).toFixed(0) + "%)");
+    row4("height at the origin, step 2 → step 4", height(centre, v).toFixed(0) + " → " + height4(centre).toFixed(0) + " m");
+    row4("noise over the world's ri", nMin.toFixed(0) + " to " + nMax.toFixed(0) + " m, of a possible ±" + ampTotal.toFixed(0));
+    row4("heavy side", "inland, " + (turned ? "lattice turned 180°" : "as seeded") + " · mean inland " + (inMean >= 0 ? "+" : "") + inMean.toFixed(0) + " m, seaward " + (outMean >= 0 ? "+" : "") + outMean.toFixed(0) + " m");
+    row4("the arc's grain here", "heading " + ((Math.atan2(tangent[1], tangent[0]) * 180 / Math.PI + 360) % 180).toFixed(0) + "° from east · lattice " + (LAMBDA_0 * state.stretch).toFixed(0) + " × " + LAMBDA_0 + " ri at octave 0");
+    { const slopeCoast = 3.0, amp12 = state.amp * (12 / LAMBDA_0) ** state.hurst;
+      row4("amplitude at a 12-ri wavelength", amp12.toFixed(0) + " m: on the plain at 3 m per ri that is " + (amp12 / slopeCoast).toFixed(0) + " ri of coast"); }
 
   }
   update();
