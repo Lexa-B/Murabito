@@ -289,6 +289,7 @@ hi(P) = max top of any solid run in any cell whose hexagon overlaps P's  // owne
       <tr><td>decichō</td><td>36 ken</td><td>6</td><td>36</td><td>10.909</td><td>1,296</td></tr>
       <tr><td>chō 町</td><td>100 decichō</td><td>10</td><td>360</td><td>109.091</td><td>129,600</td></tr>
       <tr><td>ri 里</td><td>1,296 chō</td><td>36</td><td>12,960</td><td>3,927.273</td><td>167,961,600</td></tr>
+      <tr><td>the world</td><td>1,296 ri</td><td>36</td><td>466,560</td><td>141,381.8</td><td>217,678,233,600</td></tr>
     </tbody>
   </table></div>
   <p class="muted">One shaku is 10/33 m exactly. Centres compose through the chain, so inserting the decichō moves no ken, chō or ri centre; what changes is ownership near chō borders, which now has battlements at decichō scale rather than ken scale. The name is an invention: the historical ladder has no unit of six ken.</p>
@@ -316,7 +317,7 @@ hi(P) = max top of any solid run in any cell whose hexagon overlaps P's  // owne
       <svg id="fig7b" viewBox="0 0 480 440" role="img" aria-label="Decichō cells round the camera, those holding ken detail tinted, with chō hexagons outlined."><g id="scene7b" fill="none" stroke="currentColor"></g></svg>
     </div>
   </div>
-  <p class="muted" style="max-width:none">Left is 36 times finer than right. The same camera, the same rule, one rung apart: what is a tinted <em>ken</em> chunk on the left is a fraction of one tinted <em>decichō</em> cell on the right. The third rung, decichō detail across the camera's ri, is the whole world when the world is one ri, so it is not drawn. Tints: <span style="color:var(--candidate)">resident at this detail</span>; the heavy outlines are the grandparents' ideal hexagons, battlemented in truth; the dashed hexagon is the camera's own parent.</p>
+  <p class="muted" style="max-width:none">Left is 36 times finer than right. The same camera, the same rule, one rung apart: what is a tinted <em>ken</em> chunk on the left is a fraction of one tinted <em>decichō</em> cell on the right. The two rungs above are not drawn, only counted in the table: decichō detail across the camera's ri and its neighbours, and chō detail across the whole world, which is the top cell (a packing-B cell of N = 36 ri: 1,296 ri, 141 km flat to flat, centred on 日本橋), so ri columns sit in the hierarchy for keys and <code>hi</code> but are never the surface. Tints: <span style="color:var(--candidate)">resident at this detail</span>; the heavy outlines are the grandparents' ideal hexagons, battlemented in truth; the dashed hexagon is the camera's own parent.</p>
 
   <div class="readout">
     <div class="wrap"><table class="units" id="table7">
@@ -1392,8 +1393,14 @@ hi(P) = max top of any solid run in any cell whose hexagon overlaps P's  // owne
       const deg = edge ? Math.atan(W[k] / edge) * 180 / Math.PI : null;
       facts.push([NAMES[k] + " in " + NAMES[k + 1] + " chunks", count.toLocaleString(), columns.toLocaleString(), edge ? edge.toFixed(1) : "beyond view", deg ? deg.toFixed(2) + "° ≈ " + Math.round(deg * 32) + " px" : "—"]);
     }
-    // The rung not drawn: decichō detail across the camera's ri, the whole world at one ri.
-    facts.push(["decichō in chō chunks", r === "rings" ? "37" : r === "own" ? "1,296" : "9,072 (7 ri)", r === "rings" ? (37 * 100).toLocaleString() : r === "own" ? (1296 * 100).toLocaleString() : (9072 * 100).toLocaleString(), r === "rings" ? "≥ " + (3 * 360).toLocaleString() : "the world's edge", r === "rings" ? (Math.atan(36 / 1080) * 180 / Math.PI).toFixed(2) + "° ≈ " + Math.round(Math.atan(36 / 1080) * 180 / Math.PI * 32) + " px" : "—"]);
+    // The rungs not drawn: decichō detail across the camera's ri (and neighbours), and chō detail across
+    // the whole world, which is the top cell: a packing-B cell of N = 36 ri, 1,296 ri.
+    const ang = (w, dist) => { const deg = Math.atan(w / dist) * 180 / Math.PI; return deg.toFixed(2) + "° ≈ " + Math.round(deg * 32) + " px"; };
+    const third = r === "rings" ? ["37", (37 * 100).toLocaleString(), "≥ 1,080", ang(36, 1080)]
+      : r === "own" ? ["1,296", (1296 * 100).toLocaleString(), "as little as 0", "—"]
+      : ["9,072 (7 ri)", (9072 * 100).toLocaleString(), "≥ 12,960", ang(36, 12960)];
+    facts.push(["decichō in chō chunks", ...third]);
+    facts.push(["chō in ri chunks", "1,296 (the world)", (1296 * 1296).toLocaleString(), "the world's edge", "—"]);
     rows7.replaceChildren();
     for (const f of facts) { const tr = document.createElement("tr"); f.forEach(v => { const td = document.createElement("td"); td.textContent = v; tr.appendChild(td); }); rows7.appendChild(tr); }
   }
