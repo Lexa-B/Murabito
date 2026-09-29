@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hex Ray Walk</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+/* Layout: one column, the interactive figure first, the rule and numbers beneath it. */
+:root {
+  --bg: #f6f5f0;
+  --fg: #22261f;
+  --muted: #6b7064;
+  --line: #c9ccc2;
+  --cell: #e6e8de;
+  --accent: #b7410e;      /* the face the ray leaves through */
+  --candidate: #2b6f8c;   /* faces the ray could leave through */
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23;
+    --accent: #f0803a; --candidate: #6db3d1; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23;
+  --accent: #f0803a; --candidate: #6db3d1; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body); padding: 24px 16px 40px; }
+main { max-width: 720px; margin: 0 auto; display: grid; gap: 20px; }
+h1 { font-size: 1.4rem; margin: 0; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 62ch; }
+.muted { color: var(--muted); }
+figure { margin: 0; display: grid; gap: 8px; }
+figcaption { font-size: 0.9rem; color: var(--muted); max-width: 62ch; }
+svg { width: 100%; max-width: 100%; height: auto; display: block; touch-action: none; user-select: none; }
+.handle { cursor: grab; }
+.readout { display: grid; gap: 10px; font-family: var(--font-mono); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.readout table { border-collapse: collapse; width: 100%; max-width: 560px; }
+.readout th, .readout td { text-align: left; padding: 4px 12px 4px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.readout th { font-weight: 500; color: var(--muted); }
+.readout tr.win td { color: var(--accent); font-weight: 500; }
+.readout tr.off td { color: var(--muted); }
+.wrap { overflow-x: auto; }
+code, pre { font-family: var(--font-mono); font-size: 0.9rem; }
+pre { margin: 0; padding: 12px 14px; background: var(--cell); border-radius: 4px; overflow-x: auto; }
+</style>
+
+</head>
+<body>
+<main>
+  <h1>One hex, one ray: which face does it leave through?</h1>
+  <p>Everything in cube coordinates <code>(q, r, s)</code>, <code>q + r + s = 0</code>, with the main branch's directions: <code>+q</code> is east, anticlockwise from there. Drag the <strong>origin</strong> (filled dot) anywhere inside the cell and the <strong>direction</strong> (open dot) anywhere at all.</p>
+
+  <figure>
+    <svg id="fig" viewBox="0 0 640 460" role="img" aria-label="A pointy-top hexagon with a ray inside it. The three faces the ray moves toward are marked as candidates and the nearest of their planes is marked as the exit.">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g id="scene" fill="none" stroke="currentColor" stroke-width="1.5"></g>
+    </svg>
+    <figcaption>Each face is labelled with the cube offset <code>e</code> of the neighbour behind it. The ray can only leave through the three faces it is moving toward (<span style="color:var(--candidate)">blue</span>, <code>e · d &gt; 0</code>); of their three planes, the one it reaches first is the exit (<span style="color:var(--accent)">orange</span>). Drawn through the main branch's mapping <code>x = q + r/2</code>, <code>z = r·√3/2</code>; the arithmetic never touches it.</figcaption>
+  </figure>
+
+  <div class="readout">
+    <div id="ray"></div>
+    <div class="wrap"><table>
+      <thead><tr><th>face</th><th>e = (dq, dr, ds)</th><th>plane</th><th>e · d</th><th>t to its plane</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </div>
+
+  <p>The rule, for the face toward the neighbour at cube offset <code>e</code>, cell centre <code>c</code>, ray <code>o + t·d</code>:</p>
+<pre>v = e · d                      // moving toward this face? (v ≤ 0: not a candidate)
+t = (1 − e · (o − c)) / v      // the face is the plane e · (p − c) = 1
+exit = the candidate with the smallest t</pre>
+  <p class="muted">Plain three-component dot products in <code>(q, r, s)</code>: one per face, and one division per candidate. The cell itself is the three slabs <code>|Δq − Δr| ≤ 1</code>, <code>|Δq − Δs| ≤ 1</code>, <code>|Δr − Δs| ≤ 1</code>. A tie between two faces means the ray passes through their shared corner; either neighbour is a correct next cell.</p>
+
+  <h1 id="walk">Bite two: across the face and on</h1>
+  <p>The same ray, now walking. Drag the origin anywhere in the patch and the direction anywhere. The start cell is <code>cube_round(o)</code>, the crate's <code>VoxelspacePos::round</code>. Each step crosses the nearest candidate plane, moves the centre by that face's <code>e</code>, and nudges the three <code>t</code> values instead of recomputing them.</p>
+
+  <figure>
+    <svg id="fig2" viewBox="0 0 640 520" role="img" aria-label="A patch of hexagons with a ray crossing it. The cells the ray visits are numbered in order and the face it leaves each one through is marked.">
+      <g id="scene2" fill="none" stroke="currentColor" stroke-width="1"></g>
+    </svg>
+    <figcaption>Cells the ray visits, numbered in visiting order; the exit face of each is <span style="color:var(--accent)">orange</span> and the crossing point is a dot. The three candidate faces never change along the ray, so every step is one comparison and three additions.</figcaption>
+  </figure>
+
+<pre>candidates: the three faces with v = e · d &gt; 0, and their 1/v     // fixed for the ray
+c = cube_round(o);  t_j = (1 − e_j · (o − c)) / v_j                 // bite one
+loop:
+    i = the candidate with the smallest t              // exit face
+    ... the cell c is visited from t_in to t_i ...
+    c += e_i                                            // step into the neighbour
+    t_i += 2 / v_i                                      // that family: a whole cell on
+    t_j += (e_j · e_i) / v_j   for the other two        // e_j · e_i is +1 or −1: half a cell
+    t_in = t_i</pre>
+
+  <div class="readout">
+    <div id="walkSummary"></div>
+    <div class="wrap"><table>
+      <thead><tr><th>#</th><th>cell (q, r, s)</th><th>t in</th><th>exit</th><th>t out</th><th id="h0"></th><th id="h1"></th><th id="h2"></th></tr></thead>
+      <tbody id="rows2"></tbody>
+    </table></div>
+  </div>
+  <p class="muted">The last three columns are the incremental <code>t</code> values while in that cell, each with the nudge it received on entering. The summary line checks them against bite one's direct formula recomputed in every cell: the two should agree to floating-point noise.</p>
+</main>
+
+<script>
+(function () {
+  const S = 220;                      // pixels per shaku
+  const C = { x: 320, y: 230 };       // cell centre on screen
+  const ROW = Math.sqrt(3) / 2;
+
+  // The six edge directions in Direction::ALL's order (even indices), with axial offsets
+  // from murabito_hexcoords::Direction::axial_offset, and the cube offset e they imply.
+  const faces = [
+    { name: "E",   dq:  1, dr:  0 },
+    { name: "NNE", dq:  1, dr: -1 },
+    { name: "NNW", dq:  0, dr: -1 },
+    { name: "W",   dq: -1, dr:  0 },
+    { name: "SSW", dq: -1, dr:  1 },
+    { name: "SSE", dq:  0, dr:  1 },
+  ].map(f => ({ ...f, e: [f.dq, f.dr, -f.dq - f.dr] }));
+
+  const cube = (q, r) => [q, r, -q - r];
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+  // Cube ↔ screen, through the main branch's mapping. Screen y runs down, so screen y = world z.
+  const toScreen = p => ({ x: C.x + (p[0] + p[1] / 2) * S, y: C.y + p[1] * ROW * S });
+  const fromScreen = s => { const r = (s.y - C.y) / S / ROW; const q = (s.x - C.x) / S - r / 2; return cube(q, r); };
+
+  // Corners: anticlockwise from 30°, as VoxelCoord::corners. In cube coordinates the corner
+  // between faces E and NNE is (2/3, −1/3, −1/3); the rest are its rotations.
+  const corners = [];
+  { let c = [2 / 3, -1 / 3, -1 / 3]; for (let i = 0; i < 6; i++) { corners.push(c); c = [-c[2], -c[0], -c[1]]; } }
+  // The rotation above turns 60° anticlockwise: (q, r, s) → (−s, −q, −r).
+
+  // State: origin and direction in cube coordinates, relative to the centre c = 0.
+  let o = cube(-0.10, 0.18);
+  let d = cube(0.75, -0.30);
+
+  const fmt = v => (v === null ? "—" : (v >= 0 ? " " : "") + v.toFixed(3));
+  const fmtCube = p => "(" + p.map(v => (v >= 0 ? " " : "") + v.toFixed(2)).join(", ") + ")";
+
+  function clampInside(p) {
+    for (const f of faces) {
+      const s = dot3(f.e, p);
+      if (s > 1) { const k = (s - 1) / dot3(f.e, f.e); p = p.map((v, i) => v - k * f.e[i]); }
+    }
+    return p;
+  }
+
+  function candidates() {
+    return faces.map(f => {
+      const v = dot3(f.e, d);
+      if (v <= 1e-9) return { f, v, t: null };
+      return { f, v, t: (1 - dot3(f.e, o)) / v };
+    });
+  }
+
+  const svg = document.getElementById("fig");
+  const scene = document.getElementById("scene");
+  const rows = document.getElementById("rows");
+  const rayOut = document.getElementById("ray");
+  const NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs, text) {
+    const e = document.createElementNS(NS, tag);
+    for (const a in attrs) e.setAttribute(a, attrs[a]);
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  const lerp = (a, b, k) => a.map((v, i) => v + k * (b[i] - v));
+
+  function render() {
+    const cs = candidates();
+    let win = null;
+    for (const c of cs) if (c.t !== null && (win === null || c.t < win.t)) win = c;
+
+    scene.replaceChildren();
+    scene.appendChild(el("polygon", { points: corners.map(p => { const s = toScreen(p); return s.x + "," + s.y; }).join(" "), fill: "var(--cell)", stroke: "var(--line)" }));
+
+    faces.forEach((f, k) => {
+      // Face k runs between corners k−1 and k (corners start at 30°, faces at 0°, 60°, …).
+      const p0 = toScreen(corners[(k + 5) % 6]), p1 = toScreen(corners[k]);
+      const cand = cs[k];
+      const isWin = win && win.f === f;
+      const colour = isWin ? "var(--accent)" : (cand.t !== null ? "var(--candidate)" : "var(--line)");
+      scene.appendChild(el("line", { x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: colour, "stroke-width": isWin ? 4 : (cand.t !== null ? 3 : 1.5) }));
+      // Normal arrow from the face midpoint: the midpoint is e/2 in cube coordinates.
+      const mid = toScreen(f.e.map(v => v * 0.5)), tip = toScreen(f.e.map(v => v * 0.68));
+      scene.appendChild(el("line", { x1: mid.x, y1: mid.y, x2: tip.x, y2: tip.y, stroke: colour, "marker-end": "url(#arrow)", style: "color:" + colour, "stroke-dasharray": cand.t === null ? "3 3" : "none" }));
+      const lab = toScreen(f.e.map(v => v * 0.84));
+      scene.appendChild(el("text", { x: lab.x, y: lab.y, "text-anchor": "middle", fill: colour, stroke: "none", "font-size": 12, "font-family": "var(--font-mono)" }, f.name));
+      scene.appendChild(el("text", { x: lab.x, y: lab.y + 13, "text-anchor": "middle", fill: colour, stroke: "none", "font-size": 11, "font-family": "var(--font-mono)" }, "(" + f.e.join(",") + ")"));
+    });
+
+    // Extended plane of the exit face
+    if (win) {
+      const e = win.f.e, along = corners[faces.indexOf(win.f)].map((v, i) => v - corners[(faces.indexOf(win.f) + 5) % 6][i]);
+      const mid = e.map(v => v * 0.5);
+      const p0 = toScreen(mid.map((v, i) => v + along[i] * 2.2)), p1 = toScreen(mid.map((v, i) => v - along[i] * 2.2));
+      scene.appendChild(el("line", { x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: "var(--accent)", "stroke-dasharray": "2 5", "stroke-width": 1 }));
+    }
+
+    // Ray: origin to exit point, faint beyond
+    const so = toScreen(o);
+    const tEnd = win ? win.t : 2;
+    const hit = toScreen(lerp(o, o.map((v, i) => v + d[i]), tEnd));
+    const far = toScreen(lerp(o, o.map((v, i) => v + d[i]), tEnd + 0.9));
+    scene.appendChild(el("line", { x1: hit.x, y1: hit.y, x2: far.x, y2: far.y, stroke: "currentColor", "stroke-dasharray": "4 4", opacity: 0.4 }));
+    scene.appendChild(el("line", { x1: so.x, y1: so.y, x2: hit.x, y2: hit.y, stroke: "currentColor", "stroke-width": 2 }));
+    if (win) scene.appendChild(el("circle", { cx: hit.x, cy: hit.y, r: 5, fill: "var(--accent)", stroke: "none" }));
+
+    // Handles: o, and o + d (so t = 1 is visible)
+    const one = toScreen(o.map((v, i) => v + d[i]));
+    scene.appendChild(el("circle", { cx: so.x, cy: so.y, r: 7, fill: "currentColor", stroke: "none", class: "handle" }));
+    scene.appendChild(el("circle", { cx: one.x, cy: one.y, r: 7, fill: "var(--bg)", stroke: "currentColor", "stroke-width": 2, class: "handle" }));
+    scene.appendChild(el("text", { x: so.x - 10, y: so.y + 4, "text-anchor": "end", fill: "currentColor", stroke: "none", "font-size": 12, "font-family": "var(--font-mono)" }, "o"));
+    scene.appendChild(el("text", { x: one.x + 10, y: one.y + 14, fill: "currentColor", stroke: "none", "font-size": 12, "font-family": "var(--font-mono)" }, "o + d  (t = 1)"));
+
+    // Readout
+    rayOut.textContent = "o = " + fmtCube(o) + "    d = " + fmtCube(d) + "    (c = 0, sums " + fmt(o[0] + o[1] + o[2]).trim() + " and " + fmt(d[0] + d[1] + d[2]).trim() + ")";
+    rows.replaceChildren();
+    const planeName = e => { const a = "qrs"[e.indexOf(1)], b = "qrs"[e.indexOf(-1)]; return "Δ" + a + " − Δ" + b + " = 1"; };
+    for (const c of cs) {
+      const tr = document.createElement("tr");
+      tr.className = win && win.f === c.f ? "win" : (c.t === null ? "off" : "");
+      const cells = [c.f.name, "(" + c.f.e.join(", ") + ")", planeName(c.f.e), fmt(c.v), c.t === null ? "not a candidate" : fmt(c.t) + (win && win.f === c.f ? "  ← exit" : "")];
+      for (const s of cells) { const td = document.createElement("td"); td.textContent = s; tr.appendChild(td); }
+      rows.appendChild(tr);
+    }
+  }
+
+  // Dragging
+  let drag = null;
+  function pointer(ev) {
+    const r = svg.getBoundingClientRect();
+    return { x: (ev.clientX - r.left) * 640 / r.width, y: (ev.clientY - r.top) * 460 / r.height };
+  }
+  const dist = (a, b) => { const A = toScreen(a), B = toScreen(b); return Math.hypot(A.x - B.x, A.y - B.y); };
+  svg.addEventListener("pointerdown", ev => {
+    const p = fromScreen(pointer(ev));
+    const one = o.map((v, i) => v + d[i]);
+    drag = dist(p, one) < dist(p, o) ? "d" : "o";
+    svg.setPointerCapture(ev.pointerId);
+    move(ev);
+  });
+  svg.addEventListener("pointermove", ev => { if (drag) move(ev); });
+  svg.addEventListener("pointerup", () => { drag = null; });
+  function move(ev) {
+    const p = fromScreen(pointer(ev));
+    if (drag === "o") { o = clampInside(p); }
+    else {
+      d = p.map((v, i) => v - o[i]);
+      if (Math.hypot(d[0], d[1], d[2]) < 0.05) d = cube(0.05, 0);
+    }
+    render();
+  }
+  render();
+})();
+</script>
+
+<script>
+// Bite two: the walk. Its own copy of the small helpers, so each figure stands alone.
+(function () {
+  const R = 3;                        // patch radius, in cells
+  const S = 62;                       // pixels per shaku
+  const C = { x: 320, y: 260 };
+  const ROW = Math.sqrt(3) / 2;
+  const MAX_STEPS = 60;
+
+  const faces = [
+    { name: "E",   dq:  1, dr:  0 },
+    { name: "NNE", dq:  1, dr: -1 },
+    { name: "NNW", dq:  0, dr: -1 },
+    { name: "W",   dq: -1, dr:  0 },
+    { name: "SSW", dq: -1, dr:  1 },
+    { name: "SSE", dq:  0, dr:  1 },
+  ].map(f => ({ ...f, e: [f.dq, f.dr, -f.dq - f.dr] }));
+
+  const cube = (q, r) => [q, r, -q - r];
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const add = (a, b) => a.map((v, i) => v + b[i]);
+  const sub = (a, b) => a.map((v, i) => v - b[i]);
+  const scale = (a, k) => a.map(v => v * k);
+  const hexDist = c => Math.max(Math.abs(c[0]), Math.abs(c[1]), Math.abs(c[2]));
+
+  const toScreen = p => ({ x: C.x + (p[0] + p[1] / 2) * S, y: C.y + p[1] * ROW * S });
+  const fromScreen = s => { const r = (s.y - C.y) / S / ROW; const q = (s.x - C.x) / S - r / 2; return cube(q, r); };
+
+  const corners = [];
+  { let c = [2 / 3, -1 / 3, -1 / 3]; for (let i = 0; i < 6; i++) { corners.push(c); c = [-c[2], -c[0], -c[1]]; } }
+
+  // The crate's cube rounding: round all three, then fix the one that moved furthest.
+  function cubeRound(p) {
+    let q = Math.round(p[0]), r = Math.round(p[1]), s = Math.round(p[2]);
+    const dq = Math.abs(q - p[0]), dr = Math.abs(r - p[1]), ds = Math.abs(s - p[2]);
+    if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s; else s = -q - r;
+    return [q, r, s];
+  }
+
+  const cells = [];
+  for (let q = -R; q <= R; q++) for (let r = -R; r <= R; r++) { const c = cube(q, r); if (hexDist(c) <= R) cells.push(c); }
+
+  let o = cube(-2.35, 0.9);
+  let d = cube(1.0, -0.42);
+
+  function walk() {
+    const cand = faces.filter(f => dot3(f.e, d) > 1e-9);
+    const inv = cand.map(f => 1 / dot3(f.e, d));
+    let c = cubeRound(o);
+    let t = cand.map((f, j) => (1 - dot3(f.e, sub(o, c))) * inv[j]);
+    const steps = [];
+    let tIn = 0, worst = 0;
+    for (let n = 0; n < MAX_STEPS && hexDist(c) <= R; n++) {
+      const direct = cand.map((f, j) => (1 - dot3(f.e, sub(o, c))) * inv[j]);
+      direct.forEach((v, j) => { worst = Math.max(worst, Math.abs(v - t[j])); });
+      let i = 0; for (let j = 1; j < t.length; j++) if (t[j] < t[i]) i = j;
+      const nudges = cand.map((f, j) => n === 0 ? null : dot3(f.e, steps[n - 1].exit.e));
+      steps.push({ cell: c, tIn, exit: cand[i], tOut: t[i], t: t.slice(), nudges });
+      const ei = cand[i].e;
+      c = add(c, ei);
+      t = t.map((tj, j) => tj + dot3(cand[j].e, ei) * inv[j]);
+      tIn = steps[n].tOut;
+    }
+    return { cand, steps, worst };
+  }
+
+  const svg = document.getElementById("fig2");
+  const scene = document.getElementById("scene2");
+  const rows = document.getElementById("rows2");
+  const summary = document.getElementById("walkSummary");
+  const NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs, text) {
+    const e = document.createElementNS(NS, tag);
+    for (const a in attrs) e.setAttribute(a, attrs[a]);
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  const poly = c => corners.map(k => { const s = toScreen(add(c, k)); return s.x + "," + s.y; }).join(" ");
+  const fmt = v => (v >= 0 ? " " : "") + v.toFixed(3);
+  const fmtCell = c => "(" + c.map(v => (v >= 0 ? " " : "") + v).join(",") + ")";
+
+  function render() {
+    const { cand, steps, worst } = walk();
+    scene.replaceChildren();
+
+    for (const c of cells) scene.appendChild(el("polygon", { points: poly(c), fill: "var(--cell)", stroke: "var(--line)" }));
+
+    steps.forEach((st, n) => {
+      scene.appendChild(el("polygon", { points: poly(st.cell), fill: "var(--candidate)", "fill-opacity": 0.18, stroke: "var(--candidate)", "stroke-width": 1.5 }));
+      const k = faces.indexOf(st.exit);
+      const p0 = toScreen(add(st.cell, corners[(k + 5) % 6])), p1 = toScreen(add(st.cell, corners[k]));
+      scene.appendChild(el("line", { x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: "var(--accent)", "stroke-width": 3 }));
+      const centre = toScreen(st.cell);
+      scene.appendChild(el("text", { x: centre.x, y: centre.y + 4, "text-anchor": "middle", fill: "currentColor", stroke: "none", "font-size": 12, "font-family": "var(--font-mono)" }, String(n)));
+    });
+
+    const last = steps.length ? steps[steps.length - 1].tOut : 4;
+    const so = toScreen(o), end = toScreen(add(o, scale(d, last)));
+    const far = toScreen(add(o, scale(d, last + 1)));
+    scene.appendChild(el("line", { x1: end.x, y1: end.y, x2: far.x, y2: far.y, stroke: "currentColor", "stroke-dasharray": "4 4", opacity: 0.4 }));
+    scene.appendChild(el("line", { x1: so.x, y1: so.y, x2: end.x, y2: end.y, stroke: "currentColor", "stroke-width": 2 }));
+    for (const st of steps) { const h = toScreen(add(o, scale(d, st.tOut))); scene.appendChild(el("circle", { cx: h.x, cy: h.y, r: 3.5, fill: "var(--accent)", stroke: "none" })); }
+
+    const one = toScreen(add(o, d));
+    scene.appendChild(el("circle", { cx: so.x, cy: so.y, r: 7, fill: "currentColor", stroke: "none", class: "handle" }));
+    scene.appendChild(el("circle", { cx: one.x, cy: one.y, r: 7, fill: "var(--bg)", stroke: "currentColor", "stroke-width": 2, class: "handle" }));
+    scene.appendChild(el("text", { x: so.x - 10, y: so.y + 4, "text-anchor": "end", fill: "currentColor", stroke: "none", "font-size": 12, "font-family": "var(--font-mono)" }, "o"));
+    scene.appendChild(el("text", { x: one.x + 10, y: one.y + 14, fill: "currentColor", stroke: "none", "font-size": 12, "font-family": "var(--font-mono)" }, "o + d"));
+
+    // Table
+    cand.forEach((f, j) => { document.getElementById("h" + j).textContent = "t " + f.name; });
+    for (let j = cand.length; j < 3; j++) document.getElementById("h" + j).textContent = "";
+    rows.replaceChildren();
+    const shown = steps.slice(0, 10);
+    shown.forEach((st, n) => {
+      const tr = document.createElement("tr");
+      const cols = [String(n), fmtCell(st.cell), fmt(st.tIn), st.exit.name, fmt(st.tOut)];
+      cand.forEach((f, j) => {
+        const nudge = st.nudges[j];
+        const tag = nudge === null ? "" : (nudge === 2 ? "  +2/v" : nudge === 1 ? "  +1/v" : nudge === -1 ? "  −1/v" : "  " + nudge + "/v");
+        cols.push(fmt(st.t[j]) + tag);
+      });
+      for (let j = cand.length; j < 3; j++) cols.push("");
+      cols.forEach((s, i) => { const td = document.createElement("td"); td.textContent = s; if (i === 3 || (i >= 5 && cand[i - 5] === st.exit)) td.style.color = "var(--accent)"; tr.appendChild(td); });
+      rows.appendChild(tr);
+    });
+    summary.textContent = steps.length + " cells visited" + (steps.length > shown.length ? " (first " + shown.length + " listed)" : "") + " · " + cand.length + " candidate faces: " + cand.map(f => f.name).join(", ") + " · incremental vs direct t, worst gap: " + worst.toExponential(1);
+  }
+
+  let drag = null;
+  function pointer(ev) {
+    const r = svg.getBoundingClientRect();
+    return { x: (ev.clientX - r.left) * 640 / r.width, y: (ev.clientY - r.top) * 520 / r.height };
+  }
+  const dist = (a, b) => { const A = toScreen(a), B = toScreen(b); return Math.hypot(A.x - B.x, A.y - B.y); };
+  svg.addEventListener("pointerdown", ev => {
+    const p = fromScreen(pointer(ev));
+    drag = dist(p, add(o, d)) < dist(p, o) ? "d" : "o";
+    svg.setPointerCapture(ev.pointerId);
+    move(ev);
+  });
+  svg.addEventListener("pointermove", ev => { if (drag) move(ev); });
+  svg.addEventListener("pointerup", () => { drag = null; });
+  function move(ev) {
+    const p = fromScreen(pointer(ev));
+    if (drag === "o") { o = hexDist(cubeRound(p)) <= R ? p : o; }
+    else { d = sub(p, o); if (Math.hypot(d[0], d[1], d[2]) < 0.05) d = cube(0.05, 0); }
+    render();
+  }
+  render();
+})();
+</script>
+</body>
+</html>
