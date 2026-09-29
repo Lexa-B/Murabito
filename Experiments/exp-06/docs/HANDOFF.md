@@ -117,6 +117,13 @@ Measures the 5d coast, changes nothing. (1) **Land share against the inset:** fo
 
 **Readings at d = +6:** 70% → 62% → 59%; erosion costs 2.6 points; **d ≈ +11.4 for 70% after erosion**; 132 coast ri; **D at ri scale 1.10**, inside Kantō's range (structure alone would be 1.35, so erosion and the plain's slope smoothed the coast at that scale); **D at chō scale ≈ 0.9**, i.e. the coast runs straight through a cluster: the fine octaves do not roughen the zero set at chō scale. Ria-scale coastal detail, if wanted, would have to come from finer structure at the coast or from the shelf's own erosion, not from the filter as it stands. All world maps from 5a down to the coast map take the window click (the click targets are a hand-kept list of ids in the script; two maps were missed and fixed, so a new map must be added there, or the binding moved to a class).
 
+## Cube coordinates everywhere, and two line fixes (2026-09-29)
+
+- **Lexa's rule: "always cubic in the runtime. including calcs. no exceptions."** Every ri, chō and lattice node on the page is `(q, r, s)` with `s` carried and used: `owner(q, r, s, N)` with distance `(dq² + dr² + ds²)/2`, `RI_CELLS` as triples, `NEIGH` as cube steps `E (1,0,−1) NNE (1,−1,0) NNW (0,−1,1) W (−1,0,1) SSW (−1,1,0) SSE (0,1,−1)`, `riCentre(q, r, s, c) = [c.x + (q − s)/2, c.y − r·√3/2]`, keys `"q,r,s"`, the settle graph, the coast counts, the window pick (`state.windowQRS`), the hex lattice nodes and the pivot cache, and **the hash mixes `s` too**, so seed 1 is a different draw than before the rule (same statistics). Saved as memory `always-cubic-coords`.
+- **5d's sharp lines:** the normalisation was a switch at the threshold (a step of up to 1/norm in the surface). Now the pair is divided by `max(len, norm)`, which joins continuously. Fixed, Lexa confirmed.
+- **5c's rare sharp lines** (Lexa saw them at (−1, −4, 5) and (−2, −4, 6)): the mask read the straight-gully slope of the coarser octaves, which flips sign at each of their ridges and creases. The mask now reads the true, smooth slope of the coarser stripes (`gradSmooth`, `−E·sin φ·2πS/c`); the pivots keep the straight one, where a step at a node cannot draw a line. Fixed, Lexa confirmed.
+- Readings at d +12.5 after these: land 90% → 77% → 75%; the inset for 70% is a little under 12.5 now.
+
 ## Where we stopped: the inset retune, then optimise
 
 Step 6 says d ≈ +11.4 gives 70% land after erosion at seed 1, θ 12°. The retune is setting the inset default there and checking the edge rule (at d = 12: one sea edge, three land, two shore). Then **optimise** (Lexa's standing decision; levers in the Speed paragraph above), then the open questions list.
