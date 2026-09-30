@@ -19,6 +19,8 @@ pub mod f64 {
     pub fn rad(deg: F) -> F {
         deg * PI / 180.0
     }
+    #[path = "../banana.rs"]
+    pub mod banana;
     #[path = "../plane.rs"]
     pub mod plane;
 }
@@ -33,6 +35,8 @@ pub mod f32 {
     pub fn rad(deg: F) -> F {
         deg * PI / 180.0
     }
+    #[path = "../banana.rs"]
+    pub mod banana;
     #[path = "../plane.rs"]
     pub mod plane;
 }
