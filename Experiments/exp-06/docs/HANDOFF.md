@@ -1,6 +1,19 @@
 # exp-06 handoff: worldgen
 
-Written 2026-09-29 at the end of the first design session, for a fresh context to pick up mid-conversation. Everything here was agreed in chat; there is no spec yet. Read this, open the viz page, and continue at "Where we stopped".
+Written 2026-09-29, brought up to date 2026-09-30 at the end of the design walkthrough. Everything below was agreed in chat and is built on the page.
+
+## Start here: the port to Rust and the GPU
+
+**The walkthrough is done: steps 1–7d are built on `viz/banana.html` (commit `952747a`) and tuned.** Lexa's next instruction, 2026-09-30: "rewrite all of exp-06 in rust and on-gpu where possible... that way we have a version we can plug in as a basis for a game terrain generator when we're ready. keep an exp-06.html entrypoint/wrapper... this will be a side-by-side of two browsers with the same settings on the old banana and new exp-06 files so i can verify similar results."
+
+What to read, in order:
+
+1. **`docs/specs/2026-09-30-exp-06-worldgen-port-design.md`**: the port's shape (a Rust workspace here with an engine-free `worldgen` crate, a `worldgen-gpu` crate on wgpu, and an `exp06` server that serves `viz/exp-06.html`), then the whole pipeline in port order with every formula, constant and default, the rung rule, the CPU/GPU split, the verification protocol, and the order of bites. It is the spec; this handoff is the state and the history.
+2. **`docs/reference-readings.md`**: every facts row of the page at the defaults, seed 1, plus 50-seed averages. The port is checked against these.
+3. **`viz/tools/check.js`** and **`viz/tools/seeds.js`**: the page's headless harness (node, a DOM stub) and the seed-averaging script. Any value the port needs from the page comes from a `console.log` in the page and a run of the harness.
+4. The rest of this handoff: what each step is and why, the decisions and their dates, the things tried and rejected.
+
+**How Lexa works, which the port must follow:** one small bite at a time, each checked against the page before the next; commit only when Lexa says "commit it"; steps are discrete actions with results, never recaps; cube `(q, r, s)` everywhere in runtime code, calculations and keys included, no exceptions; `git -C <absolute worktree path>` for every git command; `main` is PR-only and no push or PR until Lexa says. `banana.html` is the reference and is not changed, except to accept settings in the URL query so the side-by-side is one link each.
 
 ## What exp-06 is
 
@@ -10,7 +23,7 @@ It is a design walkthrough first: every step is thought through and drawn as an 
 
 ## Where the work lives
 
-- **This half:** worktree `.claude/worktrees/exp-06-worldgen`, branch `exp-06-worldgen`, cut from `origin/main` at `c3781c3`. Commits so far are all to `Experiments/exp-06/viz/banana.html` (last: `ac8e905`).
+- **This half:** worktree `.claude/worktrees/exp-06-worldgen`, branch `exp-06-worldgen`, cut from `origin/main` at `c3781c3`. Eighteen commits on the branch, all under `Experiments/exp-06/` (`viz/banana.html`, `viz/tools/`, `docs/`); nothing pushed, no PR. The page is also published as a private artifact at https://claude.ai/artifact/FmofqfQz8ZuP3LTM6UVpcJ (republish from a copy with the skeleton lines stripped; see "How to work here").
 - **The other half:** the raycasting conversation, exp-07, works in `.claude/worktrees/exp-06-voxel-raycast` on branch `exp-06-voxel-raycast`. Its files (`goals.md` for raycasting, `viz/hex-ray-walk.html`, `viz/kanto-scale.html`) still sit under `Experiments/exp-06/` there and are to be moved to `exp-07/` by that session. Never commit into that tree from here, and expect a rename on its side.
 - Memory notes (Claude's auto-memory) that matter: `exp-06-decisions` (decisions shared by both halves), `steps-are-actions` (process rule from this session).
 
@@ -145,7 +158,7 @@ Two rounds. **Round one changed nothing in the results:** sliders render 150 ms 
 
 ## Where we stopped
 
-Steps 1–7d built and tuned; the erosion at 8 octaves runs in ~3.2 s. Next, from the open questions: the carve and the drainage at finer rungs (rivers as objects the chō rung honours), whether to bring `H` toward Kantō's 1.1–1.15 or keep the look (the coast at chō scale measures 1.3, see step 6), materials and the vertical, and the exp-06 `goals.md` and spec.
+Steps 1–7d built and tuned; the erosion at 8 octaves runs in ~3 s on the page. **Next is the port**, see "Start here" at the top and the spec. After the port, from the open questions: rivers as objects and the halo fill at finer rungs, whether to bring `H` toward Kantō's 1.1–1.15 or keep the look (the coast at chō scale measures 1.3, see step 6), materials and the vertical, the world's climate on the finished surface, and the exp-06 `goals.md` and the manifest entry.
 
 ## Steps 7a–7c: drainage (built; numbered n+1 until step 6 existed)
 
@@ -165,6 +178,9 @@ Open for these later: they run at ri scale on a smooth surface, so pits are rare
 - **Publishing the page:** the file in `viz/` carries a full HTML skeleton so it opens from disk. The Artifact tool wants the same content without `<!doctype>`, `<html>`, `<head>`, `<meta>`, `<body>` lines; strip them with `sed` into the scratchpad and publish that copy to the existing artifact URL (same file path in the session keeps the URL).
 - **Check headlessly before publishing:** `node -e` with `new Function` on each `<script>` block for syntax, and a DOM stub (`getElementById`/`createElement`/`createElementNS`/`querySelectorAll` returning objects with `appendChild`, `replaceChildren`, `append`, `setAttribute`, `addEventListener`, `textContent`) to run the whole render and read the facts back. The whole page renders in about 55 ms.
 - Git: `git -C <absolute worktree path>` for everything; never touch the other worktree; `main` is PR-only and the PR waits for Lexa's approval.
+- **Cube `(q, r, s)` everywhere in runtime code,** calculations and keys included, no exceptions (Lexa, 2026-09-29; memory `always-cubic-coords`).
+- **The harness is in the repo:** `node viz/tools/check.js viz/banana.html` renders the page headlessly and prints every facts row (`STRIP=1` also presses the strip-count button); `node viz/tools/seeds.js viz/banana.html 50` averages the readings over seeds. The check takes ~3 s at the defaults; the seeds script ~3 s per seed.
+- **Things tried on the page and reverted, so they are not on it:** a step 8 "drill" (one cell of each rung drawn as its children, with the step against the rung above; useful numbers kept in the spec §7) and two three.js 3D views of hex columns (the cluster and the drilled chō). Lexa: "this doesn't help me too much... I won't understand better until I can see in 3D... like a full import into the game so I can see a wide swathe of terrain." That is what the port is for.
 
 ## Open questions, in the order they will come up
 
