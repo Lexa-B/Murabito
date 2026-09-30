@@ -115,16 +115,18 @@ svg { width: 100%; height: auto; display: block; }
   function view(cx, cy, scale) { return p => ({ x: 280 + (p[0] - cx) * scale, y: 280 - (p[1] - cy) * scale }); }
   const pts = (ps, f) => ps.map(p => { const s = f(p); return s.x + "," + s.y; }).join(" ");
 
-  let renderRun = 0;
+  let renderRun = 0, sent = null;
   async function render() {
-    const run = ++renderRun, t0 = performance.now();
+    const run = ++renderRun, t0 = performance.now(), body = { ...state, path };
     let out;
     try {
-      const res = await fetch("/render", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...state, path }) });
-      if (!res.ok) { status.textContent = "server error " + res.status + ": " + await res.text(); return; }
+      const res = await fetch("/render", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      if (run !== renderRun) return;
+      if (!res.ok) { status.textContent = "server error " + res.status + ": " + await res.text() + " · the drawing is from the last good render"; return; }
       out = await res.json();
-    } catch (e) { status.textContent = "no server: " + e.message + " (cargo run -p exp06)"; return; }
+    } catch (e) { if (run !== renderRun) return; status.textContent = "no server: " + e.message + " (cargo run -p exp06) · the drawing is from the last good render"; return; }
     if (run !== renderRun) return;
+    sent = body;
     draw(out);
     status.textContent = "server " + out.ms.toFixed(2) + " ms (" + out.path + ") · round trip " + (performance.now() - t0).toFixed(0) + " ms";
   }
@@ -169,7 +171,7 @@ svg { width: 100%; height: auto; display: block; }
     }
     for (const e of out.edges) for (const x of e.crossings) { const s = N(x); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 5, fill: "var(--shore)", stroke: "var(--bg)", "stroke-width": 1.5 })); }
     { const s = N(origin); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 4, fill: "var(--world)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y + 4, fill: "var(--world)", ...mono }, "origin")); }
-    { const s = N(out.here); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 3, fill: "var(--shore)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y - 6, fill: "var(--shore)", ...mono, "font-size": 10 }, "θ = " + state.theta.toFixed(1) + "°")); }
+    { const s = N(out.here); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 3, fill: "var(--shore)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y - 6, fill: "var(--shore)", ...mono, "font-size": 10 }, "θ = " + sent.theta.toFixed(1) + "°")); }
     near.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "36 ri across · north up"));
 
     facts.replaceChildren();
