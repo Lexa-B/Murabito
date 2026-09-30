@@ -273,8 +273,8 @@ svg { width: 100%; height: auto; display: block; }
   <div class="facts" id="facts6"></div>
   <p class="muted">A box count on 36 ri of world has few scales to fit, so the ri-scale <code>D</code> is a coarse reading; the chō-scale one inside the window is the sharper one, but only where the coast crosses it, so click a coastal ri. The inset slider is the retune: set <code>d</code> and watch the 5d share.</p>
 
-  <h1 id="stepGradient">Step n+1a: the downhill face of every ri</h1>
-  <p>A step for later, drawn now: it reads whatever surface the last step left, step 5d's eroded one now. For each ri, the gradient at its centre by central differences half a ri either side, in metres per ri, then reversed, so it points downhill, the way water runs, and snapped to the nearest of the ri's six faces: <code>E, NNE, NNW, W, SSW, SSE</code>, the order of <code>Direction::ALL</code>. An arrow's length is the slope, capped at the slider's value, so the plain's few metres per ri show as short stubs and the mountainsides as full arrows.</p>
+  <h1 id="stepGradient">Step 7a: the downhill face of every ri</h1>
+  <p>It reads the surface the last step left, step 5d's. For each ri, the gradient at its centre by central differences half a ri either side, in metres per ri, then reversed, so it points downhill, the way water runs, and snapped to the nearest of the ri's six faces: <code>E, NNE, NNW, W, SSW, SSE</code>, the order of <code>Direction::ALL</code>. An arrow's length is the slope, capped at the slider's value, so the plain's few metres per ri show as short stubs and the mountainsides as full arrows.</p>
   <div class="controls controls-shared"></div>
   <div class="controls controls-seed"></div>
   <div class="controls controls-gradient"></div>
@@ -286,8 +286,8 @@ svg { width: 100%; height: auto; display: block; }
     <div class="facts" id="factsGradient"></div>
   </div>
 
-  <h1 id="stepRain">Step n+1b: the year's rain on every ri</h1>
-  <p>Also for later, drawn now. Step 3's precipitation, read on the surface the last step left (step 5d's now, so the noise's and the gullies' heights and aspects count), times the ri's area: a ri is 3,927 m flat to flat, so <code>13.36 km²</code>, and 1 mm over it is <code>13,360 m³</code>. The result is a volume per ri per year, in millions of cubic metres, shaded like step 3's precipitation map. Every ri gets its rain, sea included. Nothing moves yet.</p>
+  <h1 id="stepRain">Step 7b: the year's rain on every ri</h1>
+  <p>Step 3's precipitation, read on the surface the last step left (step 5d's, so the noise's and the gullies' heights and aspects count), times the ri's area: a ri is 3,927 m flat to flat, so <code>13.36 km²</code>, and 1 mm over it is <code>13,360 m³</code>. The result is a volume per ri per year, in millions of cubic metres, shaded like step 3's precipitation map. Every ri gets its rain, sea included. Nothing moves yet.</p>
   <div class="controls controls-shared"></div>
   <div class="controls controls-seed"></div>
   <div class="pair">
@@ -298,8 +298,8 @@ svg { width: 100%; height: auto; display: block; }
     <div class="facts" id="factsRain"></div>
   </div>
 
-  <h1 id="stepSettle">Step n+1c: the rain settled, ri to ri</h1>
-  <p>Also for later. Each ri's year of rain runs to its lowest neighbour, highest ri first, until it leaves the world's edge for a lower ri outside, in any of the six directions, or gets stuck in a pit. The sea inside the world is only low ground here; its water runs off the edge like any other. A pit fills to the height at which it would spill, so every pit is a lake with a capacity. Anything below 0 m is water already, the coast being the zero set, so a pit's fresh capacity runs from 0 m, or from its floor if that is higher, up to the spill: a basin the noise cut off from the sea becomes a lake whose fresh water sits above 0 m, and a pit whose spill is under the sea holds nothing. A lake keeps the year's inflow up to its capacity and passes the rest over its spill. The graph is the six faces of each ri, and the ring of ri outside the world is read from the same surface, so "off the map" is honest.</p>
+  <h1 id="stepSettle">Step 7c: the rain settled, ri to ri</h1>
+  <p>Each ri's year of rain runs to its lowest neighbour, highest ri first, until it leaves the world's edge for a lower ri outside, in any of the six directions, or gets stuck in a pit. The sea inside the world is only low ground here; its water runs off the edge like any other. A pit fills to the height at which it would spill, so every pit is a lake with a capacity. Anything below 0 m is water already, the coast being the zero set, so a pit's fresh capacity runs from 0 m, or from its floor if that is higher, up to the spill: a basin the noise cut off from the sea becomes a lake whose fresh water sits above 0 m, and a pit whose spill is under the sea holds nothing. A lake keeps the year's inflow up to its capacity and passes the rest over its spill. The graph is the six faces of each ri, and the ring of ri outside the world is read from the same surface, so "off the map" is honest.</p>
   <div class="controls controls-shared"></div>
   <div class="controls controls-seed"></div>
   <div class="pair">
@@ -314,6 +314,23 @@ svg { width: 100%; height: auto; display: block; }
   </div>
   <div class="facts" id="factsSettle"></div>
 
+  <h1 id="stepCarve">Step 7d: the channels carved</h1>
+  <p>The filter draws gullies without the water that would have joined them up, so its creases end mid-slope and the ground below each one is a closed hollow; 7c found a third to a half of the year's rain stuck in them. Real mountains have almost none, because water cut them open. This step does the cutting. Every pit shallower than the threshold, spill minus floor, is breached: from its floor, follow 7c's flood tree outward through the spill until a ri lower than the floor is reached, and lower the ri between onto a straight ramp from the floor to that exit. Then settle again, since breaching one pit can expose the next, until no shallow pit is left. Pits deeper than the threshold stay as lakes. The result is a surface whose water reaches the sea, and the flow on it is the river network. The cuts are a table per ri, which is what a finer rung would be handed.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="controls controls-carve"></div>
+  <div class="pair">
+    <div>
+      <div class="panel-title">what was cut · ri lowered, darker the deeper · lakes kept in blue</div>
+      <svg id="cuts" viewBox="0 0 560 560" role="img" aria-label="The world's ri with the carved channels shaded by how much was cut and the lakes that stay shaded blue."><g id="cutsScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the rivers · the flow on the carved surface · arrows sized by the volume passing</div>
+      <svg id="rivers" viewBox="0 0 560 560" role="img" aria-label="The world's ri with an arrow on each pointing to the face its water leaves by on the carved surface, thicker where more water passes."><g id="riversScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="facts" id="factsCarve"></div>
+
 </main>
 <script>
 (function () {
@@ -325,7 +342,7 @@ svg { width: 100%; height: auto; display: block; }
   // Honshu-like at its Kantō width: an 80° arc about 1,300 km along the axis, 236 km wide, in ri. Fixed, not dialled.
   const R_RI = 237, W_RI = 60, ARC_DEG = 80;
   // One θ and one d, with a copy of the sliders under every step, all kept in step.
-  const state = { theta: 12, inset: 10, seed: 1, amp: 250, hurst: 0.65, stretch: 2, gref: 150, erosion: 200, firstOctave: 2, octaves5: 8, stripes: 1.5, sigmaRef: 0.03, windowQRS: null, stacking: 1, normAbove: 0.3, baseStrength: 0 };
+  const state = { theta: 12, inset: 10, seed: 1, amp: 250, hurst: 0.65, stretch: 2, gref: 150, erosion: 200, firstOctave: 2, octaves5: 8, stripes: 1.5, sigmaRef: 0.03, windowQRS: null, stacking: 1, normAbove: 0.3, baseStrength: 0, keepDeeper: 100 };
   const SLIDERS = [
     { key: "theta", label: "θ, degrees", min: 0, max: 359.5, step: 0.5, fmt: x => x.toFixed(1) + "°" },
     { key: "inset", label: "inset d, ri", min: -25, max: 45, step: 0.5, fmt: x => (x >= 0 ? "+" : "") + x.toFixed(1) },
@@ -385,6 +402,10 @@ svg { width: 100%; height: auto; display: block; }
   const PIVOT_SLIDERS = [
     { key: "baseStrength", label: "base for pivots", min: 0, max: 3, step: 0.1, fmt: x => x === 0 ? "true slope" : x.toFixed(1) + "× gully" },
   ];
+  // Step 7d's one dial: pits deeper than this stay as lakes; shallower ones are carved open.
+  const CARVE_SLIDERS = [
+    { key: "keepDeeper", label: "lakes deeper than", min: 0, max: 200, step: 5, fmt: x => x.toFixed(0) + " m" },
+  ];
   const STACK_SLIDERS = [
     { key: "stacking", label: "stacking p", min: 0, max: 3, step: 0.1, fmt: x => x.toFixed(1) },
   ];
@@ -392,7 +413,7 @@ svg { width: 100%; height: auto; display: block; }
   const NORM_SLIDERS = [
     { key: "normAbove", label: "normalise above", min: 0, max: 1, step: 0.05, fmt: x => x >= 1 ? "off" : x.toFixed(2) },
   ];
-  const controls = [...bindSliders(".controls-shared", SLIDERS), ...bindSliders(".controls-structure", STRUCTURE_SLIDERS), ...bindSliders(".controls-seed", SEED_SLIDERS), ...bindSliders(".controls-erosion", EROSION_SLIDERS), ...bindSliders(".controls-pivots", PIVOT_SLIDERS), ...bindSliders(".controls-stacking", STACK_SLIDERS),...bindSliders(".controls-norm", NORM_SLIDERS), ...bindSliders(".controls-gradient", GRADIENT_SLIDERS)];
+  const controls = [...bindSliders(".controls-shared", SLIDERS), ...bindSliders(".controls-structure", STRUCTURE_SLIDERS), ...bindSliders(".controls-seed", SEED_SLIDERS), ...bindSliders(".controls-erosion", EROSION_SLIDERS), ...bindSliders(".controls-pivots", PIVOT_SLIDERS), ...bindSliders(".controls-stacking", STACK_SLIDERS),...bindSliders(".controls-norm", NORM_SLIDERS), ...bindSliders(".controls-gradient", GRADIENT_SLIDERS), ...bindSliders(".controls-carve", CARVE_SLIDERS)];
   function update() { controls.forEach(c => c.sync()); render(); }
   // A slider drag fires many input events; the readouts follow at once, the render waits until the drag pauses.
   let pendingRender = null;
@@ -638,6 +659,8 @@ svg { width: 100%; height: auto; display: block; }
   const gradScene = document.getElementById("gradientsScene"), factsGradient = document.getElementById("factsGradient");
   const rainScene = document.getElementById("rainScene"), factsRain = document.getElementById("factsRain");
   const lakesScene = document.getElementById("lakesScene"), flowScene = document.getElementById("flowScene"), factsSettle = document.getElementById("factsSettle");
+  const cutsScene = document.getElementById("cutsScene"), riversScene = document.getElementById("riversScene"), factsCarve = document.getElementById("factsCarve");
+  const CUT_RAMP = [[0, [236, 234, 226]], [1, [90, 60, 30]]];
   // A ri's six neighbours as cube steps, Direction::ALL's order: E, NNE, NNW, W, SSW, SSE (+r is south).
   const NEIGH = [[1, 0, -1], [1, -1, 0], [0, -1, 1], [-1, 0, 1], [-1, 1, 0], [0, 1, -1]];
   const LAKE_RAMP = [[0, [205, 222, 236]], [0.5, [90, 140, 200]], [1, [20, 55, 140]]];
@@ -699,7 +722,35 @@ svg { width: 100%; height: auto; display: block; }
     // the fresh water held, spread over a lake's ri by each one's share of the capacity; its surface level
     const held = new Array(n).fill(0), level = new Array(n).fill(null);
     for (const L of lakes) { const fill = L.capacity > 0 ? L.held / L.capacity : 0; L.level = L.capacity > 0 ? Math.max(L.floor, 0) + (L.spill - Math.max(L.floor, 0)) * fill : null; for (const m of L.members) { held[m] = freshCap(m) * fill; level[m] = L.level; } }
-    return { n, nodes, h, F, outlet, outFace, lake, lakes, flow, held, level, offByEdge, offMap: offByEdge.reduce((a, b) => a + b, 0) };
+    return { n, nodes, h, F, parent, order, outlet, outFace, lake, lakes, flow, held, level, offByEdge, offMap: offByEdge.reduce((a, b) => a + b, 0) };
+  }
+  // ---- Step 7d: carve the channels. Every pit shallower than `keepDeeper` (spill minus floor, metres) is breached:
+  // from its floor, follow the flood tree outward through the spill until a cell lower than the floor is reached
+  // (or the ring, taken as a metre below the floor), and lower the cells between onto a straight ramp from the
+  // floor to that exit, so the pit drains. Then settle again, since breaching one pit can expose another, until
+  // no shallow pit is left or thirty rounds are done. Deeper pits stay as lakes. Returns the carved heights and cuts.
+  function carve(cells, heightAt, rainAt, keepDeeper) {
+    const n = cells.length, hNow = cells.map(([q, r, s]) => heightAt(q, r, s)), cut = new Array(n).fill(0);
+    const idx = new Map(cells.map(([q, r, s], i) => [q + "," + r + "," + s, i]));
+    let S = null, rounds = 0, breached = 0;
+    for (; rounds < 30; rounds++) {
+      S = settle(cells, (q, r, s) => { const i = idx.get(q + "," + r + "," + s); return i !== undefined ? hNow[i] : heightAt(q, r, s); }, rainAt);
+      // a lake's depth is from sea level, as 7c's fresh capacity is; a hollow wholly under the sea is sea, not a lake
+      const shallow = S.lakes.filter(L => L.spill > 0 && L.spill - Math.max(L.floor, 0) <= keepDeeper && L.spill > L.floor + 1e-6);
+      if (!shallow.length) break;
+      let cutThisRound = 0;
+      for (const L of shallow) {
+        let floorCell = L.members[0]; for (const m of L.members) if (S.h[m] < S.h[floorCell]) floorCell = m;
+        const hFloor = S.h[floorCell], path = [floorCell]; let c = floorCell, exitH = null;
+        while (true) { c = S.parent[c]; if (c < 0) break; path.push(c); if (c >= n) { exitH = Math.min(S.h[c], hFloor - 1); break; } if (S.h[c] < hFloor) { exitH = S.h[c]; break; } }
+        if (exitH === null) continue;
+        const L2 = path.length - 1;
+        for (let k = 1; k < L2; k++) { const i = path[k], ramp = hFloor - (hFloor - exitH) * k / L2; if (hNow[i] > ramp) { cut[i] += hNow[i] - ramp; hNow[i] = ramp; cutThisRound++; } }
+        breached++;
+      }
+      if (!cutThisRound) break;
+    }
+    return { h: hNow, cut, settled: S, rounds, breached };
   }
   const RI_M = 3927, AREA_RI = Math.sqrt(3) / 2 * RI_M * RI_M;   // m² of one ri, flat to flat 3,927 m
   const M3_PER_MM = AREA_RI / 1000;                               // m³ that 1 mm over a ri comes to
@@ -1422,7 +1473,7 @@ svg { width: 100%; height: auto; display: block; }
     row6("coast at ri scale", coastRi.length + " coast ri · D ≈ " + (isNaN(riFit.D) ? "—" : riFit.D.toFixed(2)) + " over 1–8 ri boxes · Kantō 1.1–1.15 · structure alone " + (2 - state.hurst).toFixed(2));
     row6("coast at chō scale, window round ri (" + win.q + ", " + win.r + ", " + win.s + ")", coastCho.length >= 30 ? coastCho.length + " coast chō · D ≈ " + choFit.D.toFixed(2) + " over 1–16 chō boxes" : coastCho.length ? "only " + coastCho.length + " coast chō, too few to fit · click a ri the coast runs through" : "the coast does not cross the window · click a coastal ri");
     mark("step 6");
-    // ---- Step n+1a: the gradient of every ri, on whatever surface the last step left.
+    // ---- Step 7a: the gradient of every ri, on whatever surface the last step left.
     // The drainage steps read the eroded surface at a few thousand points, several of them more than once,
     // so the surface is evaluated once per point here. They also draw after the erosion maps are on screen,
     // on a timeout, and a render that starts in the meantime cancels them.
@@ -1465,7 +1516,7 @@ svg { width: 100%; height: auto; display: block; }
     rowG("ri at or past full arrow length", mags.filter(m => m >= state.gref).length + " of 1,296");
     rowG("surface read", "step 5d, h₄ + normalised gullies · differences ±0.5 ri");
 
-    // ---- Step n+1b: the year's rain on every ri, as a volume. Step 3's precipitation on the current surface, times the ri's area.
+    // ---- Step 7b: the year's rain on every ri, as a volume. Step 3's precipitation on the current surface, times the ri's area.
     rainScene.replaceChildren();
     rainScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
     let rainTotal = 0, rainLand = 0, rainMax = { vol: 0 }, rainMin = { vol: Infinity }; const rainVols = [];
@@ -1490,9 +1541,9 @@ svg { width: 100%; height: auto; display: block; }
     rowR("the world, a year", (rainTotal / 1000).toFixed(2) + " km³ · on land " + (rainLand / 1000).toFixed(2) + " km³ · mean per ri " + (rainTotal / RI_CELLS.length).toFixed(1) + " million m³");
     rowR("surface read", "step 5d's, for height and aspect · nothing moved");
 
-    mark("n+1a, b");
-    // ---- Step n+1c: settle the rain. Lakes on the left, the flow on the right.
-    const rainOf = rainVols;                                   // the same volumes n+1b just drew, in RI_CELLS order
+    mark("7a, b");
+    // ---- Step 7c: settle the rain. Lakes on the left, the flow on the right.
+    const rainOf = rainVols;                                   // the same volumes 7b just drew, in RI_CELLS order
     const S = settle(RI_CELLS, (q, r, s) => surface(riCentre(q, r, s, centre)), i => rainOf[i]);
     const heldMax = Math.max(1e-9, ...S.held), flowMax = Math.max(1e-9, ...S.flow.slice(0, S.n).filter((f, i) => S.h[i] > 0));
     lakesScene.replaceChildren();
@@ -1537,7 +1588,48 @@ svg { width: 100%; height: auto; display: block; }
       const to = bi >= 0 ? (S.outlet[bi] < 0 ? "nowhere" : S.outlet[bi] >= S.n ? "off the map" : S.h[S.outlet[bi]] <= 0 ? "a sea ri" : S.held[S.outlet[bi]] > 0 ? "a lake" : "ri (" + RI_CELLS[S.outlet[bi]] + ")") : "";
       rowS("largest flow through a land ri", bi >= 0 ? S.flow[bi].toFixed(0) + " M m³ a year through ri (" + RI_CELLS[bi] + ") into " + to + " by its " + EDGE_NAMES[S.outFace[bi]] + " face" : "none"); }
     rowS("outlet faces used, all ri", EDGE_NAMES.map((nm, k) => nm + " " + S.outFace.filter(f => f === k).length).join(" · "));
-    mark("n+1c");
+    mark("7c");
+    // ---- Step 7d: carve the channels on the settled surface, settle again, draw the cuts and the rivers.
+    const carved = carve(RI_CELLS, (q, r, s) => surface(riCentre(q, r, s, centre)), i => rainOf[i], state.keepDeeper), S2 = carved.settled;
+    const maxCut = Math.max(1e-9, ...carved.cut), cutRi = carved.cut.filter(x => x > 0).length, cutVol = carved.cut.reduce((a, x) => a + x, 0) * AREA_RI / 1e6;
+    const held2 = S2.lakes.reduce((a, L) => a + L.held, 0), wet2 = S2.lakes.filter(L => L.held > 0), heldMax2 = Math.max(1e-9, ...S2.held), flowMax2 = Math.max(1e-9, ...S2.flow.slice(0, S2.n).filter((f, i) => S2.h[i] > 0));
+    cutsScene.replaceChildren();
+    cutsScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    RI_CELLS.forEach(([q, r, s], i) => {
+      const c = riCentre(q, r, s, centre), fill = carved.cut[i] > 0 ? ramp(CUT_RAMP, carved.cut[i] / maxCut) : S2.held[i] > 0 ? ramp(LAKE_RAMP, S2.held[i] / heldMax2) : S2.h[i] <= 0 ? "var(--sea)" : "var(--land)";
+      cutsScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill, stroke: "none" }));
+    });
+    cutsScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    cutsScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    for (let i = 0; i < 40; i++) cutsScene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(CUT_RAMP, i / 39), stroke: "none" }));
+    cutsScene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, "0 m cut"));
+    cutsScene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, maxCut.toFixed(0) + " m cut"));
+    cutsScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, cutRi + " ri carved · " + carved.breached + " pits breached in " + carved.rounds + " round" + (carved.rounds === 1 ? "" : "s") + " · " + wet2.length + " lake" + (wet2.length === 1 ? "" : "s") + " kept"));
+    riversScene.replaceChildren();
+    riversScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    RI_CELLS.forEach(([q, r, s], i) => { const c = riCentre(q, r, s, centre); riversScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: S2.held[i] > 0 ? ramp(LAKE_RAMP, S2.held[i] / heldMax2) : heightColour(S2.h[i]), "fill-opacity": S2.held[i] > 0 ? 1 : 0.35, stroke: "none" })); });
+    riversScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1, "stroke-dasharray": "3 4" }));
+    { const byStyle = new Map();
+      RI_CELLS.forEach(([q, r, s], i) => {
+        if (S2.outFace[i] < 0) return;
+        const c = riCentre(q, r, s, centre), d = FACE_DIR[S2.outFace[i]], nrm = [-d[1], d[0]], w = 0.4 + 5 * Math.sqrt(S2.flow[i] / flowMax2), key = w.toFixed(1) + (S2.h[i] <= 0 && !(S2.held[i] > 0) ? "s" : "l");
+        const tail = [c[0] - d[0] * 0.42, c[1] - d[1] * 0.42], tip = [c[0] + d[0] * 0.42, c[1] + d[1] * 0.42], head = 0.16;
+        const segs = [[tail, tip], [tip, [tip[0] - d[0] * head + nrm[0] * head * 0.6, tip[1] - d[1] * head + nrm[1] * head * 0.6]], [tip, [tip[0] - d[0] * head - nrm[0] * head * 0.6, tip[1] - d[1] * head - nrm[1] * head * 0.6]]];
+        if (!byStyle.has(key)) byStyle.set(key, []); byStyle.get(key).push(...segs);
+      });
+      for (const [key, segs] of byStyle) riversScene.appendChild(el("path", { d: segs.map(([a, b]) => { const s = HV(a), t = HV(b); return "M" + s.x.toFixed(1) + " " + s.y.toFixed(1) + "L" + t.x.toFixed(1) + " " + t.y.toFixed(1); }).join(""), stroke: "var(--shore)", "stroke-width": key.slice(0, -1), opacity: key.endsWith("s") ? 0.4 : 1, "stroke-linecap": "round", "stroke-linejoin": "round" })); }
+    riversScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    riversScene.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "off the map " + (S2.offMap / 1000).toFixed(2) + " km³ · held " + (held2 / 1000).toFixed(2) + " km³ · widest on land " + flowMax2.toFixed(0) + " M m³ · sea ri faint"));
+    factsCarve.replaceChildren();
+    const rowC = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); factsCarve.appendChild(d); };
+    rowC("lakes deeper than " + state.keepDeeper + " m stay", carved.breached + " pits breached in " + carved.rounds + " round" + (carved.rounds === 1 ? "" : "s") + " · " + cutRi + " ri carved · deepest cut " + maxCut.toFixed(0) + " m · " + cutVol.toFixed(0) + " M m³ of rock removed");
+    rowC("a year's rain held in lakes, 7c → 7d", heldTotal.toFixed(0) + " → " + held2.toFixed(0) + " M m³ (" + (100 * heldTotal / rainAll).toFixed(0) + "% → " + (100 * held2 / rainAll).toFixed(0) + "%) · off the map " + S.offMap.toFixed(0) + " → " + S2.offMap.toFixed(0));
+    rowC("lakes, 7c → 7d", wetLakes.length + " → " + wet2.length + (wet2.length ? " · deepest kept " + Math.max(...wet2.map(L => L.spill - Math.max(L.floor, 0))).toFixed(0) + " m, largest " + Math.max(...wet2.map(L => L.members.length)) + " ri" : ""));
+    { let bi = -1; for (let i = 0; i < S2.n; i++) if (S2.h[i] > 0 && (bi < 0 || S2.flow[i] > S2.flow[bi])) bi = i;
+      const to = bi >= 0 ? (S2.outlet[bi] < 0 ? "nowhere" : S2.outlet[bi] >= S2.n ? "off the map" : S2.h[S2.outlet[bi]] <= 0 ? "the sea" : S2.held[S2.outlet[bi]] > 0 ? "a lake" : "ri (" + RI_CELLS[S2.outlet[bi]] + ")") : "";
+      rowC("the largest river", bi >= 0 ? S2.flow[bi].toFixed(0) + " M m³ a year through ri (" + RI_CELLS[bi] + ") into " + to + " by its " + EDGE_NAMES[S2.outFace[bi]] + " face" : "none"); }
+    rowC("off the map, by the world's edge crossed", EDGE_NAMES.map((nm, k) => nm + " " + S2.offByEdge[k].toFixed(0)).join(" · "));
+    mark("7d");
     rowS("render time by section, ms", T.slice(1).map(([n, t], i) => n + " " + (t - T[i][1]).toFixed(0)).join(" · ") + " · all " + (T[T.length - 1][1] - T[0][1]).toFixed(0) + " · the surface was evaluated at " + surfaceMemo.size.toLocaleString() + " points for the drainage, " + parts5d.length.toLocaleString() + " of them from the 5d map");
     }, 0);
     }, 0);
