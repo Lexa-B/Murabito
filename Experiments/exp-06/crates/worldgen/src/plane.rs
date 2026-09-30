@@ -10,12 +10,10 @@ pub const ROW: F = SQRT_3 / 2.0;
 /// The centre of the cell `c` of a rung whose cells are `size` ri flat to flat, inside a parent
 /// centred on `origin`: the page's `riCentre`, `[x + (q − s)/2, y − r·√3/2]` scaled by the size.
 pub fn centre(c: Cube, size: F, origin: [F; 2]) -> [F; 2] {
-    let x_offset = if c.r > 0 {
-        (c.s - c.q) as F / 2.0
-    } else {
-        (c.q - c.s) as F / 2.0
-    } * size;
-    [origin[0] + x_offset, origin[1] - c.r as F * ROW * size]
+    [
+        origin[0] + (c.q - c.s) as F / 2.0 * size,
+        origin[1] - c.r as F * ROW * size,
+    ]
 }
 
 /// The six corners of a cell of flat-to-flat 1 about its centre: angles 30° + 60°·i, radius 1/√3.
@@ -43,9 +41,9 @@ mod tests {
 
     #[test]
     fn south_is_minus_r_rows() {
-        // +r is south: (0, 1, −1) sits a row below, half a cell west, as on the page.
+        // +r is south: (0, 1, −1) sits a row below, half a cell east, as on the page.
         let c = centre(Cube::new(0, 1, -1), 1.0, [0.0, 0.0]);
-        assert!(close(c[0], -0.5) && close(c[1], -ROW), "{c:?}");
+        assert!(close(c[0], 0.5) && close(c[1], -ROW), "{c:?}");
     }
 
     #[test]
