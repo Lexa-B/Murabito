@@ -25,6 +25,8 @@ svg { width: 100%; height: auto; display: block; }
 .controls label { display: grid; grid-template-columns: 12ch 1fr 8ch; gap: 10px; align-items: center; }
 .controls input[type=range] { width: 100%; min-width: 0; accent-color: var(--shore); }
 .controls output { text-align: right; font-variant-numeric: tabular-nums; }
+.controls button { font: inherit; padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--cell); color: var(--fg); cursor: pointer; justify-self: start; }
+.controls button:disabled { opacity: 0.6; cursor: wait; }
 .facts { font-family: var(--font-mono); font-size: 0.9rem; display: grid; gap: 4px; font-variant-numeric: tabular-nums; max-width: 560px; }
 .facts div { display: grid; grid-template-columns: 1fr auto; gap: 12px; border-bottom: 1px solid var(--line); padding: 3px 0; }
 .facts .bad { color: var(--world); }
@@ -271,6 +273,8 @@ svg { width: 100%; height: auto; display: block; }
     </div>
   </div>
   <div class="facts" id="facts6"></div>
+  <div class="controls"><button id="stripButton" type="button">count the coast at chō scale over every coast ri · 15–20 s</button></div>
+  <div class="facts" id="stripFacts"></div>
   <p class="muted">A box count on 36 ri of world has few scales to fit, so the ri-scale <code>D</code> is a coarse reading; the chō-scale one inside the window is the sharper one, but only where the coast crosses it, so click a coastal ri. The inset slider is the retune: set <code>d</code> and watch the 5d share.</p>
 
   <h1 id="stepGradient">Step 7a: the downhill face of every ri</h1>
@@ -1456,10 +1460,11 @@ svg { width: 100%; height: auto; display: block; }
       coastClusterScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, coastCho.length ? coastCho.length + " coast chō in the cluster · boxes: " + choCounts.map(c => c.s + " → " + c.n).join(", ") : "the coast does not cross the window · click a coastal ri")); }
     // (4) the box-count chart, log-log, both series
     boxChartScene.replaceChildren();
-    { const X = s => 50 + (Math.log2(s) / 5) * 480, Y = n => 270 - (Math.log2(Math.max(1, n)) / 12) * 240;
+    const X = s => 50 + (Math.log2(s) / 6) * 480, Y = n => 270 - (Math.log2(Math.max(1, n)) / 15) * 240;
+    {
       boxChartScene.appendChild(el("rect", { x: 50, y: 30, width: 480, height: 240, fill: "var(--cell)", stroke: "none" }));
       for (let e = 0; e <= 12; e += 2) { boxChartScene.appendChild(el("line", { x1: 50, y1: Y(2 ** e), x2: 530, y2: Y(2 ** e), stroke: "var(--line)" })); boxChartScene.appendChild(el("text", { x: 46, y: Y(2 ** e) + 4, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, String(2 ** e))); }
-      for (let e = 0; e <= 5; e++) boxChartScene.appendChild(el("text", { x: X(2 ** e), y: 288, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, (2 ** e) + " cells"));
+      for (let e = 0; e <= 6; e++) boxChartScene.appendChild(el("text", { x: X(2 ** e), y: 288, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, (2 ** e) + " cells"));
       const series = [[riCounts, riFit, "currentColor", "ri"], [choCounts, choFit, "var(--shore)", "chō"]];
       for (const [counts, fit, colour, name] of series) {
         for (const c of counts) boxChartScene.appendChild(el("circle", { cx: X(c.s), cy: Y(c.n), r: 4, fill: colour, stroke: "none" }));
@@ -1472,6 +1477,34 @@ svg { width: 100%; height: auto; display: block; }
     row6("inset for 70% land after erosion", d70 !== null ? "d ≈ " + (d70 >= 0 ? "+" : "") + d70.toFixed(1) + " ri, where step 4 gives " + target4.toFixed(0) + "% · set the inset slider there" : "not reached between d " + D_LO + " and +" + D_HI);
     row6("coast at ri scale", coastRi.length + " coast ri · D ≈ " + (isNaN(riFit.D) ? "—" : riFit.D.toFixed(2)) + " over 1–8 ri boxes · Kantō 1.1–1.15 · structure alone " + (2 - state.hurst).toFixed(2));
     row6("coast at chō scale, window round ri (" + win.q + ", " + win.r + ", " + win.s + ")", coastCho.length >= 30 ? coastCho.length + " coast chō · D ≈ " + choFit.D.toFixed(2) + " over 1–16 chō boxes" : coastCho.length ? "only " + coastCho.length + " coast chō, too few to fit · click a ri the coast runs through" : "the coast does not cross the window · click a coastal ri");
+    // The strip count, on a button since it takes 15–20 s: every coast ri and its sea neighbours at chō
+    // resolution on the 5d surface, coast chō = land chō with a sea chō neighbour, boxes 1–64 chō. A new
+    // render clears the old result, since it belonged to another surface.
+    const stripButton = document.getElementById("stripButton"), stripFacts = document.getElementById("stripFacts");
+    stripFacts.replaceChildren(); stripButton.disabled = false; stripButton.textContent = "count the coast at chō scale over every coast ri · 15–20 s";
+    stripButton.onclick = () => {
+      stripButton.disabled = true; stripButton.textContent = "counting…";
+      setTimeout(() => {
+        const t0 = performance.now(), stripKeys = new Set(), strip = [];
+        RI_CELLS.forEach(([q, r, s], i) => { if (coastKind[i] !== "coast") return; for (const [dq, dr, ds] of [[0, 0, 0], ...NEIGH]) { const k = (q + dq) + "," + (r + dr) + "," + (s + ds); if (idxRi.has(k) && !stripKeys.has(k)) { stripKeys.add(k); strip.push([q + dq, r + dr, s + ds]); } } });
+        const choMap = new Map();
+        for (const [rq, rr, rs] of strip) { const rc = riCentre(rq, rr, rs, centre); for (const [q, r, s] of RI_CELLS) { const c = [rc[0] + (q - s) / 72, rc[1] - r * ROW / 36]; choMap.set((36 * rq + q) + "," + (36 * rr + r) + "," + (36 * rs + s), { c, land: erodedW5d.at(c) > 0 }); } }
+        const coast = [];
+        for (const [key, cell] of choMap) { if (!cell.land) continue; const [aq, ar, as] = key.split(",").map(Number); for (const [nq, nr, ns] of NEIGH) { const nb = choMap.get((aq + nq) + "," + (ar + nr) + "," + (as + ns)); if (nb && !nb.land) { coast.push(cell.c); break; } } }
+        const sizes = [1, 2, 4, 8, 16, 32, 64], counts = boxCount(coast, centre, sizes.map(x => x / 36)).map((c, i) => ({ s: sizes[i], n: c.n }));
+        const fits = [[0, 5, "1–16"], [1, 6, "2–32"], [2, 7, "4–64"]].map(([a, b, name]) => ({ name, D: fitD(counts.slice(a, b)).D }));
+        const fit = fitD(counts.slice(2, 7));
+        for (const c of counts) boxChartScene.appendChild(el("circle", { cx: X(c.s), cy: Y(c.n), r: 4, fill: "var(--mountain)", stroke: "none" }));
+        if (!isNaN(fit.D)) { const n0 = Math.exp(fit.b - fit.D * Math.log(4)), n1 = Math.exp(fit.b - fit.D * Math.log(64)); boxChartScene.appendChild(el("line", { x1: X(4), y1: Y(n0), x2: X(64), y2: Y(n1), stroke: "var(--mountain)", "stroke-width": 1.5 })); boxChartScene.appendChild(el("text", { x: X(64) - 6, y: Y(n1) - 8, "text-anchor": "end", fill: "var(--mountain)", ...mono, "font-size": 10 }, "chō, every coast ri · D ≈ " + fit.D.toFixed(2))); }
+        stripFacts.replaceChildren();
+        const rowT = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); stripFacts.appendChild(d); };
+        rowT("the strip", strip.length + " ri, the coast ri and their sea neighbours · " + choMap.size.toLocaleString() + " chō · " + coast.length.toLocaleString() + " coast chō");
+        rowT("boxes holding coast, by side in chō", counts.map(c => c.s + " → " + c.n.toLocaleString()).join(" · "));
+        rowT("D by the boxes fitted", fits.map(f => f.name + " chō: " + (isNaN(f.D) ? "—" : f.D.toFixed(2))).join(" · ") + " · Kantō 1.1–1.15 · structure alone 2 − H = " + (2 - state.hurst).toFixed(2));
+        rowT("counted in", ((performance.now() - t0) / 1000).toFixed(1) + " s · the smallest boxes under-read: the raster's own bias, and nothing finer than the window's finest octave, 2.5 chō");
+        stripButton.disabled = false; stripButton.textContent = "count again";
+      }, 30);
+    };
     mark("step 6");
     // ---- Step 7a: the gradient of every ri, on whatever surface the last step left.
     // The drainage steps read the eroded surface at a few thousand points, several of them more than once,
