@@ -11,6 +11,9 @@
 
 pub mod hex;
 
+pub mod format;
+pub mod settings;
+
 /// The reference path: every reading in `docs/reference-readings.md` is checked against this twin.
 pub mod f64 {
     pub type F = core::primitive::f64;
@@ -24,6 +27,8 @@ pub mod f64 {
     }
     #[path = "../banana.rs"]
     pub mod banana;
+    #[path = "../facts.rs"]
+    pub mod facts;
     #[path = "../plane.rs"]
     pub mod plane;
 }
@@ -40,6 +45,8 @@ pub mod f32 {
     }
     #[path = "../banana.rs"]
     pub mod banana;
+    #[path = "../facts.rs"]
+    pub mod facts;
     #[path = "../plane.rs"]
     pub mod plane;
 }
