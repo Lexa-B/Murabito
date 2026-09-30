@@ -142,3 +142,24 @@ fn the_page_is_served_at_the_root() {
     let (status, _) = call(addr, "GET", "/exp-06.html", "");
     assert_eq!(status, 200);
 }
+
+#[test]
+fn an_off_plane_window_is_a_400_and_the_server_keeps_serving() {
+    let addr = start();
+    let (status, body) = call(addr, "POST", "/render", r#"{"windowQRS":[1,1,1]}"#);
+    assert_eq!(status, 400, "{body}");
+    assert!(
+        body.starts_with("bad settings: windowQRS off the plane"),
+        "{body}"
+    );
+    let (status, _) = call(
+        addr,
+        "POST",
+        "/render",
+        r#"{"windowQRS":[2147483647,1,-1]}"#,
+    );
+    assert_eq!(status, 400);
+    let (status, body) = call(addr, "POST", "/render", r#"{"windowQRS":[-6,-8,14]}"#);
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(facts(&body), DEFAULT_ROWS);
+}

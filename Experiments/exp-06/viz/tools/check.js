@@ -1,3 +1,5 @@
+// Headless render of a page: node viz/tools/check.js <page.html> [key=value ...]   e.g. theta=200 inset=-4
+// FLAGS=1 appends " [bad]" to rows whose value is flagged.
 const fs = require("fs");
 const html = fs.readFileSync(process.argv[2], "utf8");
 const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
@@ -21,6 +23,10 @@ global.document = {
   createElement: t => node(t), createElementNS: (ns, t) => node(t),
   querySelectorAll: sel => sel === ".controls-shared" ? shared : sel === ".controls-structure" ? structure : sel === ".controls-gradient" ? gradientC : sel === ".controls-seed" ? seedC : [],
 };
+// Settings as key=value arguments, e.g. `node viz/tools/check.js viz/banana.html theta=200 inset=-4`: the page reads them
+// from location.search exactly as a browser would. Without arguments there is no location, as before.
+const settingArgs = process.argv.slice(3).filter(a => a.includes("="));
+if (settingArgs.length) global.location = { search: "?" + settingArgs.join("&") };
 // let the debounced render (150 ms), then the deferred windows, then the deferred drainage run
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const flush = async () => { await wait(200); await wait(0); await wait(0); await wait(0); };
@@ -29,7 +35,7 @@ const t0 = Date.now();
 new Function(scripts[0])();
 const t1 = Date.now(); await flush();
 console.log("render ms", t1 - t0, "with drainage", Date.now() - t0);
-const dump = (id) => { const n = byId[id]; if (!n) return; console.log("--", id); for (const d of n.children) console.log(d.children.map(c => c._text).join(" | ")); };
+const dump = (id) => { const n = byId[id]; if (!n) return; console.log("--", id); for (const d of n.children) console.log(d.children.map(c => c._text).join(" | ") + (process.env.FLAGS && d.children[1] && d.children[1].className === "bad" ? " [bad]" : "")); };
 dump("facts"); dump("facts2"); dump("facts3"); dump("facts4"); dump("facts5"); dump("facts5b"); dump("facts5c"); dump("facts5d"); dump("facts6"); dump("factsGradient"); dump("factsRain"); dump("factsSettle"); dump("factsCarve"); dump("facts8");
 { for (const id of ["lakesScene", "flowScene"]) { const n = byId[id]; console.log("--", id, "children", n.children.length, n.children.filter(c => c.tag === "text").map(c => c._text).slice(-1)[0]); } }
 { const n = byId.rainScene; console.log("-- rainScene children", n.children.length, n.children.filter(c => c.tag === "text").map(c => c._text).slice(-1)[0]); }

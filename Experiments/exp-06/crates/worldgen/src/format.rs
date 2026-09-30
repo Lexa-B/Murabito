@@ -23,6 +23,14 @@ impl FactRow {
 /// `{:.n}` rounds a true half to even, so the two disagree on exactly representable halves such as
 /// 0.125 → "0.13" against "0.12"; everything else is the same correctly rounded value.
 pub fn js_fixed(x: f64, digits: usize) -> String {
+    if x.is_nan() {
+        return "NaN".to_string();
+    }
+    if x.is_infinite() {
+        return if x > 0.0 { "Infinity" } else { "-Infinity" }.to_string();
+    }
+    // JS writes a sign only when x < 0, so a negative zero prints unsigned.
+    let x = if x == 0.0 { 0.0 } else { x };
     if is_true_half(x.abs(), digits) {
         let scale = 10f64.powi(digits as i32);
         let up = ((x.abs() * scale).floor() + 1.0) / scale;
@@ -61,6 +69,10 @@ mod tests {
         assert_eq!(js_fixed(0.5, 0), "1");
         assert_eq!(js_fixed(1.5, 0), "2");
         assert_eq!(js_fixed(-0.125, 2), "-0.13");
+        assert_eq!(js_fixed(-0.0, 1), "0.0");
+        assert_eq!(js_fixed(f64::NAN, 2), "NaN");
+        assert_eq!(js_fixed(f64::INFINITY, 0), "Infinity");
+        assert_eq!(js_fixed(f64::NEG_INFINITY, 0), "-Infinity");
     }
 
     #[test]

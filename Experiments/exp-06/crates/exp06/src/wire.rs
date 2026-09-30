@@ -58,8 +58,22 @@ impl Default for RenderRequest {
 }
 
 impl RenderRequest {
-    pub fn settings(&self) -> Settings {
-        Settings {
+    /// The page's state as settings. A window that is not on the plane (`q + r + s ≠ 0`, or a sum that
+    /// overflows) is refused here, so it can never reach `Cube::new`'s assertion inside the server.
+    pub fn settings(&self) -> Result<Settings, String> {
+        let window = match self.window_qrs {
+            None => None,
+            Some([q, r, s]) => {
+                let sum = q.checked_add(r).and_then(|t| t.checked_add(s));
+                if sum != Some(0) {
+                    return Err(format!(
+                        "windowQRS off the plane: [{q}, {r}, {s}] does not sum to 0"
+                    ));
+                }
+                Some(Cube::new(q, r, s))
+            }
+        };
+        Ok(Settings {
             theta: self.theta,
             inset: self.inset,
             seed: self.seed,
@@ -76,8 +90,8 @@ impl RenderRequest {
             norm_above: self.norm_above,
             base_strength: self.base_strength,
             keep_deeper: self.keep_deeper,
-            window: self.window_qrs.map(|[q, r, s]| Cube::new(q, r, s)),
-        }
+            window,
+        })
     }
 }
 

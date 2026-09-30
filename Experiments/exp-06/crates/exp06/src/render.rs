@@ -2,12 +2,13 @@
 
 #![allow(clippy::unnecessary_cast)] // the f64 twin's `as f64` is a no-op; the f32 twin's is not
 
-use crate::wire::{BananaOut, EdgeOut, FactOut, MarkOut, RenderRequest, RenderResponse};
+use crate::wire::{BananaOut, EdgeOut, FactOut, MarkOut, RenderResponse};
+use worldgen::settings::Settings;
 
 macro_rules! step1_with {
-    ($twin:ident, $request:expr) => {{
+    ($twin:ident, $settings:expr) => {{
         use worldgen::$twin::{banana, facts, F};
-        let settings = $request.settings();
+        let settings = $settings;
         let started = std::time::Instant::now();
         let o = banana::outline();
         let placed = banana::place(&o, settings.theta as F, settings.inset as F);
@@ -64,9 +65,9 @@ macro_rules! step1_with {
     }};
 }
 
-pub fn render(request: &RenderRequest) -> RenderResponse {
-    match request.path.as_str() {
-        "f32" => step1_with!(f32, request),
-        _ => step1_with!(f64, request),
+pub fn render(path: &str, settings: &Settings) -> RenderResponse {
+    match path {
+        "f32" => step1_with!(f32, settings),
+        _ => step1_with!(f64, settings),
     }
 }

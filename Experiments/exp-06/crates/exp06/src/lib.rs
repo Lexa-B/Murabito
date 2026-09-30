@@ -65,7 +65,17 @@ fn render_json(body: &str) -> Reply {
         Ok(r) => r,
         Err(e) => return text(400, &format!("bad settings: {e}")),
     };
-    let out = render::render(&request);
+    let settings = match request.settings() {
+        Ok(s) => s,
+        Err(e) => return text(400, &format!("bad settings: {e}")),
+    };
+    // A panic inside the render must not take the server down with it.
+    let out = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        render::render(&request.path, &settings)
+    })) {
+        Ok(out) => out,
+        Err(_) => return text(500, "render panicked; see the server's log"),
+    };
     Response::from_string(serde_json::to_string(&out).expect("a response serialises"))
         .with_header(header("Content-Type", "application/json"))
 }

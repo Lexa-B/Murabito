@@ -390,8 +390,8 @@ mod tests {
             .map(|p| close2(p, [1.0, 1.0]))
             .unwrap_or(false));
         assert!(seg_cross([0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [3.0, 3.0]).is_none()); // parallel
+                                                                                      // past the end
         assert!(seg_cross([0.0, 0.0], [1.0, 0.0], [2.0, -1.0], [2.0, 1.0]).is_none());
-        // past the end
     }
 
     #[test]

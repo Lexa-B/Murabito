@@ -30,6 +30,10 @@ From this directory (never from the repo root):
     node viz/tools/check-port.js | sed -n '/^-- facts$/,$p' > target/port-facts.txt
     diff target/banana-facts.txt target/port-facts.txt && echo SAME
 
+`FLAGS=1` makes both scripts append ` [bad]` to flagged rows, so the diff compares the flags too.
+`check.js` takes `key=value` settings after the file (`node viz/tools/check.js viz/banana.html theta=200 inset=-4`),
+the same keys as the URL query.
+
 ## Rules
 
 Cube `(q, r, s)` everywhere in runtime code. The API names cells at a rung; the plane is derived inside.
