@@ -23,14 +23,24 @@ impl FactRow {
 /// `{:.n}` rounds a true half to even, so the two disagree on exactly representable halves such as
 /// 0.125 → "0.13" against "0.12"; everything else is the same correctly rounded value.
 pub fn js_fixed(x: f64, digits: usize) -> String {
-    let scale = 10f64.powi(digits as i32);
-    let scaled = x.abs() * scale;
-    if scaled.fract() == 0.5 {
-        let up = (scaled.floor() + 1.0) / scale;
+    if is_true_half(x.abs(), digits) {
+        let scale = 10f64.powi(digits as i32);
+        let up = ((x.abs() * scale).floor() + 1.0) / scale;
         let s = format!("{:.*}", digits, up);
         return if x < 0.0 { format!("-{s}") } else { s };
     }
     format!("{:.*}", digits, x)
+}
+
+/// Whether `x · 10^digits` is exactly a whole number and a half, read off the exact decimal
+/// expansion rather than a product that rounds. A true half is a double `m / 2^(digits + 1)` with
+/// `m` odd, whose expansion ends exactly at place `digits + 1`; any other double is at least an ulp
+/// away and shows it well within the extra places.
+fn is_true_half(x: f64, digits: usize) -> bool {
+    const EXTRA: usize = 20;
+    let wide = format!("{:.*}", digits + EXTRA, x);
+    let tail = &wide[wide.len() - EXTRA..];
+    tail.starts_with('5') && tail[1..].bytes().all(|b| b == b'0')
 }
 
 #[cfg(test)]
@@ -46,6 +56,11 @@ mod tests {
         assert_eq!(js_fixed(12.0, 1), "12.0");
         assert_eq!(js_fixed(269.4, 0), "269");
         assert_eq!(js_fixed(-0.04, 1), "-0.0"); // JS says "-0.0" too
+        assert_eq!(js_fixed(10.235, 2), "10.23"); // below a half in binary; the old product test said 10.24
+        assert_eq!(js_fixed(2.675, 2), "2.67"); // the same, the classic case
+        assert_eq!(js_fixed(0.5, 0), "1");
+        assert_eq!(js_fixed(1.5, 0), "2");
+        assert_eq!(js_fixed(-0.125, 2), "-0.13");
     }
 
     #[test]
