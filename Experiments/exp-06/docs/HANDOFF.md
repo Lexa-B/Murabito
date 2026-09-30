@@ -6,6 +6,8 @@ Written 2026-09-29, brought up to date 2026-09-30 at the end of the design walkt
 
 **The walkthrough is done: steps 1–7d are built on `viz/banana.html` (commit `952747a`) and tuned.** Lexa's next instruction, 2026-09-30: "rewrite all of exp-06 in rust and on-gpu where possible... that way we have a version we can plug in as a basis for a game terrain generator when we're ready. keep an exp-06.html entrypoint/wrapper... this will be a side-by-side of two browsers with the same settings on the old banana and new exp-06 files so i can verify similar results."
 
+**Brainstormed with Lexa in the fresh context, 2026-09-30, three decisions now in the spec's §1:** the page's compute is a native Rust process the page calls over localhost (not WASM); the page exists from the first bite, so every step is seen side by side as it lands; the GPU path arrives with step 4 and every later step lands on CPU and GPU together. Lexa also caught the API naming plane points ("why is it in XY?"): a cell set is cube `(q, r, s)` at a rung, the plane is derived inside, one named exception for the section chart's probe (spec §2).
+
 What to read, in order:
 
 1. **`docs/specs/2026-09-30-exp-06-worldgen-port-design.md`**: the port's shape (a Rust workspace here with an engine-free `worldgen` crate, a `worldgen-gpu` crate on wgpu, and an `exp06` server that serves `viz/exp-06.html`), then the whole pipeline in port order with every formula, constant and default, the rung rule, the CPU/GPU split, the verification protocol, and the order of bites. It is the spec; this handoff is the state and the history.
