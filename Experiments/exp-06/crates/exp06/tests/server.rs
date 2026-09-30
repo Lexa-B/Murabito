@@ -128,3 +128,17 @@ fn anything_else_is_a_404() {
     assert_eq!(call(addr, "GET", "/nothing", "").0, 404);
     assert_eq!(call(addr, "POST", "/", "").0, 404);
 }
+
+#[test]
+fn the_page_is_served_at_the_root() {
+    let addr = start();
+    let (status, body) = call(addr, "GET", "/", "");
+    assert_eq!(status, 200, "{body}");
+    assert!(
+        body.contains("<title>exp-06 worldgen</title>"),
+        "not the page: {}",
+        &body[..body.len().min(200)]
+    );
+    let (status, _) = call(addr, "GET", "/exp-06.html", "");
+    assert_eq!(status, 200);
+}
