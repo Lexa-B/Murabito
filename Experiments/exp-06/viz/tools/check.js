@@ -29,7 +29,7 @@ const t0 = Date.now();
 new Function(scripts[0])();
 const t1 = Date.now(); await flush();
 console.log("render ms", t1 - t0, "with drainage", Date.now() - t0);
-const dump = (id) => { const n = byId[id]; console.log("--", id); for (const d of n.children) console.log(d.children.map(c => c._text).join(" | ")); };
+const dump = (id) => { const n = byId[id]; if (!n) return; console.log("--", id); for (const d of n.children) console.log(d.children.map(c => c._text).join(" | ")); };
 dump("facts"); dump("facts2"); dump("facts3"); dump("facts4"); dump("facts5"); dump("facts5b"); dump("facts5c"); dump("facts5d"); dump("facts6"); dump("factsGradient"); dump("factsRain"); dump("factsSettle"); dump("factsCarve"); dump("facts8");
 { for (const id of ["lakesScene", "flowScene"]) { const n = byId[id]; console.log("--", id, "children", n.children.length, n.children.filter(c => c.tag === "text").map(c => c._text).slice(-1)[0]); } }
 { const n = byId.rainScene; console.log("-- rainScene children", n.children.length, n.children.filter(c => c.tag === "text").map(c => c._text).slice(-1)[0]); }

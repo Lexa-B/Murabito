@@ -347,6 +347,10 @@ svg { width: 100%; height: auto; display: block; }
   const R_RI = 237, W_RI = 60, ARC_DEG = 80;
   // One θ and one d, with a copy of the sliders under every step, all kept in step.
   const state = { theta: 12, inset: 10, seed: 1, amp: 250, hurst: 0.65, stretch: 2, gref: 150, erosion: 200, firstOctave: 2, octaves5: 8, stripes: 1.5, sigmaRef: 0.03, windowQRS: null, stacking: 1, normAbove: 0.3, baseStrength: 0, keepDeeper: 100 };
+  // Settings in the URL query, the same keys as viz/exp-06.html, so the side-by-side is one link each (the port, 2026-09-30).
+  const QUERY_KEYS = Object.keys(state);
+  if (typeof location !== "undefined") { const qs = new URLSearchParams(location.search); for (const k of QUERY_KEYS) if (qs.has(k)) state[k] = k === "windowQRS" ? qs.get(k).split(",").map(Number) : +qs.get(k); }
+  function writeQuery() { if (typeof history === "undefined") return; const qs = new URLSearchParams(); for (const k of QUERY_KEYS) { const v = state[k]; if (v === null) continue; qs.set(k, Array.isArray(v) ? v.join(",") : String(v)); } try { history.replaceState(null, "", "?" + qs); } catch (e) { /* a file: URL may refuse */ } }
   const SLIDERS = [
     { key: "theta", label: "θ, degrees", min: 0, max: 359.5, step: 0.5, fmt: x => x.toFixed(1) + "°" },
     { key: "inset", label: "inset d, ri", min: -25, max: 45, step: 0.5, fmt: x => (x >= 0 ? "+" : "") + x.toFixed(1) },
@@ -418,10 +422,10 @@ svg { width: 100%; height: auto; display: block; }
     { key: "normAbove", label: "normalise above", min: 0, max: 1, step: 0.05, fmt: x => x >= 1 ? "off" : x.toFixed(2) },
   ];
   const controls = [...bindSliders(".controls-shared", SLIDERS), ...bindSliders(".controls-structure", STRUCTURE_SLIDERS), ...bindSliders(".controls-seed", SEED_SLIDERS), ...bindSliders(".controls-erosion", EROSION_SLIDERS), ...bindSliders(".controls-pivots", PIVOT_SLIDERS), ...bindSliders(".controls-stacking", STACK_SLIDERS),...bindSliders(".controls-norm", NORM_SLIDERS), ...bindSliders(".controls-gradient", GRADIENT_SLIDERS), ...bindSliders(".controls-carve", CARVE_SLIDERS)];
-  function update() { controls.forEach(c => c.sync()); render(); }
+  function update() { controls.forEach(c => c.sync()); writeQuery(); render(); }
   // A slider drag fires many input events; the readouts follow at once, the render waits until the drag pauses.
   let pendingRender = null;
-  function scheduleUpdate() { controls.forEach(c => c.sync()); clearTimeout(pendingRender); pendingRender = setTimeout(render, 150); }
+  function scheduleUpdate() { controls.forEach(c => c.sync()); writeQuery(); clearTimeout(pendingRender); pendingRender = setTimeout(render, 150); }
 
   // The outline as a dense polyline, anticlockwise from the outer apex. Coordinates are (east, north) in ri.
   function outline(R, A, w, phi) {
