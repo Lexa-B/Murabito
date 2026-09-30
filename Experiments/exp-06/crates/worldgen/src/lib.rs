@@ -1,4 +1,7 @@
 #![forbid(unsafe_code)]
+// The numeric modules are one source compiled twice, once per float twin (see the `f64` and `f32`
+// modules below); that is the point, not a mistake.
+#![allow(clippy::duplicate_mod)]
 //! exp-06 worldgen: the Murabito world as pure functions of seed and position, engine-free.
 //!
 //! Cube coordinates `(q, r, s)` everywhere (`hex`). The numeric modules are one source compiled twice:
