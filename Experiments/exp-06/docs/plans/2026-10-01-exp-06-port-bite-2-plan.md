@@ -52,7 +52,9 @@ Append to the test module in `format.rs`:
         assert_eq!(js_round(2.5), 3.0);
         assert_eq!(js_round(-2.5), -2.0); // Math.round(-2.5) is -2
         assert_eq!(js_round(16200.4), 16200.0);
-        assert_eq!(js_round(-0.4), -0.0);
+        assert!(js_round(-0.4).is_sign_negative() && js_round(-0.4) == 0.0, "Math.round(-0.4) is -0");
+        assert_eq!(js_round(0.49999999999999994), 0.0);
+        assert_eq!(js_round(4503599627370497.0), 4503599627370497.0); // an odd integer above 2^52 must not move
     }
 
     #[test]
@@ -87,7 +89,7 @@ mod tests {
     fn a_ri_is_3927_metres_and_a_layer_half_a_shaku() {
         assert_eq!(RI_M, 3927.0);
         assert_eq!(LAYER_M, 0.15151);
-        assert!((RI_M / LAYER_M - 25919.7).abs() < 0.1); // about 25,920 layers to a ri
+        assert!((RI_M / LAYER_M - 25919.08).abs() < 0.01); // about 25,919 layers to a ri
     }
 }
 ```
@@ -113,9 +115,16 @@ pub const LAYER_M: f64 = 0.15151;
 `format.rs`, after `js_fixed`:
 
 ```rust
-/// JS `Math.round`: the nearest integer, a half toward +∞ (so −2.5 → −2), as a float like JS's.
+/// JS `Math.round`: the nearest integer, a half toward +∞ (so −2.5 → −2), as a float like JS's. Written
+/// without `x + 0.5`, which rounds before the floor at 0.49999999999999994 and above 2^52.
 pub fn js_round(x: f64) -> f64 {
-    (x + 0.5).floor()
+    let f = x.floor();
+    let r = if x - f >= 0.5 { f + 1.0 } else { f };
+    if r == 0.0 && x < 0.0 {
+        -0.0
+    } else {
+        r
+    }
 }
 
 /// JS `Number.prototype.toLocaleString()` for an integer in the page's locale: thousands grouped by commas.
