@@ -32,6 +32,8 @@ pub mod f64 {
     pub mod facts;
     #[path = "../plane.rs"]
     pub mod plane;
+    #[path = "../tectonics.rs"]
+    pub mod tectonics;
 }
 
 /// The shader's twin: the same source in f32, in the order of operations the WGSL will use.
@@ -50,4 +52,6 @@ pub mod f32 {
     pub mod facts;
     #[path = "../plane.rs"]
     pub mod plane;
+    #[path = "../tectonics.rs"]
+    pub mod tectonics;
 }
