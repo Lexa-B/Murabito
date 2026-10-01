@@ -97,7 +97,7 @@ svg { width: 100%; height: auto; display: block; }
     if (typeof location === "undefined") return;
     const qs = new URLSearchParams(location.search);
     for (const k of QUERY_KEYS) if (qs.has(k)) state[k] = k === "windowQRS" ? qs.get(k).split(",").map(Number) : +qs.get(k);
-    if (qs.has("path")) path = qs.get("path");
+    if (qs.has("path") && ["f64", "f32"].includes(qs.get("path"))) path = qs.get("path");
   }
   function writeQuery() {
     if (typeof history === "undefined") return;

@@ -219,3 +219,20 @@ fn step_2_on_the_inner_coast_and_in_f32() {
         "spine height here, H(s) | 2455 m ≈ 16,200 layers"
     );
 }
+
+#[test]
+fn facts2_on_the_inner_coast_over_http() {
+    let addr = start();
+    let (status, body) = call(addr, "POST", "/render", r#"{"theta":200,"inset":-4}"#);
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        facts2(&body),
+        [
+            "spine height here, H(s) | 2294 m ≈ 15,139 layers",
+            "world centre: a across, s along | -1.13, 0.34",
+            "height at the origin | -95 m",
+            "edge ranges, m | E -20…1181 · NNE -1206…-20 · NNW -1301…-1206 · W -1299…-146 · SSW -146…848 · SSE 848…1181",
+            "slope just inland of the coast here | 48.3 m per ri: 100 m of height is 2.1 ri of coast",
+        ]
+    );
+}

@@ -51,9 +51,16 @@ fn is_true_half(x: f64, digits: usize) -> bool {
     tail.starts_with('5') && tail[1..].bytes().all(|b| b == b'0')
 }
 
-/// JS `Math.round`: the nearest integer, a half toward +∞ (so −2.5 → −2), as a float like JS's.
+/// JS `Math.round`: the nearest integer, a half toward +∞ (so −2.5 → −2), as a float like JS's. Written
+/// without `x + 0.5`, which rounds before the floor at 0.49999999999999994 and above 2^52.
 pub fn js_round(x: f64) -> f64 {
-    (x + 0.5).floor()
+    let f = x.floor();
+    let r = if x - f >= 0.5 { f + 1.0 } else { f };
+    if r == 0.0 && x < 0.0 {
+        -0.0
+    } else {
+        r
+    }
 }
 
 /// JS `Number.prototype.toLocaleString()` for an integer in the page's locale: thousands grouped by commas.
@@ -111,7 +118,12 @@ mod tests {
         assert_eq!(js_round(2.5), 3.0);
         assert_eq!(js_round(-2.5), -2.0); // Math.round(-2.5) is -2
         assert_eq!(js_round(16200.4), 16200.0);
-        assert_eq!(js_round(-0.4), -0.0);
+        assert!(
+            js_round(-0.4).is_sign_negative() && js_round(-0.4) == 0.0,
+            "Math.round(-0.4) is -0"
+        );
+        assert_eq!(js_round(0.49999999999999994), 0.0);
+        assert_eq!(js_round(4503599627370497.0), 4503599627370497.0);
     }
 
     #[test]
