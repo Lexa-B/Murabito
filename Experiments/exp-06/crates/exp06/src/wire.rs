@@ -101,6 +101,7 @@ pub struct BananaOut {
     pub w: f64,
     pub a: f64,
     pub world: f64,
+    pub unit_hex: Vec<[f64; 2]>,
 }
 
 #[derive(Debug, Serialize)]
@@ -126,7 +127,42 @@ pub struct FactOut {
     pub bad: bool,
 }
 
-/// Everything step 1 draws and prints. Later bites append fields; nothing here is renamed.
+#[derive(Debug, Serialize)]
+pub struct SectionOut {
+    pub s: f64,
+    pub spine: f64,
+    pub a: f64,
+    pub points: Vec<[f64; 2]>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RiOut {
+    pub q: i32,
+    pub r: i32,
+    pub s: i32,
+    pub c: [f64; 2],
+    pub h: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct HeightsOut {
+    pub cells: Vec<RiOut>,
+    pub land: usize,
+    pub highest: f64,
+    pub deepest: f64,
+    pub land_mean: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProfileOut {
+    pub name: String,
+    pub kind: String,
+    pub heights: Vec<f64>,
+    pub bottom: f64,
+    pub top: f64,
+}
+
+/// Everything steps 1 and 2 draw and prints. Later bites append fields; nothing here is renamed.
 #[derive(Debug, Serialize)]
 pub struct RenderResponse {
     pub path: String,
@@ -144,4 +180,8 @@ pub struct RenderResponse {
     pub marks: Vec<MarkOut>,
     pub edges: Vec<EdgeOut>,
     pub facts: Vec<FactOut>,
+    pub section: SectionOut,
+    pub heights: HeightsOut,
+    pub profiles: Vec<ProfileOut>,
+    pub facts2: Vec<FactOut>,
 }

@@ -13,7 +13,7 @@ fn start() -> SocketAddr {
 fn call(addr: SocketAddr, method: &str, path: &str, body: &str) -> (u16, String) {
     let mut s = TcpStream::connect(addr).expect("connect");
     let req = format!(
-        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        "{method} {path} HTTP/1.0\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
     );
     s.write_all(req.as_bytes()).expect("write");
@@ -162,4 +162,60 @@ fn an_off_plane_window_is_a_400_and_the_server_keeps_serving() {
     let (status, body) = call(addr, "POST", "/render", r#"{"windowQRS":[-6,-8,14]}"#);
     assert_eq!(status, 200, "{body}");
     assert_eq!(facts(&body), DEFAULT_ROWS);
+}
+
+fn facts2(json: &str) -> Vec<String> {
+    let v: serde_json::Value = serde_json::from_str(json).expect("json");
+    v["facts2"]
+        .as_array()
+        .expect("facts2")
+        .iter()
+        .map(|f| {
+            format!(
+                "{} | {}",
+                f["key"].as_str().unwrap(),
+                f["value"].as_str().unwrap()
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn step_2_at_the_defaults_prints_the_reference_facts2() {
+    let addr = start();
+    let (status, body) = call(addr, "POST", "/render", "{}");
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        facts2(&body),
+        [
+            "spine height here, H(s) | 2455 m ≈ 16,200 layers",
+            "world centre: a across, s along | 0.67, 0.58",
+            "height at the origin | 269 m",
+            "edge ranges, m | E -85…4 · NNE 4…791 · NNW 791…2293 · W 646…2293 · SSW -31…646 · SSE -85…-31",
+            "slope just inland of the coast here | 21.5 m per ri: 100 m of height is 4.6 ri of coast",
+        ]
+    );
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["section"]["points"].as_array().unwrap().len(), 301);
+    assert_eq!(v["heights"]["cells"].as_array().unwrap().len(), 1296);
+    assert_eq!(v["heights"]["land"], 1069);
+    assert_eq!(v["heights"]["cells"][0]["q"], -24);
+    assert_eq!(v["heights"]["cells"][0]["s"], 12);
+    assert_eq!(v["profiles"].as_array().unwrap().len(), 6);
+    assert_eq!(v["profiles"][1]["name"], "NNE");
+    assert_eq!(v["profiles"][1]["heights"].as_array().unwrap().len(), 121);
+    assert_eq!(v["banana"]["unit_hex"].as_array().unwrap().len(), 6);
+}
+
+#[test]
+fn step_2_on_the_inner_coast_and_in_f32() {
+    let addr = start();
+    let (_, body) = call(addr, "POST", "/render", r#"{"theta":200,"inset":-4}"#);
+    assert_eq!(facts2(&body)[3], "edge ranges, m | E -20…1181 · NNE -1206…-20 · NNW -1301…-1206 · W -1299…-146 · SSW -146…848 · SSE 848…1181");
+    let (_, body) = call(addr, "POST", "/render", r#"{"path":"f32"}"#);
+    assert_eq!(facts2(&body)[2], "height at the origin | 269 m");
+    assert_eq!(
+        facts2(&body)[0],
+        "spine height here, H(s) | 2455 m ≈ 16,200 layers"
+    );
 }
