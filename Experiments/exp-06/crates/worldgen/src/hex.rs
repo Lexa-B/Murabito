@@ -50,6 +50,9 @@ impl Cube {
     }
 }
 
+/// The world is one packing cell of this many ri: 1,296 ri, 36 ri flat to flat.
+pub const WORLD_N: i32 = 36;
+
 /// The six edge directions, anticlockwise from east: the even entries of the main branch's twelve.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Direction {
@@ -213,5 +216,11 @@ mod tests {
         for c in children(36) {
             assert_eq!(owner(c, 36), Cube::ORIGIN, "{c:?}");
         }
+    }
+
+    #[test]
+    fn the_world_is_a_packing_cell_of_36_ri() {
+        assert_eq!(WORLD_N, 36);
+        assert_eq!(children(WORLD_N).len(), 1296);
     }
 }

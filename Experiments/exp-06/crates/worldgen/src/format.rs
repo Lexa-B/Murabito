@@ -51,6 +51,28 @@ fn is_true_half(x: f64, digits: usize) -> bool {
     tail.starts_with('5') && tail[1..].bytes().all(|b| b == b'0')
 }
 
+/// JS `Math.round`: the nearest integer, a half toward +∞ (so −2.5 → −2), as a float like JS's.
+pub fn js_round(x: f64) -> f64 {
+    (x + 0.5).floor()
+}
+
+/// JS `Number.prototype.toLocaleString()` for an integer in the page's locale: thousands grouped by commas.
+pub fn js_locale_int(n: i64) -> String {
+    let digits = n.unsigned_abs().to_string();
+    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3 + 1);
+    for (i, ch) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+    if n < 0 {
+        format!("-{grouped}")
+    } else {
+        grouped
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,5 +104,23 @@ mod tests {
             (r.key.as_str(), r.value.as_str(), r.bad),
             ("sea edges", "1  (SSE)", false)
         );
+    }
+
+    #[test]
+    fn js_round_rounds_a_half_toward_plus_infinity() {
+        assert_eq!(js_round(2.5), 3.0);
+        assert_eq!(js_round(-2.5), -2.0); // Math.round(-2.5) is -2
+        assert_eq!(js_round(16200.4), 16200.0);
+        assert_eq!(js_round(-0.4), -0.0);
+    }
+
+    #[test]
+    fn js_locale_int_groups_thousands_with_commas() {
+        assert_eq!(js_locale_int(16200), "16,200");
+        assert_eq!(js_locale_int(15139), "15,139");
+        assert_eq!(js_locale_int(1296), "1,296");
+        assert_eq!(js_locale_int(999), "999");
+        assert_eq!(js_locale_int(0), "0");
+        assert_eq!(js_locale_int(-1234567), "-1,234,567");
     }
 }

@@ -13,6 +13,7 @@ pub mod hex;
 
 pub mod format;
 pub mod settings;
+pub mod units;
 
 /// The reference path: every reading in `docs/reference-readings.md` is checked against this twin.
 pub mod f64 {
