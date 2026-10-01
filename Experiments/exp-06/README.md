@@ -16,7 +16,7 @@ and history are `docs/HANDOFF.md`; the numbers the port must reproduce are `docs
 - `viz/banana.html`: the reference page, opened from disk. `viz/exp-06.html`: the port's page. Both read and
   write the same settings in the URL query, so one link with the other filename is the same world.
 - `viz/tools/check.js`: renders `banana.html` headlessly and prints every facts row. `viz/tools/check-port.js`:
-  prints the port's facts rows from the running server, in the same format, for a `diff`.
+  prints the port's facts rows from the running server, in the same format; the `diff` of the two covers steps 1 and 2.
 
 ## Build, test, check
 
@@ -26,7 +26,7 @@ From this directory (never from the repo root):
     cargo clippy --workspace --all-targets
     cargo run -p exp06
 
-    node viz/tools/check.js viz/banana.html | sed -n '/^-- facts$/,/^-- facts2$/p' | sed '$d' > target/banana-facts.txt
+    node viz/tools/check.js viz/banana.html | sed -n '/^-- facts$/,/^-- facts3$/p' | sed '$d' > target/banana-facts.txt
     node viz/tools/check-port.js | sed -n '/^-- facts$/,$p' > target/port-facts.txt
     diff target/banana-facts.txt target/port-facts.txt && echo SAME
 

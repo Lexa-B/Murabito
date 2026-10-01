@@ -17,4 +17,6 @@ for (const kv of process.argv.slice(2)) {
   console.log("render ms", out.ms.toFixed(2), "path", out.path);
   console.log("-- facts");
   for (const f of out.facts) console.log(f.key + " | " + f.value + (process.env.FLAGS && f.bad ? " [bad]" : ""));
+  console.log("-- facts2");
+  for (const f of out.facts2) console.log(f.key + " | " + f.value + (process.env.FLAGS && f.bad ? " [bad]" : ""));
 })();

@@ -32,6 +32,9 @@ svg { width: 100%; height: auto; display: block; }
 .facts div { display: grid; grid-template-columns: 1fr auto; gap: 12px; border-bottom: 1px solid var(--line); padding: 3px 0; }
 .facts .bad { color: var(--world); }
 .status { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); min-height: 1.5em; }
+.profiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.profiles > div { display: grid; gap: 2px; min-width: 0; }
+.profiles .panel-title { font-size: 0.75rem; }
 </style>
 </head>
 <body>
@@ -59,6 +62,25 @@ svg { width: 100%; height: auto; display: block; }
 
   <div class="facts" id="facts"></div>
   <p class="muted">The edge reading: an edge the outline crosses is a shore edge; an edge it does not cross is sea or land by where its midpoint lies. The rule from the napkin, no more than four of either, is checked live. The two shore crossings are where the surface of step 2 passes through sea level on the world's edges.</p>
+  <h1 id="step2">Step 2: tectonics, as two curves</h1>
+  <p>Height anywhere, above or below the sea, is <code>h = H(s) · F(a)</code>. <code>F(a)</code> is one cross-section, the same everywhere: <code>a</code> counts half-widths from the centreline, the coasts at <code>±1</code>, and the table runs from a deep basin three half-widths inside to a trench three half-widths out. From the outer coast inward: a wide plain, the spine a little past the middle, a steep drop to the inner coast; from the outer coast outward: a wide shallow shelf, then the slope to the trench. It is 0 at both coasts with a continuous slope through them. <code>H(s)</code> is the spine's height along the centreline, low at the tips and highest round the bend, and the sea deepens with it. Round the caps the cross-section goes polar, blending the two sides by angle. The sliders are the same <code>θ</code> and <code>d</code> as above, wherever they appear.</p>
+  <div class="controls controls-shared"></div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">the band cut across at the world's θ · metres · the world's span marked</div>
+      <svg id="section" viewBox="0 0 560 300" role="img" aria-label="The height cross-section of the band at the world's position, with the extent of the world marked."><g id="sectionScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the world, ri by ri, coloured by height · shore in blue</div>
+      <svg id="heights" viewBox="0 0 560 560" role="img" aria-label="The world hexagon filled with its 1,296 ri cells coloured by height, with the shoreline through it."><g id="heightsScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+
+  <div class="panel-title">the six edge profiles · anticlockwise from each edge's first corner · metres · shore crossings at 0</div>
+  <div class="profiles" id="profiles"></div>
+  <div class="facts" id="facts2"></div>
+  <p class="muted">The cross-section is a smooth spline through a short table of control points, so it is a thing to edit rather than a formula to tune; the spine curve is a raised sine along the centreline. Both are smooth, so the erosion filter of a later step can take a gradient off them anywhere. In layers (5 sun each) the numbers are about 6.6 per metre.</p>
 </main>
 <script>
 (function () {
@@ -112,6 +134,15 @@ svg { width: 100%; height: auto; display: block; }
   function scheduleUpdate() { controls.forEach(c => c.sync()); writeQuery(); clearTimeout(pendingRender); pendingRender = setTimeout(render, 150); }
 
   const wide = document.getElementById("wideScene"), near = document.getElementById("nearScene"), facts = document.getElementById("facts");
+  const section = document.getElementById("sectionScene"), heights = document.getElementById("heightsScene"), profiles = document.getElementById("profiles"), facts2 = document.getElementById("facts2");
+  const heightColour = h => {                                 // hypsometric: trench to snow, by metres
+    const stops = h <= 0
+      ? [[-6000, [15, 30, 70]], [-2500, [30, 60, 120]], [-800, [70, 110, 165]], [-200, [120, 160, 200]], [0, [175, 205, 220]]]
+      : [[0, [190, 205, 150]], [300, [150, 180, 110]], [900, [170, 150, 100]], [1600, [140, 115, 85]], [2200, [200, 195, 190]], [2800, [245, 245, 245]]];
+    let i = 0; while (i < stops.length - 2 && h > stops[i + 1][0]) i++;
+    const [h0, c0] = stops[i], [h1, c1] = stops[i + 1], t = Math.max(0, Math.min(1, (h - h0) / (h1 - h0)));
+    return "rgb(" + c0.map((v, k) => Math.round(v + (c1[k] - v) * t)).join(",") + ")";
+  };
   function view(cx, cy, scale) { return p => ({ x: 280 + (p[0] - cx) * scale, y: 280 - (p[1] - cy) * scale }); }
   const pts = (ps, f) => ps.map(p => { const s = f(p); return s.x + "," + s.y; }).join(" ");
 
@@ -177,6 +208,55 @@ svg { width: 100%; height: auto; display: block; }
     facts.replaceChildren();
     const row = (k, val, bad) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; if (bad) b.className = "bad"; d.append(a, b); facts.appendChild(d); };
     for (const f of out.facts) row(f.key, f.value, f.bad);
+
+    // ---- Step 2 drawings.
+    section.replaceChildren();
+    const sec = out.section;
+    const A_LO = -2.5, A_HI = 2.5, M_LO = -3500, M_HI = 3000;
+    const SX = x => 50 + ((x - A_LO) / (A_HI - A_LO)) * 480, SY = m => 30 + ((M_HI - m) / (M_HI - M_LO)) * 240;
+    section.appendChild(el("rect", { x: 50, y: 30, width: 480, height: 240, fill: "var(--cell)", stroke: "none" }));
+    for (let m = -3000; m <= 3000; m += 1000) { section.appendChild(el("line", { x1: 50, y1: SY(m), x2: 530, y2: SY(m), stroke: m === 0 ? "var(--shore)" : "var(--line)" })); section.appendChild(el("text", { x: 46, y: SY(m) + 4, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, m + " m")); }
+    { const ps = sec.points.map(([a, h]) => SX(a) + "," + SY(h));
+      section.appendChild(el("polygon", { points: SX(A_LO) + "," + SY(M_LO) + " " + ps.join(" ") + " " + SX(A_HI) + "," + SY(M_LO), fill: "var(--land)", stroke: "none" }));
+      section.appendChild(el("polygon", { points: SX(A_LO) + "," + SY(0) + " " + SX(A_HI) + "," + SY(0) + " " + SX(A_HI) + "," + SY(M_LO) + " " + SX(A_LO) + "," + SY(M_LO), fill: "var(--sea)", "fill-opacity": 0.55, stroke: "none" }));
+      section.appendChild(el("polyline", { points: ps.join(" "), stroke: "var(--mountain)", "stroke-width": 2 })); }
+    { const aC = sec.a, halfSpan = 18 / (out.banana.w / 2);
+      section.appendChild(el("rect", { x: SX(aC - halfSpan), y: 30, width: SX(aC + halfSpan) - SX(aC - halfSpan), height: 240, fill: "var(--world)", "fill-opacity": 0.12, stroke: "var(--world)", "stroke-dasharray": "4 3" }));
+      section.appendChild(el("text", { x: SX(aC), y: 24, "text-anchor": "middle", fill: "var(--world)", ...mono, "font-size": 10 }, "the world, 36 ri")); }
+    for (const [a, name] of [[-2, "basin"], [-1, "inner coast"], [0, "spine"], [1, "outer coast"], [2, "trench"]]) section.appendChild(el("text", { x: SX(a), y: 288, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, name + " · " + (a * out.banana.w / 2 >= 0 ? "+" : "") + (a * out.banana.w / 2).toFixed(0) + " ri"));
+    section.appendChild(el("text", { x: 530, y: 24, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, "s = " + sec.s.toFixed(2) + " · H(s) = " + sec.spine.toFixed(0) + " m"));
+
+    heights.replaceChildren();
+    const HV = view(origin[0], origin[1], 520 / (WORLD * 1.15)), hex = out.banana.unit_hex;
+    heights.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    for (const cell of out.heights.cells) heights.appendChild(el("polygon", { points: pts(hex.map(k => [cell.c[0] + k[0], cell.c[1] + k[1]]), HV), fill: heightColour(cell.h), stroke: "none" }));
+    heights.appendChild(el("polyline", { points: pts(o, HV), stroke: "var(--shore)", "stroke-width": 2 }));
+    heights.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    heights.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, out.heights.land + " ri on land of 1,296 · highest " + out.heights.highest.toFixed(0) + " m, deepest " + out.heights.deepest.toFixed(0) + " m · land mean " + out.heights.land_mean.toFixed(0) + " m"));
+
+    profiles.replaceChildren();
+    for (const e of out.profiles) {
+      const wrap = document.createElement("div");
+      const title = document.createElement("div"); title.className = "panel-title"; title.textContent = e.name + " · " + e.kind; wrap.appendChild(title);
+      const svg = el("svg", { viewBox: "0 0 200 120", role: "img", "aria-label": "height along the " + e.name + " edge" });
+      const g = el("g", { fill: "none", stroke: "currentColor" }); svg.appendChild(g); wrap.appendChild(svg); profiles.appendChild(wrap);
+      const PX = t => 28 + t * 166, PY = m => 10 + ((3000 - m) / 4000) * 90;    // −1,000 to 3,000 m
+      g.appendChild(el("rect", { x: 28, y: 10, width: 166, height: 90, fill: "var(--cell)", stroke: "none" }));
+      for (let m = -1000; m <= 3000; m += 1000) { g.appendChild(el("line", { x1: 28, y1: PY(m), x2: 194, y2: PY(m), stroke: m === 0 ? "var(--shore)" : "var(--line)" })); g.appendChild(el("text", { x: 25, y: PY(m) + 3, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 8 }, m / 1000 + "k")); }
+      const ps = []; let prevH = null;
+      e.heights.forEach((h, i) => {
+        const t = i / (e.heights.length - 1);
+        ps.push(PX(t) + "," + PY(Math.max(-1000, h)));
+        if (prevH !== null && (h > 0) !== (prevH > 0)) g.appendChild(el("circle", { cx: PX(t), cy: PY(0), r: 3, fill: "var(--shore)", stroke: "none" }));
+        prevH = h;
+      });
+      g.appendChild(el("polygon", { points: PX(0) + "," + PY(-1000) + " " + ps.join(" ") + " " + PX(1) + "," + PY(-1000), fill: "var(--land)", stroke: "none" }));
+      g.appendChild(el("polygon", { points: PX(0) + "," + PY(0) + " " + PX(1) + "," + PY(0) + " " + PX(1) + "," + PY(-1000) + " " + PX(0) + "," + PY(-1000), fill: "var(--sea)", "fill-opacity": 0.55, stroke: "none" }));
+      g.appendChild(el("polyline", { points: ps.join(" "), stroke: e.kind === "sea" ? "var(--shore)" : "var(--mountain)", "stroke-width": 1.5 }));
+      g.appendChild(el("text", { x: 194, y: 112, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 8 }, "0 → 36 ri · " + e.bottom.toFixed(0) + " to " + e.top.toFixed(0) + " m"));
+    }
+    facts2.replaceChildren();
+    for (const f of out.facts2) { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = f.key; const b = document.createElement("span"); b.textContent = f.value; if (f.bad) b.className = "bad"; d.append(a, b); facts2.appendChild(d); }
   }
 
   update();
