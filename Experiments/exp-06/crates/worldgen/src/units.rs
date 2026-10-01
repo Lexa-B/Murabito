@@ -13,6 +13,6 @@ mod tests {
     fn a_ri_is_3927_metres_and_a_layer_half_a_shaku() {
         assert_eq!(RI_M, 3927.0);
         assert_eq!(LAYER_M, 0.15151);
-        assert!((RI_M / LAYER_M - 25919.7).abs() < 0.1); // about 25,920 layers to a ri
+        assert!((RI_M / LAYER_M - 25919.08).abs() < 0.01); // about 25,919 layers to a ri
     }
 }
