@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kantō Scale Check</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+/* Layout: the world over the map, then a strip that zooms rung by rung into its corner. */
+:root { --bg: #f6f5f0; --fg: #22261f; --muted: #6b7064; --line: #c9ccc2; --cell: #e6e8de; --sea: #dfe6e4; --pref: #b9b3a3;
+  --world: #b7410e; --rung: #2b6f8c;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif; --font-mono: "IBM Plex Mono", ui-monospace, monospace; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23; --sea: #1e2426; --pref: #5a5f52; --world: #f0803a; --rung: #6db3d1; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23; --sea: #1e2426; --pref: #5a5f52; --world: #f0803a; --rung: #6db3d1; color-scheme: dark; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body); padding: 24px 16px 40px; }
+main { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-size: 1.4rem; margin: 0; font-weight: 600; }
+p { margin: 0; max-width: 70ch; }
+.muted { color: var(--muted); }
+.row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+.row > .fig { flex: 3 1 460px; min-width: 0; }
+.row > .side { flex: 2 1 300px; min-width: 0; display: grid; gap: 12px; }
+svg { width: 100%; height: auto; display: block; }
+table { border-collapse: collapse; font-family: var(--font-mono); font-size: 0.85rem; font-variant-numeric: tabular-nums; width: 100%; }
+th, td { text-align: right; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { font-weight: 500; color: var(--muted); }
+.wrap { overflow-x: auto; }
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.strip > div { display: grid; gap: 4px; min-width: 0; }
+.strip .panel-title { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>The world over Kantō</h1>
+  <p>The world is a packing-B cell of <code>N = 36</code> ri: 1,296 ri, 36 ri flat to flat, centred on 日本橋 Nihonbashi, the zero milestone the ri were counted from. North up; every point at its true straight-line distance and bearing from the centre. Coastline and prefecture borders are Natural Earth 1:10m, public domain. In the world's south-western corner, one ri is drawn at true scale; the strip below zooms into that corner rung by rung, since below the ri nothing is wider than a pixel at this scale.</p>
+  <div class="row">
+    <div class="fig"><svg id="fig" viewBox="0 0 640 640" role="img" aria-label="The Kantō coastline and prefecture borders round Tokyo with the 36-ri world hexagon over them, and a single ri drawn to scale in its south-western corner."><g id="base" fill="none" stroke="currentColor"></g><g id="worlds" fill="none"></g><g id="labels" fill="none" stroke="currentColor"></g></svg></div>
+    <div class="side">
+      <div class="wrap"><table>
+        <thead><tr><th>rung</th><th>N up</th><th>flat to flat</th><th>owns</th></tr></thead>
+        <tbody>
+          <tr><td>shaku 尺</td><td>6</td><td>0.303 m</td><td>—</td></tr>
+          <tr><td>ken 間</td><td>6</td><td>1.82 m</td><td>36 shaku</td></tr>
+          <tr><td>decichō</td><td>10</td><td>10.9 m</td><td>36 ken</td></tr>
+          <tr><td>chō 町</td><td>36</td><td>109 m</td><td>100 decichō</td></tr>
+          <tr><td>ri 里</td><td>36</td><td>3.93 km</td><td>1,296 chō</td></tr>
+          <tr><td>the world</td><td>—</td><td>141 km</td><td>1,296 ri</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Ratios 6 · 6 · 10 · 36 · 36: the world stands to the ri as the ri to the chō. In shaku the ladder is 1 · 6 · 36 · 360 · 12,960 · 466,560. Area about 17,300 km², close to the Kantō plain's 17,000. Edge at about 71 km from the centre: Odawara, Kumagaya and Narita are in; Mito, Utsunomiya, Maebashi and Kōfu, all near 100 km, are out. Resident chō detail with the world as top cell: 1,679,616 columns.</p>
+    </div>
+  </div>
+  <div class="strip" id="strip"></div>
+  <p class="muted">Each panel is the rung above, filling the frame, with the rung below drawn to scale in its south-western corner and taken as the next frame. The zoom from panel to panel is that rung's <code>N</code>.</p>
+</main>
+<script>
+(function () {
+  const PATHS = {"coast":"M599.8,-35.3L583.3,-5.5L578.7,7.3L574.9,34.7L575.1,40.6L579.2,55.2L579.6,61.3L577.3,71.1L565.9,83.7L561.3,92.0L562.1,106.1L566.1,138.2L575.9,163.1L587.3,194.0L632.0,271.2L645.0,289.1L648.4,296.1L651.7,297.9L653.9,298.7L655.6,299.4L658.5,301.0L660.1,304.3L656.9,313.3L654.4,316.8L650.2,314.0L648.1,310.5L644.4,306.9L636.6,308.8L626.8,313.5L611.4,319.2L609.9,313.0L593.0,317.0L573.1,331.1L538.6,364.0L520.3,392.7L509.0,434.3L515.0,454.0L517.6,464.5L514.9,480.3L513.4,494.5L512.0,504.2L506.9,511.9L498.0,510.4L492.3,519.0L493.3,524.9L489.5,529.4L484.0,528.3L481.2,523.3L476.4,528.9L468.5,527.9L463.6,536.4L452.0,535.5L438.2,534.3L431.7,532.6L422.8,542.2L421.3,550.4L413.4,556.7L407.2,556.9L396.6,564.7L387.2,571.5L384.0,576.4L382.3,583.0L378.9,588.4L379.1,594.7L378.3,601.7L375.3,606.6L372.4,610.1L367.3,614.4L359.3,616.1L353.7,616.7L349.9,615.4L345.3,616.3L341.4,617.2L339.8,615.4L334.8,612.6L335.7,609.1L335.2,604.0L331.3,600.7L321.4,596.7L314.6,595.9L313.2,592.7L313.3,588.5L317.2,588.2L322.9,589.1L326.2,589.4L330.6,588.4L334.3,586.4L336.4,583.0L340.5,582.7L346.2,584.3L348.3,582.9L349.7,579.6L349.0,574.3L345.3,571.4L339.1,569.0L338.7,565.1L342.3,561.6L343.3,557.3L342.7,553.0L339.7,545.8L339.0,541.7L339.2,528.1L333.8,519.6L334.8,514.7L334.0,509.2L335.6,503.9L344.0,497.9L348.1,494.4L348.5,486.0L342.9,476.3L343.2,468.0L330.4,463.5L322.4,460.2L322.0,458.8L328.6,459.0L335.4,454.8L335.5,447.8L339.9,443.1L341.8,436.7L356.6,441.2L361.3,435.7L361.1,430.6L358.8,418.9L362.8,414.6L371.4,411.5L376.9,406.3L384.2,405.4L391.5,399.8L395.8,393.0L402.4,384.5L411.8,373.4L417.4,374.1L419.7,368.7L421.0,364.2L416.1,364.3L415.1,357.2L414.1,350.4L409.2,345.9L404.2,340.1L399.6,336.2L392.2,329.1L388.2,330.3L384.4,325.8L374.2,324.3L365.0,328.3L370.9,337.9L362.4,342.7L357.8,346.4L356.0,343.1L352.4,342.4L349.7,340.0L347.7,339.7L343.4,337.6L341.2,340.9L339.4,346.4L335.2,343.2L334.2,337.5L330.0,337.4L328.0,344.8L324.5,350.7L320.1,345.2L320.4,336.3L317.2,331.6L315.0,339.9L318.3,351.5L323.2,359.3L323.3,363.9L327.6,374.6L323.8,379.5L324.2,384.8L321.3,389.1L310.8,395.7L301.4,403.2L293.4,404.5L286.8,401.9L282.1,403.2L279.2,407.1L285.4,410.1L291.0,413.1L293.1,415.5L291.5,420.6L293.0,427.4L289.2,427.4L281.6,423.7L277.2,427.0L279.1,432.0L283.8,436.4L283.0,450.6L281.4,455.5L281.6,461.6L281.0,466.4L283.8,470.6L286.0,466.0L289.8,468.8L295.2,477.4L307.6,478.8L311.0,484.9L305.0,490.9L306.0,492.4L306.6,493.7L307.0,495.0L305.6,500.8L293.5,500.0L286.6,505.8L284.7,511.7L287.8,518.7L290.8,522.6L292.3,526.1L289.2,527.6L285.9,528.2L278.8,526.4L273.8,529.3L271.0,528.5L269.5,525.5L270.9,521.4L270.4,513.3L266.5,502.8L273.4,499.1L272.2,496.0L267.3,494.3L265.3,488.8L256.6,477.3L255.6,474.6L253.9,470.5L250.1,470.1L248.8,462.5L243.3,464.7L237.2,463.9L231.0,465.3L224.9,460.4L208.8,458.3L182.5,463.6L167.7,466.7L152.6,470.7L137.1,479.0L125.4,489.5L124.2,508.9L128.9,527.0L117.4,521.7L107.3,536.9L103.6,550.1L103.2,558.4L112.6,559.9L111.2,567.0L109.7,574.2L106.4,579.6L110.7,588.2L120.0,591.9L123.7,600.6L125.3,614.7L123.0,627.8L116.2,628.9L109.9,633.1L106.6,638.4L105.2,643.6L102.3,651.0L97.3,657.2L95.0,662.7L92.2,666.6L87.0,667.8L84.7,671.6L82.2,674.5L78.4,679.5L79.5,683.8L77.8,686.4L75.2,691.5L74.1,698.4L74.7,705.4L76.5,711.1L73.0,713.1L70.0,712.6L67.5,710.0L60.1,706.7L46.0,718.7L35.0,724.5M22.2,728.6L17.9,724.3L14.4,719.5L7.2,711.4L9.3,705.4L8.1,702.5L5.9,700.5L3.5,699.6L1.3,698.2L-0.4,694.6L-0.5,687.9L-1.0,680.4L2.8,677.2L4.6,673.1L8.5,672.0L3.8,660.1L0.6,648.5L3.7,642.3L5.1,635.9L4.5,634.9L4.7,627.2L2.6,623.4L5.5,617.9L9.9,613.8L13.9,613.1L10.5,607.3L9.1,603.7L6.0,594.4L5.5,585.3L10.2,576.6L13.2,567.8L25.8,569.0L34.7,570.8L40.8,570.4L46.6,570.5L50.9,566.5L34.3,548.3L29.8,540.2L18.9,531.6L0.6,526.5L-14.2,524.8L-24.4,529.2L-32.6,533.3L-48.3,533.8L-58.5,540.6L-66.9,557.6M-73.6,580.2L-73.5,572.3L-69.1,569.5L-65.8,570.5L-71.4,584.3M209.1,662.2L203.6,659.2L189.9,655.9L188.5,667.2L188.1,685.2L190.6,691.9L210.0,701.5L216.6,701.7L220.0,700.9L221.3,696.7L221.6,687.2L221.0,678.8L219.0,671.4L215.2,665.6L209.1,662.2","admin":"M114.7,536.4L109.2,534.1M-54.6,-66.8L-61.8,-64.7L-65.1,-63.4M-47.7,39.4L-43.2,40.0L-38.0,42.0L-33.8,46.4L-31.2,52.6L-30.0,70.3L-29.6,72.3L-28.7,75.4L-29.6,80.4L-32.0,84.4L-35.3,88.0L-41.1,92.1L-42.9,95.6L-42.5,101.4L-40.6,112.0L-37.8,120.4L-37.9,127.5L-39.3,131.3L-41.6,133.7L-46.9,133.7L-49.2,135.2L-48.6,139.9L-47.0,143.6L-42.8,147.8L-38.9,150.6L-35.6,154.0L-35.4,158.3L-35.9,166.2L-35.1,174.4L-35.4,178.5L-36.3,182.2L-35.6,186.4L-31.5,191.7L-9.3,210.0M-64.5,44.5L-56.4,40.9L-52.2,39.6L-47.7,39.4M218.0,98.3L212.8,94.3L205.9,86.2L203.0,82.1L200.6,77.4L191.6,68.0L188.5,64.0L186.9,60.2L186.4,56.2L186.8,52.6L187.7,50.0L189.0,47.6L192.4,42.6L194.6,39.9L199.2,31.8L200.8,26.0L203.1,19.9L203.8,15.2L205.0,11.1L206.9,7.4L209.5,3.6L211.0,0.7L211.7,-1.9L214.2,-6.0L217.8,-9.0L219.6,-12.8L220.5,-17.0L220.0,-22.0L217.0,-25.5L213.2,-27.6L195.0,-30.0L192.0,-31.1L188.2,-33.3L179.3,-39.7L177.5,-44.5L177.9,-49.9L179.6,-56.5M283.1,123.2L278.4,114.6L268.4,104.5L263.2,101.6L237.0,96.1L230.8,95.8M230.8,95.8L226.4,96.6L222.3,98.2L218.0,98.3M227.8,132.6L219.0,125.7L209.3,119.8L199.0,115.7L176.2,113.4L154.3,108.0L144.0,103.3L142.2,102.1L137.6,101.7L125.5,97.0L117.5,96.9M117.5,96.9L116.4,97.7L110.7,105.1L98.3,124.9L96.6,128.7L96.0,132.8L95.9,137.1L95.4,142.6L93.3,146.8L88.5,150.5L69.7,157.1L39.3,171.4L16.0,185.4L10.3,186.5L6.2,188.3L3.3,191.0L1.5,194.0L0.4,197.8L-4.5,205.7L-9.3,210.0M289.3,142.5L269.7,132.2L255.4,127.8L240.4,127.0M240.4,127.0L227.8,132.6M-5.1,237.7L-9.8,217.5L-9.3,210.0M-30.2,253.8L-33.8,253.5L-36.8,251.9L-39.4,248.6L-40.7,244.4L-42.3,241.2L-45.2,239.0L-49.0,238.0L-53.9,237.5L-61.5,235.9M-61.5,235.9L-65.5,235.9M-5.1,237.7L-21.5,251.6L-26.8,253.5L-30.2,253.8M-5.1,237.7L19.9,253.3L30.0,257.4L41.8,260.5L58.3,261.5M313.4,170.1L323.5,186.3L326.8,193.1L337.2,223.8L339.7,229.5L345.6,237.9L348.3,242.4L349.9,249.8L350.8,257.0L347.5,284.3M83.4,245.2L86.3,245.9L96.1,252.9L100.6,255.2L165.4,272.3L170.9,274.9L200.1,292.9L208.3,294.1M58.3,261.5L67.6,253.1L80.2,246.1L83.4,245.2M314.9,277.9L329.3,279.7L347.5,284.3M299.0,285.3L301.6,285.0L303.7,284.4L306.6,280.9L309.5,279.3L314.9,277.9M237.9,284.4L240.7,284.5L242.6,285.5L243.7,288.4L244.4,291.4L246.5,294.3M208.3,294.1L215.4,294.0L221.0,292.4L225.5,290.6L233.4,285.9L237.9,284.4M279.1,284.7L299.0,285.3M246.5,294.3L267.5,291.5L271.0,288.4L274.3,286.3L279.1,284.7M58.3,261.5L65.5,268.7L72.9,289.6L75.8,295.2L79.5,300.7L92.6,314.5L119.0,330.7M347.7,339.7L351.6,328.8L352.9,324.0L354.3,314.8L347.5,284.3M-13.0,444.5L-20.7,442.4L-25.3,439.0L-28.1,435.6L-32.2,432.8L-39.0,431.8L-45.0,428.5L-56.2,418.7M-56.2,418.7L-60.3,418.9L-63.2,421.6L-65.2,426.4L-66.7,432.3L-69.1,451.8L-72.5,465.3L-73.2,479.5L-72.3,489.1L-71.5,493.7L-71.4,498.2L-72.0,501.2L-72.6,503.2L-73.7,505.4M49.9,433.7L28.0,439.7L-13.0,444.5M119.0,330.7L116.4,339.5L117.5,352.0L117.2,357.0L113.9,374.2L111.7,379.3L109.1,383.7L105.9,387.2L78.1,402.2L71.7,404.7L66.0,407.8L60.2,412.5L51.7,426.2L49.9,433.7M225.3,393.8L223.9,393.5L222.4,392.3L212.5,379.0L209.8,374.5L204.3,368.2L197.5,364.2L186.7,361.7L173.0,360.9L163.4,358.2L156.9,354.6L144.2,342.4L137.7,339.4L126.9,332.3L119.0,330.7M323.8,385.4L296.4,375.3L287.2,368.9L285.5,367.3L283.1,365.5L247.6,347.0L243.9,346.5M243.9,346.5L239.7,347.5L236.3,348.9L234.1,350.7L232.9,353.0L231.7,354.9L229.2,355.3M229.2,355.3L223.7,352.2M223.7,352.2L221.4,352.7L221.0,354.6L222.9,357.1L230.7,364.7L232.2,367.4L232.1,368.9L230.9,370.8M230.9,370.8L228.0,370.7M228.0,370.7L226.7,373.8L227.5,386.6L227.3,390.1L226.8,392.1L226.2,393.4L225.3,393.8M109.2,534.1L102.5,531.2L96.0,529.7L88.8,527.1L85.9,524.9L83.8,522.8L80.8,518.6L75.1,509.0L71.9,500.6L70.5,491.0L71.2,483.6L73.2,479.1L78.3,473.4L79.8,470.4L80.5,468.2L80.5,464.1L80.0,459.7L78.5,451.9L77.5,448.6L77.0,446.3L76.5,443.3L76.8,436.7L76.5,433.9L72.9,431.7L69.7,431.1M69.7,431.1L49.9,433.7M289.3,142.5L283.1,123.2M432.8,51.8L436.8,51.2L440.8,47.8L444.1,42.7L449.9,25.9L452.9,19.4L458.8,10.5L460.4,4.0L461.1,-5.3L458.6,-36.4L456.0,-50.4L455.8,-56.8L457.9,-61.4M423.7,49.9L432.8,51.8M389.7,62.0L393.2,61.9L400.9,58.6L405.6,54.8L415.2,51.7L423.7,49.9M381.6,60.6L387.2,61.9L389.7,62.0M350.6,84.8L353.3,84.6L356.8,83.0L360.6,76.4L374.7,62.9L378.3,61.2L381.6,60.6M345.7,84.5L350.6,84.8M290.1,124.1L298.4,122.7L311.4,117.5L322.3,111.4L325.3,108.7L329.8,99.4L333.1,94.1L340.2,86.5L345.7,84.5M283.1,123.2L287.4,124.0L290.1,124.1M289.3,142.5L290.8,146.9L292.8,152.7L300.6,163.0L304.6,166.4L307.5,168.1L313.4,170.1M319.2,169.9L325.3,171.9M313.4,170.1L319.2,169.9M329.5,170.8L348.1,198.3L368.5,223.5L379.9,232.8L428.4,255.2L441.5,259.1L447.6,259.5M325.3,171.9L329.5,170.8M531.0,240.3L558.6,241.5L564.2,243.3L581.6,254.6L595.5,259.0L602.2,262.4L607.8,267.2L621.7,284.4L628.4,290.8L635.2,295.7L643.2,298.8L653.2,299.8M447.6,259.5L487.6,256.4L495.5,254.5L502.3,245.8L509.9,243.3L531.0,240.3M653.2,299.8L653.9,298.7"};
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (t, a, tx) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (tx !== undefined) e.textContent = tx; return e; };
+  const base = document.getElementById("base"), worldsG = document.getElementById("worlds"), labels = document.getElementById("labels");
+  const C = { x: 320, y: 320 }, S = 300 / 88;   // px per km; 88 km to the frame's edge
+  const at = (km, bearingDeg) => { const a = (90 - bearingDeg) * Math.PI / 180; return { x: C.x + km * S * Math.cos(a), y: C.y - km * S * Math.sin(a) }; };
+  const mono = { stroke: "none", "font-size": 11, "font-family": "var(--font-mono)" };
+  const RI = 3.92727;
+  // A pointy-top hexagon by centre and flat-to-flat width, in px; corners at 30° + 60°·i, so the
+  // south-western corner is the one at 210°.
+  const hexPts = (cx, cy, acrossPx) => { const r = acrossPx / 2 / Math.cos(Math.PI / 6); return Array.from({ length: 6 }, (_, i) => { const a = (30 + 60 * i) * Math.PI / 180; return (cx + r * Math.cos(a)) + "," + (cy - r * Math.sin(a)); }).join(" "); };
+  const cornerR = acrossPx => acrossPx / 2 / Math.cos(Math.PI / 6);
+
+  base.appendChild(el("rect", { x: 0, y: 0, width: 640, height: 640, fill: "var(--sea)", stroke: "none" }));
+  base.appendChild(el("path", { d: PATHS.admin, stroke: "var(--pref)", "stroke-width": 0.9, "stroke-dasharray": "3 3" }));
+  base.appendChild(el("path", { d: PATHS.coast, stroke: "currentColor", "stroke-width": 1.5 }));
+  for (const km of [25, 50, 75]) {
+    base.appendChild(el("circle", { cx: C.x, cy: C.y, r: km * S, stroke: "var(--line)", "stroke-dasharray": km % 50 ? "2 4" : "none" }));
+    base.appendChild(el("text", { x: C.x + 4, y: C.y - km * S - 3, fill: "var(--muted)", ...mono, "font-size": 10 }, km + " km"));
+  }
+  const places = [
+    ["日本橋", 0, 0], ["Yokohama", 27, 200], ["Chiba", 35, 100], ["Saitama", 25, 340], ["Kamakura", 45, 205], ["Hachiōji", 40, 265],
+    ["Kisarazu", 30, 140], ["Tsukuba", 55, 30], ["Narita", 55, 75], ["Kumagaya", 60, 320], ["Odawara", 70, 230], ["Tateyama", 90, 185],
+  ];
+  for (const [name, km, brg] of places) {
+    const p = at(km, brg);
+    labels.appendChild(el("circle", { cx: p.x, cy: p.y, r: km === 0 ? 5 : 3, fill: km === 0 ? "var(--world)" : "currentColor", stroke: "none" }));
+    labels.appendChild(el("text", { x: p.x + 6, y: p.y + 4, fill: "currentColor", ...mono }, name));
+  }
+  labels.appendChild(el("text", { x: 12, y: 628, fill: "var(--muted)", ...mono }, "north up · azimuthal equidistant on 日本橋 Nihonbashi · Natural Earth 1:10m · round-figure city distances"));
+
+  // The world, and one ri at true scale tucked into its south-western corner.
+  const worldPx = 36 * RI * S, riPx = RI * S;
+  worldsG.appendChild(el("polygon", { points: hexPts(C.x, C.y, worldPx), fill: "var(--world)", "fill-opacity": 0.08, stroke: "var(--world)", "stroke-width": 2.5 }));
+  worldsG.appendChild(el("text", { x: C.x, y: C.y - cornerR(worldPx) + 16, "text-anchor": "middle", fill: "var(--world)", ...mono, "font-weight": 500 }, "the world · N = 36 ri · 141 km"));
+  const inset = (cx, cy, bigPx, smallPx) => { const a = 210 * Math.PI / 180, d = cornerR(bigPx) - cornerR(smallPx) * 1.15; return { x: cx + d * Math.cos(a), y: cy - d * Math.sin(a) }; };
+  const ri = inset(C.x, C.y, worldPx, riPx);
+  worldsG.appendChild(el("polygon", { points: hexPts(ri.x, ri.y, riPx), fill: "var(--rung)", "fill-opacity": 0.35, stroke: "var(--rung)", "stroke-width": 1.5 }));
+  worldsG.appendChild(el("text", { x: ri.x + cornerR(riPx) + 6, y: ri.y + 4, fill: "var(--rung)", ...mono, "font-weight": 500 }, "one ri · 3.93 km"));
+
+  // The zoom strip: each rung fills its panel, the next drawn in its south-western corner.
+  const rungs = [
+    { name: "the world", size: "141 km", N: 36, next: "ri", nextSize: "3.93 km" },
+    { name: "ri 里", size: "3.93 km", N: 36, next: "chō", nextSize: "109 m" },
+    { name: "chō 町", size: "109 m", N: 10, next: "decichō", nextSize: "10.9 m" },
+    { name: "decichō", size: "10.9 m", N: 6, next: "ken", nextSize: "1.82 m" },
+    { name: "ken 間", size: "1.82 m", N: 6, next: "shaku", nextSize: "0.303 m" },
+  ];
+  const strip = document.getElementById("strip");
+  for (const r of rungs) {
+    const wrap = document.createElement("div");
+    const title = document.createElement("div"); title.className = "panel-title"; title.textContent = r.name + " · " + r.size + " · ×" + r.N + " down"; wrap.appendChild(title);
+    const svg = el("svg", { viewBox: "0 0 200 190", role: "img", "aria-label": r.name + " with one " + r.next + " in its south-western corner" });
+    const g = el("g", { fill: "none", stroke: "currentColor" }); svg.appendChild(g); wrap.appendChild(svg); strip.appendChild(wrap);
+    const big = 170, small = big / r.N;
+    g.appendChild(el("polygon", { points: hexPts(100, 92, big), fill: "var(--cell)", stroke: "var(--world)", "stroke-width": 2 }));
+    const p = inset(100, 92, big, small);
+    g.appendChild(el("polygon", { points: hexPts(p.x, p.y, small), fill: "var(--rung)", "fill-opacity": 0.5, stroke: "var(--rung)", "stroke-width": r.N > 10 ? 1 : 1.5 }));
+    g.appendChild(el("text", { x: 100, y: 186, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, "one " + r.next + " · " + r.nextSize));
+  }
+})();
+</script>
+</body>
+</html>
