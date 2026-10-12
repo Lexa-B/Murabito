@@ -286,3 +286,25 @@ The world as pure functions of seed and position, in cube coordinates on the uni
 
 - **The walkthrough.** `viz/banana.html` designs each step as an interactive page before any code: the world placed on the banana (1), the tectonic surface (2), climate (3), structure noise (4), erosion (5), reading the coast (6), drainage and the carved channels (7a–7d).
 - **The port.** The same pipeline in Rust, checked against the page step by step. Steps 1 and 2 are ported, and their facts rows match the page's. `viz/exp-06.html` draws the port's output, and it reads the same URL settings as `banana.html`, so the two sit side by side. The numeric code is one source compiled twice, `worldgen::f64` as the reference and `worldgen::f32` as the GPU's twin; the GPU path is planned from step 4.
+
+---
+
+## exp-07 — GPU hex-voxel raycasting
+
+- **Started:** 2026-09-29, inside exp-06; moved to its own experiment the same day, when exp-06 became the worldgen
+- **Stack:** standalone HTML mockups so far. The code is planned as Rust + Bevy, rendered on the GPU.
+- **Run:** open the pages in `Experiments/exp-07/viz/` from disk
+- **Design:** [`exp-07/docs/goals.md`](exp-07/docs/goals.md), the goals as stated before any code. The spec and plan come later and have to fit inside them.
+
+### Why
+
+To render voxels in 3D in Bevy, on the GPU, by casting a ray per pixel through the hex-prism grid instead of meshing.
+
+### What
+
+No code yet: every question is thought through and mocked up as a graph first, one small bite at a time.
+
+- `viz/hex-ray-walk.html`: bites one to seven. The exit-face rule and the incremental hex walk, the layer stack, the columns as runs with the vertical skip, skipping whole parent cells by their hi, packing B and the decichō ladder, and detail windows relative to the camera.
+- `viz/kanto-scale.html`: the world as a packing cell of 36 ri centred on the origin, mapped over Kantō, with the ladder zoomed rung by rung.
+
+The constraints are in `goals.md`: cube `(q, r, s)` throughout with `murabito_hexcoords`'s directions, a free-fly camera, a seeded test world with caves and overhangs (exp-06's worldgen is meant to supply it), and no performance bar.
