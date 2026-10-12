@@ -13,18 +13,18 @@ use crate::level::Level;
 
 /// The parent, on the lattice scaled by `n`, that owns this child cell.
 pub fn owner(cell: Hex, n: i32) -> Hex {
-    let a0 = (cell.q as f64 / n as f64).round() as i32;
-    let b0 = (cell.r as f64 / n as f64).round() as i32;
+    let a0 = (cell.q() as f64 / n as f64).round() as i32;
+    let b0 = (cell.r() as f64 / n as f64).round() as i32;
     let mut best = Hex::ZERO;
     let mut best_key: Option<(i64, i64, i64)> = None;
     for a in (a0 - 1)..=(a0 + 1) {
         for b in (b0 - 1)..=(b0 + 1) {
-            let off = Hex::new(cell.q - n * a, cell.r - n * b);
+            let off = Hex::axial(cell.q() - n * a, cell.r() - n * b);
             // Smallest d2 wins; ties go to the greatest (a, b), hence the negations.
             let key = (d2(off), -(a as i64), -(b as i64));
             if best_key.is_none_or(|k| key < k) {
                 best_key = Some(key);
-                best = Hex::new(a, b);
+                best = Hex::axial(a, b);
             }
         }
     }
@@ -55,20 +55,20 @@ pub fn up(cell: Hex, from: Level, to: Level) -> Hex {
 /// The child cell at the centre of this cell.
 pub fn centre_child(cell: Hex, level: Level) -> Hex {
     let n = level.packing();
-    Hex::new(cell.q * n, cell.r * n)
+    Hex::axial(cell.q() * n, cell.r() * n)
 }
 
 /// The shaku at the centre of this cell.
 pub fn centre_shaku(cell: Hex, level: Level) -> Hex {
     let s = level.scale_shaku();
-    Hex::new(cell.q * s, cell.r * s)
+    Hex::axial(cell.q() * s, cell.r() * s)
 }
 
 /// A cell's offset from its parent's centre, in cells of its own level.
 pub fn local(cell: Hex, level: Level) -> Hex {
     let p = parent_of(cell, level);
     let n = level.parent().expect("no parent").packing();
-    Hex::new(cell.q - n * p.q, cell.r - n * p.r)
+    Hex::axial(cell.q() - n * p.q(), cell.r() - n * p.r())
 }
 
 /// Offsets, from the centre child, of the children a cell at this level owns.
@@ -87,7 +87,7 @@ pub fn owned_offsets(level: Level) -> &'static [Hex] {
         let mut out = Vec::new();
         for q in -n..=n {
             for r in -n..=n {
-                let c = Hex::new(q, r);
+                let c = Hex::axial(q, r);
                 if owner(c, n) == Hex::ZERO {
                     out.push(c);
                 }
@@ -125,11 +125,11 @@ pub fn drawn_offsets(level: Level) -> &'static [Hex] {
         let mut out = Vec::new();
         for q in -n..=n {
             for r in -n..=n {
-                let c = Hex::new(q, r);
+                let c = Hex::axial(q, r);
                 let mine = d2(c);
                 let nearest = (-1..=1)
                     .flat_map(|a| (-1..=1).map(move |b| (a, b)))
-                    .map(|(a, b)| d2(Hex::new(q - n * a, r - n * b)))
+                    .map(|(a, b)| d2(Hex::axial(q - n * a, r - n * b)))
                     .min()
                     .expect("nine candidates");
                 if mine == nearest {
@@ -159,7 +159,7 @@ mod tests {
         // and that ken lists it among its children.
         for q in -20..=20 {
             for r in -20..=20 {
-                let c = Hex::new(q, r);
+                let c = Hex::axial(q, r);
                 let ken = owner(c, Level::Ken.packing());
                 let listed = children(ken, Level::Ken);
                 assert!(listed.contains(&c), "{c:?} not listed by {ken:?}");
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn the_centre_child_is_owned_by_its_parent() {
-        for cell in [Hex::ZERO, Hex::new(3, -7), Hex::new(-12, 5)] {
+        for cell in [Hex::ZERO, Hex::axial(3, -7), Hex::axial(-12, 5)] {
             let centre = centre_child(cell, Level::Cho);
             assert_eq!(owner(centre, Level::Cho.packing()), cell);
         }
@@ -177,11 +177,11 @@ mod tests {
 
     #[test]
     fn ownership_is_translation_invariant() {
-        for c in [Hex::new(1, 2), Hex::new(-4, 3), Hex::new(31, -17)] {
-            let shifted = Hex::new(c.q + 6 * 5, c.r - 6 * 2);
+        for c in [Hex::axial(1, 2), Hex::axial(-4, 3), Hex::axial(31, -17)] {
+            let shifted = Hex::axial(c.q() + 6 * 5, c.r() - 6 * 2);
             let a = owner(c, 6);
             let b = owner(shifted, 6);
-            assert_eq!(Hex::new(b.q - a.q, b.r - a.r), Hex::new(5, -2));
+            assert_eq!(Hex::axial(b.q() - a.q(), b.r() - a.r()), Hex::axial(5, -2));
         }
     }
 
@@ -193,20 +193,20 @@ mod tests {
         let mut found_tie = false;
         for q in -12..=12 {
             for r in -12..=12 {
-                let c = Hex::new(q, r);
+                let c = Hex::axial(q, r);
                 let win = owner(c, n);
-                let best = crate::hex::d2(Hex::new(c.q - n * win.q, c.r - n * win.r));
+                let best = crate::hex::d2(Hex::axial(c.q() - n * win.q(), c.r() - n * win.r()));
                 for a in -3..=3 {
                     for b in -3..=3 {
-                        let cand = Hex::new(a, b);
+                        let cand = Hex::axial(a, b);
                         if cand == win {
                             continue;
                         }
-                        let d = crate::hex::d2(Hex::new(c.q - n * a, c.r - n * b));
+                        let d = crate::hex::d2(Hex::axial(c.q() - n * a, c.r() - n * b));
                         if d == best {
                             found_tie = true;
                             assert!(
-                                (win.q, win.r) > (cand.q, cand.r),
+                                (win.q(), win.r()) > (cand.q(), cand.r()),
                                 "{c:?}: {win:?} vs {cand:?}"
                             );
                         }
@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn up_chains_levels() {
-        let shaku = Hex::new(77, -31);
+        let shaku = Hex::axial(77, -31);
         let ken = parent_of(shaku, Level::Shaku);
         let cho = parent_of(ken, Level::Ken);
         assert_eq!(up(shaku, Level::Shaku, Level::Cho), cho);
@@ -243,9 +243,9 @@ mod tests {
 
     #[test]
     fn local_offsets_are_small() {
-        let shaku = Hex::new(77, -31);
+        let shaku = Hex::axial(77, -31);
         let off = local(shaku, Level::Shaku);
-        assert!(off.q.abs() <= 6 && off.r.abs() <= 6, "{off:?}");
+        assert!(off.q().abs() <= 6 && off.r().abs() <= 6, "{off:?}");
     }
 }
 
@@ -282,14 +282,14 @@ mod drawn_tests {
         let n = level.packing();
         for q in -9..=9 {
             for r in -9..=9 {
-                let cell = Hex::new(q, r);
+                let cell = Hex::axial(q, r);
                 let parent = owner(cell, n);
                 assert!(
                     children(parent, level).contains(&cell),
                     "{cell:?} not listed by its owner {parent:?}"
                 );
                 let centre = centre_child(parent, level);
-                let offset = Hex::new(cell.q - centre.q, cell.r - centre.r);
+                let offset = Hex::axial(cell.q() - centre.q(), cell.r() - centre.r());
                 assert!(
                     drawn_offsets(level).contains(&offset),
                     "{cell:?} offset {offset:?} not drawn by its owner {parent:?}"
@@ -318,7 +318,7 @@ mod drawn_tests {
                 let mine = d2(*off);
                 let nearest = (-1..=1)
                     .flat_map(|a| (-1..=1).map(move |b| (a, b)))
-                    .map(|(a, b)| d2(Hex::new(off.q - n * a, off.r - n * b)))
+                    .map(|(a, b)| d2(Hex::axial(off.q() - n * a, off.r() - n * b)))
                     .min()
                     .expect("nine candidates");
                 assert_eq!(mine, nearest, "{level:?} {off:?} is a guest but not a tie");

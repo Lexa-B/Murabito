@@ -1,25 +1,29 @@
-//! Turning chunks into triangles. Pure geometry: no engine types, no GPU.
+//! Turning chunks into triangles. Pure geometry: Bevy's math types only, no ECS, no GPU.
 //!
-//! Positions are (east, north, height) in metres, relative to the chunk's own centre.
+//! Positions are Bevy-axis `[x, y, z]` in shaku, relative to the chunk's own centre.
 //! A chunk draws every child cell whose centre lies in its parent's ideal hexagon
 //! (`drawn_offsets`), minus the cells whose own chunk is on screen.
 
 use std::collections::{HashMap, HashSet};
 
+use bevy::math::Vec3;
+
 use crate::chunk::{Chunk, ChunkKey};
 use crate::column::Column;
 use crate::config::WorldConfig;
 use crate::hex::{Hex, DIRECTIONS};
+use crate::layer::{layer_bottom, layer_top};
 use crate::level::Level;
 use crate::owner::{centre_child, drawn_offsets};
 use crate::placeholder_terrain::column_at;
-use crate::plane::{cell_centre_m, corners_m};
+use crate::plane::{cell_centre, corners};
 use crate::world::{cell_in_world, world_ri};
 
 #[derive(Clone, Default, Debug)]
 pub struct MeshData {
-    /// (east, north, height) in metres, relative to the chunk's centre.
+    /// Bevy-axis `[x, y, z]` in shaku, relative to the chunk's centre.
     pub positions: Vec<[f32; 3]>,
+    /// Bevy-axis, like the positions: top faces are `[0, 1, 0]`.
     pub normals: Vec<[f32; 3]>,
     pub colours: Vec<[f32; 4]>,
     /// (edge_w, border_level, cell_level, 0): see `border_level`.
@@ -86,11 +90,6 @@ fn border_level(a: Hex, b: Hex, child: Level) -> Level {
 pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> MeshData {
     let key = chunk.key;
     let child = key.child_level();
-    let (origin_e, origin_n) = if key.level == Level::World {
-        (0.0, 0.0)
-    } else {
-        cell_centre_m(key.cell, key.level)
-    };
 
     // The chunk's own columns, plus any guest or neighbour column generated on demand.
     let mut columns: HashMap<Hex, Column> = HashMap::with_capacity(chunk.len() * 2);
@@ -110,10 +109,10 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
         generated
     };
 
-    let corners = corners_m(child);
+    let corners = corners(child);
     let mut mesh = MeshData::default();
     let cell_level = child as u32 as f32;
-    let bottom_m = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
+    let bottom = layer_bottom(cfg.bottom_layer);
 
     // This chunk's own drawn set, built once: full depth is for edges facing a cell this
     // chunk does not draw, not merely a cell some other chunk might. A neighbour outside
@@ -132,8 +131,18 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
         if column.runs.is_empty() {
             continue;
         }
-        let (ce, cn) = cell_centre_m(cell, child);
-        let (cx, cy) = ((ce - origin_e) as f32, (cn - origin_n) as f32);
+        // The offset from the chunk's centre, in shaku. Computed by first taking the
+        // difference in integer label space (`cell` and the chunk's own centre, both at
+        // the child level) and only then converting to float: subtracting two large `f32`
+        // world-space positions instead would lose precision at the edge of a big world
+        // (about 0.016 shaku at the edge of a 12-ri world). `centre_child` panics on
+        // `Level::World`, so that case keeps converting `cell` directly — its origin is
+        // the world origin anyway.
+        let c = if key.level == Level::World {
+            cell_centre(cell, child)
+        } else {
+            cell_centre(cell - centre_child(key.cell, key.level), child)
+        };
 
         // Neighbours, for face culling and for the border levels of the lines.
         let neighbour_cells: Vec<Hex> = DIRECTIONS.iter().map(|d| cell + *d).collect();
@@ -151,27 +160,27 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
             if column.is_solid(run.top + 1) {
                 continue;
             }
-            let top_m = cfg.layer_top_m(run.top) as f32;
+            let top = layer_top(run.top);
             let colour = shaded(run.material, cell);
             let centre_v = mesh.push_vertex(
-                [cx, cy, top_m],
-                [0.0, 0.0, 1.0],
+                (c + Vec3::Y * top).to_array(),
+                [0.0, 1.0, 0.0],
                 colour,
                 [0.0, 0.0, cell_level, 0.0],
             );
             for k in 0..6 {
                 let border = border_level(cell, neighbour_cells[k], child) as u32 as f32;
-                let (ax, ay) = corners[(k + 5) % 6];
-                let (bx, by) = corners[k];
+                let a = corners[(k + 5) % 6];
+                let b = corners[k];
                 let va = mesh.push_vertex(
-                    [cx + ax as f32, cy + ay as f32, top_m],
-                    [0.0, 0.0, 1.0],
+                    (c + a + Vec3::Y * top).to_array(),
+                    [0.0, 1.0, 0.0],
                     colour,
                     [1.0, border, cell_level, 0.0],
                 );
                 let vb = mesh.push_vertex(
-                    [cx + bx as f32, cy + by as f32, top_m],
-                    [0.0, 0.0, 1.0],
+                    (c + b + Vec3::Y * top).to_array(),
+                    [0.0, 1.0, 0.0],
                     colour,
                     [1.0, border, cell_level, 0.0],
                 );
@@ -181,15 +190,10 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
 
         // --- side faces: where the neighbour is air over those layers ---
         for (k, neighbour) in neighbour_columns.iter().enumerate() {
-            let (ax, ay) = corners[(k + 5) % 6];
-            let (bx, by) = corners[k];
+            let a = corners[(k + 5) % 6];
+            let b = corners[k];
             // Outward normal: the edge's midpoint direction.
-            let (nx, ny) = {
-                let (mx, my) = ((ax + bx) / 2.0, (ay + by) / 2.0);
-                let len = (mx * mx + my * my).sqrt().max(1e-9);
-                ((mx / len) as f32, (my / len) as f32)
-            };
-            let normal = [nx, ny, 0.0];
+            let normal = ((a + b) / 2.0).normalize_or_zero().to_array();
             let line = [0.0, 0.0, cell_level, 0.0];
             let full_depth = !neighbour_drawn[k];
             if full_depth {
@@ -197,32 +201,14 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
                 // world bottom to the topmost run's top — not one quad per run, which
                 // would overlap (and z-fight) across any air gap between runs.
                 let topmost = column.runs.last().expect("checked non-empty above");
-                let top_m = cfg.layer_top_m(topmost.top) as f32;
+                let top = layer_top(topmost.top);
                 let colour = shaded(topmost.material, cell);
-                let v0 = mesh.push_vertex(
-                    [cx + ax as f32, cy + ay as f32, bottom_m],
-                    normal,
-                    colour,
-                    line,
-                );
-                let v1 = mesh.push_vertex(
-                    [cx + bx as f32, cy + by as f32, bottom_m],
-                    normal,
-                    colour,
-                    line,
-                );
-                let v2 = mesh.push_vertex(
-                    [cx + bx as f32, cy + by as f32, top_m],
-                    normal,
-                    colour,
-                    line,
-                );
-                let v3 = mesh.push_vertex(
-                    [cx + ax as f32, cy + ay as f32, top_m],
-                    normal,
-                    colour,
-                    line,
-                );
+                let v0 =
+                    mesh.push_vertex((c + a + Vec3::Y * bottom).to_array(), normal, colour, line);
+                let v1 =
+                    mesh.push_vertex((c + b + Vec3::Y * bottom).to_array(), normal, colour, line);
+                let v2 = mesh.push_vertex((c + b + Vec3::Y * top).to_array(), normal, colour, line);
+                let v3 = mesh.push_vertex((c + a + Vec3::Y * top).to_array(), normal, colour, line);
                 // Seen from outside the cell, anticlockwise.
                 mesh.push_triangle(v0, v1, v2);
                 mesh.push_triangle(v0, v2, v3);
@@ -240,33 +226,25 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
                     while layer <= run.top && !neighbour.is_solid(layer) {
                         layer += 1;
                     }
-                    let top_m = cfg.layer_top_m(layer - 1) as f32;
-                    let bottom_of_wall = cfg.layer_bottom_m(start) as f32;
+                    let top = layer_top(layer - 1);
+                    let bottom_of_wall = layer_bottom(start);
                     let colour = shaded(run.material, cell);
                     let v0 = mesh.push_vertex(
-                        [cx + ax as f32, cy + ay as f32, bottom_of_wall],
+                        (c + a + Vec3::Y * bottom_of_wall).to_array(),
                         normal,
                         colour,
                         line,
                     );
                     let v1 = mesh.push_vertex(
-                        [cx + bx as f32, cy + by as f32, bottom_of_wall],
+                        (c + b + Vec3::Y * bottom_of_wall).to_array(),
                         normal,
                         colour,
                         line,
                     );
-                    let v2 = mesh.push_vertex(
-                        [cx + bx as f32, cy + by as f32, top_m],
-                        normal,
-                        colour,
-                        line,
-                    );
-                    let v3 = mesh.push_vertex(
-                        [cx + ax as f32, cy + ay as f32, top_m],
-                        normal,
-                        colour,
-                        line,
-                    );
+                    let v2 =
+                        mesh.push_vertex((c + b + Vec3::Y * top).to_array(), normal, colour, line);
+                    let v3 =
+                        mesh.push_vertex((c + a + Vec3::Y * top).to_array(), normal, colour, line);
                     // Seen from outside the cell, anticlockwise.
                     mesh.push_triangle(v0, v1, v2);
                     mesh.push_triangle(v0, v2, v3);
@@ -280,8 +258,8 @@ pub fn mesh_chunk(cfg: &WorldConfig, chunk: &Chunk, omitted: &HashSet<Hex>) -> M
 /// A material's colour, shaded slightly per cell so neighbouring cells read apart.
 fn shaded(material: crate::column::Material, cell: Hex) -> [f32; 4] {
     let base = material.colour();
-    let hash = crate::noise::gradient_2d(0x5EED, cell.q as f64 * 0.37, cell.r as f64 * 0.51);
-    let k = 1.0 + 0.06 * hash as f32;
+    let hash = crate::noise::gradient_2d(0x5EED, cell.q() as f32 * 0.37, cell.r() as f32 * 0.51);
+    let k = 1.0 + 0.06 * hash;
     [base[0] * k, base[1] * k, base[2] * k, 1.0]
 }
 
@@ -320,24 +298,44 @@ mod tests {
 
     #[test]
     fn top_faces_point_up_and_wind_anticlockwise() {
+        // Anticlockwise seen from above (+Y), with Bevy's front faces anticlockwise:
+        // (b - a) × (c - a) points up.
         let (cfg, chunk) = ken_chunk();
         let mesh = mesh_chunk(&cfg, &chunk, &HashSet::new());
-        let mut top_faces = 0;
+        let mut tops = 0;
         for tri in mesh.indices.chunks(3) {
-            let p: Vec<[f32; 3]> = tri.iter().map(|i| mesh.positions[*i as usize]).collect();
-            let up = mesh.normals[tri[0] as usize][2] > 0.9; // height is the third component
-            if !up {
-                continue;
+            let p: Vec<Vec3> = tri
+                .iter()
+                .map(|i| Vec3::from(mesh.positions[*i as usize]))
+                .collect();
+            let n = Vec3::from(mesh.normals[tri[0] as usize]);
+            if n == Vec3::Y {
+                tops += 1;
+                assert!((p[1] - p[0]).cross(p[2] - p[0]).y > 0.0, "{p:?}");
             }
-            top_faces += 1;
-            // Cross product of the edges, height component, must be positive: anticlockwise
-            // seen from above, which is Bevy's front face after the axis mapping.
-            let (a, b, c) = (p[0], p[1], p[2]);
-            let (ux, uy) = (b[0] - a[0], b[1] - a[1]);
-            let (vx, vy) = (c[0] - a[0], c[1] - a[1]);
-            assert!(ux * vy - uy * vx > 0.0, "clockwise top face: {p:?}");
         }
-        assert!(top_faces > 0, "a chunk should have top faces");
+        assert!(tops > 0);
+    }
+
+    #[test]
+    fn side_walls_face_outward() {
+        // A wall's winding must agree with its outward normal, so its front face is the
+        // one seen from outside the cell.
+        let (cfg, chunk) = ken_chunk();
+        let mesh = mesh_chunk(&cfg, &chunk, &HashSet::new());
+        let mut walls = 0;
+        for tri in mesh.indices.chunks(3) {
+            let p: Vec<Vec3> = tri
+                .iter()
+                .map(|i| Vec3::from(mesh.positions[*i as usize]))
+                .collect();
+            let n = Vec3::from(mesh.normals[tri[0] as usize]);
+            if n.y == 0.0 {
+                walls += 1;
+                assert!((p[1] - p[0]).cross(p[2] - p[0]).dot(n) > 0.0, "{p:?} {n}");
+            }
+        }
+        assert!(walls > 0);
     }
 
     #[test]
@@ -346,13 +344,13 @@ mod tests {
         let chunk = crate::chunk::generate(&cfg, ChunkKey::new(Level::Ken, Hex::ZERO));
         let mesh = mesh_chunk(&cfg, &chunk, &HashSet::new());
         let centre_column = chunk.column(Hex::ZERO).expect("the centre shaku");
-        let expected = centre_column.surface_height_m(&cfg) as f32;
+        let expected = centre_column.surface_height();
         // The centre cell's top face is at the chunk's own centre, at (0, 0) horizontally.
         let at_centre = mesh
             .positions
             .iter()
-            .filter(|p| p[0].abs() < 1e-4 && p[1].abs() < 1e-4)
-            .map(|p| p[2])
+            .filter(|p| p[0].abs() < 1e-4 && p[2].abs() < 1e-4)
+            .map(|p| p[1])
             .fold(f32::MIN, f32::max);
         assert!(
             (at_centre - expected).abs() < 1e-3,
@@ -373,11 +371,11 @@ mod tests {
         assert!(!fewer
             .positions
             .iter()
-            .any(|p| p[0].abs() < 1e-4 && p[1].abs() < 1e-4));
+            .any(|p| p[0].abs() < 1e-4 && p[2].abs() < 1e-4));
         assert!(all
             .positions
             .iter()
-            .any(|p| p[0].abs() < 1e-4 && p[1].abs() < 1e-4));
+            .any(|p| p[0].abs() < 1e-4 && p[2].abs() < 1e-4));
 
         // Omitting a cell opens a boundary between detail levels, so its neighbours wall the
         // hole down to the world bottom: that is what stops a height step becoming a crack.
@@ -387,14 +385,12 @@ mod tests {
         // that have nothing to do with the behaviour under test. Measured for this chunk and
         // config: 354 triangles all-drawn vs 352 with the centre omitted, and 0 vs 12 vertices
         // at the world bottom near the hole — fewer total triangles, but still walled.
-        let bottom = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
+        let bottom = layer_bottom(cfg.bottom_layer);
         let walls_at_bottom = |m: &MeshData| {
             m.positions
                 .iter()
-                .filter(|p| (p[2] - bottom).abs() < 1e-3)
-                .filter(|p| {
-                    (p[0] * p[0] + p[1] * p[1]).sqrt() < Level::Shaku.width_m() as f32 * 1.2
-                })
+                .filter(|p| (p[1] - bottom).abs() < 1e-3)
+                .filter(|p| (p[0] * p[0] + p[2] * p[2]).sqrt() < Level::Shaku.width() * 1.2)
                 .count()
         };
         // Exactly one full-depth quad per walled edge: 6 edges × 2 bottom vertices = 12.
@@ -442,7 +438,7 @@ mod tests {
         // Vertices at the world bottom, facing exactly direction 0 (the omitted neighbour's
         // direction) and close to target. Filtering on the outward normal as well as
         // position is what makes this robust: `target` sits on this chunk's own perimeter
-        // (`chunk.cells[0]`, `Hex { q: -4, r: 2 }` for this chunk), so most of its edges are
+        // (`chunk.cells[0]`, `(-4, 2, 2)` for this chunk), so most of its edges are
         // full depth already (this chunk's own border walls down to the world bottom all the
         // way around, per this round's fix), and several *other* cells elsewhere on the same
         // perimeter also happen to face direction 0. Those are far away (the nearest is
@@ -453,27 +449,22 @@ mod tests {
         // target's own direction-0 quad exactly, regardless of how the rest of the chunk's
         // perimeter behaves. One quad is 2 vertices; the old per-run code gave 4 for this
         // two-run column (one quad per run, each starting at the world bottom).
-        let bottom = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
-        let (tx, ty) = cell_centre_m(target, Level::Shaku);
-        let (tx, ty) = (tx as f32, ty as f32);
-        let corners = corners_m(Level::Shaku);
-        let (ax, ay) = corners[5];
-        let (bx, by) = corners[0];
-        let (mx, my) = ((ax + bx) / 2.0, (ay + by) / 2.0);
-        let len = (mx * mx + my * my).sqrt();
-        let (dir0_nx, dir0_ny) = ((mx / len) as f32, (my / len) as f32);
+        let bottom = layer_bottom(cfg.bottom_layer);
+        let t = cell_centre(target, Level::Shaku);
+        let corners = corners(Level::Shaku);
+        let dir0 = ((corners[5] + corners[0]) / 2.0).normalize();
         let walls_at_bottom = mesh
             .positions
             .iter()
             .enumerate()
-            .filter(|(_, p)| (p[2] - bottom).abs() < 1e-3)
+            .filter(|(_, p)| (p[1] - bottom).abs() < 1e-3)
             .filter(|(_, p)| {
-                let (dx, dy) = (p[0] - tx, p[1] - ty);
-                (dx * dx + dy * dy).sqrt() < Level::Shaku.width_m() as f32
+                let (dx, dz) = (p[0] - t.x, p[2] - t.z);
+                (dx * dx + dz * dz).sqrt() < Level::Shaku.width()
             })
             .filter(|(i, _)| {
                 let n = mesh.normals[*i];
-                (n[0] - dir0_nx).abs() < 1e-4 && (n[1] - dir0_ny).abs() < 1e-4
+                (n[0] - dir0.x).abs() < 1e-4 && (n[2] - dir0.z).abs() < 1e-4
             })
             .count();
         assert_eq!(walls_at_bottom, 2);
@@ -496,36 +487,32 @@ mod tests {
     #[test]
     fn a_chunks_perimeter_walls_down_even_with_nothing_omitted() {
         let (cfg, chunk) = ken_chunk();
-        // `chunk.cells[0]` (`Hex { q: -4, r: 2 }`) is a real perimeter cell of this chunk:
-        // its neighbours in directions 1 through 4 belong to sibling chunks, not this one.
-        // Its direction-1 neighbour is in-world and not omitted — the *only* reason this
+        // `chunk.cells[0]`, `(-4, 2, 2)`, is a real perimeter cell of this chunk: its
+        // neighbours in directions 2 through 5 belong to sibling chunks, not this one.
+        // Its direction-2 neighbour is in-world and not omitted — the *only* reason this
         // edge is full depth is that the neighbour is outside this chunk's own drawn set.
         // Without the fix (testing membership rather than `cell_in_world`), this edge would
         // be culled as an ordinary, same-level neighbour instead.
         let target = chunk.cells[0];
         let mesh = mesh_chunk(&cfg, &chunk, &HashSet::new());
 
-        let bottom = cfg.layer_bottom_m(cfg.bottom_layer) as f32;
-        let (tx, ty) = cell_centre_m(target, Level::Shaku);
-        let (tx, ty) = (tx as f32, ty as f32);
-        let corners = corners_m(Level::Shaku);
-        let (ax, ay) = corners[0];
-        let (bx, by) = corners[1];
-        let (mx, my) = ((ax + bx) / 2.0, (ay + by) / 2.0);
-        let len = (mx * mx + my * my).sqrt();
-        let (dir1_nx, dir1_ny) = ((mx / len) as f32, (my / len) as f32);
+        let bottom = layer_bottom(cfg.bottom_layer);
+        let t = cell_centre(target, Level::Shaku);
+        let corners = corners(Level::Shaku);
+        // The mesher pairs direction k with the cell edge between corners (k+5)%6 and k.
+        let dir2 = ((corners[1] + corners[2]) / 2.0).normalize();
         let walls_at_bottom = mesh
             .positions
             .iter()
             .enumerate()
-            .filter(|(_, p)| (p[2] - bottom).abs() < 1e-3)
+            .filter(|(_, p)| (p[1] - bottom).abs() < 1e-3)
             .filter(|(_, p)| {
-                let (dx, dy) = (p[0] - tx, p[1] - ty);
-                (dx * dx + dy * dy).sqrt() < Level::Shaku.width_m() as f32
+                let (dx, dz) = (p[0] - t.x, p[2] - t.z);
+                (dx * dx + dz * dz).sqrt() < Level::Shaku.width()
             })
             .filter(|(i, _)| {
                 let n = mesh.normals[*i];
-                (n[0] - dir1_nx).abs() < 1e-4 && (n[1] - dir1_ny).abs() < 1e-4
+                (n[0] - dir2.x).abs() < 1e-4 && (n[2] - dir2.z).abs() < 1e-4
             })
             .count();
         assert_eq!(walls_at_bottom, 2);
@@ -547,6 +534,37 @@ mod tests {
             let chunk = crate::chunk::generate(&cfg, ChunkKey::new(level, Hex::ZERO));
             let mesh = mesh_chunk(&cfg, &chunk, &HashSet::new());
             assert!(mesh.triangle_count() > 0, "{level:?} produced nothing");
+        }
+    }
+
+    #[test]
+    fn a_parents_centre_child_lands_on_the_parents_own_centre() {
+        // The identity the precision fix above depends on: packing B centres the parent
+        // (a, b) on the child (N·a, N·b), so converting a chunk key's own cell to the
+        // child lattice and taking its centre there must land on the same point in space
+        // as the parent cell's own centre at its own level. In real-number arithmetic
+        // this is exact (both sides compute the same linear function of (a, b), just
+        // through a different chain of level widths); in `f32` the two chains round
+        // differently by up to a handful of ULPs, which is not the cancellation error
+        // this identity exists to avoid (about 0.016 shaku at the edge of a 12-ri world,
+        // some five orders of magnitude bigger), so the check below allows a tight,
+        // scale-relative tolerance rather than bit-exact equality.
+        for level in [Level::Ken, Level::Cho, Level::Ri] {
+            for cell in [
+                Hex::ZERO,
+                Hex::axial(3, -7),
+                Hex::axial(-12, 5),
+                Hex::axial(41, 19),
+            ] {
+                let key = ChunkKey::new(level, cell);
+                let via_child = cell_centre(centre_child(key.cell, key.level), key.child_level());
+                let direct = cell_centre(key.cell, key.level);
+                let tolerance = 1e-4 * direct.length().max(1.0);
+                assert!(
+                    (via_child - direct).length() < tolerance,
+                    "{level:?} {cell:?}: {via_child} vs {direct}"
+                );
+            }
         }
     }
 }

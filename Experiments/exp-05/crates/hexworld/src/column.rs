@@ -1,8 +1,6 @@
 //! A column of voxels: a sorted list of runs of material, over the full height.
 //! Gaps between runs are air, so overhangs and caves can be represented.
 
-use crate::config::WorldConfig;
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Material {
     Rock,
@@ -51,16 +49,15 @@ impl Column {
         self.material_at(layer).is_some()
     }
 
-    /// The height of the top of the column, in metres.
-    pub fn surface_height_m(&self, cfg: &WorldConfig) -> f64 {
-        self.top_layer().map_or(0.0, |l| cfg.layer_top_m(l))
+    /// The height of the top of the column, in shaku.
+    pub fn surface_height(&self) -> f32 {
+        self.top_layer().map_or(0.0, crate::layer::layer_top)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::WorldConfig;
 
     fn sample() -> Column {
         Column {
@@ -124,8 +121,6 @@ mod tests {
 
     #[test]
     fn surface_height_is_the_top_of_the_top_run() {
-        let cfg = WorldConfig::default();
-        let expected = cfg.layer_top_m(13);
-        assert!((sample().surface_height_m(&cfg) - expected).abs() < 1e-12);
+        assert_eq!(sample().surface_height(), crate::layer::layer_top(13));
     }
 }

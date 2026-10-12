@@ -5,12 +5,14 @@
 
 use std::collections::{HashMap, HashSet};
 
+use bevy::math::Vec3;
+
 use crate::chunk::{Chunk, ChunkKey};
 use crate::config::WorldConfig;
 use crate::hex::{range, Hex};
 use crate::level::Level;
 use crate::owner::up;
-use crate::plane::cell_centre_m;
+use crate::plane::cell_centre;
 use crate::world::cell_in_world;
 
 /// How many rings of neighbouring cells a loader wants at each detail level.
@@ -85,18 +87,15 @@ pub fn requests(cfg: &WorldConfig, loader: &Loader) -> Vec<ChunkKey> {
 /// with the key as a tie-break so the order never depends on the input order.
 pub fn load_order(cfg: &WorldConfig, loaders: &[Loader], keys: &mut [ChunkKey]) {
     let _ = cfg;
-    let distance2 = |key: &ChunkKey| -> f64 {
+    let distance2 = |key: &ChunkKey| -> f32 {
         if key.level == Level::World {
             return 0.0;
         }
-        let (ce, cn) = cell_centre_m(key.cell, key.level);
+        let centre = cell_centre(key.cell, key.level);
         loaders
             .iter()
-            .map(|l| {
-                let (fe, fn_) = cell_centre_m(l.focus, Level::Shaku);
-                (ce - fe).powi(2) + (cn - fn_).powi(2)
-            })
-            .fold(f64::MAX, f64::min)
+            .map(|l| centre.distance_squared(cell_centre(l.focus, Level::Shaku)))
+            .fold(f32::MAX, f32::min)
     };
     keys.sort_by(|a, b| {
         coarseness_rank(a.level)
@@ -321,11 +320,11 @@ impl ChunkStore {
     }
 
     /// The height of the ground at a point, at the finest detail loaded there.
-    pub fn surface_height_m(&self, east: f64, north: f64) -> Option<f64> {
+    pub fn surface_height(&self, pos: Vec3) -> Option<f32> {
         for level in crate::level::CELL_LEVELS {
-            let cell = crate::plane::round_at(east, north, level);
+            let cell = crate::plane::round_at(pos, level);
             if let Some(column) = self.column(level, cell) {
-                return Some(column.surface_height_m(&self.cfg));
+                return Some(column.surface_height());
             }
         }
         None
@@ -407,7 +406,7 @@ mod tests {
         let cfg = WorldConfig::default();
         // Odd rings: a wide shaku window with no ken or cho window at all.
         let loader = Loader {
-            focus: Hex::new(500, -200),
+            focus: Hex::axial(500, -200),
             rings: Rings {
                 shaku: 5,
                 ken: 0,
@@ -429,7 +428,7 @@ mod tests {
     fn windows_are_clipped_to_the_world() {
         let cfg = WorldConfig::default();
         // A focus near the ri's edge: some of its cho window falls in neighbouring ri.
-        let edge = Hex::new(Level::Ri.scale_shaku() / 2, 0);
+        let edge = Hex::axial(Level::Ri.scale_shaku() / 2, 0);
         let keys = requests(
             &cfg,
             &Loader {
@@ -454,7 +453,7 @@ mod tests {
         let cfg = WorldConfig::default();
         let a = at_origin();
         let b = Loader {
-            focus: Hex::new(600, 600),
+            focus: Hex::axial(600, 600),
             rings: Rings::default(),
         };
         let ka = requests(&cfg, &a);
@@ -576,12 +575,12 @@ mod store_tests {
             rings: Rings::default(),
         }];
         settle(&mut s, &here, 0.0);
-        let far_key = ChunkKey::new(Level::Ken, up(Hex::new(18, 0), Level::Shaku, Level::Ken));
+        let far_key = ChunkKey::new(Level::Ken, up(Hex::axial(18, 0), Level::Shaku, Level::Ken));
         assert!(s.is_loaded(far_key), "should be in the starting window");
 
         // Move the loader away. The chunk is no longer requested, but it stays loaded.
         let away = [Loader {
-            focus: Hex::new(600, 0),
+            focus: Hex::axial(600, 0),
             rings: Rings::default(),
         }];
         let update = s.update(&away, 1.0);
@@ -614,7 +613,7 @@ mod store_tests {
         }];
         settle(&mut s, &here, 0.0);
         let away = [Loader {
-            focus: Hex::new(600, 0),
+            focus: Hex::axial(600, 0),
             rings: Rings::default(),
         }];
         s.update(&away, 1.0);
@@ -646,7 +645,7 @@ mod store_tests {
         }];
         settle(&mut s, &here, 0.0);
         let away = [Loader {
-            focus: Hex::new(600, 0),
+            focus: Hex::axial(600, 0),
             rings: Rings::default(),
         }];
         let update = s.update(&away, 0.0);
@@ -724,7 +723,7 @@ mod store_tests {
         s.begin_load(key);
         // The loader leaves before the chunk arrives.
         let away = [Loader {
-            focus: Hex::new(50_000, 0),
+            focus: Hex::axial(50_000, 0),
             rings: Rings::default(),
         }];
         s.update(&away, 0.0);
@@ -743,13 +742,13 @@ mod store_tests {
         settle(&mut s, &here, 0.0);
         assert_eq!(s.finest_at(Hex::ZERO), Some(Level::Shaku));
         // Far away, inside the ri, only coarse detail is loaded.
-        let far = Hex::new(3_000, 0);
+        let far = Hex::axial(3_000, 0);
         let level = s
             .finest_at(far)
             .expect("something is loaded everywhere in the ri");
         assert!(level > Level::Shaku, "{level:?}");
         assert!(s.column(Level::Shaku, Hex::ZERO).is_some());
-        assert!(s.surface_height_m(0.0, 0.0).is_some());
+        assert!(s.surface_height(Vec3::ZERO).is_some());
     }
 
     #[test]
@@ -770,7 +769,7 @@ mod store_tests {
 
         // Move away and let the delay expire everything: unloads are counted too.
         let away = [Loader {
-            focus: Hex::new(600, 0),
+            focus: Hex::axial(600, 0),
             rings: Rings::default(),
         }];
         s.update(&away, 2.5);

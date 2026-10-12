@@ -1,5 +1,7 @@
 # exp-05 — Hex coordinates, addresses and chunks: design
 
+> Amended 2026-09-22 by `2026-09-22-exp-05-main-coords-design.md`: coordinates now follow the main project's `murabito_hexcoords` (shaku `Vec3`, +r SSE, cube API, layer fixed at 5 sun). Where the two disagree, that one wins.
+
 **Date:** 2026-09-20
 **Location:** `Experiments/exp-05/`
 **Stack:** Rust 1.95 (stable), Bevy 0.19, bevy_egui 0.42; a Cargo workspace. One small Python script (run with `uv run`) writes test fixtures from exp-03.

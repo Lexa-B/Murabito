@@ -10,24 +10,24 @@ fn mix(mut z: u64) -> u64 {
     x ^ (x >> 31)
 }
 
-fn gradient(seed: u64, ix: i64, iy: i64) -> (f64, f64) {
+fn gradient(seed: u64, ix: i64, iy: i64) -> (f32, f32) {
     let h = mix(seed ^ mix((ix as u64).wrapping_mul(0x1234_5678_9ABC_DEF1) ^ (iy as u64)));
-    let angle = (h >> 11) as f64 / (1u64 << 53) as f64 * std::f64::consts::TAU;
+    let angle = (h >> 40) as f32 / (1u64 << 24) as f32 * std::f32::consts::TAU;
     (angle.cos(), angle.sin())
 }
 
-fn fade(t: f64) -> f64 {
+fn fade(t: f32) -> f32 {
     t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
 }
 
 /// Gradient noise at a point, in [-1, 1].
-pub fn gradient_2d(seed: u64, x: f64, y: f64) -> f64 {
+pub fn gradient_2d(seed: u64, x: f32, y: f32) -> f32 {
     let (x0, y0) = (x.floor(), y.floor());
     let (ix, iy) = (x0 as i64, y0 as i64);
     let (fx, fy) = (x - x0, y - y0);
     let mut corners = [0.0; 4];
     for (i, slot) in corners.iter_mut().enumerate() {
-        let (dx, dy) = ((i & 1) as f64, (i >> 1) as f64);
+        let (dx, dy) = ((i & 1) as f32, (i >> 1) as f32);
         let g = gradient(seed, ix + dx as i64, iy + dy as i64);
         *slot = g.0 * (fx - dx) + g.1 * (fy - dy);
     }
@@ -35,7 +35,7 @@ pub fn gradient_2d(seed: u64, x: f64, y: f64) -> f64 {
     let top = corners[0] + u * (corners[1] - corners[0]);
     let bottom = corners[2] + u * (corners[3] - corners[2]);
     // Gradient noise peaks near 1/sqrt(2); scale so the range is about [-1, 1].
-    ((top + v * (bottom - top)) * std::f64::consts::SQRT_2).clamp(-1.0, 1.0)
+    ((top + v * (bottom - top)) * std::f32::consts::SQRT_2).clamp(-1.0, 1.0)
 }
 
 #[cfg(test)]
@@ -54,11 +54,11 @@ mod tests {
 
     #[test]
     fn stays_in_range_and_varies() {
-        let mut min = f64::MAX;
-        let mut max = f64::MIN;
+        let mut min = f32::MAX;
+        let mut max = f32::MIN;
         for i in 0..2_000 {
-            let x = i as f64 * 0.37;
-            let y = i as f64 * -0.11;
+            let x = i as f32 * 0.37;
+            let y = i as f32 * -0.11;
             let v = gradient_2d(42, x, y);
             assert!((-1.0..=1.0).contains(&v), "{v} out of range");
             min = min.min(v);
@@ -71,7 +71,7 @@ mod tests {
     fn is_zero_at_lattice_points() {
         // Gradient noise vanishes on the lattice; this catches a value-noise mix-up.
         for i in -3..=3 {
-            assert!(gradient_2d(9, i as f64, 2.0).abs() < 1e-12);
+            assert!(gradient_2d(9, i as f32, 2.0).abs() < 1e-6);
         }
     }
 }

@@ -141,14 +141,14 @@ mod tests {
     #[test]
     fn generation_is_pure() {
         let cfg = WorldConfig::default();
-        let key = ChunkKey::new(Level::Ken, Hex::new(2, -3));
+        let key = ChunkKey::new(Level::Ken, Hex::axial(2, -3));
         assert_eq!(generate(&cfg, key), generate(&cfg, key));
     }
 
     #[test]
     fn a_column_can_be_looked_up_by_cell() {
         let cfg = WorldConfig::default();
-        let key = ChunkKey::new(Level::Ken, Hex::new(2, -3));
+        let key = ChunkKey::new(Level::Ken, Hex::axial(2, -3));
         let chunk = generate(&cfg, key);
         let cell = chunk.cells[7];
         assert_eq!(
@@ -159,12 +159,12 @@ mod tests {
                 Level::Shaku
             ))
         );
-        assert_eq!(chunk.column(Hex::new(99_999, 0)), None);
+        assert_eq!(chunk.column(Hex::axial(99_999, 0)), None);
     }
 
     #[test]
     fn ancestors_run_up_to_the_world() {
-        let key = ChunkKey::new(Level::Ken, Hex::new(2, -3));
+        let key = ChunkKey::new(Level::Ken, Hex::axial(2, -3));
         let ancestors = key.ancestors();
         assert_eq!(ancestors.len(), 3);
         assert_eq!(ancestors[0].level, Level::Cho);
@@ -175,12 +175,12 @@ mod tests {
 
     #[test]
     fn a_chunks_cells_are_its_parents_owned_children() {
-        let key = ChunkKey::new(Level::Cho, Hex::new(1, 1));
+        let key = ChunkKey::new(Level::Cho, Hex::axial(1, 1));
         let cfg = WorldConfig::default();
         let cells = chunk_cells(&cfg, key);
         assert_eq!(cells.len(), 3_600);
         for c in &cells {
-            assert_eq!(crate::owner::parent_of(*c, Level::Ken), Hex::new(1, 1));
+            assert_eq!(crate::owner::parent_of(*c, Level::Ken), Hex::axial(1, 1));
         }
     }
 }

@@ -15,9 +15,8 @@ use std::sync::OnceLock;
 use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
-use hexworld::{mesh::MeshData, plane::cell_centre_m, ChunkKey, Hex, Level, WorldConfig};
+use hexworld::{mesh::MeshData, plane::cell_centre, ChunkKey, Hex, Level, WorldConfig};
 
-use crate::axes::{mesh_position, to_bevy};
 use crate::material::GroundMaterial;
 
 #[derive(Component, Clone, Copy, Debug)]
@@ -110,26 +109,14 @@ pub fn setup_material(mut commands: Commands, mut materials: ResMut<Assets<Groun
     commands.insert_resource(crate::GroundMaterialHandle(handle));
 }
 
-/// Build a Bevy mesh from the core's data, mapping the axes once.
+/// Build a Bevy mesh from the core's data, which is already in Bevy's axes.
 pub fn to_bevy_mesh(data: &MeshData) -> Mesh {
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD,
     );
-    mesh.insert_attribute(
-        Mesh::ATTRIBUTE_POSITION,
-        data.positions
-            .iter()
-            .map(|p| mesh_position(*p))
-            .collect::<Vec<[f32; 3]>>(),
-    );
-    mesh.insert_attribute(
-        Mesh::ATTRIBUTE_NORMAL,
-        data.normals
-            .iter()
-            .map(|n| mesh_position(*n))
-            .collect::<Vec<[f32; 3]>>(),
-    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, data.positions.clone());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, data.normals.clone());
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, data.colours.clone());
     // Line data rides in the UVs, so no custom vertex shader is needed:
     // UV0 = (edge_w, border_level), UV1 = (cell_level, 0).
@@ -156,8 +143,7 @@ pub fn chunk_origin(key: ChunkKey) -> Vec3 {
     if key.level == Level::World {
         Vec3::ZERO
     } else {
-        let (east, north) = cell_centre_m(key.cell, key.level);
-        to_bevy(east, north, 0.0)
+        cell_centre(key.cell, key.level)
     }
 }
 
@@ -234,7 +220,7 @@ fn guest_offsets_by_owner(level: Level) -> &'static [GuestGroup] {
             }
         }
         let mut out: Vec<GuestGroup> = by_owner.into_iter().collect();
-        out.sort_by_key(|(dir, _)| (dir.q, dir.r));
+        out.sort_by_key(|(dir, _)| (dir.q(), dir.r()));
         out
     })
 }
@@ -376,9 +362,9 @@ mod tests {
     fn universe() -> Vec<ChunkKey> {
         let mut out = vec![ChunkKey::WORLD];
         for (level, far) in [
-            (Level::Ken, Hex::new(500, -300)),
-            (Level::Cho, Hex::new(8, -5)),
-            (Level::Ri, Hex::new(2, -1)),
+            (Level::Ken, Hex::new(500, -300, -200).unwrap()),
+            (Level::Cho, Hex::new(8, -5, -3).unwrap()),
+            (Level::Ri, Hex::new(2, -1, -1).unwrap()),
         ] {
             for cell in hexworld::hex::range(Hex::ZERO, 2) {
                 out.push(ChunkKey::new(level, cell));
@@ -416,7 +402,7 @@ mod tests {
         // The off-origin cluster only proves anything while it is inside the world: out
         // there, `drawn_cells` would be empty and both implementations would agree on
         // nothing. Fail loudly rather than quietly if that ever stops being true.
-        let far_ken = ChunkKey::new(Level::Ken, Hex::new(500, -300));
+        let far_ken = ChunkKey::new(Level::Ken, Hex::new(500, -300, -200).unwrap());
         assert!(
             !hexworld::mesh::drawn_cells(&cfg, far_ken).is_empty(),
             "{far_ken:?} must be in the world, or the far cluster tests nothing"
@@ -496,7 +482,7 @@ mod tests {
     fn a_guest_chunk_omits_once_its_owner_is_shown() {
         let cfg = WorldConfig::default();
         let a = ChunkKey::new(Level::Ken, Hex::ZERO);
-        let b = ChunkKey::new(Level::Ken, Hex::new(1, 0));
+        let b = ChunkKey::new(Level::Ken, Hex::new(1, 0, -1).unwrap());
 
         // Alone, neither omits anything: omission only ever follows from being shown.
         let only_a: HashSet<ChunkKey> = [a].into_iter().collect();
@@ -535,7 +521,7 @@ mod tests {
     fn the_owner_leaving_takes_the_cell_back_out_of_the_guests_desired_set() {
         let cfg = WorldConfig::default();
         let a = ChunkKey::new(Level::Ken, Hex::ZERO);
-        let b = ChunkKey::new(Level::Ken, Hex::new(1, 0));
+        let b = ChunkKey::new(Level::Ken, Hex::new(1, 0, -1).unwrap());
         let both: HashSet<ChunkKey> = [a, b].into_iter().collect();
 
         let cells_a: HashSet<Hex> = hexworld::mesh::drawn_cells(&cfg, a).into_iter().collect();
@@ -581,7 +567,7 @@ mod tests {
     /// never re-mesh either of them.
     #[test]
     fn affected_by_names_the_chunk_and_its_parent() {
-        let ken = ChunkKey::new(Level::Ken, Hex::new(1, -1));
+        let ken = ChunkKey::new(Level::Ken, Hex::new(1, -1, 0).unwrap());
         // No repeats: `tasks::apply_partners` takes each named chunk's mesh out of a map
         // exactly once, so a duplicate would panic there. Checked on the `Vec`, because
         // collecting into a set — which every other assertion here does — cannot see one.
@@ -610,12 +596,19 @@ mod tests {
     fn set_omissions_replaces_rather_than_accumulates() {
         let key = ChunkKey::new(Level::Cho, Hex::ZERO);
         let mut shown = Shown::default();
-        shown.set_omissions(key, [Hex::new(1, 0), Hex::new(2, 0)].into_iter().collect());
+        shown.set_omissions(
+            key,
+            [Hex::new(1, 0, -1).unwrap(), Hex::new(2, 0, -2).unwrap()]
+                .into_iter()
+                .collect(),
+        );
         assert_eq!(shown.omitted_for(key).len(), 2);
-        shown.set_omissions(key, [Hex::new(3, 0)].into_iter().collect());
+        shown.set_omissions(key, [Hex::new(3, 0, -3).unwrap()].into_iter().collect());
         assert_eq!(
             *shown.omitted_for(key),
-            [Hex::new(3, 0)].into_iter().collect::<HashSet<_>>()
+            [Hex::new(3, 0, -3).unwrap()]
+                .into_iter()
+                .collect::<HashSet<_>>()
         );
         shown.set_omissions(key, HashSet::new());
         assert!(shown.omitted_for(key).is_empty());

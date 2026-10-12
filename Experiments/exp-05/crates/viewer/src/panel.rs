@@ -11,9 +11,11 @@ use std::collections::HashMap;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
-use hexworld::{address_of, cell_centre_m, round_at, Hex, Level, WorldConfig};
+use hexworld::{
+    address_of, cell_centre, layer_of_height, round_at, Address, Hex, Level, VoxelCoord,
+    WorldConfig, SHAKU_M,
+};
 
-use hexworld_bevy::axes::{from_bevy, to_bevy};
 use hexworld_bevy::{ChunkView, HexWorld, LineMode, Loader, TintByLevel};
 
 use crate::camera::CameraRig;
@@ -105,24 +107,36 @@ pub fn update_hover(
         return;
     };
     let point = ray.get_point(distance);
-    let (east, north, _) = from_bevy(point);
-    let shaku = round_at(east, north, Level::Shaku);
-    let layer = world
-        .store()
-        .surface_height_m(east, north)
-        .map(|h| world.store().config().layer_of_height(h))
-        .unwrap_or(0);
-    hovered.0 = Some((shaku, layer));
+    let shaku = round_at(point, Level::Shaku);
+    hovered.0 = Some((shaku, layer_at(&world, point)));
 }
 
 /// The layer under a point, from the finest terrain loaded there — 0 if nothing is
-/// loaded yet, matching `update_hover`'s own fallback.
-fn layer_at(world: &HexWorld, east: f64, north: f64) -> i32 {
+/// loaded yet.
+fn layer_at(world: &HexWorld, pos: Vec3) -> i32 {
     world
         .store()
-        .surface_height_m(east, north)
-        .map(|h| world.store().config().layer_of_height(h))
+        .surface_height(pos)
+        .map(layer_of_height)
         .unwrap_or(0)
+}
+
+/// The address of a shaku cell at a layer.
+fn address_at(shaku: Hex, layer: i32) -> Address {
+    let voxel = VoxelCoord::new(shaku.q(), shaku.r(), shaku.s(), layer)
+        .expect("a Hex is always on the hex plane");
+    address_of(voxel)
+}
+
+/// A ground position for a person to read: shaku, with metres beside it.
+fn position_label(p: Vec3) -> String {
+    format!(
+        "({:.1}, {:.1}) shaku ≈ ({:.2}, {:.2}) m",
+        p.x,
+        p.z,
+        p.x * SHAKU_M,
+        p.z * SHAKU_M
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -184,23 +198,22 @@ fn draw_address(
 ) {
     ui.heading("Address");
     if let Some((_, rig, _)) = focus.iter().next() {
-        let shaku = round_at(rig.focus_east, rig.focus_north, Level::Shaku);
-        let layer = layer_at(world, rig.focus_east, rig.focus_north);
-        let addr = address_of(shaku, layer);
+        let shaku = round_at(rig.focus, Level::Shaku);
+        let layer = layer_at(world, rig.focus);
+        let addr = address_at(shaku, layer);
         ui.label(format!("Focus: {addr}"));
-        ui.label(format!(
-            "  at ({:.2}, {:.2}) m",
-            rig.focus_east, rig.focus_north
-        ));
+        ui.label(format!("  at {}", position_label(rig.focus)));
     } else {
         ui.label("Focus: (no camera rig)");
     }
     match hovered.0 {
         Some((shaku, layer)) => {
-            let addr = address_of(shaku, layer);
-            let (east, north) = cell_centre_m(shaku, Level::Shaku);
+            let addr = address_at(shaku, layer);
             ui.label(format!("Hover: {addr}"));
-            ui.label(format!("  at ({east:.2}, {north:.2}) m"));
+            ui.label(format!(
+                "  at {}",
+                position_label(cell_centre(shaku, Level::Shaku))
+            ));
         }
         None => {
             ui.label("Hover: (nothing under the mouse)");
@@ -280,33 +293,23 @@ fn draw_tuning(
         world.store_mut().settings_mut().unload_delay_s = delay;
     }
 
-    // The seed and the layer thickness are baked into every generated chunk, so changing
-    // either replaces the world wholesale (`HexWorld::set_config`) rather than editing it
-    // in place — there is no way to reconcile chunks generated under the old values with
-    // the new ones.
+    // The seed is baked into every generated chunk, so changing it replaces the world
+    // wholesale (`HexWorld::set_config`) rather than editing it in place — there is no way
+    // to reconcile chunks generated under the old seed with the new one.
     let cfg = *world.store().config();
-    let mut thickness = cfg.layer_thickness_sun;
-    let thickness_response =
-        ui.add(egui::Slider::new(&mut thickness, 1.0..=30.0).text("layer thickness (sun)"));
     let mut seed = cfg.seed;
     let seed_response = ui.add(
         egui::DragValue::new(&mut seed)
             .range(0..=u64::MAX)
             .prefix("seed "),
     );
-    // A world rebuild is not cheap — it drops and regenerates everything — so these two
-    // commit once per gesture (the drag being released, or a typed value losing focus)
+    // A world rebuild is not cheap — it drops and regenerates everything — so the seed
+    // commits once per gesture (the drag being released, or a typed value losing focus)
     // rather than on every frame the widget merely reports `changed()`, which fires on
     // every tick of a drag. The rings and unload-delay controls above stay live on every
     // change: they only mutate a `Loader`/`StoreSettings` field in place, cheap either way.
-    let thickness_committed = thickness_response.drag_stopped() || thickness_response.lost_focus();
-    let seed_committed = seed_response.drag_stopped() || seed_response.lost_focus();
-    if thickness_committed || seed_committed {
-        world.set_config(WorldConfig {
-            layer_thickness_sun: thickness,
-            seed,
-            ..cfg
-        });
+    if seed_response.drag_stopped() || seed_response.lost_focus() {
+        world.set_config(WorldConfig { seed, ..cfg });
     }
 }
 
@@ -354,18 +357,18 @@ fn draw_loaders(
         ui.label("address");
         ui.end_row();
         if let Some((entity, rig, _)) = focus.iter().next() {
-            let shaku = round_at(rig.focus_east, rig.focus_north, Level::Shaku);
-            let layer = layer_at(world, rig.focus_east, rig.focus_north);
+            let shaku = round_at(rig.focus, Level::Shaku);
+            let layer = layer_at(world, rig.focus);
             ui.label(format!("{entity:?} (focus)"));
-            ui.label(format!("{}", address_of(shaku, layer)));
+            ui.label(format!("{}", address_at(shaku, layer)));
             ui.end_row();
         }
         for (entity, transform, _) in other_loaders {
-            let (east, north, _) = from_bevy(transform.translation());
-            let shaku = round_at(east, north, Level::Shaku);
-            let layer = layer_at(world, east, north);
+            let pos = transform.translation();
+            let shaku = round_at(pos, Level::Shaku);
+            let layer = layer_at(world, pos);
             ui.label(format!("{entity:?}"));
-            ui.label(format!("{}", address_of(shaku, layer)));
+            ui.label(format!("{}", address_at(shaku, layer)));
             ui.end_row();
         }
     });
@@ -377,10 +380,9 @@ fn draw_loaders(
             .clicked()
         {
             if let Some((shaku, _)) = hovered.0 {
-                let (east, north) = cell_centre_m(shaku, Level::Shaku);
                 let entity = commands
                     .spawn((
-                        Transform::from_translation(to_bevy(east, north, 0.0)),
+                        Transform::from_translation(cell_centre(shaku, Level::Shaku)),
                         Loader::default(),
                     ))
                     .id();

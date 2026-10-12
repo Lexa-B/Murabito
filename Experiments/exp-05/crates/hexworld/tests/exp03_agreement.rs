@@ -13,6 +13,12 @@ fn level_by_name(name: &str) -> Level {
     }
 }
 
+/// The fixture stores axial pairs; a `Hex` outside `hexworld/src` is built only through the
+/// cube constructor, so each label supplies its own third value.
+fn hex_from_axial(q: i32, r: i32) -> Hex {
+    Hex::new(q, r, -q - r).expect("fixture labels are on the plane")
+}
+
 #[test]
 fn agrees_with_exp03() {
     let text = include_str!("fixtures/exp03_cases.txt");
@@ -24,21 +30,21 @@ fn agrees_with_exp03() {
         match f[0] {
             "owner" => {
                 let n: i32 = f[1].parse().unwrap();
-                let cell = Hex::new(f[2].parse().unwrap(), f[3].parse().unwrap());
-                let want = Hex::new(r[0].parse().unwrap(), r[1].parse().unwrap());
+                let cell = hex_from_axial(f[2].parse().unwrap(), f[3].parse().unwrap());
+                let want = hex_from_axial(r[0].parse().unwrap(), r[1].parse().unwrap());
                 assert_eq!(owner(cell, n), want, "{line}");
             }
             "up" => {
                 let from = level_by_name(f[1]);
-                let cell = Hex::new(f[2].parse().unwrap(), f[3].parse().unwrap());
+                let cell = hex_from_axial(f[2].parse().unwrap(), f[3].parse().unwrap());
                 let to = level_by_name(f[4]);
-                let want = Hex::new(r[0].parse().unwrap(), r[1].parse().unwrap());
+                let want = hex_from_axial(r[0].parse().unwrap(), r[1].parse().unwrap());
                 assert_eq!(up(cell, from, to), want, "{line}");
             }
             "local" => {
                 let level = level_by_name(f[1]);
-                let cell = Hex::new(f[2].parse().unwrap(), f[3].parse().unwrap());
-                let want = Hex::new(r[0].parse().unwrap(), r[1].parse().unwrap());
+                let cell = hex_from_axial(f[2].parse().unwrap(), f[3].parse().unwrap());
+                let want = hex_from_axial(r[0].parse().unwrap(), r[1].parse().unwrap());
                 assert_eq!(local(cell, level), want, "{line}");
             }
             "owned_count" => {

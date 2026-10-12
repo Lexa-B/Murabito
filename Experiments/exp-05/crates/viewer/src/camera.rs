@@ -5,18 +5,18 @@
 //! the world loads in around where the player is looking, not around the camera itself,
 //! which is up in the air and often outside the loaded area at high zoom), and a camera
 //! that is its child, sitting up and behind, looking at it. There is no rotation: the
-//! camera always looks north, so panning is always along the east/north axes.
+//! camera always looks north (−Z), so panning is always along X and Z.
 
 use bevy::input::keyboard::KeyCode;
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll, MouseButton};
 use bevy::input::ButtonInput;
 use bevy::prelude::*;
 use hexworld::{Level, WorldConfig};
-use hexworld_bevy::axes::to_bevy;
 use hexworld_bevy::HexWorld;
 
-pub const MIN_ZOOM: f32 = 3.0;
-pub const MAX_ZOOM: f32 = 4_000.0;
+/// Camera distance from the focus, in shaku.
+pub const MIN_ZOOM: f32 = 9.9; // 3 m
+pub const MAX_ZOOM: f32 = 13_200.0; // 4 km
 
 /// 45 degrees close in, 75 far out, easing on the logarithm of the zoom so the change
 /// feels even across the whole range.
@@ -25,15 +25,16 @@ pub fn tilt_for_zoom(zoom: f32) -> f32 {
     (45.0 + 30.0 * t).to_radians()
 }
 
-/// Metres per second of panning: a constant fraction of the zoom.
+/// Shaku per second of panning: a constant fraction of the zoom.
 pub fn pan_speed_for_zoom(zoom: f32) -> f32 {
     zoom * 0.9
 }
 
 #[derive(Component, Clone, Copy, Debug)]
 pub struct CameraRig {
-    pub focus_east: f64,
-    pub focus_north: f64,
+    /// The point the camera looks at, on the ground plane (y = 0); height is added
+    /// from the terrain each frame.
+    pub focus: Vec3,
     pub zoom: f32,
     /// The last ground height we actually resolved from the store. Held (not reset to
     /// zero) whenever nothing is loaded at the focus yet — see `resolve_height`.
@@ -46,25 +47,24 @@ impl CameraRig {
         self.zoom = (self.zoom * (1.0 + delta * 0.1)).clamp(MIN_ZOOM, MAX_ZOOM);
     }
 
-    pub fn pan(&mut self, east: f64, north: f64, cfg: &WorldConfig) {
-        let (e, n) = (self.focus_east + east, self.focus_north + north);
+    pub fn pan(&mut self, delta: Vec3, cfg: &WorldConfig) {
+        let next = self.focus + Vec3::new(delta.x, 0.0, delta.z);
         // Stay in the world: keep the focus inside the outermost ri.
-        let ri = hexworld::plane::round_at(e, n, Level::Ri);
+        let ri = hexworld::plane::round_at(next, Level::Ri);
         if hexworld::world::in_world(ri, cfg) {
-            self.focus_east = e;
-            self.focus_north = n;
+            self.focus = next;
         }
     }
 
     /// The ground height to use this frame: the store's real height where the focus has
     /// loaded ground, or the last height we had otherwise. At `MAX_ZOOM`, pan speed is
-    /// about 3,600 m/s — fast enough to genuinely outrun the load frontier — so falling
-    /// back to 0.0 would make the focus visibly drop and then pop back up once the real
-    /// height arrives. Holding the last value avoids that pop; it is not a smoothing
-    /// system, just "don't snap to a height that was never true."
-    pub fn resolve_height(&mut self, loaded_height_m: Option<f64>) -> f32 {
-        if let Some(h) = loaded_height_m {
-            self.last_height = h as f32;
+    /// about 11,900 shaku/s (3.6 km/s) — fast enough to genuinely outrun the load
+    /// frontier — so falling back to 0.0 would make the focus visibly drop and then pop
+    /// back up once the real height arrives. Holding the last value avoids that pop; it
+    /// is not a smoothing system, just "don't snap to a height that was never true."
+    pub fn resolve_height(&mut self, loaded_height: Option<f32>) -> f32 {
+        if let Some(h) = loaded_height {
+            self.last_height = h;
         }
         self.last_height
     }
@@ -73,11 +73,11 @@ impl CameraRig {
 /// Focus and camera positions in Bevy space. The camera sits south of the focus,
 /// so the view looks north; height comes from the tilt.
 pub fn rig_transforms(rig: &CameraRig) -> (Vec3, Vec3) {
-    let focus = to_bevy(rig.focus_east, rig.focus_north, 0.0);
+    let focus = rig.focus;
     let tilt = tilt_for_zoom(rig.zoom);
     let back = rig.zoom * tilt.cos();
     let up = rig.zoom * tilt.sin();
-    // +Z is behind the focus, i.e. south, since north is -Z (see `hexworld_bevy::axes`).
+    // +Z is behind the focus, i.e. south, since north is −Z.
     (focus, focus + Vec3::new(0.0, up, back))
 }
 
@@ -117,25 +117,19 @@ pub fn handle_input(
         if dir != Vec2::ZERO {
             let dir = dir.normalize();
             let speed = pan_speed_for_zoom(rig.zoom);
-            rig.pan(
-                (dir.x * speed * dt) as f64,
-                (dir.y * speed * dt) as f64,
-                &cfg,
-            );
+            // Up the screen (dir.y > 0) is north, which is −Z.
+            rig.pan(Vec3::new(dir.x, 0.0, -dir.y) * speed * dt, &cfg);
         }
 
         if mouse_buttons.pressed(MouseButton::Middle) {
             let delta = mouse_motion.delta;
             if delta != Vec2::ZERO {
                 // Grab-and-drag: the ground under the cursor should follow the mouse, so
-                // the focus moves opposite the drag in east (screen right) and with the
-                // drag in north (screen down looks south, i.e. toward the camera).
+                // the focus moves opposite the drag along X (screen right is east) and
+                // with the drag northward, toward −Z (screen down looks south, toward
+                // the camera).
                 let per_pixel = rig.zoom * 0.0025;
-                rig.pan(
-                    (-delta.x * per_pixel) as f64,
-                    (delta.y * per_pixel) as f64,
-                    &cfg,
-                );
+                rig.pan(Vec3::new(-delta.x, 0.0, -delta.y) * per_pixel, &cfg);
             }
         }
     }
@@ -150,9 +144,7 @@ pub fn follow_ground(
 ) {
     for (mut rig, mut focus_transform) in &mut focus_query {
         let (focus_flat, camera_flat) = rig_transforms(&rig);
-        let loaded = world
-            .store()
-            .surface_height_m(rig.focus_east, rig.focus_north);
+        let loaded = world.store().surface_height(rig.focus);
         let height = rig.resolve_height(loaded);
         focus_transform.translation = Vec3::new(focus_flat.x, height, focus_flat.z);
 
@@ -192,8 +184,7 @@ mod tests {
     #[test]
     fn the_camera_sits_above_and_behind_the_focus() {
         let rig = CameraRig {
-            focus_east: 0.0,
-            focus_north: 0.0,
+            focus: Vec3::ZERO,
             zoom: 50.0,
             last_height: 0.0,
         };
@@ -212,8 +203,7 @@ mod tests {
     #[test]
     fn zoom_is_clamped() {
         let mut rig = CameraRig {
-            focus_east: 0.0,
-            focus_north: 0.0,
+            focus: Vec3::ZERO,
             zoom: 50.0,
             last_height: 0.0,
         };
@@ -227,13 +217,12 @@ mod tests {
     fn the_focus_stays_in_the_world() {
         let cfg = WorldConfig::default();
         let mut rig = CameraRig {
-            focus_east: 0.0,
-            focus_north: 0.0,
+            focus: Vec3::ZERO,
             zoom: 50.0,
             last_height: 0.0,
         };
-        rig.pan(1e6, 0.0, &cfg);
-        let cell = hexworld::plane::round_at(rig.focus_east, rig.focus_north, Level::Ri);
+        rig.pan(Vec3::new(1e6, 0.0, 0.0), &cfg);
+        let cell = hexworld::plane::round_at(rig.focus, Level::Ri);
         assert!(
             hexworld::world::in_world(cell, &cfg),
             "panned out of the world"
@@ -243,12 +232,11 @@ mod tests {
     #[test]
     fn ground_height_holds_when_nothing_is_loaded() {
         // A fast pan at high zoom can outrun the load frontier. When that happens,
-        // `surface_height_m` returns `None`, and the focus must keep its last known
+        // `surface_height` returns `None`, and the focus must keep its last known
         // height rather than snapping to 0.0 and popping back up once the real height
         // arrives.
         let mut rig = CameraRig {
-            focus_east: 0.0,
-            focus_north: 0.0,
+            focus: Vec3::ZERO,
             zoom: 50.0,
             last_height: 12.0,
         };
@@ -260,8 +248,7 @@ mod tests {
     #[test]
     fn ground_height_updates_once_the_real_height_arrives() {
         let mut rig = CameraRig {
-            focus_east: 0.0,
-            focus_north: 0.0,
+            focus: Vec3::ZERO,
             zoom: 50.0,
             last_height: 0.0,
         };

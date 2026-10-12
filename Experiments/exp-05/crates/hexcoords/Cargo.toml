@@ -1,0 +1,10 @@
+[package]
+name = "murabito_hexcoords"
+version.workspace = true
+edition = "2024"
+license.workspace = true
+
+# Vendored from the main project's crates/hexcoords at 79335cd: see README.md.
+# Only this manifest differs from main's; src/lib.rs is a byte-for-byte copy.
+[dependencies]
+bevy = { version = "0.19", default-features = false }

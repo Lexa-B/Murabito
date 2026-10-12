@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/hexworld", "crates/hexworld_bevy", "crates/viewer"]
+members = ["crates/hexcoords", "crates/hexworld", "crates/hexworld_bevy", "crates/viewer"]
 
 [workspace.package]
 edition = "2021"

@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use murabito_hexcoords::VoxelCoord;
+
 use crate::hex::Hex;
 use crate::level::Level;
 use crate::owner::{local, parent_of};
@@ -20,7 +22,9 @@ pub struct Address {
     pub layer: i32,
 }
 
-pub fn address_of(shaku: Hex, layer: i32) -> Address {
+/// The address of a shaku voxel.
+pub fn address_of(voxel: VoxelCoord) -> Address {
+    let shaku = Hex::axial(voxel.q(), voxel.r());
     let ken = parent_of(shaku, Level::Shaku);
     let cho = parent_of(ken, Level::Ken);
     let ri = parent_of(cho, Level::Cho);
@@ -29,40 +33,34 @@ pub fn address_of(shaku: Hex, layer: i32) -> Address {
         cho: local(cho, Level::Cho),
         ken: local(ken, Level::Ken),
         shaku: local(shaku, Level::Shaku),
-        layer,
+        layer: voxel.layer(),
     }
 }
 
-pub fn shaku_of(addr: &Address) -> (Hex, i32) {
-    let cho = Hex::new(
-        addr.ri.q * Level::Ri.packing() + addr.cho.q,
-        addr.ri.r * Level::Ri.packing() + addr.cho.r,
+/// The shaku voxel an address names.
+pub fn voxel_of(addr: &Address) -> VoxelCoord {
+    let cho = Hex::axial(
+        addr.ri.q() * Level::Ri.packing() + addr.cho.q(),
+        addr.ri.r() * Level::Ri.packing() + addr.cho.r(),
     );
-    let ken = Hex::new(
-        cho.q * Level::Cho.packing() + addr.ken.q,
-        cho.r * Level::Cho.packing() + addr.ken.r,
+    let ken = Hex::axial(
+        cho.q() * Level::Cho.packing() + addr.ken.q(),
+        cho.r() * Level::Cho.packing() + addr.ken.r(),
     );
-    let shaku = Hex::new(
-        ken.q * Level::Ken.packing() + addr.shaku.q,
-        ken.r * Level::Ken.packing() + addr.shaku.r,
+    let shaku = Hex::axial(
+        ken.q() * Level::Ken.packing() + addr.shaku.q(),
+        ken.r() * Level::Ken.packing() + addr.shaku.r(),
     );
-    (shaku, addr.layer)
+    VoxelCoord::new(shaku.q(), shaku.r(), shaku.s(), addr.layer)
+        .expect("a Hex is always on the plane")
 }
 
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "ri ({},{}) / cho ({},{}) / ken ({},{}) / shaku ({},{}) / layer {}",
-            self.ri.q,
-            self.ri.r,
-            self.cho.q,
-            self.cho.r,
-            self.ken.q,
-            self.ken.r,
-            self.shaku.q,
-            self.shaku.r,
-            self.layer
+            "ri {} / cho {} / ken {} / shaku {} / layer {}",
+            self.ri, self.cho, self.ken, self.shaku, self.layer
         )
     }
 }
@@ -75,20 +73,20 @@ mod tests {
     fn addresses_round_trip() {
         for shaku in [
             Hex::ZERO,
-            Hex::new(1, -1),
-            Hex::new(4_211, -9_003),
-            Hex::new(-12_961, 7),
+            Hex::axial(1, -1),
+            Hex::axial(4_211, -9_003),
+            Hex::axial(-12_961, 7),
         ] {
             for layer in [-7, 0, 213] {
-                let addr = address_of(shaku, layer);
-                assert_eq!(shaku_of(&addr), (shaku, layer), "{shaku:?} {layer}");
+                let voxel = VoxelCoord::new(shaku.q(), shaku.r(), shaku.s(), layer).unwrap();
+                assert_eq!(voxel_of(&address_of(voxel)), voxel, "{shaku:?} {layer}");
             }
         }
     }
 
     #[test]
     fn the_origin_is_the_centre_of_everything() {
-        let addr = address_of(Hex::ZERO, 0);
+        let addr = address_of(VoxelCoord::new(0, 0, 0, 0).unwrap());
         assert_eq!(addr.ri, Hex::ZERO);
         assert_eq!(addr.cho, Hex::ZERO);
         assert_eq!(addr.ken, Hex::ZERO);
@@ -98,16 +96,14 @@ mod tests {
     #[test]
     fn neighbouring_shaku_across_a_ken_border_differ_in_ken() {
         // The shaku east of a ken's eastern edge belongs to the next ken.
-        let a = Hex::new(2, 0);
-        let b = Hex::new(3, 0);
-        let addr_a = address_of(a, 0);
-        let addr_b = address_of(b, 0);
+        let addr_a = address_of(VoxelCoord::new(2, 0, -2, 0).unwrap());
+        let addr_b = address_of(VoxelCoord::new(3, 0, -3, 0).unwrap());
         assert_ne!(addr_a.ken, addr_b.ken, "{addr_a} vs {addr_b}");
     }
 
     #[test]
     fn display_lists_every_part() {
-        let text = format!("{}", address_of(Hex::new(7, -3), 12));
+        let text = format!("{}", address_of(VoxelCoord::new(7, -3, -4, 12).unwrap()));
         assert!(text.contains("ri ("), "{text}");
         assert!(text.contains("cho ("), "{text}");
         assert!(text.contains("ken ("), "{text}");

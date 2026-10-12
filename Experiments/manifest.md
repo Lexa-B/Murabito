@@ -246,14 +246,16 @@ The user wants one uniform hex coordinate system instead of terrain, hex grids a
 
 First planned in Unreal Engine C++; the user chose a fresh start outside UE, and then Rust and Bevy for this experiment.
 
+Since 2026-09-22 it uses the main project's coordinate conventions, through a vendored copy of `murabito_hexcoords`.
+
 ### What
 
 Coordinates, the address system and chunks, with placeholder terrain.
 
-- **Coordinates.** exp-03's system unchanged (the ratios, packing B, one owner per split cell), plus a vertical **layer**, 5 sun thick by default and tunable. Addresses are `ri / cho / ken / shaku / layer`. The world is 1 ri for now; the radius is a setting.
+- **Coordinates.** exp-03's system unchanged (the ratios, packing B, one owner per split cell), plus a vertical **layer**, fixed at 5 sun (0.5 shaku), as in the main project. Addresses are `ri / cho / ken / shaku / layer`. The world is 1 ri for now; the radius is a setting.
 - **Voxels.** Terrain is hex prisms ("pancakes") one shaku across. A chunk is one parent cell's children and holds a column per child: a list of runs of material over the full height. Coarser chunks hold wider columns measured in the same layers.
 - **Loading.** Anything can be a loader: a focus and a number of rings per level (default 3). Ancestors are always loaded, and unloading is delayed (default 5 s), so sitting on a border reloads nothing.
-- **Structure.** `hexworld` (engine-free core: addresses, chunks, the store, the mesher), `hexworld_bevy` (a `Loader` component, background generation, chunk meshes, the hex-line material), and `viewer` (a RimWorld-style overhead camera and a tuning panel).
+- **Structure.** `hexworld` (engine-free core: addresses, chunks, the store, the mesher), `hexworld_bevy` (a `Loader` component, background generation, chunk meshes, the hex-line material), and `viewer` (an overhead camera and a tuning panel).
 - **Hex lines.** The borders of loaded shaku by default, or every level nested as in exp-03; toggleable.
 
 ### Controls
@@ -262,4 +264,4 @@ WASD/arrows or middle-drag pan · wheel zooms · the panel's Display section pic
 
 ### Headless
 
-`cd Experiments/exp-05 && cargo run -p viewer --release -- --frames N --screenshot-dir DIR --screenshot-every M --seed N --start-east M --start-north M --rings-shaku N`, plus `--auto-pan` (sweep the focus for a sustained-panning measurement), `--zoom M`, `--line-mode off|shaku|nested` and `--tint` (start in a chosen camera/display state — there is no keyboard or CLI-free way to reach nested lines or tint headlessly, since those are panel-only). `screenshots/` is gitignored.
+`cd Experiments/exp-05 && cargo run -p viewer --release -- --frames N --screenshot-dir DIR --screenshot-every M --seed N --start-x X --start-z Z --rings-shaku N`, plus `--auto-pan` (sweep the focus for a sustained-panning measurement), `--zoom N` (in shaku), `--line-mode off|shaku|nested` and `--tint` (start in a chosen camera/display state — there is no keyboard or CLI-free way to reach nested lines or tint headlessly, since those are panel-only). `screenshots/` is gitignored.
