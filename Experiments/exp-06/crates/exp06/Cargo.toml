@@ -1,0 +1,12 @@
+[package]
+name = "exp06"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+worldgen = { path = "../worldgen" }
+tiny_http = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

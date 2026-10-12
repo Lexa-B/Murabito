@@ -1,0 +1,1679 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banana Placement</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+/* Layout: the whole banana on the left, the world's neighbourhood on the right, controls beneath. */
+:root { --bg: #f6f5f0; --fg: #22261f; --muted: #6b7064; --line: #c9ccc2; --cell: #e6e8de; --sea: #d3dfe3; --land: #e9e3cf;
+  --world: #b7410e; --shore: #2b6f8c; --mountain: #6f5a3a;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif; --font-mono: "IBM Plex Mono", ui-monospace, monospace; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23; --sea: #1f2a2e; --land: #2e2b22; --world: #f0803a; --shore: #6db3d1; --mountain: #c9a87a; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23; --sea: #1f2a2e; --land: #2e2b22; --world: #f0803a; --shore: #6db3d1; --mountain: #c9a87a; color-scheme: dark; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body); margin: 0; padding: 24px 16px 40px; }
+main { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-size: 1.4rem; margin: 0; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 70ch; }
+.muted { color: var(--muted); }
+.pair { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.pair > div { flex: 1 1 320px; min-width: 0; display: grid; gap: 4px; }
+.panel-title { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+svg { width: 100%; height: auto; display: block; }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 24px; font-family: var(--font-mono); font-size: 0.9rem; }
+.controls label { display: grid; grid-template-columns: 12ch 1fr 8ch; gap: 10px; align-items: center; }
+.controls input[type=range] { width: 100%; min-width: 0; accent-color: var(--shore); }
+.controls output { text-align: right; font-variant-numeric: tabular-nums; }
+.controls button { font: inherit; padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--cell); color: var(--fg); cursor: pointer; justify-self: start; }
+.controls button:disabled { opacity: 0.6; cursor: wait; }
+.facts { font-family: var(--font-mono); font-size: 0.9rem; display: grid; gap: 4px; font-variant-numeric: tabular-nums; max-width: 560px; }
+.facts div { display: grid; grid-template-columns: 1fr auto; gap: 12px; border-bottom: 1px solid var(--line); padding: 3px 0; }
+.facts .bad { color: var(--world); }
+.profiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.profiles > div { display: grid; gap: 2px; min-width: 0; }
+.profiles .panel-title { font-size: 0.75rem; }
+.climate { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.climate > div { display: grid; gap: 2px; min-width: 0; }
+.octaves { font-family: var(--font-mono); font-size: 0.8rem; border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; }
+.octaves th, .octaves td { text-align: right; padding: 2px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.octaves th { color: var(--muted); font-weight: 500; }
+.octaves td:first-child, .octaves th:first-child { text-align: left; }
+.octaves tr.drawn td { color: var(--fg); }
+.octaves tr.later td { color: var(--muted); }
+#gullies, #mask, #heights5, #delta5b, #heights5b, #delta5c, #heights5c, #delta5d, #heights5d, #coastMap { cursor: crosshair; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Step 1: the world on the banana</h1>
+  <p>The banana is a slot bent along a circular arc, sized like Honshu at its Kantō width: arc <code>A = 80°</code>, centreline radius <code>R = 237</code> ri (about 1,300 km along the axis), width <code>w = 60</code> ri (about 236 km, coast to coast across Kantō). It is turned so the top tip of the centreline heads due north (90°), which puts the outer apex facing ESE, the Pacific side. The outline is walked anticlockwise from the outer apex, and <code>θ</code> is the fraction of its length walked, in degrees. The world, 36 ri flat to flat and north-up, is centred on the outline point at <code>θ</code> moved inland by <code>d</code>. Units are ri.</p>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">the whole banana · θ marked every 30° · north up</div>
+      <svg id="wide" viewBox="0 0 560 560" role="img" aria-label="The bent slot shape with degree marks along its outline and the world hexagon placed on it."><g id="wideScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">round the world · edges read as sea, land or crossed</div>
+      <svg id="near" viewBox="0 0 560 560" role="img" aria-label="The world hexagon with the shoreline through it, each edge coloured by whether it is at sea, on land or crossed by the shore."><g id="nearScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+
+  <div class="controls controls-shared"></div>
+
+  <div class="facts" id="facts"></div>
+  <p class="muted">The edge reading: an edge the outline crosses is a shore edge; an edge it does not cross is sea or land by where its midpoint lies. The rule from the napkin, no more than four of either, is checked live. The two shore crossings are where the surface of step 2 passes through sea level on the world's edges.</p>
+
+  <h1 id="step2">Step 2: tectonics, as two curves</h1>
+  <p>Height anywhere, above or below the sea, is <code>h = H(s) · F(a)</code>. <code>F(a)</code> is one cross-section, the same everywhere: <code>a</code> counts half-widths from the centreline, the coasts at <code>±1</code>, and the table runs from a deep basin three half-widths inside to a trench three half-widths out. From the outer coast inward: a wide plain, the spine a little past the middle, a steep drop to the inner coast; from the outer coast outward: a wide shallow shelf, then the slope to the trench. It is 0 at both coasts with a continuous slope through them. <code>H(s)</code> is the spine's height along the centreline, low at the tips and highest round the bend, and the sea deepens with it. Round the caps the cross-section goes polar, blending the two sides by angle. The sliders are the same <code>θ</code> and <code>d</code> as above, wherever they appear.</p>
+  <div class="controls controls-shared"></div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">the band cut across at the world's θ · metres · the world's span marked</div>
+      <svg id="section" viewBox="0 0 560 300" role="img" aria-label="The height cross-section of the band at the world's position, with the extent of the world marked."><g id="sectionScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the world, ri by ri, coloured by height · shore in blue</div>
+      <svg id="heights" viewBox="0 0 560 560" role="img" aria-label="The world hexagon filled with its 1,296 ri cells coloured by height, with the shoreline through it."><g id="heightsScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+
+  <div class="panel-title">the six edge profiles · anticlockwise from each edge's first corner · metres · shore crossings at 0</div>
+  <div class="profiles" id="profiles"></div>
+  <div class="facts" id="facts2"></div>
+  <p class="muted">The cross-section is a smooth spline through a short table of control points, so it is a thing to edit rather than a formula to tune; the spine curve is a raised sine along the centreline. Both are smooth, so the erosion filter of a later step can take a gradient off them anywhere. In layers (5 sun each) the numbers are about 6.6 per metre.</p>
+
+  <h1 id="step3">Step 3: climate, ri by ri</h1>
+  <p>Four numbers per ri from what the band already knows: where it is (northing for latitude, <code>a</code> for which coast, distance from the coast for continentality), how high it is, and which way it slopes. <strong>Temperature:</strong> a sea-level mean by latitude, 15.5 °C at the apex falling 0.036 °C per ri northward, minus 6.5 °C per 1,000 m; the coldest and warmest months sit a half-range either side of it, 10.5 °C at the coast widening to 13 °C well inland. <strong>Precipitation:</strong> 1,500 mm on the Pacific side blending to 2,200 on the Japan Sea side, plus 0.5 mm per metre of height, plus up to ±600 mm for slopes facing into or away from the winter NW monsoon and the summer SE rains.</p>
+  <div class="controls controls-shared"></div>
+  <div class="climate" id="climate"></div>
+  <div class="facts" id="facts3"></div>
+  <p class="muted">Every term is a coefficient in the script, stylised from Honshu's stations: Tokyo 15.4 °C and 1,600 mm, Niigata 13.6 °C and 1,800 mm, Matsumoto 11.8 °C and 1,030 mm, Aomori 10.4 °C. The slope term needs a gradient, taken here by finite differences half a ri apart; the erosion filter later will want the same gradient, analytically. Sea ri are left blank.</p>
+
+  <h1 id="step4">Step 4: structure, fractal noise on the tectonic surface</h1>
+  <p>Seeded gradient noise, summed over octaves, added to the step-2 height in metres everywhere, above and below the sea. The octaves are their own ladder: the coarsest spans the world, 36 ri, and each one halves, so every finer lattice nests in the coarser and a finer rung only adds octaves. The lattice is anchored to the origin, the world's centre, and turned so one axis runs along the arc's tangent there; that axis is stretched, so lumps come out as ridges with the tectonic grain. A seed's field leans one way across the arc; if its heavy side would fall seaward, the lattice is turned half a circle about the origin so the heavy side is inland. Octave <code>k</code> has wavelength <code>36 / 2ᵏ</code> ri and amplitude <code>A₀ · 2^(−kH)</code>: <code>H</code> is the Hurst exponent, and the coast this surface will have after erosion is a level set of dimension <code>2 − H</code>. At the ri scale the five octaves down to 2¼ ri are evaluated; the table shows where the ladder goes below that.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-structure"></div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">the noise alone, ri by ri · metres · the arc's tangent marked</div>
+      <svg id="noise" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by the structure noise in metres, with the along-arc axis marked."><g id="noiseScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the world, ri by ri, coloured by height after step 4 · step-2 shore dotted</div>
+      <svg id="heights4" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by height with the structure noise added, the step-2 shoreline dotted for reference."><g id="heights4Scene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">the band cut across at the world's θ · step 2 in brown, step 4 in ink</div>
+      <svg id="section4" viewBox="0 0 560 300" role="img" aria-label="The height cross-section at the world's position, before and after the structure noise."><g id="section4Scene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the octave ladder · drawn at ri scale in ink, finer rungs in grey</div>
+      <div style="overflow-x: auto"><table class="octaves" id="octaves"></table></div>
+    </div>
+  </div>
+  <div class="facts" id="facts4"></div>
+  <p class="muted">The noise is gradient noise on a hex lattice: a seeded hash gives every node a unit gradient, a point takes the three nodes of its lattice triangle, and one kernel blends them, zero on the triangle's edges for every node but the edge's ends, so the blend is continuous and has no square-grid grain. The raw peak is exactly 1/√3, so √3 scales it to −1…1 and <code>A₀</code> is the coarsest octave's swing in metres. Nothing here reads the coast: the shore, its land share, and the box-count against Kantō's 1.1–1.15 are read after erosion.</p>
+
+  <h1 id="step5">Step 5a: erosion, faded gullies on the step-4 surface</h1>
+  <p>One octave of gullies, then more without feed-forward, so what 5b adds can be seen. At a point, octave <code>k</code> uses the step-4 lattice without the stretch, cells of <code>36 / 2ᵏ</code> ri. The three nodes round the point are pivots; each pivot reads the downhill direction once, by central differences a quarter cell apart, and lays cos stripes across its slope, <code>S</code> per cell, and the same kernel blends the three into a gully value <code>g</code> from −1 in a crease to +1 on a ridge. The slope at the point sets a mask <code>m</code>: clamp <code>σ / σ_ref</code>, flip, square, flip, so it is 0 on the plain and rises gently. The target <code>t</code> that flat ground fades to comes from the surface's own relief at the octave's scale: how far the point stands above the mean of its four neighbours a quarter cell away, in units of half this octave's structure swing, clamped to ±1, so a plain gives 0 and stays put, a full ridge of this octave gives +1 and a crease −1. The octave adds <code>E_k · (m·g + (1 − m)·t)</code> metres, with <code>E_k = E₀ · 2^(−kH)</code> on the same ladder as the structure. What octave <code>k</code> reads for its slopes is the surface with structure octaves 0…k, the ones at least as wide as its cell, so a ri and a chō agree on every octave they share and a finer rung only appends.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="controls controls-erosion"></div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">the gullies alone, first octave · −1 crease to +1 ridge</div>
+      <svg id="gullies" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by the first octave's gully value, from crease to ridge."><g id="gulliesScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the mask, first octave · how much gully each ri keeps, by slope</div>
+      <svg id="mask" viewBox="0 0 560 560" role="img" aria-label="The world's ri shaded by the slope mask, pale where flat ground fades the gullies out and dark where the slope keeps them."><g id="maskScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="pair">
+    <div>
+      <div class="panel-title">the world after 5a · step-2 shore dotted · the window ri outlined · click a ri to move the window</div>
+      <svg id="heights5" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by height after the erosion octave, with the window ri outlined."><g id="heights5Scene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the window · the picked ri and its six neighbours at chō resolution · before · h₄ with 10 structure octaves</div>
+      <svg id="windowBefore" viewBox="0 0 560 560" role="img" aria-label="Seven ri drawn as their chō, before the erosion, shaded by height on a scale shared with the after panel."><g id="windowBeforeScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="pair">
+    <div>
+      <div class="panel-title">the window · after 5a · same shade scale as before</div>
+      <svg id="windowAfter" viewBox="0 0 560 560" role="img" aria-label="The same seven ri after the erosion, shaded by height on the shared scale."><g id="windowAfterScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div class="facts" id="facts5"></div>
+  </div>
+  <p class="muted">Things to look at: on the plain <code>m</code> and <code>t</code> are both 0, so the lowland and the coast stay where step 4 left them; with more than one octave the finer gullies run parallel to the coarser, since nothing feeds one octave's slope to the next until 5b. The window reads structure octaves down to 2½ chō, so its "before" is finer than the world map's.</p>
+
+  <h1 id="step5b">Step 5b: erosion, each octave's slope fed to the next</h1>
+  <p>The same octaves as 5a, but octave <code>k + 1</code>'s pivots read the slope of the base <em>plus the gullies octaves first to k already cut</em>, and so does its mask. On the side of a coarse gully the slope points into it, so the finer stripes turn and run into it: that is the branching. A gully's slope is taken as the video's straight gullies, a triangle wave of the same amplitude and spacing, <code>±4·E·S/c</code> across the slope by the sign of the sine, so fine gullies do not curl at the ends of the sine. Every pivot's direction is still a pure function of its node and seed, through the cache of coarser pivots, so a chō and a ri agree on every octave they share. The slopes are exact: the hex noise is differentiated in closed form and the tectonic spline by a fine central difference, no sampling per octave. The one switch here is the base slope the pivots read: the true slope, so a fine gully branches off a coarse one at an angle that depends on how steep the ground is, or, as the video ends up doing, its direction at a fixed strength relative to the straight-gully slope of the octave above, so the branching angle is the same everywhere. The other sliders are 5a's, linked.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="controls controls-erosion"></div>
+  <div class="controls controls-pivots"></div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">what 5b cuts and builds · metres · all octaves</div>
+      <svg id="delta5b" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by the height the fed-forward erosion adds or removes, in metres."><g id="delta5bScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the world after 5b · step-2 shore dotted · the window ri outlined · click a ri to move the window</div>
+      <svg id="heights5b" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by height after the fed-forward erosion, with the window ri outlined."><g id="heights5bScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="pair">
+    <div>
+      <div class="panel-title">the window · the picked ri and its six neighbours at chō resolution · after 5a · every octave reads the base</div>
+      <svg id="window5a" viewBox="0 0 560 560" role="img" aria-label="Seven ri drawn as their chō after the erosion without feed-forward, shaded by height on a scale shared with the 5b panel."><g id="window5aScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the window · after 5b · each octave reads the ones before · same shade scale</div>
+      <svg id="window5b" viewBox="0 0 560 560" role="img" aria-label="The same seven ri after the erosion with the slope fed forward, shaded by height on the shared scale."><g id="window5bScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="facts" id="facts5b"></div>
+  <p class="muted">The world map samples one point per ri, so stripes finer than about 2 ri alias there; the window is where the finer octaves are honest.</p>
+
+  <h1 id="step5c">Step 5c: erosion, stacked fading</h1>
+  <p>5b, with each octave told what the octaves before it already made. One running value per point, <code>R</code>, is the normalised shape the octaves so far produced: −1 in a crease, +1 on a ridge, 0 to start. At octave <code>k</code> the target is <code>R + (1 − |R|)·t_rel</code>, so where the ground is already a coarse ridge or crease that wins and elsewhere the base's relief at this scale; the mask is the slope's times <code>(1 − |R|)ᵖ</code>, so no new gullies sit on top of an existing ridge or in an existing crease; the octave adds <code>E_k·(m·g + (1 − m)·t)</code> as before; and <code>R</code> becomes that shape, <code>m·g + (1 − m)·t</code>. At the first octave <code>R</code> is 0, so 5c is 5b plus the stacking, and <code>p = 0</code> is 5b exactly. <code>p</code> is the video's terrain-detail knob. Everything is still per point, from values that are already pure functions of position and seed.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="controls controls-erosion"></div>
+  <div class="controls controls-pivots"></div>
+  <div class="controls controls-stacking"></div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">what 5c cuts and builds · metres · all octaves</div>
+      <svg id="delta5c" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by the height the stacked erosion adds or removes, in metres."><g id="delta5cScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the world after 5c · step-2 shore dotted · the window ri outlined · click a ri to move the window</div>
+      <svg id="heights5c" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by height after the stacked erosion, with the window ri outlined."><g id="heights5cScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="pair">
+    <div>
+      <div class="panel-title">the window · the picked ri and its six neighbours at chō resolution · after 5b</div>
+      <svg id="window5bAgain" viewBox="0 0 560 560" role="img" aria-label="Seven ri drawn as their chō after the fed-forward erosion, shaded by height on a scale shared with the 5c panel."><g id="window5bAgainScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the window · after 5c · stacked fading · same shade scale</div>
+      <svg id="window5c" viewBox="0 0 560 560" role="img" aria-label="The same seven ri after the stacked erosion, shaded by height on the shared scale."><g id="window5cScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="facts" id="facts5c"></div>
+  <h1 id="step5d">Step 5d: erosion, normalised gullies</h1>
+  <p>5c, with the blend fixed. A pivot's stripes are a cos of the distance across its slope, and the kernel blends three pivots. Where the three are out of phase, a blend of cosines is a cosine with a smaller swing, so the gullies wash out there. Now each pivot's cos and sin are blended as a pair, a point on the unit circle; the blended pair's length is how much the pivots agree, from 1 down. Above the threshold the pair is divided back to length 1, so the gullies keep their full swing wherever the pivots agree at all; below it, where ridges and creases join and full normalising would make spikes, the pair is divided by the threshold instead, so the two join continuously and there is no step in the surface where the length crosses it. The straight-gully slope fed forward in 5b is unchanged. The threshold is one slider; off is 5c exactly.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="controls controls-erosion"></div>
+  <div class="controls controls-pivots"></div>
+  <div class="controls controls-stacking"></div>
+  <div class="controls controls-norm"></div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">what 5d cuts and builds · metres · all octaves</div>
+      <svg id="delta5d" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by the height the normalised erosion adds or removes, in metres."><g id="delta5dScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the world after 5d · step-2 shore dotted · the window ri outlined · click a ri to move the window</div>
+      <svg id="heights5d" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by height after the normalised erosion, with the window ri outlined."><g id="heights5dScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="pair">
+    <div>
+      <div class="panel-title">the window · the picked ri and its six neighbours at chō resolution · after 5c</div>
+      <svg id="window5cAgain" viewBox="0 0 560 560" role="img" aria-label="Seven ri drawn as their chō after the stacked erosion, shaded by height on a scale shared with the 5d panel."><g id="window5cAgainScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the window · after 5d · normalised gullies · same shade scale</div>
+      <svg id="window5d" viewBox="0 0 560 560" role="img" aria-label="The same seven ri after the normalised erosion, shaded by height on the shared scale."><g id="window5dScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="facts" id="facts5d"></div>
+  <p class="muted">The drainage steps below read this surface.</p>
+
+  <h1 id="step6">Step 6: reading the coast</h1>
+  <p>The coast is the zero set of the 5d surface; nothing here changes it, this step measures it. <strong>Land share against the inset:</strong> for every <code>d</code> from −10 to +30 ri, the world is placed there and its ri counted above sea level after step 2 and after step 4, which is cheap since neither has erosion; the share after 5d at the current <code>d</code> is marked, and since erosion costs a nearly constant few points, the <code>d</code> that gives 70% after erosion is read off the step-4 curve. <strong>The coast's dimension:</strong> a coast ri is a land ri with a sea neighbour; square boxes of 1, 2, 4, 8 and 16 ri are laid over the world and the boxes holding coast counted, and the box-counting dimension <code>D</code> is minus the slope of <code>log N</code> against <code>log s</code>, fitted over 1 to 8 ri. The same is done at chō scale inside the picked window cluster, boxes of 1 to 32 chō, when the coast passes through it. Kantō's coast measures 1.11 in Natural Earth's 1:10m data and is likely 1.1 to 1.15 in truth; the structure noise alone would give level sets of dimension <code>2 − H</code>.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">land share against the inset d · step 2 dashed, step 4 in ink · 70% marked · the 5d share at the current d</div>
+      <svg id="shareChart" viewBox="0 0 560 300" role="img" aria-label="Land share of the world's ri against the inset, after step 2 and after step 4, with the 70% line and the current placement's share after erosion."><g id="shareChartScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the coast at ri scale · land pale, sea blue, coast ri in ink · 4-ri boxes drawn · click a ri to move the window</div>
+      <svg id="coastMap" viewBox="0 0 560 560" role="img" aria-label="The world's ri as land, sea and coast, with the box grid used for the count."><g id="coastMapScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="pair">
+    <div>
+      <div class="panel-title">box counts · N against the box side, both on log scales · ri series in ink, chō series in blue · fitted slopes</div>
+      <svg id="boxChart" viewBox="0 0 560 300" role="img" aria-label="Box counts of the coast against box size on log-log axes, at ri scale and at chō scale, with fitted lines."><g id="boxChartScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the coast at chō scale · the window cluster · land pale, sea blue, coast chō in ink</div>
+      <svg id="coastCluster" viewBox="0 0 560 560" role="img" aria-label="The window cluster's chō as land, sea and coast."><g id="coastClusterScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="facts" id="facts6"></div>
+  <div class="controls"><button id="stripButton" type="button">count the coast at chō scale over every coast ri · 15–20 s</button></div>
+  <div class="facts" id="stripFacts"></div>
+  <p class="muted">A box count on 36 ri of world has few scales to fit, so the ri-scale <code>D</code> is a coarse reading; the chō-scale one inside the window is the sharper one, but only where the coast crosses it, so click a coastal ri. The inset slider is the retune: set <code>d</code> and watch the 5d share.</p>
+
+  <h1 id="stepGradient">Step 7a: the downhill face of every ri</h1>
+  <p>It reads the surface the last step left, step 5d's. For each ri, the gradient at its centre by central differences half a ri either side, in metres per ri, then reversed, so it points downhill, the way water runs, and snapped to the nearest of the ri's six faces: <code>E, NNE, NNW, W, SSW, SSE</code>, the order of <code>Direction::ALL</code>. An arrow's length is the slope, capped at the slider's value, so the plain's few metres per ri show as short stubs and the mountainsides as full arrows.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="controls controls-gradient"></div>
+  <div class="pair">
+    <div style="max-width: 640px">
+      <div class="panel-title">the world, ri by ri · height under the arrows · downhill, snapped to a face</div>
+      <svg id="gradients" viewBox="0 0 560 560" role="img" aria-label="The world's ri coloured by height with an arrow on each ri showing the direction and steepness of its slope."><g id="gradientsScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div class="facts" id="factsGradient"></div>
+  </div>
+
+  <h1 id="stepRain">Step 7b: the year's rain on every ri</h1>
+  <p>Step 3's precipitation, read on the surface the last step left (step 5d's, so the noise's and the gullies' heights and aspects count), times the ri's area: a ri is 3,927 m flat to flat, so <code>13.36 km²</code>, and 1 mm over it is <code>13,360 m³</code>. The result is a volume per ri per year, in millions of cubic metres, shaded like step 3's precipitation map. Every ri gets its rain, sea included. Nothing moves yet.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="pair">
+    <div style="max-width: 640px">
+      <div class="panel-title">the world, ri by ri · rain a year, millions of m³ · step-2 shore dotted</div>
+      <svg id="rain" viewBox="0 0 560 560" role="img" aria-label="The world's ri shaded blue by the volume of precipitation that falls on each in a year."><g id="rainScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div class="facts" id="factsRain"></div>
+  </div>
+
+  <h1 id="stepSettle">Step 7c: the rain settled, ri to ri</h1>
+  <p>Each ri's year of rain runs to its lowest neighbour, highest ri first, until it leaves the world's edge for a lower ri outside, in any of the six directions, or gets stuck in a pit. The sea inside the world is only low ground here; its water runs off the edge like any other. A pit fills to the height at which it would spill, so every pit is a lake with a capacity. Anything below 0 m is water already, the coast being the zero set, so a pit's fresh capacity runs from 0 m, or from its floor if that is higher, up to the spill: a basin the noise cut off from the sea becomes a lake whose fresh water sits above 0 m, and a pit whose spill is under the sea holds nothing. A lake keeps the year's inflow up to its capacity and passes the rest over its spill. The graph is the six faces of each ri, and the ring of ri outside the world is read from the same surface, so "off the map" is honest.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="pair">
+    <div>
+      <div class="panel-title">what is left after settling · lakes, by the volume held · millions of m³</div>
+      <svg id="lakes" viewBox="0 0 560 560" role="img" aria-label="The world's ri with the lakes shaded blue by the volume of water they hold after a year's rain has settled."><g id="lakesScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the flow · each ri's outlet face, arrows sized by the volume passing through</div>
+      <svg id="flow" viewBox="0 0 560 560" role="img" aria-label="The world's ri with a blue arrow on each pointing to the face its water leaves by, thicker where more water passes."><g id="flowScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="facts" id="factsSettle"></div>
+
+  <h1 id="stepCarve">Step 7d: the channels carved</h1>
+  <p>The filter draws gullies without the water that would have joined them up, so its creases end mid-slope and the ground below each one is a closed hollow; 7c found a third to a half of the year's rain stuck in them. Real mountains have almost none, because water cut them open. This step does the cutting. Every pit shallower than the threshold, spill minus floor, is breached: from its floor, follow 7c's flood tree outward through the spill until a ri lower than the floor is reached, and lower the ri between onto a straight ramp from the floor to that exit. Then settle again, since breaching one pit can expose the next, until no shallow pit is left. Pits deeper than the threshold stay as lakes. The result is a surface whose water reaches the sea, and the flow on it is the river network. The cuts are a table per ri, which is what a finer rung would be handed.</p>
+  <div class="controls controls-shared"></div>
+  <div class="controls controls-seed"></div>
+  <div class="controls controls-carve"></div>
+  <div class="pair">
+    <div>
+      <div class="panel-title">what was cut · ri lowered, darker the deeper · lakes kept in blue</div>
+      <svg id="cuts" viewBox="0 0 560 560" role="img" aria-label="The world's ri with the carved channels shaded by how much was cut and the lakes that stay shaded blue."><g id="cutsScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the rivers · the flow on the carved surface · arrows sized by the volume passing</div>
+      <svg id="rivers" viewBox="0 0 560 560" role="img" aria-label="The world's ri with an arrow on each pointing to the face its water leaves by on the carved surface, thicker where more water passes."><g id="riversScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+  <div class="facts" id="factsCarve"></div>
+
+</main>
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (t, a, tx) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (tx !== undefined) e.textContent = tx; return e; };
+  const mono = { stroke: "none", "font-size": 11, "font-family": "var(--font-mono)" };
+  const rad = d => d * Math.PI / 180;
+  const WORLD = 36;                                   // ri, flat to flat
+  // Honshu-like at its Kantō width: an 80° arc about 1,300 km along the axis, 236 km wide, in ri. Fixed, not dialled.
+  const R_RI = 237, W_RI = 60, ARC_DEG = 80;
+  // One θ and one d, with a copy of the sliders under every step, all kept in step.
+  const state = { theta: 12, inset: 10, seed: 1, amp: 250, hurst: 0.65, stretch: 2, gref: 150, erosion: 200, firstOctave: 2, octaves5: 8, stripes: 1.5, sigmaRef: 0.03, windowQRS: null, stacking: 1, normAbove: 0.3, baseStrength: 0, keepDeeper: 100 };
+  // Settings in the URL query, the same keys as viz/exp-06.html, so the side-by-side is one link each (the port, 2026-09-30).
+  const QUERY_KEYS = Object.keys(state);
+  if (typeof location !== "undefined") { const qs = new URLSearchParams(location.search); for (const k of QUERY_KEYS) if (qs.has(k)) state[k] = k === "windowQRS" ? qs.get(k).split(",").map(Number) : +qs.get(k); }
+  function writeQuery() { if (typeof history === "undefined") return; const qs = new URLSearchParams(); for (const k of QUERY_KEYS) { const v = state[k]; if (v === null) continue; qs.set(k, Array.isArray(v) ? v.join(",") : String(v)); } try { history.replaceState(null, "", "?" + qs); } catch (e) { /* a file: URL may refuse */ } }
+  const SLIDERS = [
+    { key: "theta", label: "θ, degrees", min: 0, max: 359.5, step: 0.5, fmt: x => x.toFixed(1) + "°" },
+    { key: "inset", label: "inset d, ri", min: -25, max: 45, step: 0.5, fmt: x => (x >= 0 ? "+" : "") + x.toFixed(1) },
+  ];
+  // Step 4's own dials, shown once under step 4.
+  const STRUCTURE_SLIDERS = [
+    { key: "seed", label: "seed", min: 0, max: 99, step: 1, fmt: x => String(x) },
+    { key: "amp", label: "A₀ at 36 ri, m", min: 0, max: 400, step: 5, fmt: x => x.toFixed(0) + " m" },
+    { key: "hurst", label: "H", min: 0.5, max: 1, step: 0.01, fmt: x => x.toFixed(2) },
+    { key: "stretch", label: "stretch along", min: 1, max: 4, step: 0.1, fmt: x => x.toFixed(1) + "×" },
+  ];
+  function bindSliders(selector, sliders) {
+    return [...document.querySelectorAll(selector)].map(container => {
+      const bound = sliders.map(s => {
+        const label = document.createElement("label");
+        const name = document.createElement("span"); name.textContent = s.label;
+        const input = document.createElement("input"); input.type = "range"; input.min = s.min; input.max = s.max; input.step = s.step; input.value = state[s.key];
+        const out = document.createElement("output");
+        label.append(name, input, out); container.appendChild(label);
+        input.addEventListener("input", () => { state[s.key] = +input.value; scheduleUpdate(); });
+        return { s, input, out };
+      });
+      return { sync() { for (const b of bound) { b.input.value = state[b.s.key]; b.out.textContent = b.s.fmt(state[b.s.key]); } } };
+    });
+  }
+  const GRADIENT_SLIDERS = [
+    { key: "gref", label: "full arrow at", min: 20, max: 600, step: 10, fmt: x => x.toFixed(0) + " m/ri" },
+  ];
+  // Step 5a's dials, shown once under it.
+  const EROSION_SLIDERS = [
+    { key: "erosion", label: "E₀ at 36 ri, m", min: 0, max: 800, step: 10, fmt: x => x.toFixed(0) + " m" },
+    { key: "firstOctave", label: "first octave", min: 0, max: 6, step: 1, fmt: x => x + " · " + (WORLD / 2 ** x).toFixed(2) + " ri" },
+    { key: "octaves5", label: "octaves", min: 1, max: 8, step: 1, fmt: x => String(x) },
+    { key: "stripes", label: "stripes/cell", min: 1, max: 6, step: 0.5, fmt: x => x.toFixed(1) },
+    { key: "sigmaRef", label: "full at slope", min: 0.005, max: 0.3, step: 0.005, fmt: x => (x * 100).toFixed(1) + "%" },
+  ];
+  // The window ri is picked by clicking a ri on any of step 5's maps; it is kept as the ri's cube (q, r, s) in the
+  // world, so it stays the same ri when θ or d move the world. Until a click, it is the ri nearest 12 ri inland.
+  const WINDOW_DEFAULT_INLAND = 12, RI_MAP_SCALE = 520 / (WORLD * 1.15);
+  let mapCentre = null, renderRun = 0;
+  for (const id of ["gullies", "mask", "heights5", "delta5b", "heights5b", "delta5c", "heights5c", "delta5d", "heights5d", "coastMap"]) {
+    const svg = document.getElementById(id); if (!svg) continue;
+    svg.addEventListener("click", ev => {
+      if (!mapCentre || !svg.getScreenCTM) return;
+      const pt = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(svg.getScreenCTM().inverse());
+      const p = [mapCentre[0] + (pt.x - 280) / RI_MAP_SCALE, mapCentre[1] - (pt.y - 280) / RI_MAP_SCALE];
+      let best = null, bd = Infinity;
+      for (const [q, r, s] of RI_CELLS) { const c = riCentre(q, r, s, mapCentre), d = Math.hypot(c[0] - p[0], c[1] - p[1]); if (d < bd) { bd = d; best = [q, r, s]; } }
+      if (best && bd < 1) { state.windowQRS = best; update(); }
+    });
+  }
+  // The seed, on its own, under every step after the one that introduces it.
+  const SEED_SLIDERS = STRUCTURE_SLIDERS.filter(s => s.key === "seed");
+  // Step 5c's one dial: the exponent on (1 − |R|) in the mask, the video's "terrain detail"; 0 is 5b exactly.
+  // Step 5b's switch: the base slope the pivots read is the true one (0), or its direction at a fixed strength,
+  // this many times the straight-gully slope of the octave above (the video's final form).
+  const PIVOT_SLIDERS = [
+    { key: "baseStrength", label: "base for pivots", min: 0, max: 3, step: 0.1, fmt: x => x === 0 ? "true slope" : x.toFixed(1) + "× gully" },
+  ];
+  // Step 7d's one dial: pits deeper than this stay as lakes; shallower ones are carved open.
+  const CARVE_SLIDERS = [
+    { key: "keepDeeper", label: "lakes deeper than", min: 0, max: 200, step: 5, fmt: x => x.toFixed(0) + " m" },
+  ];
+  const STACK_SLIDERS = [
+    { key: "stacking", label: "stacking p", min: 0, max: 3, step: 0.1, fmt: x => x.toFixed(1) },
+  ];
+  // Step 5d's one dial: the pair length above which the blended stripes are normalised back to full swing; 1 is off.
+  const NORM_SLIDERS = [
+    { key: "normAbove", label: "normalise above", min: 0, max: 1, step: 0.05, fmt: x => x >= 1 ? "off" : x.toFixed(2) },
+  ];
+  const controls = [...bindSliders(".controls-shared", SLIDERS), ...bindSliders(".controls-structure", STRUCTURE_SLIDERS), ...bindSliders(".controls-seed", SEED_SLIDERS), ...bindSliders(".controls-erosion", EROSION_SLIDERS), ...bindSliders(".controls-pivots", PIVOT_SLIDERS), ...bindSliders(".controls-stacking", STACK_SLIDERS),...bindSliders(".controls-norm", NORM_SLIDERS), ...bindSliders(".controls-gradient", GRADIENT_SLIDERS), ...bindSliders(".controls-carve", CARVE_SLIDERS)];
+  function update() { controls.forEach(c => c.sync()); writeQuery(); render(); }
+  // A slider drag fires many input events; the readouts follow at once, the render waits until the drag pauses.
+  let pendingRender = null;
+  function scheduleUpdate() { controls.forEach(c => c.sync()); writeQuery(); clearTimeout(pendingRender); pendingRender = setTimeout(render, 150); }
+
+  // The outline as a dense polyline, anticlockwise from the outer apex. Coordinates are (east, north) in ri.
+  function outline(R, A, w, phi) {
+    const pts = [];
+    const push = (x, y) => { const c = Math.cos(rad(phi)), s = Math.sin(rad(phi)); pts.push([x * c - y * s, x * s + y * c]); };
+    const half = rad(A) / 2, ro = R + w / 2, ri = R - w / 2, n = 180;
+    // outer arc, from the apex (angle 0) anticlockwise to +half, then the north cap, the inner arc back, the south cap, and the outer arc from −half to the apex
+    for (let i = 0; i <= n / 2; i++) { const a = (i / (n / 2)) * half; push(ro * Math.cos(a), ro * Math.sin(a)); }
+    for (let i = 1; i < 60; i++) { const a = half, t = (i / 60) * Math.PI; const cx = R * Math.cos(a), cy = R * Math.sin(a); const ux = Math.cos(a), uy = Math.sin(a), vx = -Math.sin(a), vy = Math.cos(a); const r = w / 2; push(cx + r * (Math.cos(t) * ux + Math.sin(t) * vx), cy + r * (Math.cos(t) * uy + Math.sin(t) * vy)); }
+    for (let i = 0; i <= n; i++) { const a = half - (i / n) * 2 * half; push(ri * Math.cos(a), ri * Math.sin(a)); }
+    for (let i = 1; i < 60; i++) { const a = -half, t = Math.PI + (i / 60) * Math.PI; const cx = R * Math.cos(a), cy = R * Math.sin(a); const ux = Math.cos(a), uy = Math.sin(a), vx = -Math.sin(a), vy = Math.cos(a); const r = w / 2; push(cx + r * (Math.cos(t) * ux + Math.sin(t) * vx), cy + r * (Math.cos(t) * uy + Math.sin(t) * vy)); }
+    for (let i = 0; i <= n / 2; i++) { const a = -half + (i / (n / 2)) * half; push(ro * Math.cos(a), ro * Math.sin(a)); }
+    // cumulative length
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    return { pts, cum, length: cum[cum.length - 1] };
+  }
+  function at(o, theta) {
+    const s = (theta / 360) * o.length;
+    let i = 1; while (i < o.cum.length - 1 && o.cum[i] < s) i++;
+    const t = (s - o.cum[i - 1]) / ((o.cum[i] - o.cum[i - 1]) || 1);
+    const a = o.pts[i - 1], b = o.pts[i];
+    const p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const tx = b[0] - a[0], ty = b[1] - a[1], L = Math.hypot(tx, ty) || 1;
+    // anticlockwise outline: the outward normal is the tangent turned clockwise
+    return { p, normal: [ty / L, -tx / L] };
+  }
+  function inside(o, p) {                              // even-odd point in polygon
+    let c = false; const P = o.pts;
+    for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+      if ((P[i][1] > p[1]) !== (P[j][1] > p[1]) && p[0] < (P[j][0] - P[i][0]) * (p[1] - P[i][1]) / (P[j][1] - P[i][1]) + P[i][0]) c = !c;
+    }
+    return c;
+  }
+  function segCross(a, b, c, d) {
+    const den = (b[0] - a[0]) * (d[1] - c[1]) - (b[1] - a[1]) * (d[0] - c[0]);
+    if (Math.abs(den) < 1e-12) return null;
+    const t = ((c[0] - a[0]) * (d[1] - c[1]) - (c[1] - a[1]) * (d[0] - c[0])) / den;
+    const u = ((c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])) / den;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])] : null;
+  }
+  // The world hexagon: pointy-top, corners at 30° + 60°·i, flat to flat WORLD. Edge k runs between corners k−1 and k,
+  // so edge 0 is the east edge, then NNE, NNW, W, SSW, SSE: Direction::ALL's even entries.
+  const EDGE_NAMES = ["E", "NNE", "NNW", "W", "SSW", "SSE"];
+  function hexCorners(c) { const r = WORLD / 2 / Math.cos(Math.PI / 6); return Array.from({ length: 6 }, (_, i) => { const a = rad(30 + 60 * i); return [c[0] + r * Math.cos(a), c[1] + r * Math.sin(a)]; }); }
+
+  // ---- Step 2: height as H(s) · F(a), above and below the sea.
+  // The cross-section F(a): control points (a, F) in units of the spine height, a from 3 half-widths out on
+  // the inner side (−3) to 3 out on the outer (+3), coasts at ±1, joined by a monotone cubic (Fritsch–Carlson),
+  // so it is smooth, never overshoots the table, and its slope is continuous through the coast.
+  // Outer side: a wide shallow shelf, then the slope down to a trench about 60 ri out. Inner side: a narrow shelf
+  // and a deep basin. Both deepen with H(s), so the trench is deepest off the middle of the arc.
+  const SECTION = [
+    [-3, -1.0], [-2.2, -0.9], [-1.5, -0.35], [-1.15, -0.05],
+    [-1, 0], [-0.6, 0.35], [-0.1, 1.0], [0.2, 0.45], [0.5, 0.18], [0.8, 0.07], [1, 0],
+    [1.3, -0.03], [1.7, -0.1], [2.3, -0.8], [3, -2.4],
+  ];
+  function spline(points) {
+    const n = points.length, x = points.map(p => p[0]), y = points.map(p => p[1]);
+    const d = [], m = [];
+    for (let i = 0; i < n - 1; i++) d.push((y[i + 1] - y[i]) / (x[i + 1] - x[i]));
+    m.push(d[0]);
+    for (let i = 1; i < n - 1; i++) m.push(d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2);
+    m.push(d[n - 2]);
+    for (let i = 0; i < n - 1; i++) { if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; } const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b; if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; } }
+    return v => {
+      if (v <= x[0]) return y[0]; if (v >= x[n - 1]) return y[n - 1];
+      let i = 0; while (v > x[i + 1]) i++;
+      const h = x[i + 1] - x[i], t = (v - x[i]) / h, t2 = t * t, t3 = t2 * t;
+      return (2 * t3 - 3 * t2 + 1) * y[i] + (t3 - 2 * t2 + t) * h * m[i] + (-2 * t3 + 3 * t2) * y[i + 1] + (t3 - t2) * h * m[i + 1];
+    };
+  }
+  const f = spline(SECTION);
+  const H_TIP = 900, H_APEX = 2500;                           // metres: the spine at the tips and at the bend
+  const H = s => H_TIP + (H_APEX - H_TIP) * Math.sin(Math.PI * Math.max(0, Math.min(1, s)));
+  // A world point to the band's own frame: s along the centreline (0 at the bottom tip, 1 at the top), a across.
+  function bandCoords(p, v) {
+    const c = Math.cos(rad(-v.phi)), sn = Math.sin(rad(-v.phi));
+    const x = p[0] * c - p[1] * sn, y = p[0] * sn + p[1] * c;        // unrotated: the arc is centred on the origin, apex east
+    const r = Math.hypot(x, y), ang = Math.atan2(y, x), half = rad(v.A) / 2, hw = v.w / 2;
+    if (Math.abs(ang) <= half) return { s: (ang + half) / (2 * half), a: (r - v.R) / hw, e: 0 };
+    const end = ang > 0 ? half : -half, cx = v.R * Math.cos(end), cy = v.R * Math.sin(end);
+    const nx = Math.cos(end), ny = Math.sin(end), tx = -Math.sin(end) * (ang > 0 ? 1 : -1), ty = Math.cos(end) * (ang > 0 ? 1 : -1);
+    return { s: ang > 0 ? 1 : 0, a: ((x - cx) * nx + (y - cy) * ny) / hw, e: ((x - cx) * tx + (y - cy) * ty) / hw };
+  }
+  // Height in metres, positive on land and negative at sea, zero exactly on the outline. Along the arc it is
+  // H(s) · F(a). Round a cap it goes polar: the distance from the cap's centre stands in for a, and the outer and
+  // inner profiles are blended by the angle, which meets the arc's values where the two regions join.
+  function height(p, v) {
+    const b = bandCoords(p, v);
+    if (b.e <= 0) return H(b.s) * f(b.a);
+    const rho = Math.hypot(b.a, b.e), t = (b.a / rho + 1) / 2;
+    return H(b.s) * (t * f(rho) + (1 - t) * f(-rho));
+  }
+  // exp-03's owner(): which parent a cell belongs to, for the world's 1,296 ri.
+  // exp-03's owner() in cube: the parent (a, b, c) whose centre (N·a, N·b, N·c) is nearest, distance
+  // (dq² + dr² + ds²)/2, ties to the greatest (a, b).
+  function owner(q, r, s, N) {
+    const a0 = Math.round(q / N), b0 = Math.round(r / N);
+    let best = null, bestD = Infinity;
+    for (let a = a0 - 1; a <= a0 + 1; a++) for (let b = b0 - 1; b <= b0 + 1; b++) {
+      const c = -a - b, dq = q - N * a, dr = r - N * b, ds = s - N * c, d2 = (dq * dq + dr * dr + ds * ds) / 2;
+      if (d2 < bestD || (d2 === bestD && (a > best[0] || (a === best[0] && b > best[1])))) { bestD = d2; best = [a, b, c]; }
+    }
+    return best;
+  }
+  const RI_CELLS = [];                                         // cube (q, r, s) of every ri the world owns, N = 36
+  for (let q = -30; q <= 30; q++) for (let r = -30; r <= 30; r++) { const s = -q - r, o = owner(q, r, s, 36); if (o[0] === 0 && o[1] === 0 && o[2] === 0) RI_CELLS.push([q, r, s]); }
+  const RI_HEX = Array.from({ length: 6 }, (_, i) => { const a = rad(30 + 60 * i); return [Math.cos(a) / Math.sqrt(3), Math.sin(a) / Math.sqrt(3)]; });
+  const ROW = Math.sqrt(3) / 2;
+  const riCentre = (q, r, s, c) => [c[0] + (q - s) / 2, c[1] - r * ROW];   // pointy-top cube to the plane; +r is south, as in the main branch
+  const heightColour = h => {                                 // hypsometric: trench to snow, by metres
+    const stops = h <= 0
+      ? [[-6000, [15, 30, 70]], [-2500, [30, 60, 120]], [-800, [70, 110, 165]], [-200, [120, 160, 200]], [0, [175, 205, 220]]]
+      : [[0, [190, 205, 150]], [300, [150, 180, 110]], [900, [170, 150, 100]], [1600, [140, 115, 85]], [2200, [200, 195, 190]], [2800, [245, 245, 245]]];
+    let i = 0; while (i < stops.length - 2 && h > stops[i + 1][0]) i++;
+    const [h0, c0] = stops[i], [h1, c1] = stops[i + 1], t = Math.max(0, Math.min(1, (h - h0) / (h1 - h0)));
+    return "rgb(" + c0.map((v, k) => Math.round(v + (c1[k] - v) * t)).join(",") + ")";
+  };
+
+  // ---- Step 3: climate from position, height and slope. Stylised from Honshu's stations.
+  const LAPSE = 6.5 / 1000;                                    // °C per metre
+  const T_APEX = 15.5, T_PER_RI_NORTH = 0.036;                 // sea-level mean at the apex, and its fall northward
+  const HALF_RANGE_COAST = 10.5, HALF_RANGE_INLAND = 13.0;     // coldest-to-warmest month, halved
+  const INLAND_RI = 20;                                        // distance from the coast at which a place counts as fully inland
+  const P_PACIFIC = 1500, P_JAPAN_SEA = 2200, P_PER_M = 0.5, P_ASPECT = 600;
+  const WIND_WINTER = [Math.cos(rad(315)), Math.sin(rad(315))], WIND_SUMMER = [Math.cos(rad(135)), Math.sin(rad(135))];  // the way each wind blows toward
+  // The gradient of any field in metres per ri, by central differences d either side.
+  const gradientOf = (field, p, d) => [(field([p[0] + d, p[1]]) - field([p[0] - d, p[1]])) / (2 * d), (field([p[0], p[1] + d]) - field([p[0], p[1] - d])) / (2 * d)];
+  const gradient = (p, v) => gradientOf(x => height(x, v), p, 0.25);   // step 2's surface, half a ri apart
+  // `field` is the surface the climate reads: step 2's by default, or whatever a later step hands in.
+  function climate(p, v, apexNorth, field) {
+    const surf = field || (x => height(x, v));
+    const b = bandCoords(p, v), h = surf(p);
+    const aEff = b.e > 0 && b.e < 1 ? b.a / Math.sqrt(1 - b.e * b.e) : b.a;
+    const coastDist = Math.max(0, 1 - Math.min(1, Math.abs(aEff))) * (v.w / 2);
+    const inland = Math.min(1, coastDist / INLAND_RI);
+    const tMean = T_APEX - T_PER_RI_NORTH * (p[1] - apexNorth) - LAPSE * h;
+    const half = HALF_RANGE_COAST + (HALF_RANGE_INLAND - HALF_RANGE_COAST) * inland;
+    const g = gradientOf(surf, p, 0.25), slope = w => Math.max(-1, Math.min(1, (g[0] * w[0] + g[1] * w[1]) / 100));
+    const side = (Math.max(-1, Math.min(1, aEff)) + 1) / 2;   // 1 at the outer (Pacific) coast, 0 at the inner
+    const precip = Math.max(400, P_JAPAN_SEA + (P_PACIFIC - P_JAPAN_SEA) * side + P_PER_M * h + P_ASPECT * (0.6 * slope(WIND_WINTER) + 0.4 * slope(WIND_SUMMER)));
+    return { tMin: tMean - half, tMean, tMax: tMean + half, precip };
+  }
+  const ramp = (stops, x) => {
+    let i = 0; while (i < stops.length - 2 && x > stops[i + 1][0]) i++;
+    const [x0, c0] = stops[i], [x1, c1] = stops[i + 1], t = Math.max(0, Math.min(1, (x - x0) / (x1 - x0)));
+    return "rgb(" + c0.map((c, k) => Math.round(c + (c1[k] - c) * t)).join(",") + ")";
+  };
+  const TEMP_RAMP = [[-10, [40, 60, 140]], [0, [120, 160, 220]], [10, [235, 235, 225]], [20, [235, 160, 90]], [30, [170, 40, 40]]];
+  const PRECIP_RAMP = [[600, [235, 225, 190]], [1200, [190, 215, 205]], [1800, [110, 165, 200]], [2600, [50, 100, 170]], [3400, [25, 50, 120]]];
+
+  // ---- Step 4: structure. Seeded gradient noise over halving octaves, anchored to the origin, added in metres.
+  const LAMBDA_0 = WORLD;                                      // ri: the coarsest octave spans the world
+  const RI_OCTAVES = 5;                                        // evaluated at the ri scale: 36, 18, 9, 4.5, 2.25 ri
+  const LADDER_ROWS = 11;                                      // octaves listed in the table, down past the chō
+  const hash = (q, r, s, seed) => {                            // a seeded integer hash of a cube lattice node, 32 bits
+    let h = Math.imul(q, 0x27d4eb2d) ^ Math.imul(r, 0x165667b1) ^ Math.imul(s, 0x7feb352d) ^ Math.imul(seed + 1, 0x9e3779b1);
+    h = Math.imul(h ^ (h >>> 15), 0x85ebca6b); h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+    return (h ^ (h >>> 16)) >>> 0;
+  };
+  // The hex lattice every octave lives on. In cell units a node (i, j) sits at (i + j/2, −j·√3/2): the ri's own
+  // cube convention, +r south, s = −q − r carried. Halving the cell maps node (q, r, s) to (2q, 2r, 2s), so every coarse node stays a node.
+  // A point sits in one lattice triangle, and its three corners are the only nodes within the kernel's reach
+  // r₀ = √3/2: the nearest node outside a triangle is exactly that far from an edge's midpoint, so the kernel
+  // (r₀² − d²)⁴ is zero on every edge for every node but the edge's ends, and the blend is continuous. One
+  // kernel serves the noise here and the erosion's pivots later.
+  const HEX_R2 = 0.75;
+  const hexKernel = d2 => { const t = HEX_R2 - d2; return t > 0 ? t * t * t * t : 0; };
+  function hexTriangle(x, y) {                                 // the three cube nodes round (x, y), each with the offset from it
+    const j = -y / ROW, i = x - j / 2;                          // fractional cube (q, r, s) via the two free axes
+    const i0 = Math.floor(i), j0 = Math.floor(j), fi = i - i0, fj = j - j0;
+    const corners = fi + fj < 1 ? [[i0, j0], [i0 + 1, j0], [i0, j0 + 1]] : [[i0 + 1, j0], [i0, j0 + 1], [i0 + 1, j0 + 1]];
+    return corners.map(([cq, cr]) => ({ q: cq, r: cr, s: -cq - cr, dx: x - (cq - (-cq - cr)) / 2, dy: y + cr * ROW }));
+  }
+  // Gradient noise on the hex lattice: each node's unit gradient from the hash, dotted with the offset, blended by
+  // the normalised kernel. Zero at every node; the raw peak is exactly 1/√3, at a triangle's centre, so √3 makes it −1…1.
+  function hexNoise(x, y, seed) {
+    let sum = 0, wsum = 0;
+    for (const c of hexTriangle(x, y)) {
+      const w = hexKernel(c.dx * c.dx + c.dy * c.dy); if (w === 0) continue;
+      const a = hash(c.q, c.r, c.s, seed) * (2 * Math.PI / 4294967296);
+      sum += w * (Math.cos(a) * c.dx + Math.sin(a) * c.dy); wsum += w;
+    }
+    return Math.sqrt(3) * sum / wsum;
+  }
+  // The same noise with its exact gradient, in lattice units: n = √3·N/W with N = Σ w·(g·d), W = Σ w, and
+  // ∇w = −8·(r₀² − d²)³·d, ∇(g·d) = g, so ∇n = √3·(∇N·W − N·∇W)/W². Value identical to hexNoise.
+  function hexNoiseGrad(x, y, seed) {
+    let N = 0, W = 0, Nx = 0, Ny = 0, Wx = 0, Wy = 0;
+    for (const c of hexTriangle(x, y)) {
+      const d2 = c.dx * c.dx + c.dy * c.dy, t = HEX_R2 - d2; if (t <= 0) continue;
+      const t3 = t * t * t, w = t3 * t, wx = -8 * t3 * c.dx, wy = -8 * t3 * c.dy;
+      const a = hash(c.q, c.r, c.s, seed) * (2 * Math.PI / 4294967296), gx = Math.cos(a), gy = Math.sin(a), f = gx * c.dx + gy * c.dy;
+      N += w * f; W += w; Nx += wx * f + w * gx; Ny += wy * f + w * gy; Wx += wx; Wy += wy;
+    }
+    const s3 = Math.sqrt(3);
+    return [s3 * N / W, s3 * (Nx * W - N * Wx) / (W * W), s3 * (Ny * W - N * Wy) / (W * W)];
+  }
+  const octaveLambda = k => LAMBDA_0 / 2 ** k;                 // ri
+  const octaveAmp = (k, st) => st.amp * 2 ** (-k * st.hurst);  // metres
+  // The field in the world's own frame: origin at the world's centre, u along the arc's tangent there and shrunk by the
+  // stretch, w across it. Each octave's lattice is the coarser one's halved, so a point lands in the same
+  // cells whatever rung evaluates it, and a finer rung only adds terms.
+  // `turn` is +1 or −1: −1 turns the lattice half a circle about the origin, which keeps every node a node
+  // and swaps which side of the arc the field leans to.
+  function structureField(centre, tangent, st, octaves, turn) {
+    return p => {
+      const dx = p[0] - centre[0], dy = p[1] - centre[1];
+      const u = turn * (dx * tangent[0] + dy * tangent[1]) / st.stretch, w = turn * (-dx * tangent[1] + dy * tangent[0]);
+      let sum = 0;
+      for (let k = 0; k < octaves; k++) { const lambda = octaveLambda(k); sum += octaveAmp(k, st) * hexNoise(u / lambda, w / lambda, st.seed * 64 + k); }
+      return sum;
+    };
+  }
+  // Every structure octave at a point at once, value in metres and exact gradient in metres per ri, in the
+  // world's frame (the chain rule through the turn, the stretch and the wavelength). One call per point
+  // serves every erosion octave's base, which is what makes the erosion cheap.
+  function structureOctaves(centre, tangent, st, K, turn) {
+    const n = [-tangent[1], tangent[0]];
+    return p => {
+      const dx = p[0] - centre[0], dy = p[1] - centre[1];
+      const u = turn * (dx * tangent[0] + dy * tangent[1]) / st.stretch, w = turn * (dx * n[0] + dy * n[1]);
+      const vals = new Array(K), grads = new Array(K);
+      for (let k = 0; k < K; k++) {
+        const lambda = octaveLambda(k), A = octaveAmp(k, st), [v, dU, dW] = hexNoiseGrad(u / lambda, w / lambda, st.seed * 64 + k);
+        // U = u/λ: ∂U/∂x = turn·t₀/(stretch·λ), ∂U/∂y = turn·t₁/(stretch·λ); W = w/λ: ∂W/∂x = turn·n₀/λ, ∂W/∂y = turn·n₁/λ
+        vals[k] = A * v;
+        grads[k] = [A * (dU * turn * tangent[0] / st.stretch + dW * turn * n[0]) / lambda, A * (dU * turn * tangent[1] / st.stretch + dW * turn * n[1]) / lambda];
+      }
+      return { vals, grads };
+    };
+  }
+  const NOISE_RAMP = [[-1, [35, 80, 150]], [-0.5, [120, 160, 200]], [0, [236, 234, 226]], [0.5, [200, 150, 95]], [1, [130, 70, 25]]];
+
+  const wide = document.getElementById("wideScene"), near = document.getElementById("nearScene"), facts = document.getElementById("facts");
+  const section = document.getElementById("sectionScene"), heights = document.getElementById("heightsScene"), profiles = document.getElementById("profiles"), facts2 = document.getElementById("facts2");
+  const climateGrid = document.getElementById("climate"), facts3 = document.getElementById("facts3");
+  const gradScene = document.getElementById("gradientsScene"), factsGradient = document.getElementById("factsGradient");
+  const rainScene = document.getElementById("rainScene"), factsRain = document.getElementById("factsRain");
+  const lakesScene = document.getElementById("lakesScene"), flowScene = document.getElementById("flowScene"), factsSettle = document.getElementById("factsSettle");
+  const cutsScene = document.getElementById("cutsScene"), riversScene = document.getElementById("riversScene"), factsCarve = document.getElementById("factsCarve");
+  const CUT_RAMP = [[0, [236, 234, 226]], [1, [90, 60, 30]]];
+  // A ri's six neighbours as cube steps, Direction::ALL's order: E, NNE, NNW, W, SSW, SSE (+r is south).
+  const NEIGH = [[1, 0, -1], [1, -1, 0], [0, -1, 1], [-1, 0, 1], [-1, 1, 0], [0, 1, -1]];
+  const LAKE_RAMP = [[0, [205, 222, 236]], [0.5, [90, 140, 200]], [1, [20, 55, 140]]];
+
+  // The settling: fill pits to their spill height (a priority flood from the outlets), then route every ri's
+  // rain to its lowest neighbour, or along the flood tree where the surface is a flat lake, highest first.
+  // Outlets are the sea ri inside the world and the ring of ri just outside it; water reaching either is gone.
+  function settle(cells, heightAt, rainAt) {
+    const n = cells.length, idx = new Map(); cells.forEach(([q, r, s], i) => idx.set(q + "," + r + "," + s, i));
+    // nodes: the world's ri, then the ring of ri just outside it, which are the outlets off the map
+    const nodes = cells.slice(), h = cells.map(([q, r, s]) => heightAt(q, r, s));
+    for (let i = 0; i < n; i++) for (const [dq, dr, ds] of NEIGH) { const q = cells[i][0] + dq, r = cells[i][1] + dr, s = cells[i][2] + ds, k = q + "," + r + "," + s; if (!idx.has(k)) { idx.set(k, nodes.length); nodes.push([q, r, s]); h.push(heightAt(q, r, s)); } }
+    const N = nodes.length, isRing = i => i >= n;
+    // priority flood: the seeds are the ring, at its own height, in every direction; every ri inside fills to
+    // the lowest height it can be reached over from outside, which is its spill level if it sits in a pit.
+    // The sea inside the world is just low ground here: its water leaves over the edge like any other.
+    const F = new Array(N).fill(Infinity), parent = new Array(N).fill(-1), seen = new Array(N).fill(false), open = [], order = [];
+    for (let i = n; i < N; i++) { F[i] = h[i]; seen[i] = true; open.push(i); }
+    while (open.length) {
+      let best = 0; for (let j = 1; j < open.length; j++) if (F[open[j]] < F[open[best]]) best = j;
+      const i = open[best]; open[best] = open[open.length - 1]; open.pop(); order.push(i);
+      const [q, r, s] = nodes[i];
+      for (const [dq, dr, ds] of NEIGH) { const j = idx.get((q + dq) + "," + (r + dr) + "," + (s + ds)); if (j === undefined || seen[j] || isRing(j)) continue; seen[j] = true; F[j] = Math.max(h[j], F[i]); parent[j] = i; open.push(j); }
+    }
+    // each ri's outlet: its lowest neighbour by filled height if strictly lower, else the flood parent (flat lake)
+    const outlet = new Array(n).fill(-1), outFace = new Array(n).fill(-1);
+    for (let i = 0; i < n; i++) {
+      const [q, r, s] = cells[i]; let lo = F[i], pick = -1, face = -1;
+      for (let k = 0; k < 6; k++) { const j = idx.get((q + NEIGH[k][0]) + "," + (r + NEIGH[k][1]) + "," + (s + NEIGH[k][2])); if (F[j] < lo) { lo = F[j]; pick = j; face = k; } }
+      if (pick < 0 && parent[i] >= 0) { pick = parent[i]; const [pq, pr, ps] = nodes[pick]; face = NEIGH.findIndex(([dq, dr, ds]) => pq === q + dq && pr === r + dr && ps === s + ds); }
+      outlet[i] = pick; outFace[i] = face;
+    }
+    // lakes: connected ri sharing one filled height above their own. Anything below 0 m is water already
+    // (the coast is the zero set), so a pit's fresh capacity runs from 0 m, or its floor if higher, up to
+    // the spill; a pit whose spill is under the sea has no fresh capacity and just passes water on.
+    const lake = new Array(n).fill(-1), lakes = [], freshCap = i => Math.max(0, F[i] - Math.max(h[i], 0)) * AREA_RI / 1e6;
+    for (let i = 0; i < n; i++) {
+      if (lake[i] >= 0 || F[i] <= h[i] + 1e-6) continue;
+      const id = lakes.length, members = [i]; lake[i] = id; let cap = 0, floor = Infinity;
+      for (let s2 = 0; s2 < members.length; s2++) {
+        const m = members[s2], [q, r, s] = cells[m]; cap += freshCap(m); floor = Math.min(floor, h[m]);
+        for (const [dq, dr, ds] of NEIGH) { const j = idx.get((q + dq) + "," + (r + dr) + "," + (s + ds)); if (j < n && lake[j] < 0 && F[j] > h[j] + 1e-6 && Math.abs(F[j] - F[i]) < 1e-6) { lake[j] = id; members.push(j); } }
+      }
+      lakes.push({ id, members, capacity: cap, floor, inflow: 0, held: 0, spill: F[i], exit: -1 });
+    }
+    // route in reverse flood order, so every ri drains after everything that drains into it; a lake keeps
+    // the year's inflow up to its fresh capacity at its exit ri and passes the rest; water reaching the ring
+    // has left the world, counted by the edge it crossed
+    const flow = new Array(N).fill(0); for (let i = 0; i < n; i++) flow[i] = rainAt(i);
+    const offByEdge = [0, 0, 0, 0, 0, 0], edgeOf = ([q, r, s]) => ((Math.round(Math.atan2(-r * ROW, (q - s) / 2) / rad(60)) % 6) + 6) % 6;
+    for (let s = order.length - 1; s >= 0; s--) {
+      const i = order[s]; if (isRing(i)) continue;
+      let out = flow[i];
+      // a lake may touch its spill through several ri: each exit fills what capacity is left, then passes the rest
+      if (lake[i] >= 0 && (outlet[i] < 0 || outlet[i] >= n || lake[outlet[i]] !== lake[i])) { const L = lakes[lake[i]]; L.inflow += out; const take = Math.min(L.capacity - L.held, out); L.held += take; L.exit = i; out -= take; }
+      if (outlet[i] < 0) { offByEdge[edgeOf(cells[i])] += out; continue; }
+      if (outlet[i] >= n) offByEdge[edgeOf(nodes[outlet[i]])] += out; else flow[outlet[i]] += out;
+    }
+    // the fresh water held, spread over a lake's ri by each one's share of the capacity; its surface level
+    const held = new Array(n).fill(0), level = new Array(n).fill(null);
+    for (const L of lakes) { const fill = L.capacity > 0 ? L.held / L.capacity : 0; L.level = L.capacity > 0 ? Math.max(L.floor, 0) + (L.spill - Math.max(L.floor, 0)) * fill : null; for (const m of L.members) { held[m] = freshCap(m) * fill; level[m] = L.level; } }
+    return { n, nodes, h, F, parent, order, outlet, outFace, lake, lakes, flow, held, level, offByEdge, offMap: offByEdge.reduce((a, b) => a + b, 0) };
+  }
+  // ---- Step 7d: carve the channels. Every pit shallower than `keepDeeper` (spill minus floor, metres) is breached:
+  // from its floor, follow the flood tree outward through the spill until a cell lower than the floor is reached
+  // (or the ring, taken as a metre below the floor), and lower the cells between onto a straight ramp from the
+  // floor to that exit, so the pit drains. Then settle again, since breaching one pit can expose another, until
+  // no shallow pit is left or thirty rounds are done. Deeper pits stay as lakes. Returns the carved heights and cuts.
+  function carve(cells, heightAt, rainAt, keepDeeper) {
+    const n = cells.length, hNow = cells.map(([q, r, s]) => heightAt(q, r, s)), cut = new Array(n).fill(0);
+    const idx = new Map(cells.map(([q, r, s], i) => [q + "," + r + "," + s, i]));
+    let S = null, rounds = 0, breached = 0;
+    for (; rounds < 30; rounds++) {
+      S = settle(cells, (q, r, s) => { const i = idx.get(q + "," + r + "," + s); return i !== undefined ? hNow[i] : heightAt(q, r, s); }, rainAt);
+      // a lake's depth is from sea level, as 7c's fresh capacity is; a hollow wholly under the sea is sea, not a lake
+      const shallow = S.lakes.filter(L => L.spill > 0 && L.spill - Math.max(L.floor, 0) <= keepDeeper && L.spill > L.floor + 1e-6);
+      if (!shallow.length) break;
+      let cutThisRound = 0;
+      for (const L of shallow) {
+        let floorCell = L.members[0]; for (const m of L.members) if (S.h[m] < S.h[floorCell]) floorCell = m;
+        const hFloor = S.h[floorCell], path = [floorCell]; let c = floorCell, exitH = null;
+        while (true) { c = S.parent[c]; if (c < 0) break; path.push(c); if (c >= n) { exitH = Math.min(S.h[c], hFloor - 1); break; } if (S.h[c] < hFloor) { exitH = S.h[c]; break; } }
+        if (exitH === null) continue;
+        const L2 = path.length - 1;
+        for (let k = 1; k < L2; k++) { const i = path[k], ramp = hFloor - (hFloor - exitH) * k / L2; if (hNow[i] > ramp) { cut[i] += hNow[i] - ramp; hNow[i] = ramp; cutThisRound++; } }
+        breached++;
+      }
+      if (!cutThisRound) break;
+    }
+    return { h: hNow, cut, settled: S, rounds, breached };
+  }
+  const RI_M = 3927, AREA_RI = Math.sqrt(3) / 2 * RI_M * RI_M;   // m² of one ri, flat to flat 3,927 m
+  const M3_PER_MM = AREA_RI / 1000;                               // m³ that 1 mm over a ri comes to
+  const VOLUME_RAMP = PRECIP_RAMP.map(([mm, c]) => [mm * M3_PER_MM / 1e6, c]);   // millions of m³
+  const noiseScene = document.getElementById("noiseScene"), heights4 = document.getElementById("heights4Scene"), section4 = document.getElementById("section4Scene"), octaveTable = document.getElementById("octaves"), facts4 = document.getElementById("facts4");
+  // ---- Step 5a: gullies on the step-4 surface, faded by slope and altitude. Everything a point needs is a
+  // function of position, seed and octave, never of the rung evaluating it.
+  const erosionAmp = (k, st) => st.erosion * 2 ** (-k * st.hurst);   // metres, the same H as the structure
+  const clamp01 = x => Math.max(0, Math.min(1, x));
+  const WINDOW_OCTAVES = 10;                                   // structure octaves the chō window carries: down to 2.5 chō
+  // The erosion frame is step 4's without the stretch; lattice units at octave k are cells of c ri.
+  function erosionFrame(centre, tangent, turn) {
+    const n = [-tangent[1], tangent[0]];
+    return {
+      toLattice: (p, c) => { const dx = p[0] - centre[0], dy = p[1] - centre[1]; return [turn * (dx * tangent[0] + dy * tangent[1]) / c, turn * (dx * n[0] + dy * n[1]) / c]; },
+      toWorld: (u, w, c) => [centre[0] + turn * c * (u * tangent[0] + w * n[0]), centre[1] + turn * c * (u * tangent[1] + w * n[1])],
+      offset: (du, dw, c) => [turn * c * (du * tangent[0] + dw * n[0]), turn * c * (du * tangent[1] + dw * n[1])],
+    };
+  }
+  // One octave of gullies: the three pivots round p, each with the base's downhill direction at the pivot by
+  // central differences a quarter cell apart, each laying cos stripes across its slope, S per cell; the lattice
+  // kernel blends them. Pivot directions are cached by octave and node, a pure function of both.
+  // `slopeAt(p)` is the slope the pivots read, in m per ri: the base's alone in 5a, the base's plus the
+  // coarser gullies' in 5b. `grad(p)` is this octave's own slope for the next octave to read, the video's
+  // straight gullies: a triangle wave of the same amplitude and spacing, so ±4·E·S/c across the slope by
+  // the sign of the sine, blended by the same kernel.
+  // `norm` (5d): each pivot's cos and sin are blended as a pair, a point on the unit circle; where the three
+  // pivots' stripes are out of phase the blended pair is shorter than 1 and the gullies wash out. Above the
+  // threshold `norm` the pair is divided back to length 1, so gullies keep their full swing; below it (near
+  // where ridges and creases join, where full normalising makes spikes) it is divided by the threshold
+  // instead, which joins continuously. norm = 1 is off.
+  function gullyOctave(slopeAt, frame, k, st, cache, amp, norm) {
+    const c = octaveLambda(k), S = st.stripes;
+    const pivot = (q, r, s) => {
+      const key = k + ":" + q + "," + r + "," + s; let d = cache.get(key);
+      if (!d) { const p = frame.toWorld((q - s) / 2, -r * ROW, c), g = slopeAt(p), m = Math.hypot(g[0], g[1]); d = m > 0 ? [g[0] / m, g[1] / m] : [1, 0]; cache.set(key, d); }
+      return d;
+    };
+    const corners = p => {
+      const [u, w] = frame.toLattice(p, c), out = [];
+      for (const cn of hexTriangle(u, w)) {
+        const wt = hexKernel(cn.dx * cn.dx + cn.dy * cn.dy); if (wt === 0) continue;
+        const d = pivot(cn.q, cn.r, cn.s), off = frame.offset(cn.dx, cn.dy, c);
+        const across = -off[0] * d[1] + off[1] * d[0];        // ri, across the pivot's slope
+        out.push({ wt, d, phi: 2 * Math.PI * S * across / c });
+      }
+      return out;
+    };
+    const pair = p => {
+      let cs = 0, sn = 0, wsum = 0;
+      for (const cn of corners(p)) { cs += cn.wt * Math.cos(cn.phi); sn += cn.wt * Math.sin(cn.phi); wsum += cn.wt; }
+      cs /= wsum; sn /= wsum;
+      const len = Math.hypot(cs, sn);
+      // divide by max(len, norm): full normalisation above the threshold, and a continuous join below it
+      // (a switch at the threshold put a step of up to 1/norm into the surface, which drew as sharp lines)
+      return { g: norm < 1 ? cs / Math.max(len, norm) : cs, len };
+    };
+    const g = p => pair(p).g;
+    const grad = p => {
+      let gx = 0, gy = 0, wsum = 0;
+      for (const cn of corners(p)) { const s = -Math.sign(Math.sin(cn.phi)) * amp * 4 * S / c; gx += cn.wt * s * -cn.d[1]; gy += cn.wt * s * cn.d[0]; wsum += cn.wt; }
+      return wsum > 0 ? [gx / wsum, gy / wsum] : [0, 0];
+    };
+    // the true slope of the cos stripes, −amp·sin φ·(2πS/c) across the slope, blended: smooth, for the mask
+    // (the straight version above flips sign at every ridge and crease, which the mask would draw as a line)
+    const gradSmooth = p => {
+      let gx = 0, gy = 0, wsum = 0;
+      for (const cn of corners(p)) { const s = -Math.sin(cn.phi) * amp * 2 * Math.PI * S / c; gx += cn.wt * s * -cn.d[1]; gy += cn.wt * s * cn.d[0]; wsum += cn.wt; }
+      return wsum > 0 ? [gx / wsum, gy / wsum] : [0, 0];
+    };
+    return { g, pair, grad, gradSmooth };
+  }
+  // The eroded surface. `fine` is the structure the rung itself carries; `baseAt(k)` is h₂ plus structure
+  // octaves 0…k, what octave k reads for its slopes and its target. Each octave adds E_k · (m·g + (1 − m)·t):
+  // m is the slope mask, and t the target flat ground fades to, read from the surface's own relief at the
+  // octave's scale: how far the point stands above the mean of its four neighbours a quarter cell away, in
+  // units of half this octave's structure swing, clamped to ±1. A plain gives 0, so nothing moves there; a
+  // full ridge of this octave gives +1 and a crease −1.
+  // With `feed`, each octave's pivots and mask read the base's slope plus the coarser octaves' gullies (5b);
+  // without it every octave reads the base alone (5a).
+  // With `stack` > 0 (5c), one running value R per point, the normalised shape the octaves so far produced
+  // (−1 crease … +1 ridge, 0 to start), steers each octave: its target is R where the ground is already a
+  // ridge or crease and the base's relief elsewhere, t = R + (1 − |R|)·t_rel; its mask is the slope's times
+  // (1 − |R|)^stack, so no new gullies sit on an existing ridge or in an existing crease; and R becomes the
+  // shape this octave produced, m·g + (1 − m)·t. With stack = 0 it is 5b exactly.
+  // `struct(p)` is every structure octave's value and exact gradient at p; `fineOctaves` is how many of them the
+  // rung itself carries in h; `tect(p)` is the step-2 height. Octave k's base slope is the tectonic gradient
+  // (central differences 0.05 ri apart on the smooth spline) plus the exact gradients of structure octaves 0…k;
+  // its relief target is the octave's own noise in units of its swing plus the tectonic surface's four-sample
+  // relief a quarter cell out, in units of half the swing. With `baseStrength` > 0 (the video's final form),
+  // the pivots read the base slope's direction at a fixed strength, that many times the straight-gully slope
+  // of the octave above, so the branching angle no longer depends on how steep the ground is.
+  function erodedSurface(struct, fineOctaves, tect, frame, st, first, count, feed, stack, norm, baseStrength) {
+    const cache = new Map(), octs = []; stack = stack || 0; norm = norm === undefined ? 1 : norm; baseStrength = baseStrength || 0;
+    const tectGrad = p => gradientOf(tect, p, 0.05);
+    for (let i = 0; i < count; i++) {
+      const k = first + i, c = octaveLambda(k), amp = erosionAmp(k, st), prior = feed ? octs.slice() : [];
+      // pivots read the straight-gully slope (the video's branching); the mask reads the smooth one
+      const priorGrad = p => { let gx = 0, gy = 0; for (const o of prior) { const q = o.grad(p); gx += q[0]; gy += q[1]; } return [gx, gy]; };
+      const priorGradSmooth = p => { let gx = 0, gy = 0; for (const o of prior) { const q = o.gradSmooth(p); gx += q[0]; gy += q[1]; } return [gx, gy]; };
+      const baseSlope = (p, S) => { const g = tectGrad(p); for (let j = 0; j <= k; j++) { g[0] += S.grads[j][0]; g[1] += S.grads[j][1]; } return g; };
+      const baseSlopeAt = p => baseSlope(p, struct(p));
+      const slopeAt = p => {
+        const g = baseSlope(p, struct(p)), q = priorGrad(p);
+        if (baseStrength > 0 && prior.length) { const mag = Math.hypot(g[0], g[1]), above = prior[prior.length - 1], want = baseStrength * 4 * above.amp * st.stripes / above.c; if (mag > 0) { g[0] *= want / mag; g[1] *= want / mag; } }
+        return [g[0] + q[0], g[1] + q[1]];
+      };
+      octs.push({ k, c, amp, swing: octaveAmp(k, st), priorGrad, priorGradSmooth, baseSlope, baseSlopeAt, slopeAt, ...gullyOctave(slopeAt, frame, k, st, cache, amp, norm) });
+    }
+    const parts = p => {
+      const S = struct(p), h0 = tect(p), tg = tectGrad(p);
+      let h = h0; for (let j = 0; j < fineOctaves; j++) h += S.vals[j];
+      let delta = 0, g0 = 0, m0 = 0, t0 = 0, R = 0, room = 1, mLast = 0, mSlopeLast = 0, len0 = 1;
+      octs.forEach((o, i) => {
+        const d = o.c / 4, q = o.priorGradSmooth(p);
+        let gx = tg[0] + q[0], gy = tg[1] + q[1]; for (let j = 0; j <= o.k; j++) { gx += S.grads[j][0]; gy += S.grads[j][1]; }
+        const sigma = Math.hypot(gx, gy) / RI_M;
+        const mSlope = 1 - (1 - clamp01(sigma / st.sigmaRef)) ** 2, pr = o.pair(p), g = pr.g;
+        if (i === 0) len0 = pr.len;
+        const tectRelief = h0 - (tect([p[0] + d, p[1]]) + tect([p[0] - d, p[1]]) + tect([p[0], p[1] + d]) + tect([p[0], p[1] - d])) / 4;
+        const tRel = o.swing > 0 ? Math.max(-1, Math.min(1, S.vals[o.k] / o.swing + tectRelief / (o.swing / 2))) : 0;
+        let m = mSlope, t = tRel;
+        if (stack > 0) { room = (1 - Math.abs(R)) ** stack; t = R + (1 - Math.abs(R)) * tRel; m = mSlope * room; }
+        const shape = m * g + (1 - m) * t;
+        delta += o.amp * shape; R = shape;
+        if (i === 0) { g0 = g; m0 = m; t0 = t; }
+        mLast = m; mSlopeLast = mSlope;
+      });
+      return { h: h + delta, delta, g: g0, m: m0, t: t0, room, mLast, mSlopeLast, len0 };
+    };
+    return { parts, at: p => parts(p).h, octaves: octs, pivots: cache, frame };
+  }
+  // How far the fed-forward slope turned an octave's pivots from the base's own slope: mean degrees over its nodes.
+  function pivotTurn(eroded, o) {
+    let sum = 0, n = 0;
+    for (const [key, d] of eroded.pivots) {
+      if (!key.startsWith(o.k + ":")) continue;
+      const [q, r, s] = key.slice(key.indexOf(":") + 1).split(",").map(Number), p = eroded.frame.toWorld((q - s) / 2, -r * ROW, o.c);
+      const g = o.baseSlopeAt(p), m = Math.hypot(g[0], g[1]); if (m === 0) continue;
+      sum += Math.acos(Math.max(-1, Math.min(1, (g[0] * d[0] + g[1] * d[1]) / m))) * 180 / Math.PI; n++;
+    }
+    return { mean: n ? sum / n : 0, n };
+  }
+  // How much a set of unit directions disagree: the circular spread, in degrees, of their headings taken
+  // modulo 180° (a stripe across a slope is the same stripe with the slope reversed).
+  function headingSpread(dirs) {
+    let x = 0, y = 0; for (const d of dirs) { const a = 2 * Math.atan2(d[1], d[0]); x += Math.cos(a); y += Math.sin(a); }
+    const R = Math.hypot(x, y) / (dirs.length || 1);
+    return { mean: ((Math.atan2(y, x) / 2) * 180 / Math.PI + 180) % 180, spread: Math.sqrt(Math.max(0, -2 * Math.log(Math.max(1e-9, R)))) / 2 * 180 / Math.PI };
+  }
+  const MASK_RAMP = [[0, [236, 234, 226]], [1, [70, 60, 45]]];
+  const WINDOW_RAMP = [[0, [95, 120, 85]], [0.5, [200, 180, 125]], [1, [250, 248, 240]]];
+  const gulliesScene = document.getElementById("gulliesScene"), maskScene = document.getElementById("maskScene"), heights5 = document.getElementById("heights5Scene"), facts5 = document.getElementById("facts5");
+  const windowBeforeScene = document.getElementById("windowBeforeScene"), windowAfterScene = document.getElementById("windowAfterScene");
+  const delta5bScene = document.getElementById("delta5bScene"), heights5b = document.getElementById("heights5bScene"), facts5b = document.getElementById("facts5b");
+  const window5aScene = document.getElementById("window5aScene"), window5bScene = document.getElementById("window5bScene");
+  const delta5cScene = document.getElementById("delta5cScene"), heights5c = document.getElementById("heights5cScene"), facts5c = document.getElementById("facts5c");
+  const window5bAgainScene = document.getElementById("window5bAgainScene"), window5cScene = document.getElementById("window5cScene");
+  const delta5dScene = document.getElementById("delta5dScene"), heights5d = document.getElementById("heights5dScene"), facts5d = document.getElementById("facts5d");
+  const window5cAgainScene = document.getElementById("window5cAgainScene"), window5dScene = document.getElementById("window5dScene");
+  const shareChartScene = document.getElementById("shareChartScene"), coastMapScene = document.getElementById("coastMapScene"), boxChartScene = document.getElementById("boxChartScene"), coastClusterScene = document.getElementById("coastClusterScene"), facts6 = document.getElementById("facts6");
+  // ---- Step 6 helpers: box counting. Points fall in square boxes of side s anchored at `origin`; N is the
+  // number of distinct boxes touched. D is minus the least-squares slope of log N against log s.
+  function boxCount(points, origin, sizes) {
+    return sizes.map(s => { const set = new Set(); for (const p of points) set.add(Math.floor((p[0] - origin[0]) / s) + "," + Math.floor((p[1] - origin[1]) / s)); return { s, n: set.size }; });
+  }
+  function fitD(counts) {
+    const xs = counts.map(c => Math.log(c.s)), ys = counts.map(c => Math.log(Math.max(1, c.n))), n = xs.length;
+    const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+    let sxy = 0, sxx = 0; for (let i = 0; i < n; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; }
+    return sxx > 0 ? { D: -sxy / sxx, b: my + (sxy / sxx) * mx } : { D: NaN, b: NaN };   // log N = b − D·log s
+  }
+  const COAST_FILL = { land: "var(--land)", sea: "var(--sea)", coast: "var(--fg)" };
+  // The window cluster: the picked ri and its six neighbours, each as its 1,296 chō (the same packing as the
+  // world's ri), drawn 170 px to the ri so the cluster fills the panel. The chō are batched into one path per
+  // shade, 64 shades plus the sea, so a panel is a few dozen elements rather than nine thousand.
+  const CLUSTER_SCALE = 560 / 3.3, CLUSTER_SHADES = 64;
+  function clusterCells(riCentres) { return riCentres.flatMap(rc => RI_CELLS.map(([q, r, s]) => [rc[0] + (q - s) / 72, rc[1] - r * ROW / 36])); }
+  function drawCluster(scene, cells, lo, hi, win, riCentres, label) {
+    scene.replaceChildren();
+    scene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    const V = p => ({ x: 280 + (p[0] - win.c[0]) * CLUSTER_SCALE, y: 280 - (p[1] - win.c[1]) * CLUSTER_SCALE });
+    const byShade = new Map();
+    for (const cell of cells) {
+      const key = cell.h <= 0 ? -1 : Math.round((CLUSTER_SHADES - 1) * (cell.h - lo) / ((hi - lo) || 1));
+      const d = "M" + RI_HEX.map(k => { const s = V([cell.c[0] + k[0] / 36, cell.c[1] + k[1] / 36]); return s.x.toFixed(1) + " " + s.y.toFixed(1); }).join("L") + "Z";
+      if (!byShade.has(key)) byShade.set(key, []); byShade.get(key).push(d);
+    }
+    for (const [key, ds] of byShade) scene.appendChild(el("path", { d: ds.join(""), fill: key < 0 ? "var(--sea)" : ramp(WINDOW_RAMP, key / (CLUSTER_SHADES - 1)), stroke: "none" }));
+    riCentres.forEach((rc, i) => scene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [rc[0] + k[0], rc[1] + k[1]]), V), fill: "none", stroke: "currentColor", "stroke-width": i === 0 ? 1.5 : 0.6, opacity: i === 0 ? 1 : 0.6 })));
+    for (let i = 0; i < 40; i++) scene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(WINDOW_RAMP, i / 39), stroke: "none" }));
+    scene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, lo.toFixed(0) + " m"));
+    scene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, hi.toFixed(0) + " m"));
+    scene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, label));
+  }
+  function heightRange(...sets) { let lo = Infinity, hi = -Infinity; for (const s of sets) for (const x of s) { if (x.h < lo) lo = x.h; if (x.h > hi) hi = x.h; } return [lo, hi]; }
+
+  function view(cx, cy, scale) { return p => ({ x: 280 + (p[0] - cx) * scale, y: 280 - (p[1] - cy) * scale }); }
+  const pts = (ps, f) => ps.map(p => { const s = f(p); return s.x + "," + s.y; }).join(" ");
+
+  function render() {
+    const T = [["start", performance.now()]], mark = name => T.push([name, performance.now()]);
+    const v = { theta: state.theta, inset: state.inset, R: R_RI, w: W_RI, A: ARC_DEG };
+    v.phi = -v.A / 2;                                 // the top tip of the centreline heads due north
+    const o = outline(v.R, v.A, v.w, v.phi);
+    const here = at(o, v.theta);
+    const centre = [here.p[0] - here.normal[0] * v.inset, here.p[1] - here.normal[1] * v.inset];
+    const corners = hexCorners(centre);
+
+    // Edge reading
+    const edges = [];
+    for (let k = 0; k < 6; k++) {
+      const a = corners[(k + 5) % 6], b = corners[k];
+      const crossings = [];
+      for (let i = 1; i < o.pts.length; i++) { const x = segCross(a, b, o.pts[i - 1], o.pts[i]); if (x) crossings.push(x); }
+      const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      edges.push({ name: EDGE_NAMES[k], a, b, crossings, kind: crossings.length ? "shore" : inside(o, mid) ? "land" : "sea" });
+    }
+    const seaN = edges.filter(e => e.kind === "sea").length, landN = edges.filter(e => e.kind === "land").length, shoreN = edges.filter(e => e.kind === "shore").length;
+    const crossings = edges.flatMap(e => e.crossings);
+
+    // Wide view: fit the whole banana
+    wide.replaceChildren();
+    const xs = o.pts.map(p => p[0]), ys = o.pts.map(p => p[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) + 60;
+    const W = view(cx, cy, 520 / span);
+    wide.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--sea)", stroke: "none" }));
+    wide.appendChild(el("polygon", { points: pts(o.pts, W), fill: "var(--land)", stroke: "currentColor", "stroke-width": 1.2 }));
+    // the centreline arc, and a north arrow at its top tip
+    { const ps = []; for (let i = 0; i <= 60; i++) { const a = -rad(v.A) / 2 + (i / 60) * rad(v.A); const x = v.R * Math.cos(a), y = v.R * Math.sin(a); const c = Math.cos(rad(v.phi)), s = Math.sin(rad(v.phi)); ps.push([x * c - y * s, x * s + y * c]); }
+      wide.appendChild(el("polyline", { points: pts(ps, W), stroke: "var(--mountain)", "stroke-width": 1, "stroke-dasharray": "4 4" }));
+      const tip = ps[ps.length - 1], t0 = W(tip), t1 = W([tip[0], tip[1] + 24]);
+      wide.appendChild(el("line", { x1: t0.x, y1: t0.y, x2: t1.x, y2: t1.y, stroke: "var(--mountain)", "stroke-width": 1.5 }));
+      wide.appendChild(el("text", { x: t1.x, y: t1.y - 4, "text-anchor": "middle", fill: "var(--mountain)", ...mono, "font-size": 10 }, "90°")); }
+    for (let deg = 0; deg < 360; deg += 30) {
+      const q = at(o, deg), s = W(q.p), out = W([q.p[0] + q.normal[0] * 14, q.p[1] + q.normal[1] * 14]);
+      wide.appendChild(el("line", { x1: s.x, y1: s.y, x2: out.x, y2: out.y, stroke: "var(--muted)" }));
+      wide.appendChild(el("text", { x: out.x + (out.x - s.x) * 0.9, y: out.y + (out.y - s.y) * 0.9 + 4, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, deg + "°"));
+    }
+    wide.appendChild(el("polygon", { points: pts(corners, W), fill: "var(--world)", "fill-opacity": 0.35, stroke: "var(--world)", "stroke-width": 1.5 }));
+    { const s = W(here.p); wide.appendChild(el("circle", { cx: s.x, cy: s.y, r: 3, fill: "var(--shore)", stroke: "none" })); }
+    wide.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "outline " + o.length.toFixed(0) + " ri round · 1° of θ = " + (o.length / 360).toFixed(2) + " ri · R " + v.R + ", w " + v.w + ", A " + v.A + "° · top tip heads north"));
+
+    // Near view: the world and its surroundings
+    near.replaceChildren();
+    const N = view(centre[0], centre[1], 520 / (WORLD * 2.2));
+    near.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--sea)", stroke: "none" }));
+    near.appendChild(el("polygon", { points: pts(o.pts, N), fill: "var(--land)", stroke: "currentColor", "stroke-width": 1.5 }));
+    for (const e of edges) {
+      const a = N(e.a), b = N(e.b);
+      const colour = e.kind === "shore" ? "var(--shore)" : e.kind === "land" ? "var(--mountain)" : "currentColor";
+      near.appendChild(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: colour, "stroke-width": e.kind === "sea" ? 2 : 4, opacity: e.kind === "sea" ? 0.5 : 1 }));
+      const m = N([(e.a[0] + e.b[0]) / 2, (e.a[1] + e.b[1]) / 2]), c = N(centre);
+      const lab = { x: m.x + (m.x - c.x) * 0.16, y: m.y + (m.y - c.y) * 0.16 + 4 };
+      near.appendChild(el("text", { x: lab.x, y: lab.y, "text-anchor": "middle", fill: colour, ...mono }, e.name + " · " + e.kind));
+    }
+    for (const x of crossings) { const s = N(x); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 5, fill: "var(--shore)", stroke: "var(--bg)", "stroke-width": 1.5 })); }
+    { const s = N(centre); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 4, fill: "var(--world)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y + 4, fill: "var(--world)", ...mono }, "origin")); }
+    { const s = N(here.p); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 3, fill: "var(--shore)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y - 6, fill: "var(--shore)", ...mono, "font-size": 10 }, "θ = " + v.theta.toFixed(1) + "°")); }
+    near.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "36 ri across · north up"));
+
+    facts.replaceChildren();
+    const row = (k, val, bad) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; if (bad) b.className = "bad"; d.append(a, b); facts.appendChild(d); };
+    row("sea edges", seaN + (seaN ? "  (" + edges.filter(e => e.kind === "sea").map(e => e.name).join(", ") + ")" : ""), seaN > 4);
+    row("land edges", landN + (landN ? "  (" + edges.filter(e => e.kind === "land").map(e => e.name).join(", ") + ")" : ""), landN > 4);
+    row("shore edges (crossed)", shoreN + (shoreN ? "  (" + edges.filter(e => e.kind === "shore").map(e => e.name).join(", ") + ")" : ""));
+    row("shore crossings", String(crossings.length), crossings.length !== 2 && crossings.length !== 0);
+    row("no more than four of either", seaN <= 4 && landN <= 4 ? "holds" : "broken", !(seaN <= 4 && landN <= 4));
+    row("world centre inside the banana", inside(o, centre) ? "yes" : "no: out to sea");
+
+    mark("step 1");
+    // ---- Step 2 drawings.
+    // The cross-section at the world's s, along the local normal through the world's centre.
+    section.replaceChildren();
+    const bc = bandCoords(centre, v), Hs = H(bc.s);
+    // a from −2.5 to 2.5 across, metres from −3,500 to 3,000 up; sea level is a line through the middle
+    const A_LO = -2.5, A_HI = 2.5, M_LO = -3500, M_HI = 3000;
+    const SX = x => 50 + ((x - A_LO) / (A_HI - A_LO)) * 480, SY = m => 30 + ((M_HI - m) / (M_HI - M_LO)) * 240;
+    section.appendChild(el("rect", { x: 50, y: 30, width: 480, height: 240, fill: "var(--cell)", stroke: "none" }));
+    for (let m = -3000; m <= 3000; m += 1000) { section.appendChild(el("line", { x1: 50, y1: SY(m), x2: 530, y2: SY(m), stroke: m === 0 ? "var(--shore)" : "var(--line)" })); section.appendChild(el("text", { x: 46, y: SY(m) + 4, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, m + " m")); }
+    { const ps = []; for (let i = 0; i <= 300; i++) { const a = A_LO + (i / 300) * (A_HI - A_LO); ps.push(SX(a) + "," + SY(Hs * f(a))); }
+      section.appendChild(el("polygon", { points: SX(A_LO) + "," + SY(M_LO) + " " + ps.join(" ") + " " + SX(A_HI) + "," + SY(M_LO), fill: "var(--land)", stroke: "none" }));
+      section.appendChild(el("polygon", { points: SX(A_LO) + "," + SY(0) + " " + SX(A_HI) + "," + SY(0) + " " + SX(A_HI) + "," + SY(M_LO) + " " + SX(A_LO) + "," + SY(M_LO), fill: "var(--sea)", "fill-opacity": 0.55, stroke: "none" }));
+      section.appendChild(el("polyline", { points: ps.join(" "), stroke: "var(--mountain)", "stroke-width": 2 })); }
+    // the world's span across the band: its centre at a_c, ±18 ri along the normal
+    { const aC = bc.a, halfSpan = 18 / (v.w / 2);
+      section.appendChild(el("rect", { x: SX(aC - halfSpan), y: 30, width: SX(aC + halfSpan) - SX(aC - halfSpan), height: 240, fill: "var(--world)", "fill-opacity": 0.12, stroke: "var(--world)", "stroke-dasharray": "4 3" }));
+      section.appendChild(el("text", { x: SX(aC), y: 24, "text-anchor": "middle", fill: "var(--world)", ...mono, "font-size": 10 }, "the world, 36 ri")); }
+    for (const [a, name] of [[-2, "basin"], [-1, "inner coast"], [0, "spine"], [1, "outer coast"], [2, "trench"]]) section.appendChild(el("text", { x: SX(a), y: 288, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, name + " · " + (a * v.w / 2 >= 0 ? "+" : "") + (a * v.w / 2).toFixed(0) + " ri"));
+    section.appendChild(el("text", { x: 530, y: 24, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, "s = " + bc.s.toFixed(2) + " · H(s) = " + Hs.toFixed(0) + " m"));
+
+    // The world's ri, coloured by height.
+    heights.replaceChildren();
+    const HV = view(centre[0], centre[1], 520 / (WORLD * 1.15));
+    heights.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let hMax = 0, hMin = 0, hSum = 0, landRi = 0;
+    for (const [q, r, s] of RI_CELLS) {
+      const c = riCentre(q, r, s, centre), h = height(c, v);
+      if (h > 0) { landRi++; hSum += h; hMax = Math.max(hMax, h); } else hMin = Math.min(hMin, h);
+      heights.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: heightColour(h), stroke: "none" }));
+    }
+    heights.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 2 }));
+    heights.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    heights.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, landRi + " ri on land of 1,296 · highest " + hMax.toFixed(0) + " m, deepest " + hMin.toFixed(0) + " m · land mean " + (landRi ? (hSum / landRi).toFixed(0) : 0) + " m"));
+
+    // The six edge profiles.
+    profiles.replaceChildren();
+    const edgeFacts = [];
+    for (const e of edges) {
+      const wrap = document.createElement("div");
+      const title = document.createElement("div"); title.className = "panel-title"; title.textContent = e.name + " · " + e.kind; wrap.appendChild(title);
+      const svg = el("svg", { viewBox: "0 0 200 120", role: "img", "aria-label": "height along the " + e.name + " edge" });
+      const g = el("g", { fill: "none", stroke: "currentColor" }); svg.appendChild(g); wrap.appendChild(svg); profiles.appendChild(wrap);
+      const PX = t => 28 + t * 166, PY = m => 10 + ((3000 - m) / 4000) * 90;    // −1,000 to 3,000 m
+      g.appendChild(el("rect", { x: 28, y: 10, width: 166, height: 90, fill: "var(--cell)", stroke: "none" }));
+      for (let m = -1000; m <= 3000; m += 1000) { g.appendChild(el("line", { x1: 28, y1: PY(m), x2: 194, y2: PY(m), stroke: m === 0 ? "var(--shore)" : "var(--line)" })); g.appendChild(el("text", { x: 25, y: PY(m) + 3, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 8 }, m / 1000 + "k")); }
+      const ps = []; let top = -Infinity, bottom = Infinity, prevH = null;
+      for (let i = 0; i <= 120; i++) {
+        const t = i / 120, p = [e.a[0] + (e.b[0] - e.a[0]) * t, e.a[1] + (e.b[1] - e.a[1]) * t];
+        const h = height(p, v);
+        top = Math.max(top, h); bottom = Math.min(bottom, h); ps.push(PX(t) + "," + PY(Math.max(-1000, h)));
+        if (prevH !== null && (h > 0) !== (prevH > 0)) g.appendChild(el("circle", { cx: PX(t), cy: PY(0), r: 3, fill: "var(--shore)", stroke: "none" }));
+        prevH = h;
+      }
+      g.appendChild(el("polygon", { points: PX(0) + "," + PY(-1000) + " " + ps.join(" ") + " " + PX(1) + "," + PY(-1000), fill: "var(--land)", stroke: "none" }));
+      g.appendChild(el("polygon", { points: PX(0) + "," + PY(0) + " " + PX(1) + "," + PY(0) + " " + PX(1) + "," + PY(-1000) + " " + PX(0) + "," + PY(-1000), fill: "var(--sea)", "fill-opacity": 0.55, stroke: "none" }));
+      g.appendChild(el("polyline", { points: ps.join(" "), stroke: e.kind === "sea" ? "var(--shore)" : "var(--mountain)", "stroke-width": 1.5 }));
+      g.appendChild(el("text", { x: 194, y: 112, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 8 }, "0 → 36 ri · " + bottom.toFixed(0) + " to " + top.toFixed(0) + " m"));
+      edgeFacts.push(e.name + " " + bottom.toFixed(0) + "…" + top.toFixed(0));
+    }
+    facts2.replaceChildren();
+    const row2 = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts2.appendChild(d); };
+    row2("spine height here, H(s)", Hs.toFixed(0) + " m ≈ " + Math.round(Hs / 0.15151).toLocaleString() + " layers");
+    row2("world centre: a across, s along", bc.a.toFixed(2) + ", " + bc.s.toFixed(2));
+    row2("height at the origin", height(centre, v).toFixed(0) + " m");
+    row2("edge ranges, m", edgeFacts.join(" · "));
+    { const coastPt = at(o, v.theta), gIn = gradient([coastPt.p[0] - coastPt.normal[0] * 0.5, coastPt.p[1] - coastPt.normal[1] * 0.5], v), slopeIn = Math.hypot(gIn[0], gIn[1]);
+      row2("slope just inland of the coast here", slopeIn.toFixed(1) + " m per ri: 100 m of height is " + (slopeIn > 0 ? (100 / slopeIn).toFixed(1) : "—") + " ri of coast"); }
+
+    mark("step 2");
+    // ---- Step 3 drawings: four maps of the world's ri.
+    const apexNorth = at(o, 0).p[1];
+    const cells = RI_CELLS.map(([q, r, s]) => { const c = riCentre(q, r, s, centre); const land = inside(o, c) && height(c, v) > 0; return { c, land, k: land ? climate(c, v, apexNorth) : null }; });
+    const maps = [
+      { key: "tMin", title: "coldest month mean, °C", ramp: TEMP_RAMP, unit: "°C", fmt: x => x.toFixed(1) },
+      { key: "tMean", title: "annual mean, °C", ramp: TEMP_RAMP, unit: "°C", fmt: x => x.toFixed(1) },
+      { key: "tMax", title: "warmest month mean, °C", ramp: TEMP_RAMP, unit: "°C", fmt: x => x.toFixed(1) },
+      { key: "precip", title: "precipitation, mm a year", ramp: PRECIP_RAMP, unit: "mm", fmt: x => x.toFixed(0) },
+    ];
+    climateGrid.replaceChildren();
+    const CV = view(centre[0], centre[1], 260 / (WORLD * 1.15));
+    const summary = [];
+    for (const m of maps) {
+      const wrap = document.createElement("div");
+      const title = document.createElement("div"); title.className = "panel-title"; title.textContent = m.title; wrap.appendChild(title);
+      const svg = el("svg", { viewBox: "0 0 280 280", role: "img", "aria-label": m.title + " over the world's ri" });
+      const g = el("g", { fill: "none", stroke: "currentColor" }); svg.appendChild(g); wrap.appendChild(svg); climateGrid.appendChild(wrap);
+      let lo = Infinity, hi = -Infinity, sum = 0, n = 0;
+      for (const cell of cells) {
+        const val = cell.land ? cell.k[m.key] : null;
+        if (val !== null) { lo = Math.min(lo, val); hi = Math.max(hi, val); sum += val; n++; }
+        g.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [cell.c[0] + k[0], cell.c[1] + k[1]]), p => { const s = CV(p); return { x: s.x - 140, y: s.y - 140 }; }), fill: val === null ? "var(--sea)" : ramp(m.ramp, val), stroke: "none" }));
+      }
+      g.appendChild(el("polyline", { points: pts(o.pts, p => { const s = CV(p); return { x: s.x - 140, y: s.y - 140 }; }), stroke: "var(--shore)", "stroke-width": 1.5 }));
+      g.appendChild(el("polygon", { points: pts(corners, p => { const s = CV(p); return { x: s.x - 140, y: s.y - 140 }; }), fill: "none", stroke: "var(--world)", "stroke-width": 1.2 }));
+      // a legend strip
+      for (let i = 0; i < 40; i++) { const x = m.ramp[0][0] + (m.ramp[m.ramp.length - 1][0] - m.ramp[0][0]) * (i / 39); g.appendChild(el("rect", { x: 8 + i * 3, y: 266, width: 3, height: 6, fill: ramp(m.ramp, x), stroke: "none" })); }
+      g.appendChild(el("text", { x: 8, y: 262, fill: "var(--muted)", ...mono, "font-size": 9 }, m.fmt(m.ramp[0][0]) + " " + m.unit));
+      g.appendChild(el("text", { x: 128, y: 262, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, m.fmt(m.ramp[m.ramp.length - 1][0]) + " " + m.unit));
+      g.appendChild(el("text", { x: 272, y: 274, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, n ? m.fmt(lo) + " to " + m.fmt(hi) + ", mean " + m.fmt(sum / n) : "no land"));
+      summary.push(m.title.split(",")[0] + ": " + (n ? m.fmt(lo) + " … " + m.fmt(hi) : "—"));
+    }
+    facts3.replaceChildren();
+    const row3 = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts3.appendChild(d); };
+    const kc = climate(centre, v, apexNorth);
+    row3("at the origin: coldest / mean / warmest month", kc.tMin.toFixed(1) + " / " + kc.tMean.toFixed(1) + " / " + kc.tMax.toFixed(1) + " °C");
+    row3("at the origin: precipitation", kc.precip.toFixed(0) + " mm");
+    row3("across the world's land ri", summary.join(" · "));
+
+    mark("step 3");
+    // ---- Step 4 drawings: the noise, the world after it, the section before and after, the ladder.
+    const tangent = [-here.normal[1], here.normal[0]];          // the outline's tangent at θ: the arc's grain here
+    // Which way the field leans across the arc: its first moment along the inward normal over the world's ri.
+    // If the heavy side is seaward, turn the lattice half a circle so it is inland.
+    const inward = p => -((p[0] - centre[0]) * here.normal[0] + (p[1] - centre[1]) * here.normal[1]);
+    const lean = field => RI_CELLS.reduce((m, [q, r, s]) => { const c = riCentre(q, r, s, centre); return m + field(c) * inward(c); }, 0);
+    const seeded = structureField(centre, tangent, state, RI_OCTAVES, 1);
+    const turned = lean(seeded) < 0;
+    const noise = turned ? structureField(centre, tangent, state, RI_OCTAVES, -1) : seeded;
+    let inMean = 0, inN = 0, outMean = 0, outN = 0;
+    for (const [q, r, s] of RI_CELLS) { const c = riCentre(q, r, s, centre), n = noise(c); if (inward(c) > 0) { inMean += n; inN++; } else { outMean += n; outN++; } }
+    inMean /= inN || 1; outMean /= outN || 1;
+    const height4 = p => height(p, v) + noise(p);
+    const ampTotal = Array.from({ length: RI_OCTAVES }, (_, k) => octaveAmp(k, state)).reduce((a, b) => a + b, 0);
+
+    noiseScene.replaceChildren();
+    noiseScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let nMin = Infinity, nMax = -Infinity;
+    for (const [q, r, s] of RI_CELLS) {
+      const c = riCentre(q, r, s, centre), n = noise(c);
+      nMin = Math.min(nMin, n); nMax = Math.max(nMax, n);
+      noiseScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: ampTotal > 0 ? ramp(NOISE_RAMP, n / ampTotal) : "var(--cell)", stroke: "none" }));
+    }
+    noiseScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    { const a = HV([centre[0] - tangent[0] * 16, centre[1] - tangent[1] * 16]), b = HV([centre[0] + tangent[0] * 16, centre[1] + tangent[1] * 16]);
+      noiseScene.appendChild(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "6 4" }));
+      noiseScene.appendChild(el("text", { x: b.x, y: b.y - 6, "text-anchor": "middle", fill: "var(--shore)", ...mono, "font-size": 10 }, "along the arc")); }
+    for (let i = 0; i < 40; i++) noiseScene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(NOISE_RAMP, -1 + 2 * i / 39), stroke: "none" }));
+    noiseScene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, "−" + ampTotal.toFixed(0) + " m"));
+    noiseScene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, "+" + ampTotal.toFixed(0) + " m"));
+    noiseScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, "over the world's ri: " + nMin.toFixed(0) + " to " + nMax.toFixed(0) + " m"));
+
+    heights4.replaceChildren();
+    heights4.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let hMax4 = 0, hMin4 = 0, landRi4 = 0;
+    for (const [q, r, s] of RI_CELLS) {
+      const c = riCentre(q, r, s, centre), h = height4(c);
+      if (h > 0) { landRi4++; hMax4 = Math.max(hMax4, h); } else hMin4 = Math.min(hMin4, h);
+      heights4.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: heightColour(h), stroke: "none" }));
+    }
+    heights4.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    heights4.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    heights4.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, landRi4 + " ri above sea level of 1,296 · highest " + hMax4.toFixed(0) + " m, deepest " + hMin4.toFixed(0) + " m"));
+
+    // The section along the local normal through the world's centre, evaluated point by point this time.
+    section4.replaceChildren();
+    section4.appendChild(el("rect", { x: 50, y: 30, width: 480, height: 240, fill: "var(--cell)", stroke: "none" }));
+    for (let m = -3000; m <= 3000; m += 1000) { section4.appendChild(el("line", { x1: 50, y1: SY(m), x2: 530, y2: SY(m), stroke: m === 0 ? "var(--shore)" : "var(--line)" })); section4.appendChild(el("text", { x: 46, y: SY(m) + 4, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, m + " m")); }
+    { const hw = v.w / 2, along = a => [here.p[0] + here.normal[0] * (a - 1) * hw, here.p[1] + here.normal[1] * (a - 1) * hw];
+      const before = [], after = [];
+      for (let i = 0; i <= 480; i++) { const a = A_LO + (i / 480) * (A_HI - A_LO), p = along(a); before.push(SX(a) + "," + SY(height(p, v))); after.push(SX(a) + "," + SY(height4(p))); }
+      section4.appendChild(el("polygon", { points: SX(A_LO) + "," + SY(M_LO) + " " + after.join(" ") + " " + SX(A_HI) + "," + SY(M_LO), fill: "var(--land)", stroke: "none" }));
+      section4.appendChild(el("polygon", { points: SX(A_LO) + "," + SY(0) + " " + SX(A_HI) + "," + SY(0) + " " + SX(A_HI) + "," + SY(M_LO) + " " + SX(A_LO) + "," + SY(M_LO), fill: "var(--sea)", "fill-opacity": 0.55, stroke: "none" }));
+      section4.appendChild(el("polyline", { points: before.join(" "), stroke: "var(--mountain)", "stroke-width": 1.5, "stroke-dasharray": "5 3" }));
+      section4.appendChild(el("polyline", { points: after.join(" "), stroke: "currentColor", "stroke-width": 1.5 }));
+      const aC = bc.a, halfSpan = 18 / hw;
+      section4.appendChild(el("rect", { x: SX(aC - halfSpan), y: 30, width: SX(aC + halfSpan) - SX(aC - halfSpan), height: 240, fill: "var(--world)", "fill-opacity": 0.12, stroke: "var(--world)", "stroke-dasharray": "4 3" }));
+      section4.appendChild(el("text", { x: SX(aC), y: 24, "text-anchor": "middle", fill: "var(--world)", ...mono, "font-size": 10 }, "the world, 36 ri")); }
+    for (const [a, name] of [[-2, "basin"], [-1, "inner coast"], [0, "spine"], [1, "outer coast"], [2, "trench"]]) section4.appendChild(el("text", { x: SX(a), y: 288, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, name + " · " + (a * v.w / 2 >= 0 ? "+" : "") + (a * v.w / 2).toFixed(0) + " ri"));
+    section4.appendChild(el("text", { x: 530, y: 24, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, "along the normal through the origin · noise laid in the world's frame"));
+
+    // The octave ladder, from the world's width down past the chō.
+    octaveTable.replaceChildren();
+    { const head = document.createElement("tr");
+      for (const t of ["octave", "wavelength, ri", "in the ladder", "structure A_k, m", "layers", "gullies E_k, m"]) { const th = document.createElement("th"); th.textContent = t; head.appendChild(th); }
+      octaveTable.appendChild(head);
+      for (let k = 0; k < LADDER_ROWS; k++) {
+        const lambda = octaveLambda(k), amp = octaveAmp(k, state), tr = document.createElement("tr");
+        tr.className = k < RI_OCTAVES ? "drawn" : "later";
+        const inLadder = lambda >= 1 ? lambda.toFixed(2) + " ri" : lambda * 36 >= 1 ? (lambda * 36).toFixed(2) + " chō" : (lambda * 360).toFixed(1) + " decichō";
+        const ek = k >= state.firstOctave && k < state.firstOctave + state.octaves5 ? erosionAmp(k, state).toFixed(1) : "—";
+        for (const t of [String(k) + (k < RI_OCTAVES ? " · drawn" : ""), lambda.toFixed(3), inLadder, amp.toFixed(1), (amp / 0.15151).toFixed(1), ek]) { const td = document.createElement("td"); td.textContent = t; tr.appendChild(td); }
+        octaveTable.appendChild(tr);
+      } }
+
+    facts4.replaceChildren();
+    const row4 = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts4.appendChild(d); };
+    row4("ri above sea level, step 2 → step 4", landRi + " → " + landRi4 + " of 1,296 (" + (100 * landRi / 1296).toFixed(0) + "% → " + (100 * landRi4 / 1296).toFixed(0) + "%)");
+    row4("height at the origin, step 2 → step 4", height(centre, v).toFixed(0) + " → " + height4(centre).toFixed(0) + " m");
+    row4("noise over the world's ri", nMin.toFixed(0) + " to " + nMax.toFixed(0) + " m, of a possible ±" + ampTotal.toFixed(0));
+    row4("heavy side", "inland, " + (turned ? "lattice turned 180°" : "as seeded") + " · mean inland " + (inMean >= 0 ? "+" : "") + inMean.toFixed(0) + " m, seaward " + (outMean >= 0 ? "+" : "") + outMean.toFixed(0) + " m");
+    row4("the arc's grain here", "heading " + ((Math.atan2(tangent[1], tangent[0]) * 180 / Math.PI + 360) % 180).toFixed(0) + "° from east · lattice " + (LAMBDA_0 * state.stretch).toFixed(0) + " × " + LAMBDA_0 + " ri at octave 0");
+    { const cp = at(o, v.theta), gc = gradient([cp.p[0] - cp.normal[0] * 0.5, cp.p[1] - cp.normal[1] * 0.5], v), slopeCoast = Math.max(0.1, Math.hypot(gc[0], gc[1])), amp12 = state.amp * (12 / LAMBDA_0) ** state.hurst;
+      row4("amplitude at a 12-ri wavelength", amp12.toFixed(0) + " m: on the plain at " + slopeCoast.toFixed(1) + " m per ri that is " + (amp12 / slopeCoast).toFixed(0) + " ri of coast"); }
+
+    mark("step 4");
+    // ---- Step 5a drawings: the gullies, the mask, the world after, one ri at chō resolution.
+    const turn5 = turned ? -1 : 1, frame5 = erosionFrame(centre, tangent, turn5);
+    // one structure evaluation per point serves h and every erosion octave's base: K octaves, enough for the
+    // window's structure and for the finest erosion octave asked for
+    const structK = Math.max(WINDOW_OCTAVES, RI_OCTAVES, state.firstOctave + state.octaves5);
+    const struct5 = structureOctaves(centre, tangent, state, structK, turn5), tect = p => height(p, v);
+    const eroded = erodedSurface(struct5, RI_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, false);
+    const height5 = eroded.at;
+    const parts5 = RI_CELLS.map(([q, r, s]) => { const c = riCentre(q, r, s, centre); return { c, ...eroded.parts(c) }; });
+    const firstOct = eroded.octaves[0];
+    const hexAt = (c, scale) => pts(RI_HEX.map(k => [c[0] + k[0] * scale, c[1] + k[1] * scale]), HV);
+    gulliesScene.replaceChildren();
+    gulliesScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    for (const p of parts5) gulliesScene.appendChild(el("polygon", { points: hexAt(p.c, 1), fill: ramp(NOISE_RAMP, p.g), stroke: "none" }));
+    gulliesScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    gulliesScene.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "octave " + firstOct.k + " · cells " + firstOct.c.toFixed(2) + " ri · stripes " + (firstOct.c / state.stripes).toFixed(2) + " ri apart · pivots on the hex lattice"));
+    maskScene.replaceChildren();
+    maskScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let maskOn = 0;
+    for (const p of parts5) { if (p.m > 0.5) maskOn++; maskScene.appendChild(el("polygon", { points: hexAt(p.c, 1), fill: ramp(MASK_RAMP, p.m), stroke: "none" })); }
+    maskScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    maskScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    maskScene.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "full erosion at a " + (state.sigmaRef * 100).toFixed(0) + "% slope · " + maskOn + " ri keep more than half their gullies"));
+    // the window ri: the ri whose centre is nearest the point `window` ri inland of the origin along the normal
+    mapCentre = centre;
+    let win = null;
+    if (state.windowQRS) win = { q: state.windowQRS[0], r: state.windowQRS[1], s: state.windowQRS[2], c: riCentre(state.windowQRS[0], state.windowQRS[1], state.windowQRS[2], centre) };
+    else { const wp = [centre[0] - here.normal[0] * WINDOW_DEFAULT_INLAND, centre[1] - here.normal[1] * WINDOW_DEFAULT_INLAND]; let winD = Infinity;
+      for (const [q, r, s] of RI_CELLS) { const c = riCentre(q, r, s, centre), d = Math.hypot(c[0] - wp[0], c[1] - wp[1]); if (d < winD) { winD = d; win = { q, r, s, c }; } } }
+    heights5.replaceChildren();
+    heights5.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let landRi5 = 0, dMin = Infinity, dMax = -Infinity, dAbs = 0, dAbsN = 0;
+    for (const p of parts5) {
+      if (p.h > 0) { landRi5++; dAbs += Math.abs(p.delta); dAbsN++; }
+      dMin = Math.min(dMin, p.delta); dMax = Math.max(dMax, p.delta);
+      heights5.appendChild(el("polygon", { points: hexAt(p.c, 1), fill: heightColour(p.h), stroke: "none" }));
+    }
+    heights5.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    heights5.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    heights5.appendChild(el("polygon", { points: hexAt(win.c, 1), fill: "none", stroke: "currentColor", "stroke-width": 2 }));
+    heights5.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, landRi5 + " ri above sea level of 1,296 · window ri (" + win.q + ", " + win.r + ", " + win.s + ") outlined"));
+    mark("5a maps");
+    facts5.replaceChildren();
+    const row5 = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts5.appendChild(d); };
+    row5("first octave", firstOct.k + " · cells " + firstOct.c.toFixed(2) + " ri · stripes " + (firstOct.c / state.stripes).toFixed(2) + " ri · E = " + firstOct.amp.toFixed(0) + " m ≈ " + Math.round(firstOct.amp / 0.15151).toLocaleString() + " layers");
+    row5("ri above sea level, step 4 → 5a", landRi4 + " → " + landRi5 + " of 1,296 (" + (100 * landRi4 / 1296).toFixed(0) + "% → " + (100 * landRi5 / 1296).toFixed(0) + "%)");
+    { const o5 = eroded.parts(centre); row5("at the origin", "m " + o5.m.toFixed(2) + ", t " + o5.t.toFixed(2) + " → " + (o5.delta >= 0 ? "+" : "") + o5.delta.toFixed(0) + " m: " + height4(centre).toFixed(0) + " → " + o5.h.toFixed(0) + " m"); }
+    row5("erosion over the world's ri", dMin.toFixed(0) + " to " + (dMax >= 0 ? "+" : "") + dMax.toFixed(0) + " m · mean |Δ| on land " + (dAbsN ? dAbs / dAbsN : 0).toFixed(0) + " m");
+    { const dirs = [...eroded.pivots.entries()].filter(([k]) => k.startsWith(firstOct.k + ":")).map(([, d]) => d), hs = headingSpread(dirs);
+      row5("pivots at the first octave", dirs.length + " used · downhill headings " + hs.mean.toFixed(0) + "° ± " + hs.spread.toFixed(0) + "° (mod 180°): " + (hs.spread < 15 ? "nearly all agree, so the stripes join into one comb" : hs.spread < 40 ? "some disagreement, the stripes bend and break" : "widely spread")); }
+    // ---- Step 5b drawings: the same octaves with the slope fed forward.
+    const eroded5b = erodedSurface(struct5, RI_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, 0, 1, state.baseStrength);
+    const height5b = eroded5b.at;
+    const parts5b = RI_CELLS.map(([q, r, s]) => { const c = riCentre(q, r, s, centre); return { c, ...eroded5b.parts(c) }; });
+    const ampTotal5 = eroded5b.octaves.reduce((a, o) => a + o.amp, 0);
+    delta5bScene.replaceChildren();
+    delta5bScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let landRi5b = 0, dMin5b = Infinity, dMax5b = -Infinity, dAbs5b = 0, dAbsN5b = 0;
+    for (const p of parts5b) {
+      if (p.h > 0) { landRi5b++; dAbs5b += Math.abs(p.delta); dAbsN5b++; }
+      dMin5b = Math.min(dMin5b, p.delta); dMax5b = Math.max(dMax5b, p.delta);
+      delta5bScene.appendChild(el("polygon", { points: hexAt(p.c, 1), fill: ampTotal5 > 0 ? ramp(NOISE_RAMP, p.delta / ampTotal5) : "var(--cell)", stroke: "none" }));
+    }
+    delta5bScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    delta5bScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    for (let i = 0; i < 40; i++) delta5bScene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(NOISE_RAMP, -1 + 2 * i / 39), stroke: "none" }));
+    delta5bScene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, "−" + ampTotal5.toFixed(0) + " m"));
+    delta5bScene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, "+" + ampTotal5.toFixed(0) + " m"));
+    delta5bScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, "octaves " + state.firstOctave + " to " + (state.firstOctave + state.octaves5 - 1) + " · " + dMin5b.toFixed(0) + " to " + (dMax5b >= 0 ? "+" : "") + dMax5b.toFixed(0) + " m"));
+    heights5b.replaceChildren();
+    heights5b.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    for (const p of parts5b) heights5b.appendChild(el("polygon", { points: hexAt(p.c, 1), fill: heightColour(p.h), stroke: "none" }));
+    heights5b.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    heights5b.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    heights5b.appendChild(el("polygon", { points: hexAt(win.c, 1), fill: "none", stroke: "currentColor", "stroke-width": 2 }));
+    heights5b.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, landRi5b + " ri above sea level of 1,296 · window ri (" + win.q + ", " + win.r + ", " + win.s + ") outlined"));
+    mark("5b maps");
+    facts5b.replaceChildren();
+    const row5b = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts5b.appendChild(d); };
+    row5b("octaves", eroded5b.octaves.map(o => o.k + " (" + o.c.toFixed(2) + " ri, E " + o.amp.toFixed(0) + " m)").join(" · "));
+    row5b("ri above sea level, step 4 → 5b", landRi4 + " → " + landRi5b + " of 1,296 (" + (100 * landRi4 / 1296).toFixed(0) + "% → " + (100 * landRi5b / 1296).toFixed(0) + "%)");
+    row5b("erosion over the world's ri", dMin5b.toFixed(0) + " to " + (dMax5b >= 0 ? "+" : "") + dMax5b.toFixed(0) + " m · mean |Δ| on land " + (dAbsN5b ? dAbs5b / dAbsN5b : 0).toFixed(0) + " m");
+    for (const o of eroded5b.octaves.slice(1)) { const t = pivotTurn(eroded5b, o); row5b("octave " + o.k + " pivots turned by the gullies above", t.mean.toFixed(0) + "° on average over " + t.n + " nodes"); }
+    if (eroded5b.octaves.length < 2) row5b("pivots turned", "one octave: nothing to feed forward yet; raise the octaves slider");
+    // ---- Step 5c drawings: 5b with the stacking.
+    const eroded5c = erodedSurface(struct5, RI_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, 1, state.baseStrength);
+    const height5c = eroded5c.at;
+    const parts5c = RI_CELLS.map(([q, r, s]) => { const c = riCentre(q, r, s, centre); return { c, ...eroded5c.parts(c) }; });
+    delta5cScene.replaceChildren();
+    delta5cScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let landRi5c = 0, dMin5c = Infinity, dMax5c = -Infinity, dAbs5c = 0, dAbsN5c = 0, roomSum = 0, roomN = 0, closed = 0;
+    for (const p of parts5c) {
+      if (p.h > 0) { landRi5c++; dAbs5c += Math.abs(p.delta); dAbsN5c++; if (p.mSlopeLast > 0.5) { roomSum += p.room; roomN++; if (p.mLast < p.mSlopeLast / 2) closed++; } }
+      dMin5c = Math.min(dMin5c, p.delta); dMax5c = Math.max(dMax5c, p.delta);
+      delta5cScene.appendChild(el("polygon", { points: hexAt(p.c, 1), fill: ampTotal5 > 0 ? ramp(NOISE_RAMP, p.delta / ampTotal5) : "var(--cell)", stroke: "none" }));
+    }
+    delta5cScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    delta5cScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    for (let i = 0; i < 40; i++) delta5cScene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(NOISE_RAMP, -1 + 2 * i / 39), stroke: "none" }));
+    delta5cScene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, "−" + ampTotal5.toFixed(0) + " m"));
+    delta5cScene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, "+" + ampTotal5.toFixed(0) + " m"));
+    delta5cScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, "p = " + state.stacking.toFixed(1) + " · " + dMin5c.toFixed(0) + " to " + (dMax5c >= 0 ? "+" : "") + dMax5c.toFixed(0) + " m"));
+    heights5c.replaceChildren();
+    heights5c.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    for (const p of parts5c) heights5c.appendChild(el("polygon", { points: hexAt(p.c, 1), fill: heightColour(p.h), stroke: "none" }));
+    heights5c.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    heights5c.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    heights5c.appendChild(el("polygon", { points: hexAt(win.c, 1), fill: "none", stroke: "currentColor", "stroke-width": 2 }));
+    heights5c.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, landRi5c + " ri above sea level of 1,296 · window ri (" + win.q + ", " + win.r + ", " + win.s + ") outlined"));
+    mark("5c maps");
+    facts5c.replaceChildren();
+    const row5c = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts5c.appendChild(d); };
+    row5c("ri above sea level, step 4 → 5c", landRi4 + " → " + landRi5c + " of 1,296 (" + (100 * landRi4 / 1296).toFixed(0) + "% → " + (100 * landRi5c / 1296).toFixed(0) + "%)");
+    row5c("erosion over the world's ri, 5b → 5c", "mean |Δ| on land " + (dAbsN5b ? dAbs5b / dAbsN5b : 0).toFixed(0) + " → " + (dAbsN5c ? dAbs5c / dAbsN5c : 0).toFixed(0) + " m · range " + dMin5c.toFixed(0) + " to " + (dMax5c >= 0 ? "+" : "") + dMax5c.toFixed(0) + " m");
+    row5c("room left for the last octave, on sloping land", roomN ? (100 * roomSum / roomN).toFixed(0) + "% of its slope mask on average over " + roomN + " ri · the stacking halved it or more on " + closed + " of them" : "no sloping land ri");
+    // ---- Step 5d drawings: 5c with the blended pair normalised.
+    const eroded5d = erodedSurface(struct5, RI_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, state.normAbove, state.baseStrength);
+    const height5d = eroded5d.at;
+    const parts5d = RI_CELLS.map(([q, r, s]) => { const c = riCentre(q, r, s, centre); return { c, ...eroded5d.parts(c) }; });
+    delta5dScene.replaceChildren();
+    delta5dScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let landRi5d = 0, dMin5d = Infinity, dMax5d = -Infinity, dAbs5d = 0, dAbsN5d = 0, lenSum = 0, lenN = 0, lifted = 0, left = 0;
+    for (const p of parts5d) {
+      if (p.h > 0) { landRi5d++; dAbs5d += Math.abs(p.delta); dAbsN5d++; if (p.mSlopeLast > 0.5) { lenSum += p.len0; lenN++; if (p.len0 > state.normAbove && state.normAbove < 1) lifted++; else left++; } }
+      dMin5d = Math.min(dMin5d, p.delta); dMax5d = Math.max(dMax5d, p.delta);
+      delta5dScene.appendChild(el("polygon", { points: hexAt(p.c, 1), fill: ampTotal5 > 0 ? ramp(NOISE_RAMP, p.delta / ampTotal5) : "var(--cell)", stroke: "none" }));
+    }
+    delta5dScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    delta5dScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    for (let i = 0; i < 40; i++) delta5dScene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(NOISE_RAMP, -1 + 2 * i / 39), stroke: "none" }));
+    delta5dScene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, "−" + ampTotal5.toFixed(0) + " m"));
+    delta5dScene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, "+" + ampTotal5.toFixed(0) + " m"));
+    delta5dScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, "normalise above " + (state.normAbove >= 1 ? "off" : state.normAbove.toFixed(2)) + " · " + dMin5d.toFixed(0) + " to " + (dMax5d >= 0 ? "+" : "") + dMax5d.toFixed(0) + " m"));
+    heights5d.replaceChildren();
+    heights5d.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    for (const p of parts5d) heights5d.appendChild(el("polygon", { points: hexAt(p.c, 1), fill: heightColour(p.h), stroke: "none" }));
+    heights5d.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    heights5d.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    heights5d.appendChild(el("polygon", { points: hexAt(win.c, 1), fill: "none", stroke: "currentColor", "stroke-width": 2 }));
+    heights5d.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, landRi5d + " ri above sea level of 1,296 · window ri (" + win.q + ", " + win.r + ", " + win.s + ") outlined"));
+    mark("5d maps");
+    facts5d.replaceChildren();
+    const row5d = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts5d.appendChild(d); };
+    row5d("ri above sea level, step 4 → 5d", landRi4 + " → " + landRi5d + " of 1,296 (" + (100 * landRi4 / 1296).toFixed(0) + "% → " + (100 * landRi5d / 1296).toFixed(0) + "%)");
+    row5d("erosion over the world's ri, 5c → 5d", "mean |Δ| on land " + (dAbsN5c ? dAbs5c / dAbsN5c : 0).toFixed(0) + " → " + (dAbsN5d ? dAbs5d / dAbsN5d : 0).toFixed(0) + " m · range " + dMin5d.toFixed(0) + " to " + (dMax5d >= 0 ? "+" : "") + dMax5d.toFixed(0) + " m");
+    row5d("how much the pivots agreed, first octave, sloping land", lenN ? "blended pair length " + (lenSum / lenN).toFixed(2) + " on average over " + lenN + " ri · normalised on " + lifted + ", left alone on " + left : "no sloping land ri");
+    // ---- Phase two, on a timeout so the maps above are on screen first: the four windows, then step 6,
+    // then the drainage in a third phase. A render that starts in the meantime cancels what has not run.
+    const runId = ++renderRun;
+    setTimeout(() => { if (runId !== renderRun) return;
+    // the windows: the picked ri and its six neighbours as their chō, one pair per erosion substep, on shared shade scales
+    const fineW = p => { const S = struct5(p); let h = tect(p); for (let j = 0; j < WINDOW_OCTAVES; j++) h += S.vals[j]; return h; };
+    const erodedW = erodedSurface(struct5, WINDOW_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, false);
+    const clusterCentres = [[win.q, win.r, win.s], ...NEIGH.map(([dq, dr, ds]) => [win.q + dq, win.r + dr, win.s + ds])].map(([q, r, s]) => riCentre(q, r, s, centre));
+    const choCells = clusterCells(clusterCentres);
+    const choBefore = choCells.map(c => ({ c, h: fineW(c) })), choAfter = choCells.map(c => ({ c, h: erodedW.at(c) }));
+    const [wLo, wHi] = heightRange(choBefore, choAfter);
+    drawCluster(windowBeforeScene, choBefore, wLo, wHi, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · before · 1 chō ≈ 109 m");
+    drawCluster(windowAfterScene, choAfter, wLo, wHi, win, clusterCentres, "after 5a · " + state.octaves5 + " gully octave" + (state.octaves5 > 1 ? "s" : ""));
+    { const n = choBefore.length, bMean = choBefore.reduce((a, x) => a + x.h, 0) / n, aMean = choAfter.reduce((a, x) => a + x.h, 0) / n, [b0, b1] = heightRange(choBefore), [a0, a1] = heightRange(choAfter);
+      row5("window round ri (" + win.q + ", " + win.r + ", " + win.s + ")" + (state.windowQRS ? ", picked" : ", 12 ri inland by default; click a ri on any step-5 map"), "mean " + bMean.toFixed(0) + " → " + aMean.toFixed(0) + " m · relief " + (b1 - b0).toFixed(0) + " → " + (a1 - a0).toFixed(0) + " m over " + n.toLocaleString() + " chō"); }
+    const erodedW5b = erodedSurface(struct5, WINDOW_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, 0, 1, state.baseStrength);
+    const choAfter5b = choCells.map(c => ({ c, h: erodedW5b.at(c) }));
+    const [wLo2, wHi2] = heightRange(choAfter, choAfter5b);
+    drawCluster(window5aScene, choAfter, wLo2, wHi2, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5a");
+    drawCluster(window5bScene, choAfter5b, wLo2, wHi2, win, clusterCentres, "after 5b · 1 chō ≈ 109 m");
+    { const [a0, a1] = heightRange(choAfter), [b0, b1] = heightRange(choAfter5b);
+      row5b("window round ri (" + win.q + ", " + win.r + ", " + win.s + ") relief, 5a → 5b", (a1 - a0).toFixed(0) + " → " + (b1 - b0).toFixed(0) + " m over " + choAfter.length.toLocaleString() + " chō"); }
+    const erodedW5c = erodedSurface(struct5, WINDOW_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, 1, state.baseStrength);
+    const choAfter5c = choCells.map(c => ({ c, h: erodedW5c.at(c) }));
+    const [wLo3, wHi3] = heightRange(choAfter5b, choAfter5c);
+    drawCluster(window5bAgainScene, choAfter5b, wLo3, wHi3, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5b");
+    drawCluster(window5cScene, choAfter5c, wLo3, wHi3, win, clusterCentres, "after 5c · p = " + state.stacking.toFixed(1) + " · 1 chō ≈ 109 m");
+    { const [a0, a1] = heightRange(choAfter5b), [b0, b1] = heightRange(choAfter5c);
+      row5c("window round ri (" + win.q + ", " + win.r + ", " + win.s + ") relief, 5b → 5c", (a1 - a0).toFixed(0) + " → " + (b1 - b0).toFixed(0) + " m over " + choAfter5c.length.toLocaleString() + " chō"); }
+    const erodedW5d = erodedSurface(struct5, WINDOW_OCTAVES, tect, frame5, state, state.firstOctave, state.octaves5, true, state.stacking, state.normAbove, state.baseStrength);
+    const choAfter5d = choCells.map(c => ({ c, h: erodedW5d.at(c) }));
+    const [wLo4, wHi4] = heightRange(choAfter5c, choAfter5d);
+    drawCluster(window5cAgainScene, choAfter5c, wLo4, wHi4, win, clusterCentres, "ri (" + win.q + ", " + win.r + ", " + win.s + ") and its six neighbours · after 5c");
+    drawCluster(window5dScene, choAfter5d, wLo4, wHi4, win, clusterCentres, "after 5d · normalise above " + (state.normAbove >= 1 ? "off" : state.normAbove.toFixed(2)) + " · 1 chō ≈ 109 m");
+    { const [a0, a1] = heightRange(choAfter5c), [b0, b1] = heightRange(choAfter5d);
+      row5d("window round ri (" + win.q + ", " + win.r + ", " + win.s + ") relief, 5c → 5d", (a1 - a0).toFixed(0) + " → " + (b1 - b0).toFixed(0) + " m over " + choAfter5d.length.toLocaleString() + " chō"); }
+    mark("windows");
+    // ---- Step 6: reading the coast of the 5d surface.
+    // (1) land share against the inset, after step 2 and after step 4, the world re-placed at each d
+    const shareAt = d => {
+      const c = [here.p[0] - here.normal[0] * d, here.p[1] - here.normal[1] * d], cs = RI_CELLS.map(([q, r, s]) => riCentre(q, r, s, c));
+      const inw = p => -((p[0] - c[0]) * here.normal[0] + (p[1] - c[1]) * here.normal[1]);
+      const f1 = structureField(c, tangent, state, RI_OCTAVES, 1);
+      let lean = 0; for (const p of cs) lean += f1(p) * inw(p);
+      const f = lean < 0 ? structureField(c, tangent, state, RI_OCTAVES, -1) : f1;
+      let l2 = 0, l4 = 0; for (const p of cs) { const h = height(p, v); if (h > 0) l2++; if (h + f(p) > 0) l4++; }
+      return { d, s2: 100 * l2 / RI_CELLS.length, s4: 100 * l4 / RI_CELLS.length };
+    };
+    const D_LO = -10, D_HI = 30, shares = []; for (let d = D_LO; d <= D_HI; d += 2) shares.push(shareAt(d));
+    const share4Now = 100 * landRi4 / RI_CELLS.length, share5dNow = 100 * landRi5d / RI_CELLS.length, erosionCost = share4Now - share5dNow, target4 = 70 + erosionCost;
+    let d70 = null;
+    for (let i = 1; i < shares.length; i++) { const a = shares[i - 1], b = shares[i]; if ((a.s4 - target4) * (b.s4 - target4) <= 0 && a.s4 !== b.s4) { d70 = a.d + (target4 - a.s4) / (b.s4 - a.s4) * (b.d - a.d); break; } }
+    shareChartScene.replaceChildren();
+    { const CX = d => 50 + ((d - D_LO) / (D_HI - D_LO)) * 480, CY = s => 30 + ((100 - s) / 100) * 240;
+      shareChartScene.appendChild(el("rect", { x: 50, y: 30, width: 480, height: 240, fill: "var(--cell)", stroke: "none" }));
+      for (let s = 0; s <= 100; s += 25) { shareChartScene.appendChild(el("line", { x1: 50, y1: CY(s), x2: 530, y2: CY(s), stroke: "var(--line)" })); shareChartScene.appendChild(el("text", { x: 46, y: CY(s) + 4, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, s + "%")); }
+      for (let d = D_LO; d <= D_HI; d += 10) shareChartScene.appendChild(el("text", { x: CX(d), y: 288, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, "d " + (d >= 0 ? "+" : "") + d));
+      shareChartScene.appendChild(el("line", { x1: 50, y1: CY(70), x2: 530, y2: CY(70), stroke: "var(--shore)", "stroke-width": 1.5 }));
+      shareChartScene.appendChild(el("text", { x: 530, y: CY(70) - 4, "text-anchor": "end", fill: "var(--shore)", ...mono, "font-size": 10 }, "70% land"));
+      shareChartScene.appendChild(el("polyline", { points: shares.map(x => CX(x.d) + "," + CY(x.s2)).join(" "), stroke: "var(--mountain)", "stroke-width": 1.5, "stroke-dasharray": "5 3" }));
+      shareChartScene.appendChild(el("polyline", { points: shares.map(x => CX(x.d) + "," + CY(x.s4)).join(" "), stroke: "currentColor", "stroke-width": 1.5 }));
+      shareChartScene.appendChild(el("circle", { cx: CX(state.inset), cy: CY(share5dNow), r: 5, fill: "var(--world)", stroke: "var(--bg)", "stroke-width": 1.5 }));
+      shareChartScene.appendChild(el("text", { x: CX(state.inset) + 8, y: CY(share5dNow) + 4, fill: "var(--world)", ...mono, "font-size": 10 }, "after 5d, d " + (state.inset >= 0 ? "+" : "") + state.inset.toFixed(1) + ": " + share5dNow.toFixed(0) + "%"));
+      if (d70 !== null) { shareChartScene.appendChild(el("line", { x1: CX(d70), y1: 30, x2: CX(d70), y2: 270, stroke: "var(--world)", "stroke-dasharray": "3 3" })); shareChartScene.appendChild(el("text", { x: CX(d70), y: 24, "text-anchor": "middle", fill: "var(--world)", ...mono, "font-size": 10 }, "d " + (d70 >= 0 ? "+" : "") + d70.toFixed(1) + " for 70% after erosion")); }
+      shareChartScene.appendChild(el("text", { x: 530, y: 24, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, "erosion costs " + erosionCost.toFixed(1) + " points here")); }
+    // (2) the coast at ri scale: coast ri = land ri with a sea neighbour; boxes of 1…16 ri anchored at the origin
+    const idxRi = new Map(RI_CELLS.map(([q, r, s], i) => [q + "," + r + "," + s, i])), landMask = parts5d.map(p => p.h > 0);
+    const coastRi = [], coastKind = parts5d.map(() => "sea");
+    RI_CELLS.forEach(([q, r, s], i) => { if (!landMask[i]) return; coastKind[i] = "land"; for (const [dq, dr, ds] of NEIGH) { const j = idxRi.get((q + dq) + "," + (r + dr) + "," + (s + ds)); if (j !== undefined && !landMask[j]) { coastRi.push(parts5d[i].c); coastKind[i] = "coast"; break; } } });
+    const riCounts = boxCount(coastRi, centre, [1, 2, 4, 8, 16]), riFit = fitD(riCounts.slice(0, 4));
+    coastMapScene.replaceChildren();
+    coastMapScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    parts5d.forEach((p, i) => coastMapScene.appendChild(el("polygon", { points: hexAt(p.c, 1), fill: COAST_FILL[coastKind[i]], stroke: "none" })));
+    { const s = 4, lines = []; for (let k = -6; k <= 6; k++) { const a = HV([centre[0] + k * s, centre[1] - 24]), b = HV([centre[0] + k * s, centre[1] + 24]); lines.push("M" + a.x.toFixed(1) + " " + a.y.toFixed(1) + "L" + b.x.toFixed(1) + " " + b.y.toFixed(1)); const c2 = HV([centre[0] - 24, centre[1] + k * s]), d2 = HV([centre[0] + 24, centre[1] + k * s]); lines.push("M" + c2.x.toFixed(1) + " " + c2.y.toFixed(1) + "L" + d2.x.toFixed(1) + " " + d2.y.toFixed(1)); }
+      coastMapScene.appendChild(el("path", { d: lines.join(""), stroke: "var(--world)", "stroke-width": 0.6, opacity: 0.7 })); }
+    coastMapScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    coastMapScene.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, coastRi.length + " coast ri · boxes touched: " + riCounts.map(c => c.s + " ri → " + c.n).join(", ")));
+    // (3) the coast at chō scale inside the window cluster; chō cube keys are 36·(ri offset) + (q, r, s), the packing
+    const clusterOff = [[0, 0, 0], ...NEIGH], nCho = RI_CELLS.length, choLand = choAfter5d.map(x => x.h > 0), choIdx = new Map();
+    choAfter5d.forEach((x, i) => { const j = Math.floor(i / nCho), [q, r, s] = RI_CELLS[i % nCho], [dq, dr, ds] = clusterOff[j]; choIdx.set((36 * dq + q) + "," + (36 * dr + r) + "," + (36 * ds + s), i); });
+    const coastCho = [], choKind = choAfter5d.map(() => "sea");
+    choAfter5d.forEach((x, i) => { if (!choLand[i]) return; choKind[i] = "land"; const j = Math.floor(i / nCho), [q, r, s] = RI_CELLS[i % nCho], [dq, dr, ds] = clusterOff[j], aq = 36 * dq + q, ar = 36 * dr + r, as = 36 * ds + s; for (const [nq, nr, ns] of NEIGH) { const k = choIdx.get((aq + nq) + "," + (ar + nr) + "," + (as + ns)); if (k !== undefined && !choLand[k]) { coastCho.push(x.c); choKind[i] = "coast"; break; } } });
+    const choSizes = [1, 2, 4, 8, 16, 32], choCounts = boxCount(coastCho, win.c, choSizes.map(s => s / 36)).map((c, i) => ({ s: choSizes[i], n: c.n })), choFit = coastCho.length >= 30 ? fitD(choCounts.slice(0, 5)) : { D: NaN, b: NaN };
+    coastClusterScene.replaceChildren();
+    coastClusterScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    { const V = p => ({ x: 280 + (p[0] - win.c[0]) * CLUSTER_SCALE, y: 280 - (p[1] - win.c[1]) * CLUSTER_SCALE }), byKind = new Map();
+      choAfter5d.forEach((cell, i) => { const d = "M" + RI_HEX.map(k => { const s = V([cell.c[0] + k[0] / 36, cell.c[1] + k[1] / 36]); return s.x.toFixed(1) + " " + s.y.toFixed(1); }).join("L") + "Z"; const key = choKind[i]; if (!byKind.has(key)) byKind.set(key, []); byKind.get(key).push(d); });
+      for (const [key, ds] of byKind) coastClusterScene.appendChild(el("path", { d: ds.join(""), fill: COAST_FILL[key], stroke: "none" }));
+      clusterCentres.forEach((rc, i) => coastClusterScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [rc[0] + k[0], rc[1] + k[1]]), V), fill: "none", stroke: "var(--world)", "stroke-width": i === 0 ? 1.5 : 0.6, opacity: i === 0 ? 1 : 0.6 })));
+      coastClusterScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, coastCho.length ? coastCho.length + " coast chō in the cluster · boxes: " + choCounts.map(c => c.s + " → " + c.n).join(", ") : "the coast does not cross the window · click a coastal ri")); }
+    // (4) the box-count chart, log-log, both series
+    boxChartScene.replaceChildren();
+    const X = s => 50 + (Math.log2(s) / 6) * 480, Y = n => 270 - (Math.log2(Math.max(1, n)) / 15) * 240;
+    {
+      boxChartScene.appendChild(el("rect", { x: 50, y: 30, width: 480, height: 240, fill: "var(--cell)", stroke: "none" }));
+      for (let e = 0; e <= 12; e += 2) { boxChartScene.appendChild(el("line", { x1: 50, y1: Y(2 ** e), x2: 530, y2: Y(2 ** e), stroke: "var(--line)" })); boxChartScene.appendChild(el("text", { x: 46, y: Y(2 ** e) + 4, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, String(2 ** e))); }
+      for (let e = 0; e <= 6; e++) boxChartScene.appendChild(el("text", { x: X(2 ** e), y: 288, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, (2 ** e) + " cells"));
+      const series = [[riCounts, riFit, "currentColor", "ri"], [choCounts, choFit, "var(--shore)", "chō"]];
+      for (const [counts, fit, colour, name] of series) {
+        for (const c of counts) boxChartScene.appendChild(el("circle", { cx: X(c.s), cy: Y(c.n), r: 4, fill: colour, stroke: "none" }));
+        if (!isNaN(fit.D)) { const s0 = 1, s1 = name === "ri" ? 8 : 16, n0 = Math.exp(fit.b - fit.D * Math.log(s0)), n1 = Math.exp(fit.b - fit.D * Math.log(s1)); boxChartScene.appendChild(el("line", { x1: X(s0), y1: Y(n0), x2: X(s1), y2: Y(n1), stroke: colour, "stroke-width": 1.5 })); boxChartScene.appendChild(el("text", { x: X(s1) + 6, y: Y(n1) + 4, fill: colour, ...mono, "font-size": 10 }, name + " D ≈ " + fit.D.toFixed(2))); }
+      }
+      boxChartScene.appendChild(el("text", { x: 530, y: 24, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, "N boxes holding coast, by box side in cells of each scale · Kantō 1.1–1.15 · structure alone 2 − H = " + (2 - state.hurst).toFixed(2))); }
+    facts6.replaceChildren();
+    const row6 = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); facts6.appendChild(d); };
+    row6("land share, step 2 → 4 → 5d, at d " + (state.inset >= 0 ? "+" : "") + state.inset.toFixed(1), (100 * landRi / RI_CELLS.length).toFixed(0) + "% → " + share4Now.toFixed(0) + "% → " + share5dNow.toFixed(0) + "% · erosion costs " + erosionCost.toFixed(1) + " points");
+    row6("inset for 70% land after erosion", d70 !== null ? "d ≈ " + (d70 >= 0 ? "+" : "") + d70.toFixed(1) + " ri, where step 4 gives " + target4.toFixed(0) + "% · set the inset slider there" : "not reached between d " + D_LO + " and +" + D_HI);
+    row6("coast at ri scale", coastRi.length + " coast ri · D ≈ " + (isNaN(riFit.D) ? "—" : riFit.D.toFixed(2)) + " over 1–8 ri boxes · Kantō 1.1–1.15 · structure alone " + (2 - state.hurst).toFixed(2));
+    row6("coast at chō scale, window round ri (" + win.q + ", " + win.r + ", " + win.s + ")", coastCho.length >= 30 ? coastCho.length + " coast chō · D ≈ " + choFit.D.toFixed(2) + " over 1–16 chō boxes" : coastCho.length ? "only " + coastCho.length + " coast chō, too few to fit · click a ri the coast runs through" : "the coast does not cross the window · click a coastal ri");
+    // The strip count, on a button since it takes 15–20 s: every coast ri and its sea neighbours at chō
+    // resolution on the 5d surface, coast chō = land chō with a sea chō neighbour, boxes 1–64 chō. A new
+    // render clears the old result, since it belonged to another surface.
+    const stripButton = document.getElementById("stripButton"), stripFacts = document.getElementById("stripFacts");
+    stripFacts.replaceChildren(); stripButton.disabled = false; stripButton.textContent = "count the coast at chō scale over every coast ri · 15–20 s";
+    stripButton.onclick = () => {
+      stripButton.disabled = true; stripButton.textContent = "counting…";
+      setTimeout(() => {
+        const t0 = performance.now(), stripKeys = new Set(), strip = [];
+        RI_CELLS.forEach(([q, r, s], i) => { if (coastKind[i] !== "coast") return; for (const [dq, dr, ds] of [[0, 0, 0], ...NEIGH]) { const k = (q + dq) + "," + (r + dr) + "," + (s + ds); if (idxRi.has(k) && !stripKeys.has(k)) { stripKeys.add(k); strip.push([q + dq, r + dr, s + ds]); } } });
+        const choMap = new Map();
+        for (const [rq, rr, rs] of strip) { const rc = riCentre(rq, rr, rs, centre); for (const [q, r, s] of RI_CELLS) { const c = [rc[0] + (q - s) / 72, rc[1] - r * ROW / 36]; choMap.set((36 * rq + q) + "," + (36 * rr + r) + "," + (36 * rs + s), { c, land: erodedW5d.at(c) > 0 }); } }
+        const coast = [];
+        for (const [key, cell] of choMap) { if (!cell.land) continue; const [aq, ar, as] = key.split(",").map(Number); for (const [nq, nr, ns] of NEIGH) { const nb = choMap.get((aq + nq) + "," + (ar + nr) + "," + (as + ns)); if (nb && !nb.land) { coast.push(cell.c); break; } } }
+        const sizes = [1, 2, 4, 8, 16, 32, 64], counts = boxCount(coast, centre, sizes.map(x => x / 36)).map((c, i) => ({ s: sizes[i], n: c.n }));
+        const fits = [[0, 5, "1–16"], [1, 6, "2–32"], [2, 7, "4–64"]].map(([a, b, name]) => ({ name, D: fitD(counts.slice(a, b)).D }));
+        const fit = fitD(counts.slice(2, 7));
+        for (const c of counts) boxChartScene.appendChild(el("circle", { cx: X(c.s), cy: Y(c.n), r: 4, fill: "var(--mountain)", stroke: "none" }));
+        if (!isNaN(fit.D)) { const n0 = Math.exp(fit.b - fit.D * Math.log(4)), n1 = Math.exp(fit.b - fit.D * Math.log(64)); boxChartScene.appendChild(el("line", { x1: X(4), y1: Y(n0), x2: X(64), y2: Y(n1), stroke: "var(--mountain)", "stroke-width": 1.5 })); boxChartScene.appendChild(el("text", { x: X(64) - 6, y: Y(n1) - 8, "text-anchor": "end", fill: "var(--mountain)", ...mono, "font-size": 10 }, "chō, every coast ri · D ≈ " + fit.D.toFixed(2))); }
+        stripFacts.replaceChildren();
+        const rowT = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); stripFacts.appendChild(d); };
+        rowT("the strip", strip.length + " ri, the coast ri and their sea neighbours · " + choMap.size.toLocaleString() + " chō · " + coast.length.toLocaleString() + " coast chō");
+        rowT("boxes holding coast, by side in chō", counts.map(c => c.s + " → " + c.n.toLocaleString()).join(" · "));
+        rowT("D by the boxes fitted", fits.map(f => f.name + " chō: " + (isNaN(f.D) ? "—" : f.D.toFixed(2))).join(" · ") + " · Kantō 1.1–1.15 · structure alone 2 − H = " + (2 - state.hurst).toFixed(2));
+        rowT("counted in", ((performance.now() - t0) / 1000).toFixed(1) + " s · the smallest boxes under-read: the raster's own bias, and nothing finer than the window's finest octave, 2.5 chō");
+        stripButton.disabled = false; stripButton.textContent = "count again";
+      }, 30);
+    };
+    mark("step 6");
+    // ---- Step 7a: the gradient of every ri, on whatever surface the last step left.
+    // The drainage steps read the eroded surface at a few thousand points, several of them more than once,
+    // so the surface is evaluated once per point here. They also draw after the erosion maps are on screen,
+    // on a timeout, and a render that starts in the meantime cancels them.
+    const surfaceMemo = new Map();
+    for (const p of parts5d) surfaceMemo.set(p.c[0] + "," + p.c[1], p.h);      // the ri centres the 5d map already evaluated
+    const surface = p => { const key = p[0] + "," + p[1]; let h = surfaceMemo.get(key); if (h === undefined) { h = height5d(p); surfaceMemo.set(key, h); } return h; };
+    const runId3 = ++renderRun;
+    setTimeout(() => { if (runId3 !== renderRun) return;
+    // The six faces of a pointy-top ri, Direction::ALL's order: E at 0°, then every 60° anticlockwise.
+    const FACE_DIR = Array.from({ length: 6 }, (_, k) => [Math.cos(rad(60 * k)), Math.sin(rad(60 * k))]);
+    const downhillFace = g => ((Math.round(Math.atan2(-g[1], -g[0]) / rad(60)) % 6) + 6) % 6;
+    gradScene.replaceChildren();
+    gradScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    const arrows = [], faceCount = [0, 0, 0, 0, 0, 0];
+    let steepest = { mag: 0 }, landSlope = 0, landSlopeN = 0; const mags = [];
+    for (const [q, r, s] of RI_CELLS) {
+      const c = riCentre(q, r, s, centre), h = surface(c), g = gradientOf(surface, c, 0.5), mag = Math.hypot(g[0], g[1]);
+      gradScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: heightColour(h), "fill-opacity": 0.6, stroke: "none" }));
+      mags.push(mag); if (mag > steepest.mag) steepest = { mag, q, r, s, h };
+      if (h > 0) { landSlope += mag; landSlopeN++; }
+      if (mag === 0) continue;
+      const face = downhillFace(g); faceCount[face]++;
+      const len = Math.min(1, mag / state.gref) * 0.85, d = FACE_DIR[face], n = [-d[1], d[0]];
+      const tail = [c[0] - d[0] * len / 2, c[1] - d[1] * len / 2], tip = [c[0] + d[0] * len / 2, c[1] + d[1] * len / 2];
+      const head = 0.12 + 0.1 * len;
+      arrows.push([tail, tip], [tip, [tip[0] - d[0] * head + n[0] * head * 0.6, tip[1] - d[1] * head + n[1] * head * 0.6]], [tip, [tip[0] - d[0] * head - n[0] * head * 0.6, tip[1] - d[1] * head - n[1] * head * 0.6]]);
+    }
+    gradScene.appendChild(el("path", { d: arrows.map(([a, b]) => { const s = HV(a), t = HV(b); return "M" + s.x.toFixed(1) + " " + s.y.toFixed(1) + "L" + t.x.toFixed(1) + " " + t.y.toFixed(1); }).join(""), stroke: "currentColor", "stroke-width": 1.1, "stroke-linecap": "round" }));
+    gradScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    gradScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    gradScene.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "arrows point downhill, snapped to a face · full length at " + state.gref + " m per ri · reading step 5d's surface"));
+    factsGradient.replaceChildren();
+    const rowG = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); factsGradient.appendChild(d); };
+    const asSlope = m => (m / RI_M * 100).toFixed(1) + "% · " + (Math.atan(m / RI_M) * 180 / Math.PI).toFixed(1) + "°";
+    { const g0 = gradientOf(surface, centre, 0.5), m0 = Math.hypot(g0[0], g0[1]);
+      rowG("at the origin", m0.toFixed(1) + " m per ri, " + asSlope(m0) + ", downhill heading " + ((Math.atan2(-g0[1], -g0[0]) * 180 / Math.PI + 360) % 360).toFixed(0) + "° from east → face " + EDGE_NAMES[downhillFace(g0)]); }
+    rowG("ri draining through each face", EDGE_NAMES.map((n, k) => n + " " + faceCount[k]).join(" · "));
+    rowG("steepest ri", steepest.mag.toFixed(0) + " m per ri, " + asSlope(steepest.mag) + " at ri (" + steepest.q + ", " + steepest.r + ", " + steepest.s + "), " + steepest.h.toFixed(0) + " m");
+    rowG("mean slope over land ri", (landSlopeN ? landSlope / landSlopeN : 0).toFixed(1) + " m per ri, " + asSlope(landSlopeN ? landSlope / landSlopeN : 0));
+    rowG("ri at or past full arrow length", mags.filter(m => m >= state.gref).length + " of 1,296");
+    rowG("surface read", "step 5d, h₄ + normalised gullies · differences ±0.5 ri");
+
+    // ---- Step 7b: the year's rain on every ri, as a volume. Step 3's precipitation on the current surface, times the ri's area.
+    rainScene.replaceChildren();
+    rainScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    let rainTotal = 0, rainLand = 0, rainMax = { vol: 0 }, rainMin = { vol: Infinity }; const rainVols = [];
+    for (const [q, r, s] of RI_CELLS) {
+      const c = riCentre(q, r, s, centre), mm = climate(c, v, apexNorth, surface).precip, vol = mm * M3_PER_MM / 1e6;
+      rainVols.push(vol); rainTotal += vol; if (surface(c) > 0) rainLand += vol;
+      if (vol > rainMax.vol) rainMax = { vol, mm, q, r, s }; if (vol < rainMin.vol) rainMin = { vol, mm, q, r, s };
+      rainScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: ramp(VOLUME_RAMP, vol), stroke: "none" }));
+    }
+    rainScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    rainScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    for (let i = 0; i < 40; i++) { const x = VOLUME_RAMP[0][0] + (VOLUME_RAMP[VOLUME_RAMP.length - 1][0] - VOLUME_RAMP[0][0]) * (i / 39); rainScene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(VOLUME_RAMP, x), stroke: "none" })); }
+    rainScene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, VOLUME_RAMP[0][0].toFixed(0) + " M m³"));
+    rainScene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, VOLUME_RAMP[VOLUME_RAMP.length - 1][0].toFixed(0) + " M m³"));
+    rainScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, "a year's rain on the world: " + (rainTotal / 1000).toFixed(1) + " km³ · reading step 5d's surface"));
+    factsRain.replaceChildren();
+    const rowR = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); factsRain.appendChild(d); };
+    rowR("one ri", (AREA_RI / 1e6).toFixed(2) + " km² · 1 mm = " + M3_PER_MM.toLocaleString(undefined, { maximumFractionDigits: 0 }) + " m³");
+    { const k0 = climate(centre, v, apexNorth, surface); rowR("at the origin", k0.precip.toFixed(0) + " mm → " + (k0.precip * M3_PER_MM / 1e6).toFixed(1) + " million m³"); }
+    rowR("wettest ri", rainMax.vol.toFixed(1) + " million m³ (" + rainMax.mm.toFixed(0) + " mm) at (" + rainMax.q + ", " + rainMax.r + ", " + rainMax.s + ")");
+    rowR("driest ri", rainMin.vol.toFixed(1) + " million m³ (" + rainMin.mm.toFixed(0) + " mm) at (" + rainMin.q + ", " + rainMin.r + ", " + rainMin.s + ")");
+    rowR("the world, a year", (rainTotal / 1000).toFixed(2) + " km³ · on land " + (rainLand / 1000).toFixed(2) + " km³ · mean per ri " + (rainTotal / RI_CELLS.length).toFixed(1) + " million m³");
+    rowR("surface read", "step 5d's, for height and aspect · nothing moved");
+
+    mark("7a, b");
+    // ---- Step 7c: settle the rain. Lakes on the left, the flow on the right.
+    const rainOf = rainVols;                                   // the same volumes 7b just drew, in RI_CELLS order
+    const S = settle(RI_CELLS, (q, r, s) => surface(riCentre(q, r, s, centre)), i => rainOf[i]);
+    const heldMax = Math.max(1e-9, ...S.held), flowMax = Math.max(1e-9, ...S.flow.slice(0, S.n).filter((f, i) => S.h[i] > 0));
+    lakesScene.replaceChildren();
+    lakesScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    RI_CELLS.forEach(([q, r, s], i) => {
+      const c = riCentre(q, r, s, centre), fill = S.held[i] > 0 ? ramp(LAKE_RAMP, S.held[i] / heldMax) : S.h[i] <= 0 ? "var(--sea)" : "var(--land)";
+      lakesScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill, stroke: "none" }));
+    });
+    lakesScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    lakesScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    for (let i = 0; i < 40; i++) lakesScene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(LAKE_RAMP, i / 39), stroke: "none" }));
+    lakesScene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, "0"));
+    lakesScene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, heldMax.toFixed(1) + " M m³ in one ri"));
+    const heldTotal = S.lakes.reduce((a, L) => a + L.held, 0), freshLakes = S.lakes.filter(L => L.capacity > 0), wetLakes = S.lakes.filter(L => L.held > 0), wetCells = S.held.filter(x => x > 0).length;
+    lakesScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, wetLakes.length + " lakes holding " + heldTotal.toFixed(0) + " M m³ over " + wetCells + " ri"));
+
+    flowScene.replaceChildren();
+    flowScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    RI_CELLS.forEach(([q, r, s], i) => { const c = riCentre(q, r, s, centre); flowScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: heightColour(S.h[i]), "fill-opacity": 0.35, stroke: "none" })); });
+    flowScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1, "stroke-dasharray": "3 4" }));
+    { const byStyle = new Map();
+      RI_CELLS.forEach(([q, r, s], i) => {
+        if (S.outFace[i] < 0) return;
+        const c = riCentre(q, r, s, centre), d = FACE_DIR[S.outFace[i]], nrm = [-d[1], d[0]], w = 0.4 + 5 * Math.sqrt(S.flow[i] / flowMax), key = w.toFixed(1) + (S.h[i] <= 0 && !(S.held[i] > 0) ? "s" : "l");
+        const tail = [c[0] - d[0] * 0.42, c[1] - d[1] * 0.42], tip = [c[0] + d[0] * 0.42, c[1] + d[1] * 0.42], head = 0.16;
+        const segs = [[tail, tip], [tip, [tip[0] - d[0] * head + nrm[0] * head * 0.6, tip[1] - d[1] * head + nrm[1] * head * 0.6]], [tip, [tip[0] - d[0] * head - nrm[0] * head * 0.6, tip[1] - d[1] * head - nrm[1] * head * 0.6]]];
+        if (!byStyle.has(key)) byStyle.set(key, []); byStyle.get(key).push(...segs);
+      });
+      for (const [key, segs] of byStyle) flowScene.appendChild(el("path", { d: segs.map(([a, b]) => { const s = HV(a), t = HV(b); return "M" + s.x.toFixed(1) + " " + s.y.toFixed(1) + "L" + t.x.toFixed(1) + " " + t.y.toFixed(1); }).join(""), stroke: "var(--shore)", "stroke-width": key.slice(0, -1), opacity: key.endsWith("s") ? 0.4 : 1, "stroke-linecap": "round", "stroke-linejoin": "round" })); }
+    flowScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    flowScene.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "off the map " + (S.offMap / 1000).toFixed(2) + " km³ · held " + (heldTotal / 1000).toFixed(2) + " km³ · widest on land " + flowMax.toFixed(0) + " M m³ · sea ri faint"));
+
+    factsSettle.replaceChildren();
+    const rowS = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); factsSettle.appendChild(d); };
+    const rainAll = rainOf.reduce((a, b) => a + b, 0);
+    rowS("a year's rain in, and where it ends", rainAll.toFixed(0) + " M m³ = off the map " + S.offMap.toFixed(0) + " + held in lakes " + heldTotal.toFixed(0) + (Math.abs(rainAll - S.offMap - heldTotal) < 0.5 ? " · balances" : " · does not balance"));
+    rowS("off the map, by the world's edge crossed", EDGE_NAMES.map((nm, k) => nm + " " + S.offByEdge[k].toFixed(0)).join(" · "));
+    rowS("pits found", S.lakes.length + " · " + freshLakes.length + " with fresh capacity above 0 m · " + wetLakes.length + " hold water over " + wetCells + " ri");
+    { const big = S.lakes.slice().sort((a, b) => b.held - a.held)[0];
+      rowS("largest lake by water held", big && big.held > 0 ? big.held.toFixed(1) + " M m³ of " + big.capacity.toFixed(0) + " capacity · " + big.members.length + " ri · floor " + big.floor.toFixed(0) + " m" + (big.floor <= 0 ? " (a cut-off sea basin)" : "") + " · surface at " + big.level.toFixed(1) + " m, spill at " + big.spill.toFixed(0) + " m" + (big.inflow > big.capacity ? " · full, spilling " + (big.inflow - big.capacity).toFixed(0) : "") : "none"); }
+    { let bi = -1; for (let i = 0; i < S.n; i++) if (S.h[i] > 0 && (bi < 0 || S.flow[i] > S.flow[bi])) bi = i;
+      const to = bi >= 0 ? (S.outlet[bi] < 0 ? "nowhere" : S.outlet[bi] >= S.n ? "off the map" : S.h[S.outlet[bi]] <= 0 ? "a sea ri" : S.held[S.outlet[bi]] > 0 ? "a lake" : "ri (" + RI_CELLS[S.outlet[bi]] + ")") : "";
+      rowS("largest flow through a land ri", bi >= 0 ? S.flow[bi].toFixed(0) + " M m³ a year through ri (" + RI_CELLS[bi] + ") into " + to + " by its " + EDGE_NAMES[S.outFace[bi]] + " face" : "none"); }
+    rowS("outlet faces used, all ri", EDGE_NAMES.map((nm, k) => nm + " " + S.outFace.filter(f => f === k).length).join(" · "));
+    mark("7c");
+    // ---- Step 7d: carve the channels on the settled surface, settle again, draw the cuts and the rivers.
+    const carved = carve(RI_CELLS, (q, r, s) => surface(riCentre(q, r, s, centre)), i => rainOf[i], state.keepDeeper), S2 = carved.settled;
+    const maxCut = Math.max(1e-9, ...carved.cut), cutRi = carved.cut.filter(x => x > 0).length, cutVol = carved.cut.reduce((a, x) => a + x, 0) * AREA_RI / 1e6;
+    const held2 = S2.lakes.reduce((a, L) => a + L.held, 0), wet2 = S2.lakes.filter(L => L.held > 0), heldMax2 = Math.max(1e-9, ...S2.held), flowMax2 = Math.max(1e-9, ...S2.flow.slice(0, S2.n).filter((f, i) => S2.h[i] > 0));
+    cutsScene.replaceChildren();
+    cutsScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    RI_CELLS.forEach(([q, r, s], i) => {
+      const c = riCentre(q, r, s, centre), fill = carved.cut[i] > 0 ? ramp(CUT_RAMP, carved.cut[i] / maxCut) : S2.held[i] > 0 ? ramp(LAKE_RAMP, S2.held[i] / heldMax2) : S2.h[i] <= 0 ? "var(--sea)" : "var(--land)";
+      cutsScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill, stroke: "none" }));
+    });
+    cutsScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1.5, "stroke-dasharray": "3 4" }));
+    cutsScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    for (let i = 0; i < 40; i++) cutsScene.appendChild(el("rect", { x: 10 + i * 4, y: 530, width: 4, height: 8, fill: ramp(CUT_RAMP, i / 39), stroke: "none" }));
+    cutsScene.appendChild(el("text", { x: 10, y: 526, fill: "var(--muted)", ...mono, "font-size": 9 }, "0 m cut"));
+    cutsScene.appendChild(el("text", { x: 170, y: 526, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 9 }, maxCut.toFixed(0) + " m cut"));
+    cutsScene.appendChild(el("text", { x: 550, y: 548, "text-anchor": "end", fill: "var(--muted)", ...mono }, cutRi + " ri carved · " + carved.breached + " pits breached in " + carved.rounds + " round" + (carved.rounds === 1 ? "" : "s") + " · " + wet2.length + " lake" + (wet2.length === 1 ? "" : "s") + " kept"));
+    riversScene.replaceChildren();
+    riversScene.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    RI_CELLS.forEach(([q, r, s], i) => { const c = riCentre(q, r, s, centre); riversScene.appendChild(el("polygon", { points: pts(RI_HEX.map(k => [c[0] + k[0], c[1] + k[1]]), HV), fill: S2.held[i] > 0 ? ramp(LAKE_RAMP, S2.held[i] / heldMax2) : heightColour(S2.h[i]), "fill-opacity": S2.held[i] > 0 ? 1 : 0.35, stroke: "none" })); });
+    riversScene.appendChild(el("polyline", { points: pts(o.pts, HV), stroke: "var(--shore)", "stroke-width": 1, "stroke-dasharray": "3 4" }));
+    { const byStyle = new Map();
+      RI_CELLS.forEach(([q, r, s], i) => {
+        if (S2.outFace[i] < 0) return;
+        const c = riCentre(q, r, s, centre), d = FACE_DIR[S2.outFace[i]], nrm = [-d[1], d[0]], w = 0.4 + 5 * Math.sqrt(S2.flow[i] / flowMax2), key = w.toFixed(1) + (S2.h[i] <= 0 && !(S2.held[i] > 0) ? "s" : "l");
+        const tail = [c[0] - d[0] * 0.42, c[1] - d[1] * 0.42], tip = [c[0] + d[0] * 0.42, c[1] + d[1] * 0.42], head = 0.16;
+        const segs = [[tail, tip], [tip, [tip[0] - d[0] * head + nrm[0] * head * 0.6, tip[1] - d[1] * head + nrm[1] * head * 0.6]], [tip, [tip[0] - d[0] * head - nrm[0] * head * 0.6, tip[1] - d[1] * head - nrm[1] * head * 0.6]]];
+        if (!byStyle.has(key)) byStyle.set(key, []); byStyle.get(key).push(...segs);
+      });
+      for (const [key, segs] of byStyle) riversScene.appendChild(el("path", { d: segs.map(([a, b]) => { const s = HV(a), t = HV(b); return "M" + s.x.toFixed(1) + " " + s.y.toFixed(1) + "L" + t.x.toFixed(1) + " " + t.y.toFixed(1); }).join(""), stroke: "var(--shore)", "stroke-width": key.slice(0, -1), opacity: key.endsWith("s") ? 0.4 : 1, "stroke-linecap": "round", "stroke-linejoin": "round" })); }
+    riversScene.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    riversScene.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "off the map " + (S2.offMap / 1000).toFixed(2) + " km³ · held " + (held2 / 1000).toFixed(2) + " km³ · widest on land " + flowMax2.toFixed(0) + " M m³ · sea ri faint"));
+    factsCarve.replaceChildren();
+    const rowC = (k, val) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; d.append(a, b); factsCarve.appendChild(d); };
+    rowC("lakes deeper than " + state.keepDeeper + " m stay", carved.breached + " pits breached in " + carved.rounds + " round" + (carved.rounds === 1 ? "" : "s") + " · " + cutRi + " ri carved · deepest cut " + maxCut.toFixed(0) + " m · " + cutVol.toFixed(0) + " M m³ of rock removed");
+    rowC("a year's rain held in lakes, 7c → 7d", heldTotal.toFixed(0) + " → " + held2.toFixed(0) + " M m³ (" + (100 * heldTotal / rainAll).toFixed(0) + "% → " + (100 * held2 / rainAll).toFixed(0) + "%) · off the map " + S.offMap.toFixed(0) + " → " + S2.offMap.toFixed(0));
+    rowC("lakes, 7c → 7d", wetLakes.length + " → " + wet2.length + (wet2.length ? " · deepest kept " + Math.max(...wet2.map(L => L.spill - Math.max(L.floor, 0))).toFixed(0) + " m, largest " + Math.max(...wet2.map(L => L.members.length)) + " ri" : ""));
+    { let bi = -1; for (let i = 0; i < S2.n; i++) if (S2.h[i] > 0 && (bi < 0 || S2.flow[i] > S2.flow[bi])) bi = i;
+      const to = bi >= 0 ? (S2.outlet[bi] < 0 ? "nowhere" : S2.outlet[bi] >= S2.n ? "off the map" : S2.h[S2.outlet[bi]] <= 0 ? "the sea" : S2.held[S2.outlet[bi]] > 0 ? "a lake" : "ri (" + RI_CELLS[S2.outlet[bi]] + ")") : "";
+      rowC("the largest river", bi >= 0 ? S2.flow[bi].toFixed(0) + " M m³ a year through ri (" + RI_CELLS[bi] + ") into " + to + " by its " + EDGE_NAMES[S2.outFace[bi]] + " face" : "none"); }
+    rowC("off the map, by the world's edge crossed", EDGE_NAMES.map((nm, k) => nm + " " + S2.offByEdge[k].toFixed(0)).join(" · "));
+    mark("7d");
+    rowS("render time by section, ms", T.slice(1).map(([n, t], i) => n + " " + (t - T[i][1]).toFixed(0)).join(" · ") + " · all " + (T[T.length - 1][1] - T[0][1]).toFixed(0) + " · the surface was evaluated at " + surfaceMemo.size.toLocaleString() + " points for the drainage, " + parts5d.length.toLocaleString() + " of them from the 5d map");
+    }, 0);
+    }, 0);
+
+  }
+  update();
+})();
+</script>
+</body>
+</html>

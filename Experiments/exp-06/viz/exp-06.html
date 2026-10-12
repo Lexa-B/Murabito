@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>exp-06 worldgen</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+/* banana.html's look, unchanged, so the two pages sit side by side. */
+:root { --bg: #f6f5f0; --fg: #22261f; --muted: #6b7064; --line: #c9ccc2; --cell: #e6e8de; --sea: #d3dfe3; --land: #e9e3cf;
+  --world: #b7410e; --shore: #2b6f8c; --mountain: #6f5a3a;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif; --font-mono: "IBM Plex Mono", ui-monospace, monospace; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23; --sea: #1f2a2e; --land: #2e2b22; --world: #f0803a; --shore: #6db3d1; --mountain: #c9a87a; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #1b1d19; --fg: #e4e6dc; --muted: #9aa092; --line: #444a3f; --cell: #262a23; --sea: #1f2a2e; --land: #2e2b22; --world: #f0803a; --shore: #6db3d1; --mountain: #c9a87a; color-scheme: dark; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body); margin: 0; padding: 24px 16px 40px; }
+main { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-size: 1.4rem; margin: 0; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 70ch; }
+.muted { color: var(--muted); }
+.pair { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.pair > div { flex: 1 1 320px; min-width: 0; display: grid; gap: 4px; }
+.panel-title { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+svg { width: 100%; height: auto; display: block; }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 24px; font-family: var(--font-mono); font-size: 0.9rem; }
+.controls label { display: grid; grid-template-columns: 12ch 1fr 8ch; gap: 10px; align-items: center; }
+.controls input[type=range] { width: 100%; min-width: 0; accent-color: var(--shore); }
+.controls output { text-align: right; font-variant-numeric: tabular-nums; }
+.controls select { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--cell); color: var(--fg); }
+.controls button { font: inherit; padding: 6px 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--cell); color: var(--fg); cursor: pointer; justify-self: start; }
+.controls button:disabled { opacity: 0.6; cursor: wait; }
+.facts { font-family: var(--font-mono); font-size: 0.9rem; display: grid; gap: 4px; font-variant-numeric: tabular-nums; max-width: 560px; }
+.facts div { display: grid; grid-template-columns: 1fr auto; gap: 12px; border-bottom: 1px solid var(--line); padding: 3px 0; }
+.facts .bad { color: var(--world); }
+.status { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); min-height: 1.5em; }
+.profiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.profiles > div { display: grid; gap: 2px; min-width: 0; }
+.profiles .panel-title { font-size: 0.75rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Step 1: the world on the banana</h1>
+  <p>The banana is a slot bent along a circular arc, sized like Honshu at its Kantō width: arc <code>A = 80°</code>, centreline radius <code>R = 237</code> ri (about 1,300 km along the axis), width <code>w = 60</code> ri (about 236 km, coast to coast across Kantō). It is turned so the top tip of the centreline heads due north (90°), which puts the outer apex facing ESE, the Pacific side. The outline is walked anticlockwise from the outer apex, and <code>θ</code> is the fraction of its length walked, in degrees. The world, 36 ri flat to flat and north-up, is centred on the outline point at <code>θ</code> moved inland by <code>d</code>. Units are ri.</p>
+  <p class="muted">This page draws what the Rust server computes (<code>cargo run -p exp06</code> in <code>Experiments/exp-06</code>); <code>banana.html</code> beside it is the reference. The settings travel in the URL query, so the same link with the other filename is the same world.</p>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">the whole banana · θ marked every 30° · north up</div>
+      <svg id="wide" viewBox="0 0 560 560" role="img" aria-label="The bent slot shape with degree marks along its outline and the world hexagon placed on it."><g id="wideScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">round the world · edges read as sea, land or crossed</div>
+      <svg id="near" viewBox="0 0 560 560" role="img" aria-label="The world hexagon with the shoreline through it, each edge coloured by whether it is at sea, on land or crossed by the shore."><g id="nearScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+
+  <div class="controls controls-shared"></div>
+  <div class="controls">
+    <label><span>compute path</span><select id="path"><option value="f64">CPU f64, the reference</option><option value="f32">CPU f32, the shader's twin</option></select><span></span></label>
+  </div>
+  <div class="status" id="status">rendering…</div>
+
+  <div class="facts" id="facts"></div>
+  <p class="muted">The edge reading: an edge the outline crosses is a shore edge; an edge it does not cross is sea or land by where its midpoint lies. The rule from the napkin, no more than four of either, is checked live. The two shore crossings are where the surface of step 2 passes through sea level on the world's edges.</p>
+  <h1 id="step2">Step 2: tectonics, as two curves</h1>
+  <p>Height anywhere, above or below the sea, is <code>h = H(s) · F(a)</code>. <code>F(a)</code> is one cross-section, the same everywhere: <code>a</code> counts half-widths from the centreline, the coasts at <code>±1</code>, and the table runs from a deep basin three half-widths inside to a trench three half-widths out. From the outer coast inward: a wide plain, the spine a little past the middle, a steep drop to the inner coast; from the outer coast outward: a wide shallow shelf, then the slope to the trench. It is 0 at both coasts with a continuous slope through them. <code>H(s)</code> is the spine's height along the centreline, low at the tips and highest round the bend, and the sea deepens with it. Round the caps the cross-section goes polar, blending the two sides by angle. The sliders are the same <code>θ</code> and <code>d</code> as above, wherever they appear.</p>
+  <div class="controls controls-shared"></div>
+
+  <div class="pair">
+    <div>
+      <div class="panel-title">the band cut across at the world's θ · metres · the world's span marked</div>
+      <svg id="section" viewBox="0 0 560 300" role="img" aria-label="The height cross-section of the band at the world's position, with the extent of the world marked."><g id="sectionScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+    <div>
+      <div class="panel-title">the world, ri by ri, coloured by height · shore in blue</div>
+      <svg id="heights" viewBox="0 0 560 560" role="img" aria-label="The world hexagon filled with its 1,296 ri cells coloured by height, with the shoreline through it."><g id="heightsScene" fill="none" stroke="currentColor"></g></svg>
+    </div>
+  </div>
+
+  <div class="panel-title">the six edge profiles · anticlockwise from each edge's first corner · metres · shore crossings at 0</div>
+  <div class="profiles" id="profiles"></div>
+  <div class="facts" id="facts2"></div>
+  <p class="muted">The cross-section is a smooth spline through a short table of control points, so it is a thing to edit rather than a formula to tune; the spine curve is a raised sine along the centreline. Both are smooth, so the erosion filter of a later step can take a gradient off them anywhere. In layers (5 sun each) the numbers are about 6.6 per metre.</p>
+</main>
+<script>
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (t, a, tx) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (tx !== undefined) e.textContent = tx; return e; };
+  const mono = { stroke: "none", "font-size": 11, "font-family": "var(--font-mono)" };
+  const WORLD = 36;                                   // ri, flat to flat
+  // The page's whole state, banana.html's keys and defaults, so a URL from either page reads on the other.
+  const state = { theta: 12, inset: 10, seed: 1, amp: 250, hurst: 0.65, stretch: 2, gref: 150, erosion: 200, firstOctave: 2, octaves5: 8, stripes: 1.5, sigmaRef: 0.03, windowQRS: null, stacking: 1, normAbove: 0.3, baseStrength: 0, keepDeeper: 100 };
+  let path = "f64";
+  // Settings in the URL query: read once, written on every change.
+  const QUERY_KEYS = Object.keys(state);
+  function readQuery() {
+    if (typeof location === "undefined") return;
+    const qs = new URLSearchParams(location.search);
+    for (const k of QUERY_KEYS) if (qs.has(k)) state[k] = k === "windowQRS" ? qs.get(k).split(",").map(Number) : +qs.get(k);
+    if (qs.has("path") && ["f64", "f32"].includes(qs.get("path"))) path = qs.get("path");
+  }
+  function writeQuery() {
+    if (typeof history === "undefined") return;
+    const qs = new URLSearchParams();
+    for (const k of QUERY_KEYS) { const v = state[k]; if (v === null) continue; qs.set(k, Array.isArray(v) ? v.join(",") : String(v)); }
+    if (path !== "f64") qs.set("path", path);
+    try { history.replaceState(null, "", "?" + qs); } catch (e) { /* a file: URL may refuse; the page still works */ }
+  }
+  const SLIDERS = [
+    { key: "theta", label: "θ, degrees", min: 0, max: 359.5, step: 0.5, fmt: x => x.toFixed(1) + "°" },
+    { key: "inset", label: "inset d, ri", min: -25, max: 45, step: 0.5, fmt: x => (x >= 0 ? "+" : "") + x.toFixed(1) },
+  ];
+  function bindSliders(selector, sliders) {
+    return [...document.querySelectorAll(selector)].map(container => {
+      const bound = sliders.map(s => {
+        const label = document.createElement("label");
+        const name = document.createElement("span"); name.textContent = s.label;
+        const input = document.createElement("input"); input.type = "range"; input.min = s.min; input.max = s.max; input.step = s.step; input.value = state[s.key];
+        const out = document.createElement("output");
+        label.append(name, input, out); container.appendChild(label);
+        input.addEventListener("input", () => { state[s.key] = +input.value; scheduleUpdate(); });
+        return { s, input, out };
+      });
+      return { sync() { for (const b of bound) { b.input.value = state[b.s.key]; b.out.textContent = b.s.fmt(state[b.s.key]); } } };
+    });
+  }
+  readQuery();
+  const controls = [...bindSliders(".controls-shared", SLIDERS)];
+  const pathSelect = document.getElementById("path"), status = document.getElementById("status");
+  pathSelect.value = path;
+  pathSelect.addEventListener("change", () => { path = pathSelect.value; update(); });
+  function update() { controls.forEach(c => c.sync()); writeQuery(); render(); }
+  let pendingRender = null;
+  function scheduleUpdate() { controls.forEach(c => c.sync()); writeQuery(); clearTimeout(pendingRender); pendingRender = setTimeout(render, 150); }
+
+  const wide = document.getElementById("wideScene"), near = document.getElementById("nearScene"), facts = document.getElementById("facts");
+  const section = document.getElementById("sectionScene"), heights = document.getElementById("heightsScene"), profiles = document.getElementById("profiles"), facts2 = document.getElementById("facts2");
+  const heightColour = h => {                                 // hypsometric: trench to snow, by metres
+    const stops = h <= 0
+      ? [[-6000, [15, 30, 70]], [-2500, [30, 60, 120]], [-800, [70, 110, 165]], [-200, [120, 160, 200]], [0, [175, 205, 220]]]
+      : [[0, [190, 205, 150]], [300, [150, 180, 110]], [900, [170, 150, 100]], [1600, [140, 115, 85]], [2200, [200, 195, 190]], [2800, [245, 245, 245]]];
+    let i = 0; while (i < stops.length - 2 && h > stops[i + 1][0]) i++;
+    const [h0, c0] = stops[i], [h1, c1] = stops[i + 1], t = Math.max(0, Math.min(1, (h - h0) / (h1 - h0)));
+    return "rgb(" + c0.map((v, k) => Math.round(v + (c1[k] - v) * t)).join(",") + ")";
+  };
+  function view(cx, cy, scale) { return p => ({ x: 280 + (p[0] - cx) * scale, y: 280 - (p[1] - cy) * scale }); }
+  const pts = (ps, f) => ps.map(p => { const s = f(p); return s.x + "," + s.y; }).join(" ");
+
+  let renderRun = 0, sent = null;
+  async function render() {
+    const run = ++renderRun, t0 = performance.now(), body = { ...state, path };
+    let out;
+    try {
+      const res = await fetch("/render", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      if (run !== renderRun) return;
+      if (!res.ok) { status.textContent = "server error " + res.status + ": " + await res.text() + " · the drawing is from the last good render"; return; }
+      out = await res.json();
+    } catch (e) { if (run !== renderRun) return; status.textContent = "no server: " + e.message + " (cargo run -p exp06) · the drawing is from the last good render"; return; }
+    if (run !== renderRun) return;
+    sent = body;
+    draw(out);
+    status.textContent = "server " + out.ms.toFixed(2) + " ms (" + out.path + ") · round trip " + (performance.now() - t0).toFixed(0) + " ms";
+  }
+
+  function draw(out) {
+    const o = out.outline, origin = out.origin, corners = out.corners;
+    // Wide view: fit the whole banana
+    wide.replaceChildren();
+    const xs = o.map(p => p[0]), ys = o.map(p => p[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) + 60;
+    const W = view(cx, cy, 520 / span);
+    wide.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--sea)", stroke: "none" }));
+    wide.appendChild(el("polygon", { points: pts(o, W), fill: "var(--land)", stroke: "currentColor", "stroke-width": 1.2 }));
+    // the centreline arc, and a north arrow at its top tip
+    { const ps = out.centreline;
+      wide.appendChild(el("polyline", { points: pts(ps, W), stroke: "var(--mountain)", "stroke-width": 1, "stroke-dasharray": "4 4" }));
+      const tip = ps[ps.length - 1], t0 = W(tip), t1 = W([tip[0], tip[1] + 24]);
+      wide.appendChild(el("line", { x1: t0.x, y1: t0.y, x2: t1.x, y2: t1.y, stroke: "var(--mountain)", "stroke-width": 1.5 }));
+      wide.appendChild(el("text", { x: t1.x, y: t1.y - 4, "text-anchor": "middle", fill: "var(--mountain)", ...mono, "font-size": 10 }, "90°")); }
+    for (const q of out.marks) {
+      const s = W(q.p), o2 = W([q.p[0] + q.normal[0] * 14, q.p[1] + q.normal[1] * 14]);
+      wide.appendChild(el("line", { x1: s.x, y1: s.y, x2: o2.x, y2: o2.y, stroke: "var(--muted)" }));
+      wide.appendChild(el("text", { x: o2.x + (o2.x - s.x) * 0.9, y: o2.y + (o2.y - s.y) * 0.9 + 4, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, q.deg + "°"));
+    }
+    wide.appendChild(el("polygon", { points: pts(corners, W), fill: "var(--world)", "fill-opacity": 0.35, stroke: "var(--world)", "stroke-width": 1.5 }));
+    { const s = W(out.here); wide.appendChild(el("circle", { cx: s.x, cy: s.y, r: 3, fill: "var(--shore)", stroke: "none" })); }
+    wide.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "outline " + out.length.toFixed(0) + " ri round · 1° of θ = " + (out.length / 360).toFixed(2) + " ri · R " + out.banana.r + ", w " + out.banana.w + ", A " + out.banana.a + "° · top tip heads north"));
+
+    // Near view: the world and its surroundings
+    near.replaceChildren();
+    const N = view(origin[0], origin[1], 520 / (WORLD * 2.2));
+    near.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--sea)", stroke: "none" }));
+    near.appendChild(el("polygon", { points: pts(o, N), fill: "var(--land)", stroke: "currentColor", "stroke-width": 1.5 }));
+    for (const e of out.edges) {
+      const a = N(e.a), b = N(e.b);
+      const colour = e.kind === "shore" ? "var(--shore)" : e.kind === "land" ? "var(--mountain)" : "currentColor";
+      near.appendChild(el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: colour, "stroke-width": e.kind === "sea" ? 2 : 4, opacity: e.kind === "sea" ? 0.5 : 1 }));
+      const m = N([(e.a[0] + e.b[0]) / 2, (e.a[1] + e.b[1]) / 2]), c = N(origin);
+      const lab = { x: m.x + (m.x - c.x) * 0.16, y: m.y + (m.y - c.y) * 0.16 + 4 };
+      near.appendChild(el("text", { x: lab.x, y: lab.y, "text-anchor": "middle", fill: colour, ...mono }, e.name + " · " + e.kind));
+    }
+    for (const e of out.edges) for (const x of e.crossings) { const s = N(x); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 5, fill: "var(--shore)", stroke: "var(--bg)", "stroke-width": 1.5 })); }
+    { const s = N(origin); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 4, fill: "var(--world)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y + 4, fill: "var(--world)", ...mono }, "origin")); }
+    { const s = N(out.here); near.appendChild(el("circle", { cx: s.x, cy: s.y, r: 3, fill: "var(--shore)", stroke: "none" })); near.appendChild(el("text", { x: s.x + 8, y: s.y - 6, fill: "var(--shore)", ...mono, "font-size": 10 }, "θ = " + sent.theta.toFixed(1) + "°")); }
+    near.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, "36 ri across · north up"));
+
+    facts.replaceChildren();
+    const row = (k, val, bad) => { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = k; const b = document.createElement("span"); b.textContent = val; if (bad) b.className = "bad"; d.append(a, b); facts.appendChild(d); };
+    for (const f of out.facts) row(f.key, f.value, f.bad);
+
+    // ---- Step 2 drawings.
+    section.replaceChildren();
+    const sec = out.section;
+    const A_LO = -2.5, A_HI = 2.5, M_LO = -3500, M_HI = 3000;
+    const SX = x => 50 + ((x - A_LO) / (A_HI - A_LO)) * 480, SY = m => 30 + ((M_HI - m) / (M_HI - M_LO)) * 240;
+    section.appendChild(el("rect", { x: 50, y: 30, width: 480, height: 240, fill: "var(--cell)", stroke: "none" }));
+    for (let m = -3000; m <= 3000; m += 1000) { section.appendChild(el("line", { x1: 50, y1: SY(m), x2: 530, y2: SY(m), stroke: m === 0 ? "var(--shore)" : "var(--line)" })); section.appendChild(el("text", { x: 46, y: SY(m) + 4, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, m + " m")); }
+    { const ps = sec.points.map(([a, h]) => SX(a) + "," + SY(h));
+      section.appendChild(el("polygon", { points: SX(A_LO) + "," + SY(M_LO) + " " + ps.join(" ") + " " + SX(A_HI) + "," + SY(M_LO), fill: "var(--land)", stroke: "none" }));
+      section.appendChild(el("polygon", { points: SX(A_LO) + "," + SY(0) + " " + SX(A_HI) + "," + SY(0) + " " + SX(A_HI) + "," + SY(M_LO) + " " + SX(A_LO) + "," + SY(M_LO), fill: "var(--sea)", "fill-opacity": 0.55, stroke: "none" }));
+      section.appendChild(el("polyline", { points: ps.join(" "), stroke: "var(--mountain)", "stroke-width": 2 })); }
+    { const aC = sec.a, halfSpan = 18 / (out.banana.w / 2);
+      section.appendChild(el("rect", { x: SX(aC - halfSpan), y: 30, width: SX(aC + halfSpan) - SX(aC - halfSpan), height: 240, fill: "var(--world)", "fill-opacity": 0.12, stroke: "var(--world)", "stroke-dasharray": "4 3" }));
+      section.appendChild(el("text", { x: SX(aC), y: 24, "text-anchor": "middle", fill: "var(--world)", ...mono, "font-size": 10 }, "the world, 36 ri")); }
+    for (const [a, name] of [[-2, "basin"], [-1, "inner coast"], [0, "spine"], [1, "outer coast"], [2, "trench"]]) section.appendChild(el("text", { x: SX(a), y: 288, "text-anchor": "middle", fill: "var(--muted)", ...mono, "font-size": 10 }, name + " · " + (a * out.banana.w / 2 >= 0 ? "+" : "") + (a * out.banana.w / 2).toFixed(0) + " ri"));
+    section.appendChild(el("text", { x: 530, y: 24, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 10 }, "s = " + sec.s.toFixed(2) + " · H(s) = " + sec.spine.toFixed(0) + " m"));
+
+    heights.replaceChildren();
+    const HV = view(origin[0], origin[1], 520 / (WORLD * 1.15)), hex = out.banana.unit_hex;
+    heights.appendChild(el("rect", { x: 0, y: 0, width: 560, height: 560, fill: "var(--bg)", stroke: "none" }));
+    for (const cell of out.heights.cells) heights.appendChild(el("polygon", { points: pts(hex.map(k => [cell.c[0] + k[0], cell.c[1] + k[1]]), HV), fill: heightColour(cell.h), stroke: "none" }));
+    heights.appendChild(el("polyline", { points: pts(o, HV), stroke: "var(--shore)", "stroke-width": 2 }));
+    heights.appendChild(el("polygon", { points: pts(corners, HV), fill: "none", stroke: "var(--world)", "stroke-width": 1.5 }));
+    heights.appendChild(el("text", { x: 10, y: 548, fill: "var(--muted)", ...mono }, out.heights.land + " ri on land of 1,296 · highest " + out.heights.highest.toFixed(0) + " m, deepest " + out.heights.deepest.toFixed(0) + " m · land mean " + out.heights.land_mean.toFixed(0) + " m"));
+
+    profiles.replaceChildren();
+    for (const e of out.profiles) {
+      const wrap = document.createElement("div");
+      const title = document.createElement("div"); title.className = "panel-title"; title.textContent = e.name + " · " + e.kind; wrap.appendChild(title);
+      const svg = el("svg", { viewBox: "0 0 200 120", role: "img", "aria-label": "height along the " + e.name + " edge" });
+      const g = el("g", { fill: "none", stroke: "currentColor" }); svg.appendChild(g); wrap.appendChild(svg); profiles.appendChild(wrap);
+      const PX = t => 28 + t * 166, PY = m => 10 + ((3000 - m) / 4000) * 90;    // −1,000 to 3,000 m
+      g.appendChild(el("rect", { x: 28, y: 10, width: 166, height: 90, fill: "var(--cell)", stroke: "none" }));
+      for (let m = -1000; m <= 3000; m += 1000) { g.appendChild(el("line", { x1: 28, y1: PY(m), x2: 194, y2: PY(m), stroke: m === 0 ? "var(--shore)" : "var(--line)" })); g.appendChild(el("text", { x: 25, y: PY(m) + 3, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 8 }, m / 1000 + "k")); }
+      const ps = []; let prevH = null;
+      e.heights.forEach((h, i) => {
+        const t = i / (e.heights.length - 1);
+        ps.push(PX(t) + "," + PY(Math.max(-1000, h)));
+        if (prevH !== null && (h > 0) !== (prevH > 0)) g.appendChild(el("circle", { cx: PX(t), cy: PY(0), r: 3, fill: "var(--shore)", stroke: "none" }));
+        prevH = h;
+      });
+      g.appendChild(el("polygon", { points: PX(0) + "," + PY(-1000) + " " + ps.join(" ") + " " + PX(1) + "," + PY(-1000), fill: "var(--land)", stroke: "none" }));
+      g.appendChild(el("polygon", { points: PX(0) + "," + PY(0) + " " + PX(1) + "," + PY(0) + " " + PX(1) + "," + PY(-1000) + " " + PX(0) + "," + PY(-1000), fill: "var(--sea)", "fill-opacity": 0.55, stroke: "none" }));
+      g.appendChild(el("polyline", { points: ps.join(" "), stroke: e.kind === "sea" ? "var(--shore)" : "var(--mountain)", "stroke-width": 1.5 }));
+      g.appendChild(el("text", { x: 194, y: 112, "text-anchor": "end", fill: "var(--muted)", ...mono, "font-size": 8 }, "0 → 36 ri · " + e.bottom.toFixed(0) + " to " + e.top.toFixed(0) + " m"));
+    }
+    facts2.replaceChildren();
+    for (const f of out.facts2) { const d = document.createElement("div"); const a = document.createElement("span"); a.textContent = f.key; const b = document.createElement("span"); b.textContent = f.value; if (f.bad) b.className = "bad"; d.append(a, b); facts2.appendChild(d); }
+  }
+
+  update();
+})();
+</script>
+</body>
+</html>

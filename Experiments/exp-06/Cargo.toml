@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/worldgen", "crates/exp06"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+publish = false
+
+# The experiments' profile, as exp-05 has it: our code debuggable, dependencies fast.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

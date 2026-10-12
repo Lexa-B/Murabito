@@ -1,0 +1,9 @@
+[package]
+name = "worldgen"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Engine-free and dependency-free on purpose: this is the crate the game will depend on.
+[dependencies]
