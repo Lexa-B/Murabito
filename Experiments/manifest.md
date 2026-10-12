@@ -265,3 +265,46 @@ WASD/arrows or middle-drag pan · wheel zooms · the panel's Display section pic
 ### Headless
 
 `cd Experiments/exp-05 && cargo run -p viewer --release -- --frames N --screenshot-dir DIR --screenshot-every M --seed N --start-x X --start-z Z --rings-shaku N`, plus `--auto-pan` (sweep the focus for a sustained-panning measurement), `--zoom N` (in shaku), `--line-mode off|shaku|nested` and `--tint` (start in a chosen camera/display state — there is no keyboard or CLI-free way to reach nested lines or tint headlessly, since those are panel-only). `screenshots/` is gitignored.
+
+---
+
+## exp-06 — Worldgen
+
+- **Started:** 2026-09-29
+- **Stack:** a standalone HTML walkthrough (`viz/banana.html`), and its port to Rust 1.95 in a Cargo workspace (an engine-free `worldgen` crate, and a local server on `tiny_http`)
+- **Run:** open `Experiments/exp-06/viz/banana.html` from disk for the walkthrough; for the port, `cd Experiments/exp-06 && cargo run -p exp06`, then open `http://127.0.0.1:8060/`
+- **Test:** `cd Experiments/exp-06 && cargo test --workspace`; `node viz/tools/check.js viz/banana.html` and `node viz/tools/check-port.js` print the facts rows of the page and the port for a `diff` (see the README)
+- **Design:** [`exp-06/docs/specs/2026-09-30-exp-06-worldgen-port-design.md`](exp-06/docs/specs/2026-09-30-exp-06-worldgen-port-design.md). [`exp-06/docs/HANDOFF.md`](exp-06/docs/HANDOFF.md) has the state, the history and every decision; [`exp-06/README.md`](exp-06/README.md) is the map of the workspace.
+
+### Why
+
+The worldgen for Murabito: a test world for exp-07's raycaster, and the framework the full world grows from. Towns, flora, fiefdoms and the like are later layers, not part of this. In the user's words: "1 + 2-lite: set up the framework we can play off of for the full Murabito world eventually."
+
+### What
+
+The world as pure functions of seed and position, in cube coordinates on the unit ladder shaku · ken · decichō · chō · ri, the world being a packing cell of 36 ri.
+
+- **The walkthrough.** `viz/banana.html` designs each step as an interactive page before any code: the world placed on the banana (1), the tectonic surface (2), climate (3), structure noise (4), erosion (5), reading the coast (6), drainage and the carved channels (7a–7d).
+- **The port.** The same pipeline in Rust, checked against the page step by step. Steps 1 and 2 are ported, and their facts rows match the page's. `viz/exp-06.html` draws the port's output, and it reads the same URL settings as `banana.html`, so the two sit side by side. The numeric code is one source compiled twice, `worldgen::f64` as the reference and `worldgen::f32` as the GPU's twin; the GPU path is planned from step 4.
+
+---
+
+## exp-07 — GPU hex-voxel raycasting
+
+- **Started:** 2026-09-29, inside exp-06; moved to its own experiment the same day, when exp-06 became the worldgen
+- **Stack:** standalone HTML mockups so far. The code is planned as Rust + Bevy, rendered on the GPU.
+- **Run:** open the pages in `Experiments/exp-07/viz/` from disk
+- **Design:** [`exp-07/docs/goals.md`](exp-07/docs/goals.md), the goals as stated before any code. The spec and plan come later and have to fit inside them.
+
+### Why
+
+To render voxels in 3D in Bevy, on the GPU, by casting a ray per pixel through the hex-prism grid instead of meshing.
+
+### What
+
+No code yet: every question is thought through and mocked up as a graph first, one small bite at a time.
+
+- `viz/hex-ray-walk.html`: bites one to seven. The exit-face rule and the incremental hex walk, the layer stack, the columns as runs with the vertical skip, skipping whole parent cells by their hi, packing B and the decichō ladder, and detail windows relative to the camera.
+- `viz/kanto-scale.html`: the world as a packing cell of 36 ri centred on the origin, mapped over Kantō, with the ladder zoomed rung by rung.
+
+The constraints are in `goals.md`: cube `(q, r, s)` throughout with `murabito_hexcoords`'s directions, a free-fly camera, a seeded test world with caves and overhangs (exp-06's worldgen is meant to supply it), and no performance bar.

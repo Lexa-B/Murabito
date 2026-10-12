@@ -29,8 +29,8 @@ It is a design walkthrough first: every step is thought through and drawn as an 
 
 ## Where the work lives
 
-- **This half:** worktree `.claude/worktrees/exp-06-worldgen`, branch `exp-06-worldgen`, cut from `origin/main` at `c3781c3`. Eighteen commits on the branch, all under `Experiments/exp-06/` (`viz/banana.html`, `viz/tools/`, `docs/`); nothing pushed, no PR. The page is also published as a private artifact at https://claude.ai/artifact/FmofqfQz8ZuP3LTM6UVpcJ (republish from a copy with the skeleton lines stripped; see "How to work here").
-- **The other half:** the raycasting conversation, exp-07, works in `.claude/worktrees/exp-06-voxel-raycast` on branch `exp-06-voxel-raycast`. Its files (`goals.md` for raycasting, `viz/hex-ray-walk.html`, `viz/kanto-scale.html`) still sit under `Experiments/exp-06/` there and are to be moved to `exp-07/` by that session. Never commit into that tree from here, and expect a rename on its side.
+- **This half:** worktree `.claude/worktrees/exp-06-worldgen`, branch `exp-06-worldgen`, cut from `origin/main` at `c3781c3`. 41 commits on the branch as of 2026-10-01, all under `Experiments/exp-06/` (the walkthrough, the port's workspace, `docs/`). Merged 2026-10-12 as PR #59. The page is also published as a private artifact at https://claude.ai/artifact/FmofqfQz8ZuP3LTM6UVpcJ (republish from a copy with the skeleton lines stripped; see "How to work here").
+- **The other half:** the raycasting, exp-07, in `.claude/worktrees/exp-07-raycast` on branch `exp-07-raycast` (merged 2026-10-12 as PR #60). Its files (`docs/goals.md`, `viz/hex-ray-walk.html`, `viz/kanto-scale.html`) moved from `Experiments/exp-06/` to `Experiments/exp-07/` there, so nothing of it remains under `exp-06/`. The older `exp-06-voxel-raycast` branch is wholly contained in `exp-07-raycast`. Never commit into those trees from here.
 - Memory notes (Claude's auto-memory) that matter: `exp-06-decisions` (decisions shared by both halves), `steps-are-actions` (process rule from this session).
 
 ## Decisions carried over from the shared conversation
@@ -197,4 +197,4 @@ Open for these later: they run at ri scale on a smooth surface, so pits are rare
 5. Inset tuning to 70% land after step 4.
 6. Done: steps 7a–7c read 5d and 7d carves; open: the carve at finer rungs (the cut table per ri is what a chō rung would be handed), and the drainage as rivers as objects. (Was: point n+1a–c at the eroded surface and re-checked on it.
 7. Materials and the vertical: nothing yet says what a column's runs are made of (rock/dirt/grass came from exp-05's placeholder), nor how caves and overhangs arise; the raycasting test world wants both.
-8. `goals.md` in Lexa's voice for exp-06 (the one in the other worktree is the raycasting's), and the spec in `docs/specs/YYYY-MM-DD-exp-06-worldgen-design.md` once the walkthrough settles; then the manifest entry.
+8. `goals.md` in Lexa's voice for exp-06 (the existing one is exp-07's, under `Experiments/exp-07/docs/`). The manifest entry exists (2026-10-12); update it as the port grows.
